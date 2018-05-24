@@ -88,8 +88,7 @@ var localSchemeBuilder = runtime.SchemeBuilder{
 	rbacv1alpha1.AddToScheme,
 	schedulingv1alpha1.AddToScheme,
 	schedulingv1beta1.AddToScheme,
-	settingsv1alpha1.AddToScheme,
-	storagev1beta1.AddToScheme,
+	settingsv1alpha1.AddToScheme, storagev1beta1.AddToScheme,
 	storagev1.AddToScheme,
 	storagev1alpha1.AddToScheme,
 }

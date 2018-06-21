@@ -693,7 +693,6 @@ func BenchmarkWriteIndexMaintenance(b *testing.B) {
 
 func BenchmarkAuthorization(b *testing.B) {
 	g := NewGraph()
-
 	opts := sampleDataOpts{
 		// To simulate high replication in a small number of namespaces:
 		// nodes:       5000,

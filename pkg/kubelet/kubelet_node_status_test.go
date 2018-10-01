@@ -1687,3 +1687,159 @@ func TestSyncNodeStatusWithBackoff(t *testing.T) {
 	}
 	assert.True(t, finishTime.After(startTime.Add(time.Duration(25*time.Second))))
 }
+
+func TestNodeStatusHasChanged(t *testing.T) {
+	fakeNow := metav1.Date(2015, 1, 1, 12, 0, 0, 0, time.UTC)
+	fakeFuture := metav1.Time{Time: fakeNow.Time.Add(time.Minute)}
+	readyCondition := v1.NodeCondition{
+		Type:               v1.NodeReady,
+		Status:             v1.ConditionTrue,
+		LastHeartbeatTime:  fakeNow,
+		LastTransitionTime: fakeNow,
+	}
+	readyConditionAtDiffHearbeatTime := v1.NodeCondition{
+		Type:               v1.NodeReady,
+		Status:             v1.ConditionTrue,
+		LastHeartbeatTime:  fakeFuture,
+		LastTransitionTime: fakeNow,
+	}
+	readyConditionAtDiffTransitionTime := v1.NodeCondition{
+		Type:               v1.NodeReady,
+		Status:             v1.ConditionTrue,
+		LastHeartbeatTime:  fakeFuture,
+		LastTransitionTime: fakeFuture,
+	}
+	notReadyCondition := v1.NodeCondition{
+		Type:               v1.NodeReady,
+		Status:             v1.ConditionFalse,
+		LastHeartbeatTime:  fakeNow,
+		LastTransitionTime: fakeNow,
+	}
+	memoryPressureCondition := v1.NodeCondition{
+		Type:               v1.NodeMemoryPressure,
+		Status:             v1.ConditionFalse,
+		LastHeartbeatTime:  fakeNow,
+		LastTransitionTime: fakeNow,
+	}
+	testcases := []struct {
+		name           string
+		originalStatus *v1.NodeStatus
+		status         *v1.NodeStatus
+		expectChange   bool
+	}{
+		{
+			name:           "Node status does not change with nil status.",
+			originalStatus: nil,
+			status:         nil,
+			expectChange:   false,
+		},
+		{
+			name:           "Node status does not change with default status.",
+			originalStatus: &v1.NodeStatus{},
+			status:         &v1.NodeStatus{},
+			expectChange:   false,
+		},
+		{
+			name:           "Node status changes with nil and default status.",
+			originalStatus: nil,
+			status:         &v1.NodeStatus{},
+			expectChange:   true,
+		},
+		{
+			name:           "Node status changes with nil and status.",
+			originalStatus: nil,
+			status: &v1.NodeStatus{
+				Conditions: []v1.NodeCondition{readyCondition, memoryPressureCondition},
+			},
+			expectChange: true,
+		},
+		{
+			name:           "Node status does not change with empty conditions.",
+			originalStatus: &v1.NodeStatus{Conditions: []v1.NodeCondition{}},
+			status:         &v1.NodeStatus{Conditions: []v1.NodeCondition{}},
+			expectChange:   false,
+		},
+		{
+			name: "Node status does not change",
+			originalStatus: &v1.NodeStatus{
+				Conditions: []v1.NodeCondition{readyCondition, memoryPressureCondition},
+			},
+			status: &v1.NodeStatus{
+				Conditions: []v1.NodeCondition{readyCondition, memoryPressureCondition},
+			},
+			expectChange: false,
+		},
+		{
+			name: "Node status does not change even if heartbeat time changes.",
+			originalStatus: &v1.NodeStatus{
+				Conditions: []v1.NodeCondition{readyCondition, memoryPressureCondition},
+			},
+			status: &v1.NodeStatus{
+				Conditions: []v1.NodeCondition{readyConditionAtDiffHearbeatTime, memoryPressureCondition},
+			},
+			expectChange: false,
+		},
+		{
+			name: "Node status does not change even if the orders of conditions are different.",
+			originalStatus: &v1.NodeStatus{
+				Conditions: []v1.NodeCondition{readyCondition, memoryPressureCondition},
+			},
+			status: &v1.NodeStatus{
+				Conditions: []v1.NodeCondition{memoryPressureCondition, readyConditionAtDiffHearbeatTime},
+			},
+			expectChange: false,
+		},
+		{
+			name: "Node status changes if condition status differs.",
+			originalStatus: &v1.NodeStatus{
+				Conditions: []v1.NodeCondition{readyCondition, memoryPressureCondition},
+			},
+			status: &v1.NodeStatus{
+				Conditions: []v1.NodeCondition{notReadyCondition, memoryPressureCondition},
+			},
+			expectChange: true,
+		},
+		{
+			name: "Node status changes if transition time changes.",
+			originalStatus: &v1.NodeStatus{
+				Conditions: []v1.NodeCondition{readyCondition, memoryPressureCondition},
+			},
+			status: &v1.NodeStatus{
+				Conditions: []v1.NodeCondition{readyConditionAtDiffTransitionTime, memoryPressureCondition},
+			},
+			expectChange: true,
+		},
+		{
+			name: "Node status changes with different number of conditions.",
+			originalStatus: &v1.NodeStatus{
+				Conditions: []v1.NodeCondition{readyCondition},
+			},
+			status: &v1.NodeStatus{
+				Conditions: []v1.NodeCondition{readyCondition, memoryPressureCondition},
+			},
+			expectChange: true,
+		},
+		{
+			name: "Node status changes with different phase.",
+			originalStatus: &v1.NodeStatus{
+				Phase:      v1.NodePending,
+				Conditions: []v1.NodeCondition{readyCondition},
+			},
+			status: &v1.NodeStatus{
+				Phase:      v1.NodeRunning,
+				Conditions: []v1.NodeCondition{readyCondition},
+			},
+			expectChange: true,
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			originalStatusCopy := tc.originalStatus.DeepCopy()
+			statusCopy := tc.status.DeepCopy()
+			changed := nodeStatusHasChanged(tc.originalStatus, tc.status)
+			assert.Equal(t, tc.expectChange, changed, "Expect node status change to be %t, but got %t.", tc.expectChange, changed)
+			assert.True(t, apiequality.Semantic.DeepEqual(originalStatusCopy, tc.originalStatus), "%s", diff.ObjectDiff(originalStatusCopy, tc.originalStatus))
+			assert.True(t, apiequality.Semantic.DeepEqual(statusCopy, tc.status), "%s", diff.ObjectDiff(statusCopy, tc.status))
+		})
+	}
+}

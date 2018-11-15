@@ -41,16 +41,9 @@ type recorder struct {
 	errCount int
 }
 
-func (r *recorder) Record(err error) {
+func (r *recorder) Record() {
 	r.lock.Lock()
 	defer r.lock.Unlock()
-
-	if err == nil {
-		r.count++
-		return
-	}
-
-	// TODO, need any logs here?
 	r.errCount++
 }
 
@@ -96,7 +89,7 @@ func TestTimeout(t *testing.T) {
 
 	handler := newHandler(sendResponse, doPanic, writeErrors)
 	ts := httptest.NewServer(withPanicRecovery(
-		WithTimeout(handler, func(req *http.Request) (*http.Request, <-chan time.Time, func(error), *apierrors.StatusError) {
+		WithTimeout(handler, func(req *http.Request) (*http.Request, <-chan time.Time, func(), *apierrors.StatusError) {
 			return req, timeout, record.Record, timeoutErr
 		}), func(w http.ResponseWriter, req *http.Request, err interface{}) {
 			gotPanic <- err
@@ -182,7 +175,7 @@ func TestWriteBodyTimeout(t *testing.T) {
 			w.WriteHeader(200)
 			// mock hang scene
 			<-make(chan struct{})
-		}), func(req *http.Request) (*http.Request, <-chan time.Time, func(error), *apierrors.StatusError) {
+		}), func(req *http.Request) (*http.Request, <-chan time.Time, func(), *apierrors.StatusError) {
 			return req, time.After(time.Second * 10), record.Record, timeoutErr
 		}), func(w http.ResponseWriter, req *http.Request, err interface{}) {
 			gotPanic <- err

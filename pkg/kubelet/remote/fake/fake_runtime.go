@@ -85,6 +85,17 @@ func (f *RemoteRuntime) RunPodSandbox(ctx context.Context, req *kubeapi.RunPodSa
 	return &kubeapi.RunPodSandboxResponse{PodSandboxId: sandboxID}, nil
 }
 
+// StartPodSandbox Start a sandbox pod which was forced to stop by external factors.
+// Network plugin returns same IPs when input same pod names and namespaces
+func (f *RemoteRuntime) StartPodSandbox(ctx context.Context, req *kubeapi.StartPodSandboxRequest) (*kubeapi.StartPodSandboxResponse, error) {
+	err := f.RuntimeService.StartPodSandbox(req.PodSandboxId)
+	if err != nil {
+		return nil, err
+	}
+
+	return &kubeapi.StartPodSandboxResponse{}, nil
+}
+
 // StopPodSandbox stops any running process that is part of the sandbox and
 // reclaims network resources (e.g., IP addresses) allocated to the sandbox.
 // If there are any running containers in the sandbox, they must be forcibly

@@ -106,6 +106,23 @@ func (r *RemoteRuntimeService) RunPodSandbox(config *runtimeapi.PodSandboxConfig
 	return resp.PodSandboxId, nil
 }
 
+// StartPodSandbox Start a sandbox pod which was forced to stop by external factors.
+// Network plugin returns same IPs when input same pod names and namespaces
+func (r *RemoteRuntimeService) StartPodSandbox(podSandBoxID string) error {
+	ctx, cancel := getContextWithTimeout(r.timeout)
+	defer cancel()
+
+	_, err := r.runtimeClient.StartPodSandbox(ctx, &runtimeapi.StartPodSandboxRequest{
+		PodSandboxId: podSandBoxID,
+	})
+	if err != nil {
+		glog.Errorf("StartPodSandbox %q from runtime service failed: %v", podSandBoxID, err)
+		return err
+	}
+
+	return nil
+}
+
 // StopPodSandbox stops the sandbox. If there are any running containers in the
 // sandbox, they should be forced to termination.
 func (r *RemoteRuntimeService) StopPodSandbox(podSandBoxID string) error {

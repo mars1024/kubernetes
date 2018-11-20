@@ -706,6 +706,11 @@ type KubeletConfiguration struct {
 	// Default: ["pods"]
 	// +optional
 	EnforceNodeAllocatable []string `json:"enforceNodeAllocatable,omitempty"`
+	// This flag indeicate the path of userinfo script
+	// If this flag is set, Kubelet will use userinfo script to backup and restore userinfo of the cotainers in upgrade procedure
+	UserinfoScriptPath string `json:"userinfoScriptPath,omitempty"`
+	// This flag tells Kubelet the path of custom cgroup parent, and Kubelet can find pod cgroup under them.
+	CustomCgroupParents []string `json:"customCgroupParents,omitempty`
 }
 
 type KubeletAuthorizationMode string

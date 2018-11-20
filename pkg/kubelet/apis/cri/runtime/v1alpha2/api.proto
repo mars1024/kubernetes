@@ -22,6 +22,9 @@ service RuntimeService {
     // RunPodSandbox creates and starts a pod-level sandbox. Runtimes must ensure
     // the sandbox is in the ready state on success.
     rpc RunPodSandbox(RunPodSandboxRequest) returns (RunPodSandboxResponse) {}
+    // Start a sandbox pod which was forced to stop by external factors.
+    // Network plugin returns same IPs when input same pod names and namespaces
+    rpc StartPodSandbox(StartPodSandboxRequest) returns (StartPodSandboxResponse) {}
     // StopPodSandbox stops any running process that is part of the sandbox and
     // reclaims network resources (e.g., IP addresses) allocated to the sandbox.
     // If there are any running containers in the sandbox, they must be forcibly
@@ -182,6 +185,8 @@ message Mount {
     bool selinux_relabel = 4;
     // Requested propagation mode.
     MountPropagation propagation = 5;
+    // Name of the mount.
+    string name = 100;
 }
 
 // A NamespaceMode describes the intended namespace configuration for each
@@ -363,6 +368,13 @@ message StopPodSandboxRequest {
     string pod_sandbox_id = 1;
 }
 
+message StartPodSandboxRequest {
+    // ID of the PodSandbox to start.
+    string pod_sandbox_id = 1;
+}
+
+message StartPodSandboxResponse {}
+
 message StopPodSandboxResponse {}
 
 message RemovePodSandboxRequest {
@@ -489,6 +501,8 @@ message ListPodSandboxResponse {
 // future it will include more detailed information about the different image types.
 message ImageSpec {
     string image = 1;
+    // the seconds for image pull timeout
+    int64 timeout = 100;
 }
 
 message KeyValue {
@@ -515,6 +529,49 @@ message LinuxContainerResources {
     string cpuset_cpus = 6;
     // CpusetMems constrains the allowed set of memory nodes. Default: "" (not specified).
     string cpuset_mems = 7;
+    // DiskQuota constrains the disk
+    map<string,string> disk_quota = 100;
+    // Block IO weight (relative weight vs. other containers)
+    uint32  blkio_weight = 101;
+    repeated WeightDevice blkio_weight_device = 102;
+    repeated ThrottleDevice blkio_device_read_bps = 103;
+    repeated ThrottleDevice blkio_device_write_bps = 104;
+    repeated ThrottleDevice blkio_device_read_IOps = 105;
+    repeated ThrottleDevice blkio_device_write_IOps = 106;
+    // Kernel memory limit (in bytes)
+    int64 kernel_memory = 107;
+    // Memory soft limit (in bytes)
+    int64 memory_reservation = 108;
+    // Tuning container memory swappiness behaviour
+    Int64Value memory_swappiness = 109;
+    // List of ulimits to be set in the container
+    repeated Ulimit ulimits = 110;
+}
+
+// WeightDevice is a structure that holds device:weight pair
+message WeightDevice {
+    // Path of weightdevice.
+    string path = 1;
+    // Weight of weightdevice.
+    uint32 Weight = 2;
+}
+
+// ThrottleDevice is a structure that holds device:rate_per_second pair
+message ThrottleDevice  {
+    // Path of throttledevice.
+    string path = 1;
+    // Rate of throttledevice.
+    uint64 rate = 2;
+}
+
+//  Ulimit is a human friendly version of Rlimit.
+message Ulimit {
+    // Name of ulimit.
+    string name = 1;
+    // Hard limit of ulimit.
+    int64 hard = 2;
+    // Soft limit of Ulimit.
+    int64 soft = 3;
 }
 
 // SELinuxOption are the labels to be applied to the container.
@@ -729,6 +786,10 @@ message ContainerConfig {
     LinuxContainerConfig linux = 15;
    // Configuration specific to Windows containers.
    WindowsContainerConfig windows = 16;
+    // NetPriority of the container
+    int64  net_priority = 100;
+    // QuotaId of the container
+    string quota_id = 101;
 }
 
 message CreateContainerRequest {
@@ -881,6 +942,17 @@ message ContainerStatus {
     repeated Mount mounts = 14;
     // Log path of container.
     string log_path = 15;
+    // Volumes of container
+    map<string,  Volume> volumes= 100;
+    // Resources specification for the container
+    LinuxContainerResources resources = 101;
+    // QuotaId of container
+    string quota_id = 102;
+    // List of environment variable that set in the container.
+    repeated KeyValue envs = 103;
+}
+
+message Volume {
 }
 
 message ContainerStatusResponse {
@@ -1010,6 +1082,8 @@ message Image {
     // User name that will run the command(s). This is used if UID is not set
     // and no user is specified when creating container.
     string username = 6;
+    // Volumes of image
+    map<string, Volume> volumes= 100;
 }
 
 message ListImagesResponse {
@@ -1248,3 +1322,15 @@ message ReopenContainerLogRequest {
 
 message ReopenContainerLogResponse{
 }
+
+service VolumeService {
+    // Remove a volume
+    rpc RemoveVolume(RemoveVolumeRequest) returns (RemoveVolumeResponse) {}
+}
+
+message RemoveVolumeRequest {
+    // name of the volume to remove
+    string volume_name = 1;
+}
+
+message RemoveVolumeResponse {}

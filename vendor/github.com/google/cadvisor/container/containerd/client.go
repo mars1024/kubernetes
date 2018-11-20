@@ -33,7 +33,7 @@ import (
 
 const (
 	// k8sNamespace is the namespace we use to connect containerd.
-	k8sNamespace = "k8s.io"
+	k8sNamespace = "default"
 )
 
 type client struct {
@@ -52,7 +52,7 @@ var once sync.Once
 var ctrdClient containerdClient = nil
 
 const (
-	address           = "/run/containerd/containerd.sock"
+	address           = "/var/run/containerd/containerd.sock"
 	maxBackoffDelay   = 3 * time.Second
 	connectionTimeout = 2 * time.Second
 )

@@ -1,0 +1,275 @@
+package api
+
+import (
+	"k8s.io/api/core/v1"
+)
+
+const (
+	LabelPodReuseIp = "pod.beta1.sigma.ali/ip-reuse"
+)
+
+// AllocSpec contains specification of the desired allocation behavior of the pod.
+// More info: https://lark.alipay.com/sigma.pouch/sigma3.x/sghayi
+type AllocSpec struct {
+	// If specified, the pod's scheduling constraints
+	// +optional
+	Affinity *Affinity `json:"affinity,omitempty"`
+	// List of containers belonging to the pod.
+	// +optional
+	Containers []Container `json:"containers,omitempty"`
+}
+
+// Affinity is a group of affinity scheduling rules.
+type Affinity struct {
+	// Describes pod anti-affinity scheduling rules extensions with added spread strategy logic.
+	// +optional
+	PodAntiAffinity *PodAntiAffinity `json:"podAntiAffinity,omitempty"`
+	// Describes cpu anti-affinity scheduling rules between pods extensions with added spread strategy logic.
+	// +optional
+	CPUAntiAffinity *CPUAntiAffinity `json:"cpuAntiAffinity,omitempty"`
+}
+
+// A single application container that you want to run within a pod.
+type Container struct {
+	// Name of the container.
+	// Must corresponds to one container in pod spec containers fields
+	Name string `json:"name,omitempty"`
+	// Extra attributes of resources required by this container.
+	Resource ResourceRequirements `json:"resource,omitempty"`
+	// Extra attributes of HostConfig required by this container.
+	HostConfig HostConfigInfo `json:"hostConfig,omitempty"`
+}
+
+// ResourceRequirements describes extra attributes of the compute resource requirements.
+type ResourceRequirements struct {
+	// If specified, extra cpu attributes such as cpuset modes
+	// +optional
+	CPU CPUSpec `json:"cpu,omitempty"`
+	// If specified, extra gpu attributes such as gpu sharing mode
+	// +optional
+	GPU GPUSpec `json:"gpu,omitempty"`
+}
+
+//HostConfigInfo describes extra attributes of the HostConfig parameters.
+type HostConfigInfo struct {
+	//Path to cgroups under which the container’s cgroup is created.
+	// If the path is not absolute, the path is considered to be relative to the cgroups path of the init process.
+	// Cgroups are created if they do not already exist.
+	CgroupParent string `json:"cgroupParent"`
+	// Total memory limit (memory + swap); set -1 to enable unlimited swap.
+	// You must use this with memory and make the swap value larger than memory
+	MemorySwap int64 `json:"memorySwap,omitempty"`
+	//Tune a container’s memory swappiness behavior. Accepts an integer between 0 and 100.
+	MemorySwappiness int64 `json:"memorySwappiness,omitempty"`
+	//Block IO weight (relative weight) accepts a weight value between 10 and 1000.
+	// +optional
+	BlkioWeight int64 `json:"blkioWeight,omitempty"`
+	//Tune a container’s pids limit. Set -1 for unlimited.
+	PidsLimit uint16 `json:"pidsLimit,omitempty"`
+	//
+	CPUBvtWarpNs     int     `json:"cpuBvtWarpNs,omitempty"`
+	MemoryWmarkRatio float64 `json:"memoryWmarkRatio,omitempty"`
+	IntelRdtMba      string  `json:"intelRdtMba,omitempty"`
+	IntelRdtGroup    string  `json:"intelRdtGroup,omitempty"`
+	//Block IO weight (relative device weight) in the form of: "BlkioWeightDevice": [{"Path": "device_path", "Weight": weight}]
+	BlkioWeightDevice []WeightDevice `json:"blkioWeightDevice,omitempty"`
+	//Limit read rate (bytes per second) from a device in the form of: "BlkioDeviceReadBps": [{"Path": "device_path", "Rate": rate}]
+	// for example: "BlkioDeviceReadBps": [{"Path": "/dev/sda", "Rate": "1024"}]"
+	BlkioDeviceReadBps []ThrottleDevice `json:"blkioDeviceReadBps,omitempty"`
+	//Limit write rate (bytes per second) to a device in the form of: "BlkioDeviceWriteBps": [{"Path": "device_path", "Rate": rate}]
+	// for example: "BlkioDeviceWriteBps": [{"Path": "/dev/sda", "Rate": "1024"}]"
+	BlkioDeviceWriteBps []ThrottleDevice `json:"blkioDeviceWriteBps,omitempty"`
+	//Limit read rate (IO per second) from a device in the form of: "BlkioDeviceReadIOps": [{"Path": "device_path", "Rate": rate}]
+	// for example: "BlkioDeviceReadIOps": [{"Path": "/dev/sda", "Rate": "1000"}]
+	BlkioDeviceReadIOps []ThrottleDevice `json:"blkioDeviceReadIOps,omitempty"`
+	//Limit write rate (IO per second) to a device in the form of: "BlkioDeviceWriteIOps": [{"Path": "device_path", "Rate": rate}]
+	// for example: "BlkioDeviceWriteIOps": [{"Path": "/dev/sda", "Rate": "1000"}]
+	BlkioDeviceWriteIOps []ThrottleDevice `json:"blkioDeviceWriteIOps,omitempty"`
+	// List of ulimits to be set
+	// for example: "ulimits: [{"Name": "nofile", "Hard": 8192, "Soft": 1024}]"
+	Ulimits []Ulimit `json:"ulimits,omitempty"`
+	// CPU CFS (Completely Fair Scheduler) period. Set this to overwrite agent default value
+	CpuPeriod int64 `json:"cpuPeriod,omitempty"`
+}
+
+type WeightDevice struct {
+	Path   string
+	Weight uint16
+}
+
+type ThrottleDevice struct {
+	Path string
+	Rate uint64
+}
+
+//  Ulimit is a human friendly version of Rlimit.
+type Ulimit struct {
+	// Name of ulimit.
+	Name string
+	// Hard limit of ulimit.
+	Hard int64
+	// Soft limit of ulimit.
+	Soft int64
+}
+
+// SpreadStrategy means how to allocate cpuset of container in the CPU topology
+type SpreadStrategy string
+
+const (
+	// SpreadStrategySpread is the default strategy that favor cpuset allocation that spread
+	// across physical cores
+	SpreadStrategySpread SpreadStrategy = "spread"
+	// SpreadStrategySameCoreFirst is the strategy that favor cpuset allocation that pack
+	// in few physical cores
+	SpreadStrategySameCoreFirst SpreadStrategy = "sameCoreFirst"
+)
+
+type CPUBindingStrategy string
+
+const (
+	// CPUBindStrategyDefault is a BindingStrategy that indicates kubelet binds this container according to CPUIDs
+	CPUBindStrategyDefault CPUBindingStrategy = ""
+	// CPUBindStrategyAllCPUs is a BindingStrategy that indicates kubelet binds this container to all cpus
+	CPUBindStrategyAllCPUs CPUBindingStrategy = "BindAllCPUs"
+)
+
+// CPUSpec contains the extra attributes of CPU resource
+type CPUSpec struct {
+	// BindStrategy indicate kubelet how to bind cpus
+	// If BindStrategy is "", that means using default binding logic as usual
+	BindingStrategy CPUBindingStrategy `json:"bindingStrategy,omitempty"`
+	// If specified, cpu resource of container is allocated as cpusets, and the CPUSet fields contains information
+	// about CPUSet. The cpu resource request and limit value must be integer.
+	// If not specified, cpu resource of container is allocated as cpu shares.
+	// +optional
+	CPUSet *CPUSetSpec `json:"cpuSet,omitempty"`
+}
+
+// CPUSetSpec contains extra attributes of cpuset allocation
+type CPUSetSpec struct {
+	// If specified, cpuset allocation strategy
+	// +optional
+	SpreadStrategy SpreadStrategy `json:"spreadStrategy,omitempty"`
+	// the logic cpu IDs allocated to the container
+	// if not specified, scheduler wil fill with allocated cpu IDs.
+	// +optional
+	CPUIDs []int `json:"cpuIDs,omitempty"`
+}
+
+// GPUShareMode means how multiple containers use one GPU
+type GPUShareMode string
+
+const (
+	// GPUShareModeExclusive is the default mode that allow only one container is allowed to run on the GPU
+	GPUShareModeExclusive GPUShareMode = "exclusive"
+)
+
+// GPUSpec contains the GPU specification other than the number of GPUs
+type GPUSpec struct {
+	// GPUShareMode is the sharing strategy for multiple container use
+	ShareMode GPUShareMode `json:"shareMode,omitempty"`
+}
+
+// Pod anti affinity is a group of inter pod anti affinity scheduling rules.
+type PodAntiAffinity struct {
+	// Extensions of the RequiredDuringSchedulingIgnoredDuringExecution fields of k8s PodAntiAffinity struct,
+	// extra fields is added to support more hard rules of pod spreading logic.
+	// +optional
+	RequiredDuringSchedulingIgnoredDuringExecution []PodAffinityTerm `json:"requiredDuringSchedulingIgnoredDuringExecution,omitempty"`
+	// Extensions of the PreferredDuringSchedulingIgnoredDuringExecution fields of k8s PodAntiAffinity struct,
+	// extra fields is added to support more soft rules of pod spreading logic.
+	// +optional
+	PreferredDuringSchedulingIgnoredDuringExecution []WeightedPodAffinityTerm `json:"preferredDuringSchedulingIgnoredDuringExecution,omitempty"`
+}
+
+// CPUAntiAffinity is a group of CPU anti affinity rules between pods
+type CPUAntiAffinity struct {
+	// Extensions of the PreferredDuringSchedulingIgnoredDuringExecution fields of k8s PodAntiAffinity struct,
+	// extra fields is added to support more soft rules of cpu spreading logic.
+	// +optional
+	PreferredDuringSchedulingIgnoredDuringExecution []v1.WeightedPodAffinityTerm `json:"preferredDuringSchedulingIgnoredDuringExecution,omitempty"`
+}
+
+// PodAffinityTerm contains the extensions to the k8s PodAffinityTerm struct
+type PodAffinityTerm struct {
+	v1.PodAffinityTerm `json:",inline"`
+
+	// MaxCount is the maximum "allowed" number of pods in the scope specified by the value of topologyKey,
+	// which are selected by LabelSelector and namespaces，not including the pod to be scheduled. If more selected pods
+	// are located in a single value of topologyKey, the allocation will be rejected by the scheduler.
+	// Defaults to 0, which means no more selected pods is allowed in the scope specified by the value of topologyKey
+	// +optional
+	MaxCount int64 `json:"maxCount,omitempty"`
+	// MaxPercent is the maximum "allowed" percentage of pods in the scope specified by the value of topologyKey,
+	// which are selected by LabelSelector and namespaces, not including the pod to be scheduled.
+	// If more pods are located in a single value of topologyKey, the allocation will be rejected by the scheduler
+	// Defaults to 0, which means no more selected pods is allowed in the scope specified by the value of topologyKey.
+	// Values should be in the range 1-100.
+	// +optional
+	MaxPercent int32 `json:"maxPercent,omitempty"`
+}
+
+// WeightedPodAffinityTerm contains the extensions to the k8s WeightedPodAffinityTerm struct
+type WeightedPodAffinityTerm struct {
+	v1.WeightedPodAffinityTerm `json:",inline"`
+	// MaxCount is the maximum "allowed" number of pods in the scope specified by the value of topologyKey,
+	// which are selected by LabelSelector and namespaces，not including the pod to be scheduled.
+	// If more pods are located in a single value of topologyKey, the allocation will be disfavored
+	// but not rejected by the scheduler
+	// Defaults to 0, which means no more selected pods is allowed in the scope specified by the value of topologyKey
+	// +optional
+	MaxCount int64 `json:"maxCount,omitempty"`
+	// MaxPercent is the maximum "allowed" percentage of pods in the scope specified by the value of topologyKey,
+	// which are selected by LabelSelector and namespaces，not including the pod to be scheduled.
+	// If more pods are located in a single value of topologyKey, the allocation will be disfavored but not rejected
+	// by the scheduler
+	// Defaults to 0, which means no more selected pods is allowed in the scope specified by the value of topologyKey.
+	// Values should be in the range 1-100.
+	// +optional
+	MaxPercent int32 `json:"maxPercent,omitempty"`
+}
+
+// NetworkStatus contains the network configuration for the pod. It can be used by cni plugin to reuse IP configuration
+// for the same pod name.
+type NetworkStatus struct {
+	// Backend IPAM provider name
+	// +optional
+	IPAMName string `json:"ipam,omitempty"`
+	// Virtual lan id, e.g. 701
+	// +optional
+	VlanID string `json:"vlan,omitempty"`
+	// The number of bits set in the subnet mask
+	// +optional
+	NetworkPrefixLength int32 `json:"networkPrefixLen,omitempty"`
+	// The default gateway applied to the pod
+	// +optional
+	Gateway string `json:"gateway,omitempty"`
+	// The MAC address of the pod
+	// +optional
+	MACAddress string `json:"macAddress,omitempty"`
+	// Virtual Port ID
+	// +optional
+	VPortID string `json:"vPortID,omitempty"`
+	// Virtual Port token
+	// +optional
+	VPortToken string `json:"vPortToken,omitempty"`
+	// Virtual Switch ID, e.g. vsw-uf6v8mhdbxsnj0ckakqrb
+	// +optional
+	VSwitchID string `json:"vSwitchID,omitempty"`
+	// Elastic network interface ID, e.g. eni-abcdxxxx
+	// +optional
+	EnID string `json:"enID,omitempty"`
+	// The network mode, e.g. bridge, vlan, overlay, ecs
+	// +optional
+	NetType string `json:"netType,omitempty"`
+	// Overlay network version, e.g. 1.0
+	// +optional
+	OverlayNetworkVer string `json:"overlayNetworkVer,omitempty"`
+	// Pod ip label, e.g. stage/unit
+	// +optional
+	IpLabel string `json:"ipLabel,omitempty"`
+	// Pod sandbox container id
+	SandboxId string `json:"sandboxId"`
+	// Ip, e.g. 11.172.32.180
+	Ip string `json:"ip"`
+}

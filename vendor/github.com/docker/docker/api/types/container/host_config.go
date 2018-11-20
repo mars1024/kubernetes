@@ -327,7 +327,7 @@ type Resources struct {
 	CpusetMems           string          // CpusetMems 0-2, 0,1
 	Devices              []DeviceMapping // List of devices to map inside the container
 	DeviceCgroupRules    []string        // List of rule to be added to the device cgroup
-	DiskQuota            int64           // Disk limit (in bytes)
+	DiskQuota            string          `json:"-"` // Disk limit (in bytes)
 	KernelMemory         int64           // Kernel memory limit (in bytes)
 	MemoryReservation    int64           // Memory soft limit (in bytes)
 	MemorySwap           int64           // Total memory usage (memory + swap); set `-1` to enable unlimited swap

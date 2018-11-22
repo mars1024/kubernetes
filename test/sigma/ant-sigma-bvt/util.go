@@ -1,7 +1,10 @@
 package ant_sigma_bvt
 
 import (
+	"io"
+	"io/ioutil"
 	"strconv"
+	"strings"
 )
 
 func Atoi64(str string, def int64) int64 {
@@ -45,4 +48,66 @@ func Atofloat64(str string, def int64) int64 {
 		return def
 	}
 	return int64(i)
+}
+
+// parseResolveConf reads a resolv.conf file from the given reader, and parses
+// it into nameservers, searches and options, possibly returning an error.
+func parseResolvConf(reader io.Reader) (nameservers []string, searches []string, options []string, err error) {
+	file, err := ioutil.ReadAll(reader)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	// Lines of the form "nameserver 1.2.3.4" accumulate.
+	nameservers = []string{}
+
+	// Lines of the form "search example.com" overrule - last one wins.
+	searches = []string{}
+
+	// Lines of the form "option ndots:5 attempts:2" overrule - last one wins.
+	// Each option is recorded as an element in the array.
+	options = []string{}
+
+	lines := strings.Split(string(file), "\n")
+	for l := range lines {
+		trimmed := strings.TrimSpace(lines[l])
+		if strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		fields := strings.Fields(trimmed)
+		if len(fields) == 0 {
+			continue
+		}
+		if fields[0] == "nameserver" && len(fields) >= 2 {
+			nameservers = append(nameservers, fields[1])
+		}
+		if fields[0] == "search" {
+			searches = fields[1:]
+		}
+		if fields[0] == "options" {
+			options = fields[1:]
+		}
+	}
+	return nameservers, searches, options, nil
+}
+
+func IsSubslice(parent, sub []string) bool {
+	parentMap := map[string]string{}
+	for _, item := range parent {
+		parentMap[item] = item
+	}
+	for _, item := range sub {
+		_, ok := parentMap[item]
+		if !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func IsEqualSlice(parent, sub []string) bool {
+	if len(parent) == len(sub) && IsSubslice(parent, sub) {
+		return true
+	}
+	return false
 }

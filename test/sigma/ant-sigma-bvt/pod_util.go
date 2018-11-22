@@ -79,16 +79,24 @@ func LoadAlipayBasePod(name string, expectStatus k8sApi.ContainerState, enableOv
 	stateSpecStr, _ := json.Marshal(containerState)
 	pod.Annotations[k8sApi.AnnotationContainerStateSpec] = string(stateSpecStr)
 	pod.Spec.Hostname = pod.Name
+	pod.Spec.DNSPolicy = v1.DNSDefault
 	return pod, nil
 }
 
 //CreateSigmaPod() create sigma pod, return nil if pod status equals expect-status. if timeout, return error.
 func CreateSigmaPod(client clientset.Interface, pod *v1.Pod) error {
-	_, err := client.CoreV1().Pods(pod.Namespace).Create(pod)
+	var err error
+	defer func() {
+		if err != nil && pod != nil {
+			framework.Logf("Wait pod ready failed, Pod info:%#v, err:%#v", *pod, err)
+		}
+	}()
+	_, err = client.CoreV1().Pods(pod.Namespace).Create(pod)
 	if err != nil {
 		return err
 	}
-	return wait.PollImmediate(5*time.Second, 5*time.Minute, CheckPodIsReady(client, pod))
+	err = wait.PollImmediate(5*time.Second, 5*time.Minute, CheckPodIsReady(client, pod))
+	return err
 }
 
 //CheckPodIsReady() check sigma pod status, return true if pod status equals expect-status.
@@ -182,7 +190,13 @@ var upgradeEnv2 = []v1.EnvVar{
 
 //UpgradeSigmaPod() upgrade container env, wait upgraded and return true.
 func UpgradeSigmaPod(client clientset.Interface, pod *v1.Pod, upgradePod *v1.Pod, expectStatus k8sApi.ContainerState) error {
-	pod, err := client.CoreV1().Pods(pod.Namespace).Get(pod.Name, metav1.GetOptions{})
+	var err error
+	defer func() {
+		if err != nil {
+			framework.Logf("Upgrade pod failed, pod:%#v, err:%#v", *pod, err)
+		}
+	}()
+	pod, err = client.CoreV1().Pods(pod.Namespace).Get(pod.Name, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -199,7 +213,8 @@ func UpgradeSigmaPod(client clientset.Interface, pod *v1.Pod, upgradePod *v1.Pod
 		return err
 	}
 	time.Sleep(5 * time.Second)
-	return wait.PollImmediate(5*time.Second, 5*time.Minute, CheckPodIsReady(client, pod))
+	err = wait.PollImmediate(5*time.Second, 5*time.Minute, CheckPodIsReady(client, pod))
+	return err
 }
 
 //CheckPodNameSpace() check namespace, if exist, skip else create a new one.

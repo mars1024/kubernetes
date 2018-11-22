@@ -173,7 +173,7 @@ func GetOptionsUseExec(f *framework.Framework, pod *v1.Pod, cmd []string) (strin
 		Command:       cmd,
 		Namespace:     pod.Namespace,
 		PodName:       pod.Name,
-		ContainerName: pod.Status.ContainerStatuses[0].Name,
+		ContainerName: pod.Spec.Containers[0].Name,
 		CaptureStdout: true,
 		CaptureStderr: true,
 	})

@@ -27,6 +27,8 @@ import (
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 
+	"k8s.io/apimachinery/pkg/types"
+	clientset "k8s.io/client-go/kubernetes"
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpumanager/state"
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpumanager/topology"
@@ -40,6 +42,7 @@ type ActivePodsFunc func() []*v1.Pod
 
 type runtimeService interface {
 	UpdateContainerResources(id string, resources *runtimeapi.LinuxContainerResources) error
+	ContainerStatus(containerID string) (*runtimeapi.ContainerStatus, error)
 }
 
 type policyName string
@@ -97,7 +100,7 @@ type manager struct {
 var _ Manager = &manager{}
 
 // NewManager creates new cpu manager based on provided policy
-func NewManager(cpuPolicyName string, reconcilePeriod time.Duration, machineInfo *cadvisorapi.MachineInfo, nodeAllocatableReservation v1.ResourceList, stateFileDirectory string) (Manager, error) {
+func NewManager(kubeClient clientset.Interface, nodeName types.NodeName, cpuPolicyName string, reconcilePeriod time.Duration, machineInfo *cadvisorapi.MachineInfo, nodeAllocatableReservation v1.ResourceList, stateFileDirectory string) (Manager, error) {
 	var policy Policy
 
 	switch policyName(cpuPolicyName) {
@@ -130,6 +133,17 @@ func NewManager(cpuPolicyName string, reconcilePeriod time.Duration, machineInfo
 		reservedCPUsFloat := float64(reservedCPUs.MilliValue()) / 1000
 		numReservedCPUs := int(math.Ceil(reservedCPUsFloat))
 		policy = NewStaticPolicy(topo, numReservedCPUs)
+
+	case PolicySigma:
+		// Sigma policy doesn't care "zero CPU reservation".
+		// The shared pool is guaranteed by Master scheduler.
+		topo, err := topology.Discover(machineInfo)
+		if err != nil {
+			return nil, err
+		}
+		glog.Infof("[cpumanager] detected CPU topology: %v", topo)
+
+		policy = NewSigmaPolicy(kubeClient, nodeName, topo)
 
 	default:
 		glog.Errorf("[cpumanager] Unknown policy \"%s\", falling back to default policy \"%s\"", cpuPolicyName, PolicyNone)
@@ -258,6 +272,27 @@ func (m *manager) reconcileState() (success []reconciledContainer, failure []rec
 				}
 			}
 
+			// Do PolicyExtend check
+			if policyEx, ok := m.policy.(PolicyExtend); ok {
+				// It is safe to call IsCPUSetChanged() here because IsCPUSetChanged() doesn't change state.
+				if policyEx.IsCPUSetChanged(m.state, pod, &container, containerID) {
+					err := m.RemoveContainer(containerID)
+					if err != nil {
+						glog.Errorf("[cpumanager] reconcileState: failed to remove container (pod: %s, container: %s, container id: %s, error: %v)", pod.Name, container.Name, containerID, err)
+						failure = append(failure, reconciledContainer{pod.Name, container.Name, containerID})
+					}
+					err = m.AddContainer(pod, &container, containerID)
+					if err != nil {
+						glog.Errorf("[cpumanager] reconcileState: failed to add container (pod: %s, container: %s, container id: %s, error: %v)", pod.Name, container.Name, containerID, err)
+						failure = append(failure, reconciledContainer{pod.Name, container.Name, containerID})
+					}
+				}
+				// Manager should be locked because defaultCPUSet may be modified.
+				m.Lock()
+				policyEx.CheckAndCorrectDefaultCPUSet(m.state)
+				m.Unlock()
+			}
+
 			cset := m.state.GetCPUSetOrDefault(containerID)
 			if cset.IsEmpty() {
 				// NOTE: This should not happen outside of tests.
@@ -266,6 +301,15 @@ func (m *manager) reconcileState() (success []reconciledContainer, failure []rec
 				continue
 			}
 
+			// Get current container's cpuset from status
+			currentContainerCpuset, err := m.getContainerCPUSet(containerID)
+			if err != nil {
+				glog.Warningf("[cpumanager] reconcileState: Failed to get cpuset from container %s, error: %v", containerID, err)
+			}
+			// Ignore if current container cpuset is the same with cset.
+			if currentContainerCpuset.Equals(cset) {
+				continue
+			}
 			glog.V(4).Infof("[cpumanager] reconcileState: updating container (pod: %s, container: %s, container id: %s, cpuset: \"%v\")", pod.Name, container.Name, containerID, cset)
 			err = m.updateContainerCPUSet(containerID, cset)
 			if err != nil {
@@ -273,6 +317,7 @@ func (m *manager) reconcileState() (success []reconciledContainer, failure []rec
 				failure = append(failure, reconciledContainer{pod.Name, container.Name, containerID})
 				continue
 			}
+			glog.V(4).Infof("[cpumanager] reconcileState: set container %s with cpuset %v successfully", containerID, cset)
 			success = append(success, reconciledContainer{pod.Name, container.Name, containerID})
 		}
 	}
@@ -303,4 +348,19 @@ func (m *manager) updateContainerCPUSet(containerID string, cpus cpuset.CPUSet) 
 		&runtimeapi.LinuxContainerResources{
 			CpusetCpus: cpus.String(),
 		})
+}
+
+func (m *manager) getContainerCPUSet(containerID string) (cpuset.CPUSet, error) {
+	containerStatus, err := m.containerRuntime.ContainerStatus(containerID)
+	if err != nil {
+		return cpuset.NewCPUSet(), err
+	}
+	if containerStatus.Resources == nil {
+		return cpuset.NewCPUSet(), fmt.Errorf("Failed to get resources of container: %s", containerID)
+	}
+	containerCpuset, err := cpuset.Parse(containerStatus.Resources.CpusetCpus)
+	if err != nil {
+		return cpuset.NewCPUSet(), err
+	}
+	return containerCpuset, nil
 }

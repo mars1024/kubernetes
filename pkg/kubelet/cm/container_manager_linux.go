@@ -36,10 +36,12 @@ import (
 
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
 	kubefeatures "k8s.io/kubernetes/pkg/features"
 	internalapi "k8s.io/kubernetes/pkg/kubelet/apis/cri"
@@ -109,7 +111,7 @@ type containerManagerImpl struct {
 	cadvisorInterface cadvisor.Interface
 	mountUtil         mount.Interface
 	NodeConfig
-	status Status
+	status            Status
 	// External containers being managed.
 	systemContainers []*systemContainer
 	qosContainers    QOSContainersInfo
@@ -133,6 +135,9 @@ type containerManagerImpl struct {
 	deviceManager devicemanager.Manager
 	// Interface for CPU affinity management.
 	cpuManager cpumanager.Manager
+	// customCgroupParents indicates the custom cgroup parent.
+	// Used to get all cgroup name of pod on disk.
+	customCgroupParents []string
 }
 
 type features struct {
@@ -195,7 +200,7 @@ func validateSystemRequirements(mountUtil mount.Interface) (features, error) {
 // TODO(vmarmol): Add limits to the system containers.
 // Takes the absolute name of the specified containers.
 // Empty container name disables use of the specified container.
-func NewContainerManager(mountUtil mount.Interface, cadvisorInterface cadvisor.Interface, nodeConfig NodeConfig, failSwapOn bool, devicePluginEnabled bool, recorder record.EventRecorder) (ContainerManager, error) {
+func NewContainerManager(kubeClient clientset.Interface, nodeName types.NodeName, mountUtil mount.Interface, cadvisorInterface cadvisor.Interface, nodeConfig NodeConfig, failSwapOn bool, devicePluginEnabled bool, recorder record.EventRecorder, customCgroupParents []string) (ContainerManager, error) {
 	subsystems, err := GetCgroupSubsystems()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get mounted cgroup subsystems: %v", err)
@@ -266,6 +271,7 @@ func NewContainerManager(mountUtil mount.Interface, cadvisorInterface cadvisor.I
 		cgroupRoot:          cgroupRoot,
 		recorder:            recorder,
 		qosContainerManager: qosContainerManager,
+		customCgroupParents: customCgroupParents,
 	}
 
 	glog.Infof("Creating device plugin manager: %t", devicePluginEnabled)
@@ -281,6 +287,8 @@ func NewContainerManager(mountUtil mount.Interface, cadvisorInterface cadvisor.I
 	// Initialize CPU manager
 	if utilfeature.DefaultFeatureGate.Enabled(kubefeatures.CPUManager) {
 		cm.cpuManager, err = cpumanager.NewManager(
+			kubeClient,
+			nodeName,
 			nodeConfig.ExperimentalCPUManagerPolicy,
 			nodeConfig.ExperimentalCPUManagerReconcilePeriod,
 			machineInfo,
@@ -293,6 +301,11 @@ func NewContainerManager(mountUtil mount.Interface, cadvisorInterface cadvisor.I
 		}
 	}
 
+	// If customCgroupParents is not defined in parameter, then try to get it from ConfigMap.
+	if len(cm.customCgroupParents) == 0 {
+		cm.listWatchCustomCgroupParentConfigMap(kubeClient)
+	}
+
 	return cm, nil
 }
 
@@ -300,14 +313,21 @@ func NewContainerManager(mountUtil mount.Interface, cadvisorInterface cadvisor.I
 // If qosCgroups are enabled then it returns the general pod container manager
 // otherwise it returns a no-op manager which essentially does nothing
 func (cm *containerManagerImpl) NewPodContainerManager() PodContainerManager {
+	cm.RLock()
+	defer cm.RUnlock()
+	// Make a copy of cm.customCgroupParents because cm.customCgroupParents may be changed.
+	copyCustomCgroupParents := make([]string, len(cm.customCgroupParents))
+	copy(copyCustomCgroupParents, cm.customCgroupParents)
+
 	if cm.NodeConfig.CgroupsPerQOS {
 		return &podContainerManagerImpl{
-			qosContainersInfo: cm.GetQOSContainersInfo(),
-			subsystems:        cm.subsystems,
-			cgroupManager:     cm.cgroupManager,
-			podPidsLimit:      cm.ExperimentalPodPidsLimit,
-			enforceCPULimits:  cm.EnforceCPULimits,
-			cpuCFSQuotaPeriod: uint64(cm.CPUCFSQuotaPeriod / time.Microsecond),
+			qosContainersInfo:   cm.GetQOSContainersInfo(),
+			subsystems:          cm.subsystems,
+			cgroupManager:       cm.cgroupManager,
+			podPidsLimit:        cm.ExperimentalPodPidsLimit,
+			enforceCPULimits:    cm.EnforceCPULimits,
+			cpuCFSQuotaPeriod:   uint64(cm.CPUCFSQuotaPeriod / time.Microsecond),
+			customCgroupParents: copyCustomCgroupParents,
 		}
 	}
 	return &podContainerManagerNoop{

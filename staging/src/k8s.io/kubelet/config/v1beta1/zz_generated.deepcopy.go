@@ -279,6 +279,11 @@ func (in *KubeletConfiguration) DeepCopyInto(out *KubeletConfiguration) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.CustomCgroupParents != nil {
+		in, out := &in.CustomCgroupParents, &out.CustomCgroupParents
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	return
 }
 

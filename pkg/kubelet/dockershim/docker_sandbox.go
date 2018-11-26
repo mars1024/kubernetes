@@ -187,6 +187,74 @@ func (ds *dockerService) RunPodSandbox(ctx context.Context, r *runtimeapi.RunPod
 	return resp, nil
 }
 
+func (ds *dockerService) StartPodSandbox(ctx context.Context, r *runtimeapi.StartPodSandboxRequest) (*runtimeapi.StartPodSandboxResponse, error) {
+	var namespace, name string
+	var hostNetwork bool
+
+	podSandboxID := r.PodSandboxId
+	resp := &runtimeapi.StartPodSandboxResponse{}
+
+	// Try to retrieve minimal sandbox information from docker daemon or sandbox checkpoint.
+	inspectResult, metadata, statusErr := ds.getPodSandboxDetails(podSandboxID)
+	if statusErr == nil {
+		namespace = metadata.Namespace
+		name = metadata.Name
+		hostNetwork = networkNamespaceMode(inspectResult) == runtimeapi.NamespaceMode_NODE
+	} else {
+		checkpoint := NewPodSandboxCheckpoint("", "", &CheckpointData{})
+		checkpointErr := ds.checkpointManager.GetCheckpoint(podSandboxID, checkpoint)
+
+		// Proceed if both sandbox container and checkpoint could not be found.
+		// Return error if encounter any unexpected error.
+		if checkpointErr != nil {
+			return nil, utilerrors.NewAggregate([]error{
+				fmt.Errorf("failed to get checkpoint for sandbox %q: %v", podSandboxID, checkpointErr),
+				fmt.Errorf("failed to get sandbox status: %v", statusErr)})
+		}
+		_, name, namespace, _, hostNetwork = checkpoint.GetData()
+	}
+
+	var err error
+	ds.setNetworkReady(podSandboxID, false)
+	defer func(e *error) {
+		// Set networking ready depending on the error return of
+		// the parent function
+		if *e == nil {
+			ds.setNetworkReady(podSandboxID, true)
+		}
+	}(&err)
+
+	// Step 4: Start the sandbox container.
+	// Assume kubelet's garbage collector would remove the sandbox later, if
+	// startContainer failed.
+	err = ds.client.StartContainer(podSandboxID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to start sandbox container for pod %s_%s: %v", namespace, name, err)
+	}
+
+	// Do not invoke network plugins if in hostNetwork mode.
+	if hostNetwork {
+		return resp, nil
+	}
+
+	// Step 5: Setup networking for the sandbox.
+	// All pod networking is setup by a CNI plugin discovered at startup time.
+	// This plugin assigns the pod ip, sets up routes inside the sandbox,
+	// creates interfaces etc. In theory, its jurisdiction ends with pod
+	// sandbox networking, but it might insert iptables rules or open ports
+	// on the host as well, to satisfy parts of the pod spec that aren't
+	// recognized by the CNI standard yet.
+	cID := kubecontainer.BuildContainerID(runtimeName, podSandboxID)
+	err = ds.network.SetUpPod(namespace, name, cID, nil)
+	if err != nil {
+		// TODO(random-liu): Do we need to teardown network here?
+		if err := ds.client.StopContainer(podSandboxID, defaultSandboxGracePeriod); err != nil {
+			glog.Warningf("Failed to stop sandbox container %q for pod %s_%s: %v", podSandboxID, namespace, name, err)
+		}
+	}
+	return resp, err
+}
+
 // StopPodSandbox stops the sandbox. If there are any running containers in the
 // sandbox, they should be force terminated.
 // TODO: This function blocks sandbox teardown on networking teardown. Is it
@@ -251,6 +319,12 @@ func (ds *dockerService) StopPodSandbox(ctx context.Context, r *runtimeapi.StopP
 		} else {
 			errList = append(errList, err)
 		}
+	}
+	// If call to tear down pod fail, we should not stop container.
+	// If we stop the container, sandbox pid will become to 0, and in next loop,
+	// valid network namespace path cannot be built, and network will never be deleted.
+	if len(errList) > 0 {
+		return nil, utilerrors.NewAggregate(errList)
 	}
 	if err := ds.client.StopContainer(podSandboxID, defaultSandboxGracePeriod); err != nil {
 		// Do not return error if the container does not exist

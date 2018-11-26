@@ -305,6 +305,11 @@ type KubeletConfiguration struct {
 	// This flag accepts a list of options. Acceptable options are `pods`, `system-reserved` & `kube-reserved`.
 	// Refer to [Node Allocatable](https://git.k8s.io/community/contributors/design-proposals/node/node-allocatable.md) doc for more information.
 	EnforceNodeAllocatable []string
+	// This flag indeicates the path of userinfo script
+	// If this flag is set, Kubelet will use userinfo script to backup and restore userinfo of the cotainers in upgrade procedure
+	UserinfoScriptPath string
+	// This flag tells Kubelet the path of custom cgroup parent, and Kubelet can find pod cgroup under them.
+	CustomCgroupParents []string
 }
 
 type KubeletAuthorizationMode string

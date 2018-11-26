@@ -64,6 +64,9 @@ type PodSandboxManager interface {
 	// RunPodSandbox creates and starts a pod-level sandbox. Runtimes should ensure
 	// the sandbox is in ready state.
 	RunPodSandbox(config *runtimeapi.PodSandboxConfig, runtimeHandler string) (string, error)
+	// StartPodSandbox Start a sandbox pod which was forced to stop by external factors.
+	// Network plugin returns same IPs when input same pod names and namespaces
+	StartPodSandbox(podSandboxID string) error
 	// StopPodSandbox stops the sandbox. If there are any running containers in the
 	// sandbox, they should be force terminated.
 	StopPodSandbox(podSandboxID string) error
@@ -116,4 +119,10 @@ type ImageManagerService interface {
 	RemoveImage(image *runtimeapi.ImageSpec) error
 	// ImageFsInfo returns information of the filesystem that is used to store images.
 	ImageFsInfo() ([]*runtimeapi.FilesystemUsage, error)
+}
+
+// VolumeService interface should be implemented by a container volume manager
+// The methods should be thread-safe.
+type VolumeService interface {
+	RemoveVolume(volumeName string) error
 }

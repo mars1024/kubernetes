@@ -185,6 +185,14 @@ func (in instrumentedRuntimeService) RunPodSandbox(config *runtimeapi.PodSandbox
 	return out, err
 }
 
+func (in instrumentedRuntimeService) StartPodSandbox(podSandboxID string) error {
+	const operation = "start_podsandbox"
+	defer recordOperation(operation, time.Now())
+
+	err := in.service.StartPodSandbox(podSandboxID)
+	recordError(operation, err)
+	return err
+}
 func (in instrumentedRuntimeService) StopPodSandbox(podSandboxID string) error {
 	const operation = "stop_podsandbox"
 	defer recordOperation(operation, time.Now())

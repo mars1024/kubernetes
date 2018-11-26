@@ -133,6 +133,7 @@ var (
 		"TLSCertFile",
 		"TLSPrivateKeyFile",
 		"ResolverConfig",
+		"UserinfoScriptPath",
 	)
 
 	// KubeletConfiguration fields that do not contain file paths.
@@ -217,5 +218,6 @@ var (
 		"TypeMeta.APIVersion",
 		"TypeMeta.Kind",
 		"VolumeStatsAggPeriod.Duration",
+		"CustomCgroupParents[*]",
 	)
 )

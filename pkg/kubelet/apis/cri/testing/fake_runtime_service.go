@@ -184,6 +184,24 @@ func (r *FakeRuntimeService) RunPodSandbox(config *runtimeapi.PodSandboxConfig, 
 	return podSandboxID, nil
 }
 
+func (r *FakeRuntimeService) StartPodSandbox(podSandboxID string) error {
+	r.Lock()
+	defer r.Unlock()
+
+	r.Called = append(r.Called, "StartSandbox")
+
+	if s, ok := r.Sandboxes[podSandboxID]; ok {
+		s.State = runtimeapi.PodSandboxState_SANDBOX_READY
+		s.Network = &runtimeapi.PodSandboxNetworkStatus{
+			Ip: FakePodSandboxIP,
+		}
+	} else {
+		return fmt.Errorf("pod sandbox %s not found", podSandboxID)
+	}
+
+	return nil
+}
+
 func (r *FakeRuntimeService) StopPodSandbox(podSandboxID string) error {
 	r.Lock()
 	defer r.Unlock()

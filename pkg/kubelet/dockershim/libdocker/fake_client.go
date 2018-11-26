@@ -919,3 +919,7 @@ func (f *FakeDockerClient) GetContainerStats(id string) (*dockertypes.StatsJSON,
 	f.appendCalled(calledDetail{name: "getContainerStats"})
 	return nil, fmt.Errorf("not implemented")
 }
+
+func (f *FakeDockerClient) RemoveVolume(volumeName string, force bool) error {
+	return nil
+}

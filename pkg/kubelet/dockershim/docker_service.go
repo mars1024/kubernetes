@@ -85,6 +85,7 @@ const (
 type CRIService interface {
 	runtimeapi.RuntimeServiceServer
 	runtimeapi.ImageServiceServer
+	runtimeapi.VolumeServiceServer
 	Start() error
 }
 

@@ -29,7 +29,7 @@ import (
 
 	"github.com/blang/semver"
 	dockertypes "github.com/docker/docker/api/types"
-	dockercontainer "github.com/docker/docker/api/types/container"
+	dockerunits "github.com/docker/go-units"
 	"k8s.io/api/core/v1"
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 )
@@ -104,15 +104,21 @@ func (ds *dockerService) updateCreateConfig(
 		// TODO: Can we assume the defaults are sane?
 		rOpts := lc.GetResources()
 		if rOpts != nil {
-			createConfig.HostConfig.Resources = dockercontainer.Resources{
-				// Memory and MemorySwap are set to the same value, this prevents containers from using any swap.
-				Memory:     rOpts.MemoryLimitInBytes,
-				MemorySwap: rOpts.MemoryLimitInBytes,
-				CPUShares:  rOpts.CpuShares,
-				CPUQuota:   rOpts.CpuQuota,
-				CPUPeriod:  rOpts.CpuPeriod,
+			resources := toDockerResources(rOpts)
+			if resources != nil {
+				createConfig.HostConfig.Resources = *resources
 			}
 			createConfig.HostConfig.OomScoreAdj = int(rOpts.OomScoreAdj)
+
+			if len(rOpts.Ulimits) != 0 {
+				for _, ulimit := range rOpts.Ulimits {
+					createConfig.HostConfig.Ulimits = append(createConfig.HostConfig.Ulimits, &dockerunits.Ulimit{
+						Name: ulimit.Name,
+						Soft: ulimit.Soft,
+						Hard: ulimit.Hard,
+					})
+				}
+			}
 		}
 		// Note: ShmSize is handled in kube_docker_client.go
 

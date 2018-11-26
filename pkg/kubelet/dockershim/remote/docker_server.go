@@ -68,6 +68,8 @@ func (s *DockerServer) Start() error {
 	)
 	runtimeapi.RegisterRuntimeServiceServer(s.server, s.service)
 	runtimeapi.RegisterImageServiceServer(s.server, s.service)
+	// CRI Extension: support volume service
+	runtimeapi.RegisterVolumeServiceServer(s.server, s.service)
 	go func() {
 		if err := s.server.Serve(l); err != nil {
 			glog.Fatalf("Failed to serve connections: %v", err)

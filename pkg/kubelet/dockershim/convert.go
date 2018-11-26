@@ -62,6 +62,15 @@ func imageInspectToRuntimeAPIImage(image *dockertypes.ImageInspect) (*runtimeapi
 		runtimeImage.Uid = &runtimeapi.Int64Value{Value: *uid}
 	}
 	runtimeImage.Username = username
+
+	// CRI extension: get volumes of image in ImageStatus()
+	volumes := map[string]*runtimeapi.Volume{}
+	for key := range image.Config.Volumes {
+		volumes[key] = &runtimeapi.Volume{}
+	}
+	if len(volumes) > 0 {
+		runtimeImage.Volumes = volumes
+	}
 	return runtimeImage, nil
 }
 

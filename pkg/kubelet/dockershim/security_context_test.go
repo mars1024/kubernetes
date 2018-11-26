@@ -380,7 +380,7 @@ func TestModifyContainerNamespaceOptions(t *testing.T) {
 	}
 }
 
-func TestModifyContainerNamespacePIDOverride(t *testing.T) {
+func TestModifyContainerNamespacePIDOverrideExtension(t *testing.T) {
 	cases := []struct {
 		name            string
 		version         *semver.Version
@@ -388,37 +388,37 @@ func TestModifyContainerNamespacePIDOverride(t *testing.T) {
 	}{
 		{
 			name:     "mode:CONTAINER docker:NEW",
-			version:  &semver.Version{Major: 1, Minor: 26},
+			version:  &semver.Version{Major: 1, Minor: 24},
 			input:    "",
 			expected: "",
 		},
 		{
 			name:     "mode:CONTAINER docker:OLD",
-			version:  &semver.Version{Major: 1, Minor: 25},
+			version:  &semver.Version{Major: 1, Minor: 23},
 			input:    "",
 			expected: "",
 		},
 		{
 			name:     "mode:HOST docker:NEW",
-			version:  &semver.Version{Major: 1, Minor: 26},
+			version:  &semver.Version{Major: 1, Minor: 24},
 			input:    "host",
 			expected: "host",
 		},
 		{
 			name:     "mode:HOST docker:OLD",
-			version:  &semver.Version{Major: 1, Minor: 25},
+			version:  &semver.Version{Major: 1, Minor: 23},
 			input:    "host",
 			expected: "host",
 		},
 		{
 			name:     "mode:POD docker:NEW",
-			version:  &semver.Version{Major: 1, Minor: 26},
+			version:  &semver.Version{Major: 1, Minor: 24},
 			input:    "container:sandbox",
 			expected: "container:sandbox",
 		},
 		{
 			name:     "mode:POD docker:OLD",
-			version:  &semver.Version{Major: 1, Minor: 25},
+			version:  &semver.Version{Major: 1, Minor: 23},
 			input:    "container:sandbox",
 			expected: "",
 		},

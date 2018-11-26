@@ -270,3 +270,12 @@ func (in instrumentedInterface) GetContainerStats(id string) (*dockertypes.Stats
 	recordError(operation, err)
 	return out, err
 }
+
+func (in instrumentedInterface) RemoveVolume(volumeName string, force bool) error {
+	const operation = "remove_volume"
+	defer recordOperation(operation, time.Now())
+
+	err := in.client.RemoveVolume(volumeName, force)
+	recordError(operation, err)
+	return err
+}

@@ -56,6 +56,8 @@ import (
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	api "k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/apis/core/v1/validation"
+	"k8s.io/kubernetes/pkg/kubelet/autonomy/sketch"
+	sketchhandler "k8s.io/kubernetes/pkg/kubelet/autonomy/sketch/handler"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	"k8s.io/kubernetes/pkg/kubelet/prober"
 	"k8s.io/kubernetes/pkg/kubelet/server/portforward"
@@ -82,6 +84,7 @@ type Server struct {
 	restfulCont                containerInterface
 	resourceAnalyzer           stats.ResourceAnalyzer
 	redirectContainerStreaming bool
+	sketchProvider             sketch.Provider
 }
 
 type TLSOptions struct {
@@ -129,9 +132,10 @@ func ListenAndServeKubeletServer(
 	enableDebuggingHandlers,
 	enableContentionProfiling,
 	redirectContainerStreaming bool,
-	criHandler http.Handler) {
+	criHandler http.Handler,
+	sketchProvider sketch.Provider) {
 	glog.Infof("Starting to listen on %s:%d", address, port)
-	handler := NewServer(host, resourceAnalyzer, auth, enableDebuggingHandlers, enableContentionProfiling, redirectContainerStreaming, criHandler)
+	handler := NewServer(host, resourceAnalyzer, auth, enableDebuggingHandlers, enableContentionProfiling, redirectContainerStreaming, criHandler, sketchProvider)
 	s := &http.Server{
 		Addr:           net.JoinHostPort(address.String(), strconv.FormatUint(uint64(port), 10)),
 		Handler:        &handler,
@@ -149,9 +153,9 @@ func ListenAndServeKubeletServer(
 }
 
 // ListenAndServeKubeletReadOnlyServer initializes a server to respond to HTTP network requests on the Kubelet.
-func ListenAndServeKubeletReadOnlyServer(host HostInterface, resourceAnalyzer stats.ResourceAnalyzer, address net.IP, port uint) {
+func ListenAndServeKubeletReadOnlyServer(host HostInterface, resourceAnalyzer stats.ResourceAnalyzer, address net.IP, port uint, sketchProvider sketch.Provider) {
 	glog.V(1).Infof("Starting to listen read-only on %s:%d", address, port)
-	s := NewServer(host, resourceAnalyzer, nil, false, false, false, nil)
+	s := NewServer(host, resourceAnalyzer, nil, false, false, false, nil, sketchProvider)
 
 	server := &http.Server{
 		Addr:           net.JoinHostPort(address.String(), strconv.FormatUint(uint64(port), 10)),
@@ -194,13 +198,15 @@ func NewServer(
 	enableDebuggingHandlers,
 	enableContentionProfiling,
 	redirectContainerStreaming bool,
-	criHandler http.Handler) Server {
+	criHandler http.Handler,
+	sketchProvider sketch.Provider) Server {
 	server := Server{
 		host:                       host,
 		resourceAnalyzer:           resourceAnalyzer,
 		auth:                       auth,
 		restfulCont:                &filteringContainer{Container: restful.NewContainer()},
 		redirectContainerStreaming: redirectContainerStreaming,
+		sketchProvider:             sketchProvider,
 	}
 	if auth != nil {
 		server.InstallAuthFilter()
@@ -292,6 +298,7 @@ func (s *Server) InstallDefaultHandlers() {
 	s.restfulCont.Handle(cadvisorMetricsPath,
 		promhttp.HandlerFor(r, promhttp.HandlerOpts{ErrorHandling: promhttp.ContinueOnError}),
 	)
+	s.restfulCont.Add(sketchhandler.CreateHandlers(sketchhandler.APIRootPath, s.sketchProvider))
 
 	// prober metrics are exposed under a different endpoint
 	p := prometheus.NewRegistry()

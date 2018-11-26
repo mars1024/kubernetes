@@ -54,6 +54,8 @@ import (
 
 	// Do some initialization to decode the query parameters correctly.
 	_ "k8s.io/kubernetes/pkg/apis/core/install"
+	sketchhandler "k8s.io/kubernetes/pkg/kubelet/autonomy/sketch/handler"
+	sketcthtesting "k8s.io/kubernetes/pkg/kubelet/autonomy/sketch/testing"
 	"k8s.io/kubernetes/pkg/kubelet/cm"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	"k8s.io/kubernetes/pkg/kubelet/server/portforward"
@@ -333,7 +335,8 @@ func newServerTestWithDebug(enableDebugging, redirectContainerStreaming bool, st
 		enableDebugging,
 		false,
 		redirectContainerStreaming,
-		fw.criHandler)
+		fw.criHandler,
+		&sketcthtesting.Provider{})
 	fw.serverUnderTest = &server
 	fw.testHTTPServer = httptest.NewServer(fw.serverUnderTest)
 	return fw
@@ -719,6 +722,8 @@ func TestAuthFilters(t *testing.T) {
 			return "log"
 		case isSubpath(path, metricsPath):
 			return "metrics"
+		case isSubpath(path, sketchhandler.APIRootPath):
+			return "sketch"
 
 		// Cases for subpaths we expect to map to the "proxy" subresource
 		case isSubpath(path, "/attach"),

@@ -25,6 +25,7 @@ import (
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
+	sketchhandler "k8s.io/kubernetes/pkg/kubelet/autonomy/sketch/handler"
 )
 
 // KubeletAuth implements AuthInterface
@@ -106,6 +107,8 @@ func (n nodeAuthorizerAttributesGetter) GetRequestAttributes(u user.Info, r *htt
 		attrs.Subresource = "log"
 	case isSubpath(requestPath, specPath):
 		attrs.Subresource = "spec"
+	case isSubpath(requestPath, sketchhandler.APIRootPath):
+		attrs.Subresource = "sketch"
 	}
 
 	glog.V(5).Infof("Node request attributes: attrs=%#v", attrs)

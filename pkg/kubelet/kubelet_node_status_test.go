@@ -315,6 +315,8 @@ func TestUpdateNewNodeStatus(t *testing.T) {
 
 			updatedNode, err := applyNodeStatusPatch(&existingNode, actions[1].(core.PatchActionImpl).GetPatch())
 			assert.NoError(t, err)
+			// because set node localinfo will update annotation, so set annotation to nil.
+			updatedNode.Annotations = nil
 			for i, cond := range updatedNode.Status.Conditions {
 				assert.False(t, cond.LastHeartbeatTime.IsZero(), "LastHeartbeatTime for %v condition is zero", cond.Type)
 				assert.False(t, cond.LastTransitionTime.IsZero(), "LastTransitionTime for %v condition  is zero", cond.Type)
@@ -521,6 +523,8 @@ func TestUpdateExistingNodeStatus(t *testing.T) {
 
 	updatedNode, err := applyNodeStatusPatch(&existingNode, patchAction.GetPatch())
 	require.NoError(t, err)
+	// because set node localinfo will update annotation, so set annotation to nil.
+	updatedNode.Annotations = nil
 
 	for i, cond := range updatedNode.Status.Conditions {
 		old := metav1.Date(2012, 1, 1, 0, 0, 0, 0, time.UTC).Time
@@ -725,6 +729,8 @@ func TestUpdateNodeStatusWithRuntimeStateError(t *testing.T) {
 
 		updatedNode, err := kubeClient.CoreV1().Nodes().Get(testKubeletHostname, metav1.GetOptions{})
 		require.NoError(t, err, "can't apply node status patch")
+		// because set node localinfo will update annotation, so set annotation to nil.
+		updatedNode.Annotations = nil
 
 		for i, cond := range updatedNode.Status.Conditions {
 			assert.False(t, cond.LastHeartbeatTime.IsZero(), "LastHeartbeatTime for %v condition is zero", cond.Type)
@@ -1100,6 +1106,8 @@ func TestUpdateNewNodeStatusTooLargeReservation(t *testing.T) {
 
 	updatedNode, err := applyNodeStatusPatch(&existingNode, actions[1].(core.PatchActionImpl).GetPatch())
 	assert.NoError(t, err)
+	// because set node localinfo will update annotation, so set annotation to nil.
+	updatedNode.Annotations = nil
 	assert.True(t, apiequality.Semantic.DeepEqual(expectedNode.Status.Allocatable, updatedNode.Status.Allocatable), "%s", diff.ObjectDiff(expectedNode.Status.Allocatable, updatedNode.Status.Allocatable))
 }
 
@@ -1560,4 +1568,122 @@ func TestRegisterWithApiServerWithTaint(t *testing.T) {
 
 		return
 	})
+}
+
+func TestSyncNodeStatusWithBackoff(t *testing.T) {
+	testKubelet := newTestKubelet(t, false /* controllerAttachDetachEnabled */)
+	defer testKubelet.Cleanup()
+	kubelet := testKubelet.kubelet
+	kubelet.containerManager = &localCM{
+		ContainerManager: cm.NewStubContainerManager(),
+		allocatableReservation: v1.ResourceList{
+			v1.ResourceCPU:    *resource.NewMilliQuantity(200, resource.DecimalSI),
+			v1.ResourceMemory: *resource.NewQuantity(100E6, resource.BinarySI),
+		},
+		capacity: v1.ResourceList{
+			v1.ResourceCPU:              *resource.NewMilliQuantity(2000, resource.DecimalSI),
+			v1.ResourceMemory:           *resource.NewQuantity(20E9, resource.BinarySI),
+			v1.ResourceEphemeralStorage: *resource.NewQuantity(5000, resource.BinarySI),
+		},
+	}
+
+	kubeClient := testKubelet.fakeKubeClient
+	existingNode := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: testKubeletHostname},
+		Spec:       v1.NodeSpec{},
+		Status: v1.NodeStatus{
+			Conditions: []v1.NodeCondition{
+				{
+					Type:               v1.NodeOutOfDisk,
+					Status:             v1.ConditionFalse,
+					Reason:             "KubeletHasSufficientDisk",
+					Message:            fmt.Sprintf("kubelet has sufficient disk space available"),
+					LastHeartbeatTime:  metav1.Date(2012, 1, 1, 0, 0, 0, 0, time.UTC),
+					LastTransitionTime: metav1.Date(2012, 1, 1, 0, 0, 0, 0, time.UTC),
+				},
+				{
+					Type:               v1.NodeMemoryPressure,
+					Status:             v1.ConditionFalse,
+					Reason:             "KubeletHasSufficientMemory",
+					Message:            fmt.Sprintf("kubelet has sufficient memory available"),
+					LastHeartbeatTime:  metav1.Date(2012, 1, 1, 0, 0, 0, 0, time.UTC),
+					LastTransitionTime: metav1.Date(2012, 1, 1, 0, 0, 0, 0, time.UTC),
+				},
+				{
+					Type:               v1.NodeDiskPressure,
+					Status:             v1.ConditionFalse,
+					Reason:             "KubeletHasSufficientDisk",
+					Message:            fmt.Sprintf("kubelet has sufficient disk space available"),
+					LastHeartbeatTime:  metav1.Date(2012, 1, 1, 0, 0, 0, 0, time.UTC),
+					LastTransitionTime: metav1.Date(2012, 1, 1, 0, 0, 0, 0, time.UTC),
+				},
+				{
+					Type:               v1.NodePIDPressure,
+					Status:             v1.ConditionFalse,
+					Reason:             "KubeletHasSufficientPID",
+					Message:            fmt.Sprintf("kubelet has sufficient PID available"),
+					LastHeartbeatTime:  metav1.Date(2012, 1, 1, 0, 0, 0, 0, time.UTC),
+					LastTransitionTime: metav1.Date(2012, 1, 1, 0, 0, 0, 0, time.UTC),
+				},
+				{
+					Type:               v1.NodeReady,
+					Status:             v1.ConditionTrue,
+					Reason:             "KubeletReady",
+					Message:            fmt.Sprintf("kubelet is posting ready status"),
+					LastHeartbeatTime:  metav1.Date(2012, 1, 1, 0, 0, 0, 0, time.UTC),
+					LastTransitionTime: metav1.Date(2012, 1, 1, 0, 0, 0, 0, time.UTC),
+				},
+			},
+			Capacity: v1.ResourceList{
+				v1.ResourceCPU:    *resource.NewMilliQuantity(3000, resource.DecimalSI),
+				v1.ResourceMemory: *resource.NewQuantity(20E9, resource.BinarySI),
+				v1.ResourcePods:   *resource.NewQuantity(0, resource.DecimalSI),
+			},
+			Allocatable: v1.ResourceList{
+				v1.ResourceCPU:    *resource.NewMilliQuantity(2800, resource.DecimalSI),
+				v1.ResourceMemory: *resource.NewQuantity(19900E6, resource.BinarySI),
+				v1.ResourcePods:   *resource.NewQuantity(0, resource.DecimalSI),
+			},
+		},
+	}
+	kubeClient.AddReactor("get", "nodes", func(action core.Action) (bool, runtime.Object, error) {
+		// Return an existing (matching) node on get.
+		return true, existingNode, nil
+	})
+	notImplemented := func(action core.Action) (bool, runtime.Object, error) {
+		return true, nil, fmt.Errorf("no reaction implemented for %s", action)
+	}
+	var finishTime time.Time
+	kubeClient.AddReactor("patch", "nodes", func(action core.Action) (bool, runtime.Object, error) {
+		if action.GetSubresource() == "status" {
+			finishTime = time.Now()
+			return true, nil, &apierrors.StatusError{
+				ErrStatus: metav1.Status{Reason: metav1.StatusReasonTooManyRequests},
+			}
+		}
+		return notImplemented(action)
+	})
+	machineInfo := &cadvisorapi.MachineInfo{
+		MachineID:      "123",
+		SystemUUID:     "abc",
+		BootID:         "1b3",
+		NumCores:       2,
+		MemoryCapacity: 20E9,
+	}
+
+	kubelet.machineInfo = machineInfo
+
+	kubelet.updateRuntimeUp()
+	kubelet.registerNode = false
+
+	stopChan := make(chan struct{})
+	stopTimer := time.NewTimer(30 * time.Second)
+	startTime := time.Now()
+	go wait.Until(kubelet.syncNodeStatus, 10*time.Second, stopChan)
+
+	select {
+	case <-stopTimer.C:
+		close(stopChan)
+	}
+	assert.True(t, finishTime.After(startTime.Add(time.Duration(25*time.Second))))
 }

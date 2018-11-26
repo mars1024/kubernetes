@@ -28,6 +28,7 @@ type InternalContainerLifecycle interface {
 	PreStartContainer(pod *v1.Pod, container *v1.Container, containerID string) error
 	PreStopContainer(containerID string) error
 	PostStopContainer(containerID string) error
+	PostResizeContainer(pod *v1.Pod, container *v1.Container, containerID string) error
 }
 
 // Implements InternalContainerLifecycle interface.

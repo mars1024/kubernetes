@@ -691,6 +691,8 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.Dependencies, stopCh <-chan
 		devicePluginEnabled := utilfeature.DefaultFeatureGate.Enabled(features.DevicePlugins)
 
 		kubeDeps.ContainerManager, err = cm.NewContainerManager(
+			kubeDeps.KubeClient,
+			nodeName,
 			kubeDeps.Mounter,
 			kubeDeps.CAdvisorInterface,
 			cm.NodeConfig{
@@ -720,7 +722,8 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.Dependencies, stopCh <-chan
 			},
 			s.FailSwapOn,
 			devicePluginEnabled,
-			kubeDeps.Recorder)
+			kubeDeps.Recorder,
+			s.CustomCgroupParents)
 
 		if err != nil {
 			return err

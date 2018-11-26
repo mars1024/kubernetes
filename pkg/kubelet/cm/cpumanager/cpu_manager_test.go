@@ -110,6 +110,10 @@ func (rt mockRuntimeService) UpdateContainerResources(id string, resources *runt
 	return rt.err
 }
 
+func (rt mockRuntimeService) ContainerStatus(id string) (*runtimeapi.ContainerStatus, error) {
+	return &runtimeapi.ContainerStatus{}, rt.err
+}
+
 type mockPodStatusProvider struct {
 	podStatus v1.PodStatus
 	found     bool
@@ -299,7 +303,7 @@ func TestCPUManagerGenerate(t *testing.T) {
 			}
 			defer os.RemoveAll(sDir)
 
-			mgr, err := NewManager(testCase.cpuPolicyName, 5*time.Second, machineInfo, testCase.nodeAllocatableReservation, sDir)
+			mgr, err := NewManager(nil, "", testCase.cpuPolicyName, 5*time.Second, machineInfo, testCase.nodeAllocatableReservation, sDir)
 			if testCase.expectedError != nil {
 				if !strings.Contains(err.Error(), testCase.expectedError.Error()) {
 					t.Errorf("Unexpected error message. Have: %s wants %s", err.Error(), testCase.expectedError.Error())

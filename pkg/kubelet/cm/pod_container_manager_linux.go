@@ -30,6 +30,7 @@ import (
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	v1qos "k8s.io/kubernetes/pkg/apis/core/v1/helper/qos"
 	kubefeatures "k8s.io/kubernetes/pkg/features"
+	"k8s.io/kubernetes/pkg/kubelet/util/format"
 )
 
 const (
@@ -54,6 +55,8 @@ type podContainerManagerImpl struct {
 	// cpuCFSQuotaPeriod is the cfs period value, cfs_period_us, setting per
 	// node for all containers in usec
 	cpuCFSQuotaPeriod uint64
+	// customCgroupParents indicates the custom cgroup parent which pod can run under
+	customCgroupParents []string
 }
 
 // Make sure that podContainerManagerImpl implements the PodContainerManager interface
@@ -70,6 +73,11 @@ func (m *podContainerManagerImpl) applyLimits(pod *v1.Pod) error {
 // Exists checks if the pod's cgroup already exists
 func (m *podContainerManagerImpl) Exists(pod *v1.Pod) bool {
 	podContainerName, _ := m.GetPodContainerName(pod)
+	// If podContainerName is nil, it means invalid custom cgroup parent is applied.
+	// Just return false which means "not exists".
+	if podContainerName == nil {
+		return false
+	}
 	return m.cgroupManager.Exists(podContainerName)
 }
 
@@ -78,6 +86,11 @@ func (m *podContainerManagerImpl) Exists(pod *v1.Pod) bool {
 // If the pod level container doesn't already exist it is created.
 func (m *podContainerManagerImpl) EnsureExists(pod *v1.Pod) error {
 	podContainerName, _ := m.GetPodContainerName(pod)
+	// If podContainerName is nil, it means invalid custom cgroup parent is applied.
+	// Just return nil.
+	if podContainerName == nil {
+		return nil
+	}
 	// check if container already exist
 	alreadyExists := m.Exists(pod)
 	if !alreadyExists {
@@ -120,6 +133,24 @@ func (m *podContainerManagerImpl) GetPodContainerName(pod *v1.Pod) (CgroupName, 
 
 	// Get the absolute path of the cgroup
 	cgroupName := NewCgroupName(parentContainer, podContainer)
+	userDefinedCgroupParent := GetCgroupParentFromAnnotation(pod)
+
+	if userDefinedCgroupParent != "" {
+		isLegal := false
+		for _, customCgroupParent := range m.customCgroupParents {
+			if userDefinedCgroupParent == customCgroupParent {
+				isLegal = true
+				break
+			}
+		}
+		if !isLegal {
+			glog.Warningf("Invalid cgroup parent: %s in pod %s, only support %v",
+				userDefinedCgroupParent, format.Pod(pod), m.customCgroupParents)
+			return nil, ""
+		}
+		userDefinedParentContainer := []string{userDefinedCgroupParent}
+		cgroupName = NewCgroupName(userDefinedParentContainer, podContainer)
+	}
 	// Get the literal cgroupfs name
 	cgroupfsName := m.cgroupManager.Name(cgroupName)
 
@@ -232,7 +263,14 @@ func (m *podContainerManagerImpl) IsPodCgroup(cgroupfs string) (bool, types.UID)
 func (m *podContainerManagerImpl) GetAllPodsFromCgroups() (map[types.UID]CgroupName, error) {
 	// Map for storing all the found pods on the disk
 	foundPods := make(map[types.UID]CgroupName)
-	qosContainersList := [3]CgroupName{m.qosContainersInfo.BestEffort, m.qosContainersInfo.Burstable, m.qosContainersInfo.Guaranteed}
+	qosContainersList := []CgroupName{m.qosContainersInfo.BestEffort, m.qosContainersInfo.Burstable, m.qosContainersInfo.Guaranteed}
+	if len(m.customCgroupParents) != 0 {
+		var customCgroupParentNames []CgroupName
+		for _, customCgroupParent := range m.customCgroupParents {
+			customCgroupParentNames = append(customCgroupParentNames, []CgroupName{CgroupName([]string{customCgroupParent})}...)
+		}
+		qosContainersList = append(qosContainersList, customCgroupParentNames...)
+	}
 	// Scan through all the subsystem mounts
 	// and through each QoS cgroup directory for each subsystem mount
 	// If a pod cgroup exists in even a single subsystem mount
@@ -324,4 +362,8 @@ func (m *podContainerManagerNoop) GetAllPodsFromCgroups() (map[types.UID]CgroupN
 
 func (m *podContainerManagerNoop) IsPodCgroup(cgroupfs string) (bool, types.UID) {
 	return false, types.UID("")
+}
+
+func (m *podContainerManagerNoop) Update(_ *v1.Pod) error {
+	return nil
 }

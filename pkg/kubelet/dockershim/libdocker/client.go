@@ -66,6 +66,7 @@ type Interface interface {
 	ResizeContainerTTY(id string, height, width uint) error
 	ResizeExecTTY(id string, height, width uint) error
 	GetContainerStats(id string) (*dockertypes.StatsJSON, error)
+	RemoveVolume(volumeName string, force bool) error
 }
 
 // Get a *dockerapi.Client, either using the endpoint passed in, or using

@@ -211,7 +211,7 @@ func modifyHostOptionsForContainer(nsOpts *runtimeapi.NamespaceOption, podSandbo
 //        minimum Docker version is at least 1.13.1 (API version 1.26).
 // TODO(verb): remove entirely once these two conditions are satisfied
 func modifyContainerPIDNamespaceOverrides(version *semver.Version, hc *dockercontainer.HostConfig, podSandboxID string) {
-	if version.LT(semver.Version{Major: 1, Minor: 26}) && strings.HasPrefix(string(hc.PidMode), "container:") {
+	if version.LT(semver.Version{Major: 1, Minor: 24}) && strings.HasPrefix(string(hc.PidMode), "container:") {
 		hc.PidMode = ""
 	}
 }

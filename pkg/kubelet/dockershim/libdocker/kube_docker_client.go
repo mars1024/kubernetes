@@ -676,3 +676,15 @@ func IsImageNotFoundError(err error) bool {
 	_, ok := err.(ImageNotFoundError)
 	return ok
 }
+
+// RemoveVolume remove volume from docker runtime.
+func (d *kubeDockerClient) RemoveVolume(volumeName string, force bool) error {
+	ctx, cancel := d.getTimeoutContext()
+	defer cancel()
+	err := d.client.VolumeRemove(ctx, volumeName, force)
+	if ctxErr := contextError(ctx); ctxErr != nil {
+		return ctxErr
+	}
+
+	return err
+}

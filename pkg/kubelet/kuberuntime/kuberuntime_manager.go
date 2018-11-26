@@ -24,16 +24,20 @@ import (
 
 	"github.com/golang/glog"
 	cadvisorapi "github.com/google/cadvisor/info/v1"
+	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
+	sigmautil "k8s.io/kubernetes/pkg/kubelet/sigma"
 
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubetypes "k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/client-go/tools/record"
 	ref "k8s.io/client-go/tools/reference"
 	"k8s.io/client-go/util/flowcontrol"
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	"k8s.io/kubernetes/pkg/credentialprovider"
+	"k8s.io/kubernetes/pkg/features"
 	internalapi "k8s.io/kubernetes/pkg/kubelet/apis/cri"
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 	"k8s.io/kubernetes/pkg/kubelet/cm"
@@ -41,6 +45,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/events"
 	"k8s.io/kubernetes/pkg/kubelet/images"
 	"k8s.io/kubernetes/pkg/kubelet/lifecycle"
+	kubepod "k8s.io/kubernetes/pkg/kubelet/pod"
 	proberesults "k8s.io/kubernetes/pkg/kubelet/prober/results"
 	"k8s.io/kubernetes/pkg/kubelet/runtimeclass"
 	"k8s.io/kubernetes/pkg/kubelet/types"
@@ -123,6 +128,12 @@ type kubeGenericRuntimeManager struct {
 
 	// Manage RuntimeClass resources.
 	runtimeClassManager *runtimeclass.Manager
+
+	// The userinfoBackup can backup or restore userinfo when upgrade container.
+	userinfoBackup *UserinfoBackup
+
+	// kubeGenericRuntimeManager can get new pod from podManager.
+	podManager kubepod.Manager
 }
 
 type KubeGenericRuntime interface {
@@ -159,6 +170,8 @@ func NewKubeGenericRuntimeManager(
 	internalLifecycle cm.InternalContainerLifecycle,
 	legacyLogProvider LegacyLogProvider,
 	runtimeClassManager *runtimeclass.Manager,
+	userinfoScript string,
+	podManager kubepod.Manager,
 ) (KubeGenericRuntime, error) {
 	kubeRuntimeManager := &kubeGenericRuntimeManager{
 		recorder:            recorder,
@@ -176,6 +189,8 @@ func NewKubeGenericRuntimeManager(
 		internalLifecycle:   internalLifecycle,
 		legacyLogProvider:   legacyLogProvider,
 		runtimeClassManager: runtimeClassManager,
+		userinfoBackup:      NewUserinfoBackup(userinfoScript),
+		podManager:          podManager,
 	}
 
 	typedVersion, err := kubeRuntimeManager.runtimeService.Version(kubeRuntimeAPIVersion)
@@ -372,6 +387,8 @@ type podActions struct {
 	// Whether need to create a new sandbox. If needed to kill pod and create a
 	// a new pod sandbox, all init containers need to be purged (i.e., removed).
 	CreateSandbox bool
+	// Whether need to start the latest sandbox.
+	StartSandbox bool
 	// The id of existing sandbox. It is used for starting containers in ContainersToStart.
 	SandboxID string
 	// The attempt number of creating sandboxes for the pod.
@@ -387,14 +404,35 @@ type podActions struct {
 	// the key is the container ID of the container, while
 	// the value contains necessary information to kill a container.
 	ContainersToKill map[kubecontainer.ContainerID]containerToKillInfo
+	// ContainersToKillBecauseDesireState keeps a map of containers that need to be killed, note that
+	// the key is the container ID of the container, while
+	// the value contains necessary information to kill a container.
+	// it's operation same to ContainersToKill, it just used to distinguish.
+	ContainersToKillBecauseDesireState map[kubecontainer.ContainerID]containerOperationInfo
+	// ContainersToStartBecauseDesireState keeps a map of containers that need to be to started,
+	// the key is the container ID of the container, while
+	// the value contains necessary information to start a container.
+	// it different from containersToStart, because it not need to create a container.
+	ContainersToStartBecauseDesireState map[kubecontainer.ContainerID]containerOperationInfo
+	// ContainersToUpdate keeps a map of containers that need to be updated, note that
+	// the key is the container ID of the container, while
+	// the value contains necessary information to update a container.
+	ContainersToUpdate map[kubecontainer.ContainerID]containerOperationInfo
+	// ContainersToUpgrade keeps a map of containers that need to be upgraded, note that
+	// the key is the container ID of the container, while
+	// the value contains necessary information to upgrade a container.
+	ContainersToUpgrade map[kubecontainer.ContainerID]containerOperationInfo
+	// ContainersToStartBecausePause keeps a map of containers in paused state.
+	// Paused container is in running state without doing PostStartHook.
+	ContainersToStartBecausePause map[kubecontainer.ContainerID]containerOperationInfo
 }
 
 // podSandboxChanged checks whether the spec of the pod is changed and returns
-// (changed, new attempt, original sandboxID if exist).
-func (m *kubeGenericRuntimeManager) podSandboxChanged(pod *v1.Pod, podStatus *kubecontainer.PodStatus) (bool, uint32, string) {
+// (changed, needStart, new attempt, original sandboxID if exist).
+func (m *kubeGenericRuntimeManager) podSandboxChanged(pod *v1.Pod, podStatus *kubecontainer.PodStatus) (bool, bool, uint32, string) {
 	if len(podStatus.SandboxStatuses) == 0 {
 		glog.V(2).Infof("No sandbox for pod %q can be found. Need to start a new one", format.Pod(pod))
-		return true, 0, ""
+		return true, false, 0, ""
 	}
 
 	readySandboxCount := 0
@@ -408,31 +446,80 @@ func (m *kubeGenericRuntimeManager) podSandboxChanged(pod *v1.Pod, podStatus *ku
 	sandboxStatus := podStatus.SandboxStatuses[0]
 	if readySandboxCount > 1 {
 		glog.V(2).Infof("More than 1 sandboxes for pod %q are ready. Need to reconcile them", format.Pod(pod))
-		return true, sandboxStatus.Metadata.Attempt + 1, sandboxStatus.Id
+		return true, false, sandboxStatus.Metadata.Attempt + 1, sandboxStatus.Id
 	}
 	if sandboxStatus.State != runtimeapi.PodSandboxState_SANDBOX_READY {
-		glog.V(2).Infof("No ready sandbox for pod %q can be found. Need to start a new one", format.Pod(pod))
-		return true, sandboxStatus.Metadata.Attempt + 1, sandboxStatus.Id
+		glog.V(2).Infof("No ready sandbox for pod %q can be found. Need to start the latest one", format.Pod(pod))
+		return false, true, sandboxStatus.Metadata.Attempt + 1, sandboxStatus.Id
 	}
 
 	// Needs to create a new sandbox when network namespace changed.
 	if sandboxStatus.GetLinux().GetNamespaces().GetOptions().GetNetwork() != networkNamespaceForPod(pod) {
 		glog.V(2).Infof("Sandbox for pod %q has changed. Need to start a new one", format.Pod(pod))
-		return true, sandboxStatus.Metadata.Attempt + 1, ""
+		return true, false, sandboxStatus.Metadata.Attempt + 1, ""
 	}
 
 	// Needs to create a new sandbox when the sandbox does not have an IP address.
 	if !kubecontainer.IsHostNetworkPod(pod) && sandboxStatus.Network.Ip == "" {
 		glog.V(2).Infof("Sandbox for pod %q has no IP address.  Need to start a new one", format.Pod(pod))
-		return true, sandboxStatus.Metadata.Attempt + 1, sandboxStatus.Id
+		return true, false, sandboxStatus.Metadata.Attempt + 1, sandboxStatus.Id
 	}
 
-	return false, sandboxStatus.Metadata.Attempt, sandboxStatus.Id
+	return false, false, sandboxStatus.Metadata.Attempt, sandboxStatus.Id
 }
 
-func containerChanged(container *v1.Container, containerStatus *kubecontainer.ContainerStatus) (uint64, uint64, bool) {
+func (m *kubeGenericRuntimeManager) containerChanged(container *v1.Container, containerStatus *kubecontainer.ContainerStatus, pod *v1.Pod) (uint64, uint64, bool, bool) {
+	needToRestart := false
+	needToResize := false
+
 	expectedHash := kubecontainer.HashContainer(container)
-	return expectedHash, containerStatus.Hash, containerStatus.Hash != expectedHash
+	needToRestart = containerStatus.Hash != expectedHash
+	if needToRestart == false {
+		newResources := m.generateLinuxContainerResources(container, pod)
+		changed, restartNeeded := computeResourceChanges(newResources, containerStatus)
+		if len(changed) > 0 {
+			needToRestart = restartNeeded
+			glog.V(1).Infof("resource requirement for container %q of pod %s changed", container.Name, format.Pod(pod))
+			if needToRestart == false {
+				needToResize = true
+			}
+		}
+	}
+
+	return expectedHash, containerStatus.Hash, needToRestart, needToResize
+}
+
+func computeResourceChanges(lc *runtimeapi.LinuxContainerResources, containerStatus *kubecontainer.ContainerStatus) (map[v1.ResourceName]bool, bool) {
+	currentResources := containerStatus.Resources
+	resourceChanged := make(map[v1.ResourceName]bool)
+	restartNeeded := false
+
+	if currentResources == nil {
+		return resourceChanged, restartNeeded
+	}
+	if lc.CpuPeriod != currentResources.CpuPeriod {
+		resourceChanged[v1.ResourceCPU] = true
+	}
+
+	if lc.CpuQuota != currentResources.CpuQuota {
+		resourceChanged[v1.ResourceCPU] = true
+	}
+
+	if lc.CpuShares != currentResources.CpuShares {
+		resourceChanged[v1.ResourceCPU] = true
+	}
+
+	if lc.MemoryLimitInBytes != currentResources.MemoryLimitInBytes {
+		resourceChanged[v1.ResourceMemory] = true
+	}
+
+	// docker not support the update of OomScoreAdj
+	/*if lc.OomScoreAdj != currentResources.OomScoreAdj {
+		// TODO: as an example, resource change may still need to restart container
+		restartNeeded = true
+	}*/
+
+	return resourceChanged, restartNeeded
 }
 
 func shouldRestartOnFailure(pod *v1.Pod) bool {
@@ -448,17 +535,24 @@ func containerSucceeded(c *v1.Container, podStatus *kubecontainer.PodStatus) boo
 }
 
 // computePodActions checks whether the pod spec has changed and returns the changes if true.
+// It extension the origin function to satisfy alibaba requirement,such as container start, stop, update, upgrade.
 func (m *kubeGenericRuntimeManager) computePodActions(pod *v1.Pod, podStatus *kubecontainer.PodStatus) podActions {
 	glog.V(5).Infof("Syncing Pod %q: %+v", format.Pod(pod), pod)
 
-	createPodSandbox, attempt, sandboxID := m.podSandboxChanged(pod, podStatus)
+	createPodSandbox, startPodSandbox, attempt, sandboxID := m.podSandboxChanged(pod, podStatus)
 	changes := podActions{
-		KillPod:           createPodSandbox,
-		CreateSandbox:     createPodSandbox,
-		SandboxID:         sandboxID,
-		Attempt:           attempt,
-		ContainersToStart: []int{},
-		ContainersToKill:  make(map[kubecontainer.ContainerID]containerToKillInfo),
+		KillPod:                             createPodSandbox,
+		CreateSandbox:                       createPodSandbox,
+		StartSandbox:                        startPodSandbox,
+		SandboxID:                           sandboxID,
+		Attempt:                             attempt,
+		ContainersToStart:                   []int{},
+		ContainersToKill:                    make(map[kubecontainer.ContainerID]containerToKillInfo),
+		ContainersToStartBecauseDesireState: make(map[kubecontainer.ContainerID]containerOperationInfo),
+		ContainersToKillBecauseDesireState:  make(map[kubecontainer.ContainerID]containerOperationInfo),
+		ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
+		ContainersToUpgrade:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
+		ContainersToStartBecausePause:       make(map[kubecontainer.ContainerID]containerOperationInfo),
 	}
 
 	// If we need to (re-)create the pod sandbox, everything will need to be
@@ -466,6 +560,7 @@ func (m *kubeGenericRuntimeManager) computePodActions(pod *v1.Pod, podStatus *ku
 	if createPodSandbox {
 		if !shouldRestartOnFailure(pod) && attempt != 0 {
 			// Should not restart the pod, just return.
+			changes.CreateSandbox = false
 			return changes
 		}
 		if len(pod.Spec.InitContainers) != 0 {
@@ -480,6 +575,37 @@ func (m *kubeGenericRuntimeManager) computePodActions(pod *v1.Pod, podStatus *ku
 				continue
 			}
 			changes.ContainersToStart = append(changes.ContainersToStart, idx)
+		}
+		return changes
+	}
+
+	// If we need to start the pod sandbox, everything will need to be restarted.
+	if startPodSandbox {
+		if !shouldRestartOnFailure(pod) && attempt != 0 {
+			// Should not restart the pod, just return.
+			return changes
+		}
+		glog.V(0).Infof("No ready sandbox for pod %q can be found. Need to restart the latest sandbox %s", format.Pod(pod), sandboxID)
+		changes.StartSandbox = true
+
+		for idx, container := range pod.Spec.Containers {
+			containerStatus := podStatus.FindContainerStatusByName(container.Name)
+			if containerStatus == nil {
+				changes.ContainersToStart = append(changes.ContainersToStart, idx)
+				continue
+			}
+			if containerSucceeded(&container, podStatus) && pod.Spec.RestartPolicy == v1.RestartPolicyOnFailure {
+				continue
+			}
+			changes.ContainersToKillBecauseDesireState[containerStatus.ID] = containerOperationInfo{
+				name:      containerStatus.Name,
+				container: &pod.Spec.Containers[idx],
+			}
+			changes.ContainersToStartBecauseDesireState[containerStatus.ID] = containerOperationInfo{
+				name:      containerStatus.Name,
+				container: &pod.Spec.Containers[idx],
+			}
+			glog.V(4).Infof("Container %q will be restarted in pod %q because of sandbox restart", container.Name, format.Pod(pod))
 		}
 		return changes
 	}
@@ -500,36 +626,120 @@ func (m *kubeGenericRuntimeManager) computePodActions(pod *v1.Pod, podStatus *ku
 		return changes
 	}
 
+	haveContainerStateAnnotation, containerDesiredState, _ := GetContainerDesiredStateFromAnnotation(pod)
+	hasProtectFinalizer := sigmautil.HasProtectionFinalizer(pod)
 	// Number of running containers to keep.
 	keepCount := 0
 	// check the status of containers.
 	for idx, container := range pod.Spec.Containers {
 		containerStatus := podStatus.FindContainerStatusByName(container.Name)
+		containerPreviousResult := getStatusFromAnnotation(pod, container.Name)
+
+		// Pause the container.
+		// Paused container is in running state and user can debug the program in the container.
+		// TODO: Add upate-status when containerStatus is nil.
+		if haveContainerStateAnnotation && isContainerPaused(containerDesiredState, container.Name) {
+			if containerStatus != nil && containerStatus.State != kubecontainer.ContainerStateRunning {
+				changes.ContainersToStartBecausePause[containerStatus.ID] = containerOperationInfo{
+					name:      containerStatus.Name,
+					container: &pod.Spec.Containers[idx],
+					message:   fmt.Sprintf("container %s needs to be paused", container.Name),
+				}
+				continue
+			}
+			keepCount += 1
+			continue
+		}
+
+		// Recover from paused state.
+		// Container should be stopped to trigger finishing PostStartHook if desired state is running.
+		if haveContainerStateAnnotation && containerStatus != nil && containerPreviousResult != nil &&
+			containerPreviousResult.CurrentState == sigmak8sapi.ContainerStatePaused {
+			desiredState, exists := containerDesiredState.States[sigmak8sapi.ContainerInfo{container.Name}]
+			if exists && desiredState == sigmak8sapi.ContainerStateRunning {
+				changes.ContainersToKillBecauseDesireState[containerStatus.ID] = containerOperationInfo{
+					name:      containerStatus.Name,
+					container: &pod.Spec.Containers[idx],
+					message: fmt.Sprintf("container %s need to kill by annotation, because "+
+						"previous state is %s", container.Name, containerPreviousResult.CurrentState),
+				}
+				continue
+			}
+		}
+
+		// Upgrade the container which should be upgraded
+		if containerStatus != nil && m.isContainerNeedUpgrade(pod, &container, containerStatus) {
+			if !utilfeature.DefaultFeatureGate.Enabled(features.IgnoreProtectionFinalizer) && hasProtectFinalizer {
+				glog.V(3).Infof("pod %s has protection finalizer, could not upgrade it", format.Pod(pod))
+				continue
+			}
+			changes.ContainersToUpgrade[containerStatus.ID] = containerOperationInfo{
+				name:      containerStatus.Name,
+				container: &pod.Spec.Containers[idx],
+				message:   fmt.Sprintf("container %s needs to be upgraded", container.Name),
+			}
+			continue
+		}
+
+		action := ContainerDoNothing
+		containerExistInDesire := false
+		if haveContainerStateAnnotation {
+			containerExistInDesire, action =
+				CompareCurrentStateAndDesiredState(containerDesiredState, containerStatus, container.Name)
+
+			switch action {
+			case ContainerStart:
+				changes.ContainersToStartBecauseDesireState[containerStatus.ID] = containerOperationInfo{
+					name:      containerStatus.Name,
+					container: &pod.Spec.Containers[idx],
+					message: fmt.Sprintf("container %s need to start by annotation, because  "+
+						"current state is %s not equal to desire state", container.Name, containerStatus.State),
+				}
+			case ContainerStop:
+				if hasProtectFinalizer {
+					glog.V(3).Infof("pod %s has protection finalizer, could not stop it", format.Pod(pod))
+				} else {
+					changes.ContainersToKillBecauseDesireState[containerStatus.ID] = containerOperationInfo{
+						name:      containerStatus.Name,
+						container: &pod.Spec.Containers[idx],
+						message: fmt.Sprintf("container %s need to stop by annotation, because "+
+							" current state is %s not equal to desire state", container.Name, containerStatus.State),
+					}
+				}
+			}
+		}
 
 		// Call internal container post-stop lifecycle hook for any non-running container so that any
 		// allocated cpus are released immediately. If the container is restarted, cpus will be re-allocated
 		// to it.
 		if containerStatus != nil && containerStatus.State != kubecontainer.ContainerStateRunning {
-			if err := m.internalLifecycle.PostStopContainer(containerStatus.ID.ID); err != nil {
-				glog.Errorf("internal container post-stop lifecycle hook failed for container %v in pod %v with error %v",
-					container.Name, pod.Name, err)
+			// if not running container exist in desire annotation, just ignore
+			if !containerExistInDesire {
+				if err := m.internalLifecycle.PostStopContainer(containerStatus.ID.ID); err != nil {
+					glog.Errorf("internal container post-stop lifecycle hook failed for container %v in pod %v with error %v",
+						container.Name, pod.Name, err)
+				}
 			}
 		}
 
 		// If container does not exist, or is not running, check whether we
 		// need to restart it.
 		if containerStatus == nil || containerStatus.State != kubecontainer.ContainerStateRunning {
-			if kubecontainer.ShouldContainerBeRestarted(&container, pod, podStatus) {
-				message := fmt.Sprintf("Container %+v is dead, but RestartPolicy says that we should restart it.", container)
-				glog.V(3).Infof(message)
-				changes.ContainersToStart = append(changes.ContainersToStart, idx)
+			// if not running container exist in desire annotation, just ignore
+			if !containerExistInDesire {
+				if kubecontainer.ShouldContainerBeRestarted(&container, pod, podStatus) {
+					message := fmt.Sprintf("Container %+v is dead, but RestartPolicy says that we should restart it.", container)
+					glog.V(3).Infof(message)
+					changes.ContainersToStart = append(changes.ContainersToStart, idx)
+				}
+				continue
 			}
-			continue
 		}
 		// The container is running, but kill the container if any of the following condition is met.
 		reason := ""
 		restart := shouldRestartOnFailure(pod)
-		if expectedHash, actualHash, changed := containerChanged(&container, containerStatus); changed {
+		expectedHash, actualHash, needToRestart, needToResize := m.containerChanged(&container, containerStatus, pod)
+		if needToRestart {
 			reason = fmt.Sprintf("Container spec hash changed (%d vs %d).", actualHash, expectedHash)
 			// Restart regardless of the restart policy because the container
 			// spec changed.
@@ -540,6 +750,13 @@ func (m *kubeGenericRuntimeManager) computePodActions(pod *v1.Pod, podStatus *ku
 		} else {
 			// Keep the container.
 			keepCount += 1
+			if needToResize {
+				changes.ContainersToUpdate[containerStatus.ID] = containerOperationInfo{
+					name:      containerStatus.Name,
+					container: &pod.Spec.Containers[idx],
+					message:   fmt.Sprintf("container %s resource requirement changed", container.Name),
+				}
+			}
 			continue
 		}
 
@@ -560,7 +777,9 @@ func (m *kubeGenericRuntimeManager) computePodActions(pod *v1.Pod, podStatus *ku
 		glog.V(2).Infof("Container %q (%q) of pod %s: %s", container.Name, containerStatus.ID, format.Pod(pod), message)
 	}
 
-	if keepCount == 0 && len(changes.ContainersToStart) == 0 {
+	if keepCount == 0 && len(changes.ContainersToStart) == 0 && len(changes.ContainersToUpgrade) == 0 &&
+		len(changes.ContainersToKillBecauseDesireState) == 0 && len(changes.ContainersToStartBecauseDesireState) == 0 &&
+		len(changes.ContainersToStartBecausePause) == 0 {
 		changes.KillPod = true
 	}
 
@@ -578,6 +797,8 @@ func (m *kubeGenericRuntimeManager) computePodActions(pod *v1.Pod, podStatus *ku
 func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStatus *kubecontainer.PodStatus, pullSecrets []v1.Secret, backOff *flowcontrol.Backoff) (result kubecontainer.PodSyncResult) {
 	// Step 1: Compute sandbox and container changes.
 	podContainerChanges := m.computePodActions(pod, podStatus)
+	// result.StateStatus get from annotation, if failed or not exist, create a new one.
+	_, _, result.StateStatus = GetContainerDesiredStateFromAnnotation(pod)
 	glog.V(3).Infof("computePodActions got %+v for pod %q", podContainerChanges, format.Pod(pod))
 	if podContainerChanges.CreateSandbox {
 		ref, err := ref.GetReference(legacyscheme.Scheme, pod)
@@ -615,11 +836,16 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 			glog.V(3).Infof("Killing unwanted container %q(id=%q) for pod %q", containerInfo.name, containerID, format.Pod(pod))
 			killContainerResult := kubecontainer.NewSyncResult(kubecontainer.KillContainer, containerInfo.name)
 			result.AddSyncResult(killContainerResult)
+			containerStatus := createContainerStatus(podStatus, sigmak8sapi.StopContainerAction, containerInfo.name, pod)
+
 			if err := m.killContainer(pod, containerID, containerInfo.name, containerInfo.message, nil); err != nil {
 				killContainerResult.Fail(kubecontainer.ErrKillContainer, err.Error())
-				glog.Errorf("killContainer %q(id=%q) for pod %q failed: %v", containerInfo.name, containerID, format.Pod(pod), err)
+				msg := fmt.Sprintf("killContainer %q(id=%q) for pod %q failed: %v", containerInfo.name, containerID, format.Pod(pod), err)
+				glog.Error(msg)
+				m.updateContainerStateStatus(containerStatus, containerInfo.name, containerID.ID, result.StateStatus, false, msg)
 				return
 			}
+			m.updateContainerStateStatus(containerStatus, containerInfo.name, containerID.ID, result.StateStatus, true, KillContainerSuccess)
 		}
 	}
 
@@ -642,7 +868,7 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 		podIP = podStatus.IP
 	}
 
-	// Step 4: Create a sandbox for the pod if necessary.
+	// Step 4: Create or restart a sandbox for the pod if necessary.
 	podSandboxID := podContainerChanges.SandboxID
 	if podContainerChanges.CreateSandbox {
 		var msg string
@@ -685,6 +911,19 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 		}
 	}
 
+	// Start the sandbox if necessary.
+	if podContainerChanges.StartSandbox {
+		glog.V(4).Infof("Starting sandbox for pod %s", format.Pod(pod))
+		startSandboxResult := kubecontainer.NewSyncResult(kubecontainer.CreatePodSandbox, format.Pod(pod))
+		result.AddSyncResult(startSandboxResult)
+		if err := m.runtimeService.StartPodSandbox(podSandboxID); err != nil {
+			glog.Errorf("Failed to start sandbox %s", podSandboxID)
+			result.Fail(err)
+			return
+		}
+		glog.V(4).Infof("Starting sandbox for pod %s success", format.Pod(pod))
+	}
+
 	// Get podSandboxConfig for containers to start.
 	configPodSandboxResult := kubecontainer.NewSyncResult(kubecontainer.ConfigPodSandbox, podSandboxID)
 	result.AddSyncResult(configPodSandboxResult)
@@ -707,13 +946,18 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 			glog.V(4).Infof("Backing Off restarting init container %+v in pod %v", container, format.Pod(pod))
 			return
 		}
-
+		containerStatus := createContainerStatus(podStatus, sigmak8sapi.StartContainerAction, container.Name, pod)
 		glog.V(4).Infof("Creating init container %+v in pod %v", container, format.Pod(pod))
 		if msg, err := m.startContainer(podSandboxID, podSandboxConfig, container, pod, podStatus, pullSecrets, podIP, kubecontainer.ContainerTypeInit); err != nil {
 			startContainerResult.Fail(err, msg)
-			utilruntime.HandleError(fmt.Errorf("init container start failed: %v: %s", err, msg))
+			errMsg := fmt.Sprintf("init container start failed: %v: %s", err, msg)
+			utilruntime.HandleError(fmt.Errorf(errMsg))
+			//if err != nil, msg is err msg, so can't get container info
+			m.updateContainerStateStatus(containerStatus, container.Name, msg, result.StateStatus, false, errMsg)
 			return
 		}
+		// if err==nil msg is containerID
+		m.updateContainerStateStatus(containerStatus, container.Name, msg, result.StateStatus, true, CreateStartAndPostStartContainerSuccess)
 
 		// Successfully started the container; clear the entry in the failure
 		glog.V(4).Infof("Completed init container %q for pod %q", container.Name, format.Pod(pod))
@@ -731,6 +975,7 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 			glog.V(4).Infof("Backing Off restarting container %+v in pod %v", container, format.Pod(pod))
 			continue
 		}
+		containerStatus := createContainerStatus(podStatus, sigmak8sapi.StartContainerAction, container.Name, pod)
 
 		glog.V(4).Infof("Creating container %+v in pod %v", container, format.Pod(pod))
 		if msg, err := m.startContainer(podSandboxID, podSandboxConfig, container, pod, podStatus, pullSecrets, podIP, kubecontainer.ContainerTypeRegular); err != nil {
@@ -743,10 +988,26 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 			default:
 				utilruntime.HandleError(fmt.Errorf("container start failed: %v: %s", err, msg))
 			}
+			// in this condition, msg is error message, can't get container status,
+			m.updateContainerStateStatus(containerStatus, container.Name, msg, result.StateStatus, false, fmt.Sprintf("container start failed: %v: %s", err, msg))
 			continue
+		} else {
+			// if err==nil msg is containerID
+			m.updateContainerStateStatus(containerStatus, container.Name, msg, result.StateStatus, true, CreateStartAndPostStartContainerSuccess)
 		}
 	}
 
+	if len(podContainerChanges.ContainersToKillBecauseDesireState) > 0 ||
+		len(podContainerChanges.ContainersToStartBecauseDesireState) > 0 ||
+		len(podContainerChanges.ContainersToUpgrade) > 0 ||
+		len(podContainerChanges.ContainersToUpdate) > 0 ||
+		len(podContainerChanges.ContainersToStartBecausePause) > 0 {
+		glog.V(4).Infof("pod %s containers have change about start, stop, update, upgrade, pause:%+v",
+			format.Pod(pod), podContainerChanges)
+		m.SyncPodExtension(podSandboxConfig, pod, podStatus, pullSecrets, podIP, &result, podContainerChanges, backOff)
+	} else {
+		glog.V(4).Infof("pod %s containers have no change about start, stop, update, upgrade, pause", format.Pod(pod))
+	}
 	return
 }
 

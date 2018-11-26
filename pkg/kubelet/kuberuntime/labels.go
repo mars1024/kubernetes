@@ -19,6 +19,7 @@ package kuberuntime
 import (
 	"encoding/json"
 	"strconv"
+	"strings"
 
 	"github.com/golang/glog"
 	"k8s.io/api/core/v1"
@@ -105,6 +106,12 @@ func newContainerLabels(container *v1.Container, pod *v1.Pod, containerType kube
 	labels[types.KubernetesContainerNameLabel] = container.Name
 	if utilfeature.DefaultFeatureGate.Enabled(features.DebugContainers) {
 		labels[types.KubernetesContainerTypeLabel] = string(containerType)
+	}
+
+	for k, v := range pod.Labels {
+		if strings.HasPrefix(k, "ali") {
+			labels[k] = v
+		}
 	}
 
 	return labels

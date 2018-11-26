@@ -71,6 +71,14 @@ func (m *kubeGenericRuntimeManager) generateLinuxContainerConfig(container *v1.C
 		cpuQuota := milliCPUToQuota(cpuLimit.MilliValue(), cpuPeriod)
 		lc.Resources.CpuQuota = cpuQuota
 		lc.Resources.CpuPeriod = cpuPeriod
+		AdjustResourcesByAnnotation(pod, container.Name, lc.Resources, cpuLimit.MilliValue())
+	}
+
+	ulimits := GetUlimitsFromAnnotation(container, pod)
+	if len(ulimits) != 0 {
+		for _, ulimit := range ulimits {
+			lc.Resources.Ulimits = append(lc.Resources.Ulimits, &runtimeapi.Ulimit{Name: ulimit.Name, Soft: ulimit.Soft, Hard: ulimit.Hard})
+		}
 	}
 
 	return lc

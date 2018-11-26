@@ -25,6 +25,7 @@ type FakeManager struct{}
 
 // Unused methods.
 func (_ FakeManager) AddPod(_ *v1.Pod)        {}
+func (_ FakeManager) UpdatePod(_ *v1.Pod)     {}
 func (_ FakeManager) RemovePod(_ *v1.Pod)     {}
 func (_ FakeManager) CleanupPods(_ []*v1.Pod) {}
 func (_ FakeManager) Start()                  {}

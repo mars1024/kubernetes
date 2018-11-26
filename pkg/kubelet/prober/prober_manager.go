@@ -17,7 +17,9 @@ limitations under the License.
 package prober
 
 import (
+	"reflect"
 	"sync"
+	"time"
 
 	"github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus"
@@ -52,6 +54,9 @@ type Manager interface {
 	// pod created.
 	AddPod(pod *v1.Pod)
 
+	// UpdatePod creates new probe workers and stops the old probe workers if continer's probe is changed.
+	UpdatePod(pod *v1.Pod)
+
 	// RemovePod handles cleaning up the removed pod state, including terminating probe workers and
 	// deleting cached results.
 	RemovePod(pod *v1.Pod)
@@ -85,6 +90,9 @@ type manager struct {
 
 	// prober executes the probe actions.
 	prober *prober
+
+	// updateReadinessCache will cache the last readiness result when readiness prober is updating.
+	updateReadinessCache map[probeKey]results.Result
 }
 
 func NewManager(
@@ -97,11 +105,12 @@ func NewManager(
 	prober := newProber(runner, refManager, recorder)
 	readinessManager := results.NewManager()
 	return &manager{
-		statusManager:    statusManager,
-		prober:           prober,
-		readinessManager: readinessManager,
-		livenessManager:  livenessManager,
-		workers:          make(map[probeKey]*worker),
+		statusManager:        statusManager,
+		prober:               prober,
+		readinessManager:     readinessManager,
+		livenessManager:      livenessManager,
+		workers:              make(map[probeKey]*worker),
+		updateReadinessCache: map[probeKey]results.Result{},
 	}
 }
 
@@ -122,7 +131,7 @@ type probeKey struct {
 type probeType int
 
 const (
-	liveness probeType = iota
+	liveness  probeType = iota
 	readiness
 )
 
@@ -172,6 +181,117 @@ func (m *manager) AddPod(pod *v1.Pod) {
 	}
 }
 
+func (m *manager) updateContainer(pod *v1.Pod, container *v1.Container, probe probeType) {
+	key := probeKey{podUID: pod.UID, containerName: container.Name}
+	probeTypeName := ""
+
+	// Get container's probe information according to probe type.
+	containerProbe := &v1.Probe{}
+	if probe == liveness {
+		containerProbe = container.LivenessProbe
+		key.probeType = liveness
+		probeTypeName = "liveness prober"
+	} else if probe == readiness {
+		containerProbe = container.ReadinessProbe
+		key.probeType = readiness
+		probeTypeName = "readiness prober"
+	} else {
+		glog.Errorf("Ignore to update container's probe worker because of unknown probe type: %v", probe)
+		return
+	}
+
+	if containerProbe != nil {
+		worker, workerExists := m.workers[key]
+		// Case 1: Update worker if probe changes.
+		if workerExists && !reflect.DeepEqual(containerProbe, worker.spec) {
+			glog.V(0).Infof("Update %s for container %v-%v with new probe: %v",
+				probeTypeName, format.Pod(pod), container.Name, containerProbe)
+			worker.isCacheResult = true
+			worker.stop()
+
+			var defaultTimeoutSeconds int32 = 5
+
+			// Wait for worker to exit.
+			// Manager shouldn't be locked by updateContainer or UpdatePod because worker should be removed during wating time.
+			timeout := worker.spec.TimeoutSeconds
+			if timeout == 0 {
+				timeout = defaultTimeoutSeconds
+			}
+			timerTimeout := time.NewTicker(time.Duration(3*timeout) * time.Second)
+			// The TimeoutSeconds such as 20s is too long for checking whether worker is exited or not.
+			// The max interval is 5 second.
+			interval := worker.spec.TimeoutSeconds
+			if interval > defaultTimeoutSeconds || interval == 0 {
+				interval = defaultTimeoutSeconds
+			}
+			timerInterval := time.NewTicker(time.Duration(interval) * time.Second)
+		DONE:
+			for {
+				select {
+				case <-timerInterval.C:
+					if _, exists := m.workers[key]; !exists {
+						break DONE
+					}
+				case <-timerTimeout.C:
+					glog.Errorf("Failed to update %s because of timeout when waiting probe worker to exit: %v",
+						probeTypeName, worker)
+					return
+				}
+			}
+
+			w := newWorker(m, probe, pod, *container)
+			// Lock manager because we need to add a worker.
+			m.workerLock.Lock()
+			defer m.workerLock.Unlock()
+			m.workers[key] = w
+			go w.run()
+		}
+		// Case 2: Add worker if worker doesn't exists.
+		if !workerExists {
+			// Lock manager because we need to add a worker.
+			m.workerLock.Lock()
+			defer m.workerLock.Unlock()
+			glog.V(0).Infof("Add %s for container %v-%v with new probe: %v",
+				probeTypeName, format.Pod(pod), container.Name, containerProbe)
+			w := newWorker(m, probe, pod, *container)
+			m.workers[key] = w
+			go w.run()
+		}
+		// Case 3: Keep worker because nothing changes.
+		return
+	}
+
+	// Case 4: Delete worker if probe doesn't exist in spec.
+	if worker, ok := m.workers[key]; ok {
+		glog.V(0).Infof("Remove %s for container %v-%v because new probe is nil",
+			probeTypeName, format.Pod(pod), container.Name)
+		worker.stop()
+		return
+	}
+
+	// Case 5: There is no probe in spec and workers.
+	// Make sure container is not in updateReadinessCache.
+	// Case: old worker is deleted, new worker is not created(timeout), user delete probe in spec
+	// TODO: Support liveness
+	m.workerLock.Lock()
+	defer m.workerLock.Unlock()
+	switch probe {
+	case readiness:
+		delete(m.updateReadinessCache, key)
+	}
+	return
+}
+
+func (m *manager) UpdatePod(pod *v1.Pod) {
+	if pod.DeletionTimestamp != nil {
+		return
+	}
+	for _, c := range pod.Spec.Containers {
+		m.updateContainer(pod, &c, liveness)
+		m.updateContainer(pod, &c, readiness)
+	}
+}
+
 func (m *manager) RemovePod(pod *v1.Pod) {
 	m.workerLock.RLock()
 	defer m.workerLock.RUnlock()
@@ -194,12 +314,18 @@ func (m *manager) CleanupPods(activePods []*v1.Pod) {
 		desiredPods[pod.UID] = sets.Empty{}
 	}
 
-	m.workerLock.RLock()
-	defer m.workerLock.RUnlock()
+	m.workerLock.Lock()
+	defer m.workerLock.Unlock()
 
 	for key, worker := range m.workers {
 		if _, ok := desiredPods[key.podUID]; !ok {
 			worker.stop()
+		}
+	}
+
+	for key := range m.updateReadinessCache {
+		if _, ok := desiredPods[key.podUID]; !ok {
+			delete(m.updateReadinessCache, key)
 		}
 	}
 }
@@ -211,7 +337,9 @@ func (m *manager) UpdatePodStatus(podUID types.UID, podStatus *v1.PodStatus) {
 			ready = false
 		} else if result, ok := m.readinessManager.Get(kubecontainer.ParseContainerID(c.ContainerID)); ok {
 			ready = result == results.Success
-		} else {
+		} else if result, ok := m.getReadinessResultCache(podUID, c.Name); ok {
+			ready = result == results.Success
+		}else {
 			// The check whether there is a probe which hasn't run yet.
 			_, exists := m.getWorker(podUID, c.Name, readiness)
 			ready = !exists
@@ -255,4 +383,28 @@ func (m *manager) updateReadiness() {
 
 	ready := update.Result == results.Success
 	m.statusManager.SetContainerReadiness(update.PodUID, update.ContainerID, ready)
+}
+
+func (m *manager) addReadinessResultCache(podUID types.UID, containerName string, result results.Result) {
+	m.workerLock.Lock()
+	defer m.workerLock.Unlock()
+	key := probeKey{podUID, containerName, readiness}
+	m.updateReadinessCache[key] = result
+}
+
+func (m *manager) removeReadinessResultCache(podUID types.UID, containerName string) {
+	m.workerLock.Lock()
+	defer m.workerLock.Unlock()
+	key := probeKey{podUID, containerName, readiness}
+	delete(m.updateReadinessCache, key)
+}
+
+func (m *manager) getReadinessResultCache(podUID types.UID, containerName string) (results.Result, bool) {
+	m.workerLock.RLock()
+	defer m.workerLock.RUnlock()
+	key := probeKey{podUID, containerName, readiness}
+	if result, exists := m.updateReadinessCache[key]; exists {
+		return result, true
+	}
+	return results.Failure, false
 }

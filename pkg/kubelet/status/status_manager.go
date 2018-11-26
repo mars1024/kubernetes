@@ -479,6 +479,8 @@ func (m *manager) syncPod(uid types.UID, status versionedPodStatus) {
 		glog.V(3).Infof("Pod %q (%s) does not exist on the server", status.podName, uid)
 		// If the Pod is deleted the status will be cleared in
 		// RemoveOrphanedStatuses, so we just ignore the update here.
+		// Avoid status leak when deal with invalid cgroup parent.
+		m.deletePodStatus(uid)
 		return
 	}
 	if err != nil {

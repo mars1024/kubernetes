@@ -44,6 +44,9 @@ type Interface interface {
 
 	// Get filesystem information for the filesystem that contains the given file.
 	GetDirFsInfo(path string) (cadvisorapiv2.FsInfo, error)
+
+	// Returns container spec.
+	ContainerSpec(containerName string, options cadvisorapiv2.RequestOptions) (map[string]cadvisorapiv2.ContainerSpec, error)
 }
 
 // ImageFsInfoProvider informs cAdvisor how to find imagefs for container images.

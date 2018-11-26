@@ -1,0 +1,529 @@
+packageName: core
+groups:
+  - name: container_cpu_usage_limit
+    help: "represents container cpu usage limit metrics"
+    scraper: walle
+    type: container
+    labels: ["id", "pod", "namespace", "image"]
+    metrics:        
+      # container CPU statistics
+      - name: container_cpu_usage_limit
+        help: "represents container cpu utilization relative to Resource.CPU.Limit"
+
+      # aggregate container_cpu_usage_limit over 1 minute
+      - name: container_cpu_usage_limit_max_over_1min
+        help: "aggregates the max value of container_cpu_usage_limit over the last minute"
+        expr: "max_over_time(container_cpu_usage_limit[1m])"
+
+      - name: container_cpu_usage_limit_min_over_1min
+        help: "aggregates the min value of container_cpu_usage_limit over the last minute"
+        expr: "min_over_time(container_cpu_usage_limit[1m])"
+
+      - name: container_cpu_usage_limit_avg_over_1min
+        help: "aggregates the average value of container_cpu_usage_limit over the last minute"
+        expr: "avg_over_time(container_cpu_usage_limit[1m])"
+
+      - name: container_cpu_usage_limit_p99_over_1min
+        help: "aggregates the P99 value of container_cpu_usage_limit over the last minute"
+        expr: "quantile_over_time(0.99, container_cpu_usage_limit[1m])"
+
+      - name: container_cpu_usage_limit_predict_1min
+        help: "predicts the value of container_cpu_usage_limit over the last minute"
+        expr: "predict_linear(container_cpu_usage_limit[1m], 60)"
+
+      # aggregate container_cpu_usage_limit over 5 minute
+      - name: container_cpu_usage_limit_max_over_5min
+        help: "aggregates the max value of container_cpu_usage_limit over the last 5 minutess"
+        expr: "max_over_time(container_cpu_usage_limit[5m])"
+
+      - name: container_cpu_usage_limit_min_over_5min
+        help: "aggregates the min value of container_cpu_usage_limit over the last 5 minutess"
+        expr: "min_over_time(container_cpu_usage_limit[5m])"
+
+      - name: container_cpu_usage_limit_avg_over_5min
+        help: "aggregates the average value of container_cpu_usage_limit over the last 5 minutess"
+        expr: "avg_over_time(container_cpu_usage_limit[5m])"
+
+      - name: container_cpu_usage_limit_p99_over_5min
+        help: "aggregates the P99 value of container_cpu_usage_limit over the last 5 minutess"
+        expr: "quantile_over_time(0.99, container_cpu_usage_limit[5m])"
+
+      - name: container_cpu_usage_limit_predict_5min
+        help: "predicts the value of container_cpu_usage_limit over the last 5 minutess"
+        expr: "predict_linear(container_cpu_usage_limit[5m], 60)"
+
+      # aggregate container_cpu_usage_limit over 15 minute
+      - name: container_cpu_usage_limit_max_over_15min
+        help: "aggregates the max value of container_cpu_usage_request over the last 15 minutes"
+        expr: "max_over_time(container_cpu_usage_limit[15m])"
+
+      - name: container_cpu_usage_limit_min_over_15min
+        help: "aggregates the min value of container_cpu_usage_request over the last 15 minutes"
+        expr: "min_over_time(container_cpu_usage_limit[15m])"
+
+      - name: container_cpu_usage_limit_avg_over_15min
+        help: "aggregates the average value of container_cpu_usage_request over the last 15 minutes"
+        expr: "avg_over_time(container_cpu_usage_limit[15m])"
+
+      - name: container_cpu_usage_limit_p99_over_15min
+        help: "aggregates the P99 value of container_cpu_usage_request over the last 15 minutes"
+        expr: "quantile_over_time(0.99, container_cpu_usage_limit[15m])"
+
+      - name: container_cpu_usage_limit_predict_15min
+        help: "predicts the value of container_cpu_usage_request over the last 15 minutes"
+        expr: "predict_linear(container_cpu_usage_limit[15m], 60)"
+
+
+  - name: container_cpu_usage_request
+    help: "represents container cpu usage request metrics"
+    scraper: walle
+    type: container
+    labels: ["id", "pod", "namespace", "image"]
+    metrics:
+      - name: container_cpu_usage_request
+        help: "represents container cpu utilization relative to Resource.CPU.Request"
+
+      # aggregate container_cpu_usage_request over 1 minute
+      - name: container_cpu_usage_request_max_over_1min
+        help: "aggregates the max value of container_cpu_usage_request over the last minute"
+        expr: "max_over_time(container_cpu_usage_request[1m])"
+
+      - name: container_cpu_usage_request_min_over_1min
+        help: "aggregates the min value of container_cpu_usage_request over the last minute"
+        expr: "min_over_time(container_cpu_usage_request[1m])"
+
+      - name: container_cpu_usage_request_avg_over_1min
+        help: "aggregates the average value of container_cpu_usage_request over the last minute"
+        expr: "avg_over_time(container_cpu_usage_request[1m])"
+
+      - name: container_cpu_usage_request_p99_over_1min
+        help: "aggregates the P99 value of container_cpu_usage_request over the last minute"
+        expr: "quantile_over_time(0.99, container_cpu_usage_request[1m])"
+
+      - name: container_cpu_usage_request_predict_1min
+        help: "predicts the value of container_cpu_usage_request over the last minute"
+        expr: "predict_linear(container_cpu_usage_request[1m], 60)"
+
+      # aggregate container_cpu_usage_request over 5 minute
+      - name: container_cpu_usage_request_max_over_5min
+        help: "aggregates the max value of container_cpu_usage_request over the last 5 minutes"
+        expr: "max_over_time(container_cpu_usage_request[5m])"
+
+      - name: container_cpu_usage_request_min_over_5min
+        help: "aggregates the min value of container_cpu_usage_request over the last 5 minutes"
+        expr: "min_over_time(container_cpu_usage_request[5m])"
+
+      - name: container_cpu_usage_request_avg_over_5min
+        help: "aggregates the average max value of container_cpu_usage_request over the last 5 minutes"
+        expr: "avg_over_time(container_cpu_usage_request[5m])"
+
+      - name: container_cpu_usage_request_p99_over_5min
+        help: "aggregates the P99 value of container_cpu_usage_request over the last 5 minutes"
+        expr: "quantile_over_time(0.99, container_cpu_usage_request[5m])"
+
+      - name: container_cpu_usage_request_predict_5min
+        help: "predicts the value of container_cpu_usage_request over the last 5 minutes"
+        expr: "predict_linear(container_cpu_usage_request[5m], 60)"
+
+      # aggregate container_cpu_usage_request over 15 minute
+      - name: container_cpu_usage_request_max_over_15min
+        help: "aggregates the max value of container_cpu_usage_request over the last 15 minutes"
+        expr: "max_over_time(container_cpu_usage_request[15m])"
+
+      - name: container_cpu_usage_request_min_over_15min
+        help: "aggregates the min value of container_cpu_usage_request over the last 15 minutes"
+        expr: "min_over_time(container_cpu_usage_request[15m])"
+
+      - name: container_cpu_usage_request_avg_over_15min
+        help: "aggregates the average value of container_cpu_usage_request over the last 15 minutes"
+        expr: "avg_over_time(container_cpu_usage_request[15m])"
+
+      - name: container_cpu_usage_request_p99_over_15min
+        help: "aggregates P99 value of container_cpu_usage_request over the last 15 minutes"
+        expr: "quantile_over_time(0.99, container_cpu_usage_request[15m])"
+
+      - name: container_cpu_usage_request_predict_15min
+        help: "predicts the value of container_cpu_usage_request over the last 15 minutes"
+        expr: "predict_linear(container_cpu_usage_request[15m], 60)"
+
+
+  - name: container_cpu_load_average
+    help: "represents container cpu load average metrics"
+    scraper: walle
+    type: container
+    labels: ["id", "pod", "namespace", "image"]
+    metrics:
+      - name: container_cpu_load_average_10s
+        help: "represents container CPU Load over the last 10 seconds"
+      
+      # aggregate container_cpu_load_average_10s over 1 minute
+      - name: container_cpu_load_average_10s_max_over_1min
+        help: "aggregates the max value of container_cpu_load_average_10s_max_over_1min over the last minute"
+        expr: "max_over_time(container_cpu_load_average_10s[1m])"
+      
+      - name: container_cpu_load_average_10s_min_over_1min
+        help: "aggregates the min value of container_cpu_load_average_10s_max_over_1min over the last minute"
+        expr: "min_over_time(container_cpu_load_average_10s[1m])"
+
+      - name: container_cpu_load_average_10s_avg_over_1min
+        help: "aggregates the average value of container_cpu_load_average_10s_max_over_1min over the last minute"
+        expr: "avg_over_time(container_cpu_load_average_10s[1m])"
+
+      - name: container_cpu_load_average_10s_p99_over_1min
+        help: "aggregates the P99 value of container_cpu_load_average_10s_max_over_1min over the last minute"
+        expr: "quantile_over_time(0.99, container_cpu_load_average_10s[1m])"
+
+      - name: container_cpu_load_average_10s_predict_1min
+        help: "predicts the value of container_cpu_load_average_10s_max_over_1min over the last minute"
+        expr: "predict_linear(container_cpu_load_average_10s[1m], 60)"
+
+      # aggregate container_cpu_load_average_10s over 5 minute
+      - name: container_cpu_load_average_10s_max_over_5min
+        help: "aggregates the max value of container_cpu_load_average_10s_max_over_1min over the last 5 minutes"
+        expr: "max_over_time(container_cpu_load_average_10s[5m])"
+      
+      - name: container_cpu_load_average_10s_min_over_5min
+        help: "aggregates the min value of container_cpu_load_average_10s_max_over_1min over the last 5 minutes"
+        expr: "min_over_time(container_cpu_load_average_10s[5m])"
+
+      - name: container_cpu_load_average_10s_avg_over_5min
+        help: "aggregates the average value of container_cpu_load_average_10s_max_over_1min over the last 5 minutes"
+        expr: "avg_over_time(container_cpu_load_average_10s[5m])"
+
+      - name: container_cpu_load_average_10s_p99_over_5min
+        help: "aggregates the P99 value of container_cpu_load_average_10s_max_over_1min over the last 5 minutes"
+        expr: "quantile_over_time(0.99, container_cpu_load_average_10s[5m])"
+
+      - name: container_cpu_load_average_10s_predict_5min
+        help: "predicts the value of container_cpu_load_average_10s_max_over_1min over the last 5 minutes"
+        expr: "predict_linear(container_cpu_load_average_10s[5m], 60)"
+
+      # aggregate container_cpu_load_average_10s over 15 minute
+      - name: container_cpu_load_average_10s_max_over_15min
+        help: "aggregates the max value of container_cpu_load_average_10s_max_over_1min over the last 15 minutes"
+        expr: "max_over_time(container_cpu_load_average_10s[15m])"
+      
+      - name: container_cpu_load_average_10s_min_over_15min
+        help: "aggregates the min value of container_cpu_load_average_10s_max_over_1min over the last 15 minutes"
+        expr: "min_over_time(container_cpu_load_average_10s[15m])"
+
+      - name: container_cpu_load_average_10s_avg_over_15min
+        help: "aggregates the average value of container_cpu_load_average_10s_max_over_1min over the last 15 minutes"
+        expr: "avg_over_time(container_cpu_load_average_10s[15m])"
+
+      - name: container_cpu_load_average_10s_p99_over_15min
+        help: "aggregates the P99 value of container_cpu_load_average_10s_max_over_1min over the last 15 minutes"
+        expr: "quantile_over_time(0.99, container_cpu_load_average_10s[15m])"
+
+      - name: container_cpu_load_average_10s_predict_15min
+        help: "predicts the value of container_cpu_load_average_10s_max_over_1min over the last 15 minutes"
+        expr: "predict_linear(container_cpu_load_average_10s[15m], 60)"
+
+  - name: container_memory_metrics
+    help: "represents container memory metrics"
+    scraper: walle
+    type: container
+    labels: ["id", "pod", "namespace", "image"]
+    metrics:        
+      # container memory statistics
+      - name: container_memory_available_bytes
+        help: "represents the available memory bytes of container"
+        expr: "container_memory_avail_bytes"
+
+      - name: container_memory_usage_bytes
+        help: "represents the used memory bytes of container"
+
+      - name: container_memory_working_set_bytes
+        help: "represents the workingset bytes of container"
+
+  - name: node_cpu_usage_metrics
+    help: "represents node cpu usage metrics"
+    scraper: walle
+    type: node
+    metrics:
+      # node CPU statistics
+      - name: node_cpu_usage
+        help: "represents the system CPU utilization"
+
+      # aggregate node_cpu_usage over 1 minute
+      - name: node_cpu_usage_max_over_1min
+        help: "aggregates the max value of node_cpu_usage over the last minute"
+        expr: "max_over_time(node_cpu_usage[1m])"
+
+      - name: node_cpu_usage_min_over_1min
+        help: "aggregates the min value of node_cpu_usage over the last minute"
+        expr: "min_over_time(node_cpu_usage[1m])"
+
+      - name: node_cpu_usage_avg_over_1min
+        help: "aggregates the average value of node_cpu_usage over the last minute"
+        expr: "avg_over_time(node_cpu_usage[1m])"
+
+      - name: node_cpu_usage_p99_over_1min
+        help: "aggregates the P99 value of node_cpu_usage over the last minute"
+        expr: "quantile_over_time(0.99, node_cpu_usage[1m])"
+
+      - name: node_cpu_usage_predict_1min
+        help: "predicts the value of node_cpu_usage over the last minute"
+        expr: "predict_linear(node_cpu_usage[1m], 60)"
+
+      # aggregate node_cpu_usage over 5 minute
+      - name: node_cpu_usage_max_over_5min
+        help: "aggregates the max value of node_cpu_usage over the last 5 minutess"
+        expr: "max_over_time(node_cpu_usage[5m])"
+
+      - name: node_cpu_usage_min_over_5min
+        help: "aggregates the min value of node_cpu_usage over the last 5 minutess"
+        expr: "min_over_time(node_cpu_usage[5m])"
+
+      - name: node_cpu_usage_avg_over_5min
+        help: "aggregates the average value of node_cpu_usage over the last 5 minutess"
+        expr: "avg_over_time(node_cpu_usage[5m])"
+
+      - name: node_cpu_usage_p99_over_5min
+        help: "aggregates the P99 value of node_cpu_usage over the last 5 minutess"
+        expr: "quantile_over_time(0.99, node_cpu_usage[5m])"
+
+      - name: node_cpu_usage_predict_5min
+        help: "predicts the value of node_cpu_usage over the last 5 minutess"
+        expr: "predict_linear(node_cpu_usage[5m], 60)"
+
+      # aggregate node_cpu_usage over 15 minute
+      - name: node_cpu_usage_max_over_15min
+        help: "aggregates the max value of node_cpu_usage over the last 15 minutess"
+        expr: "max_over_time(node_cpu_usage[15m])"
+
+      - name: node_cpu_usage_min_over_15min
+        help: "aggregates the min value of node_cpu_usage over the last 15 minutess"
+        expr: "min_over_time(node_cpu_usage[15m])"
+
+      - name: node_cpu_usage_avg_over_15min
+        help: "aggregates the average value of node_cpu_usage over the last 15 minutess"
+        expr: "avg_over_time(node_cpu_usage[15m])"
+
+      - name: node_cpu_usage_p99_over_15min
+        help: "aggregates the P99 value of node_cpu_usage over the last 15 minutess"
+        expr: "quantile_over_time(0.99, node_cpu_usage[15m])"
+
+      - name: node_cpu_usage_predict_15min
+        help: "predicts the value of node_cpu_usage over the last 15 minutess"
+        expr: "predict_linear(node_cpu_usage[15m], 60)"
+
+  - name: node_system_load_metrics
+    help: "represents node system load metrics"
+    scraper: walle
+    type: node
+    metrics:
+      # system load statistics
+      - name: node_load_1m
+        help: "represents system load average over the last minute"
+
+      # aggregate node_load_1m over 1 minute
+      - name: node_load_1m_max_over_1min
+        help: "aggregates the max value of node_cpunode_load_1m_usage over the last minute"
+        expr: "max_over_time(node_load_1m[1m])"
+
+      - name: node_load_1m_min_over_1min
+        help: "aggregates the min value of node_cpunode_load_1m_usage over the last minute"
+        expr: "min_over_time(node_load_1m[1m])"
+
+      - name: node_load_1m_avg_over_1min
+        help: "aggregates the average value of node_cpunode_load_1m_usage over the last minute"
+        expr: "avg_over_time(node_load_1m[1m])"
+
+      - name: node_load_1m_p99_over_1min
+        help: "aggregates the P99 value of node_cpunode_load_1m_usage over the last minute"
+        expr: "quantile_over_time(0.99, node_load_1m[1m])"
+
+      - name: node_load_1m_predict_1min
+        help: "predicts the value of node_cpunode_load_1m_usage over the last minute"
+        expr: "predict_linear(node_load_1m[1m], 60)"
+
+      # aggregate node_load_1m over 5 minute
+      - name: node_load_1m_max_over_5min
+        help: "aggregates the max value of node_cpunode_load_1m_usage over the last 5 minutess"
+        expr: "max_over_time(node_load_1m[5m])"
+
+      - name: node_load_1m_min_over_5min
+        help: "aggregates the min value of node_cpunode_load_1m_usage over the last 5 minutess"
+        expr: "min_over_time(node_load_1m[5m])"
+
+      - name: node_load_1m_avg_over_5min
+        help: "aggregates the average value of node_cpunode_load_1m_usage over the last 5 minutess"
+        expr: "avg_over_time(node_load_1m[5m])"
+
+      - name: node_load_1m_p99_over_5min
+        help: "aggregates the P99 value of node_cpunode_load_1m_usage over the last 5 minutess"
+        expr: "quantile_over_time(0.99, node_load_1m[5m])"
+
+      - name: node_load_1m_predict_5min
+        help: "predicts the value of node_cpunode_load_1m_usage over the last 5 minutess"
+        expr: "predict_linear(node_load_1m[5m], 60)"
+
+      # aggregate node_load_1m over 15 minute
+      - name: node_load_1m_max_over_15min
+        help: "aggregates the max value of node_cpunode_load_1m_usage over the last 15 minutess"
+        expr: "max_over_time(node_load_1m[15m])"
+
+      - name: node_load_1m_min_over_15min
+        help: "aggregates the min value of node_cpunode_load_1m_usage over the last 15 minutess"
+        expr: "min_over_time(node_load_1m[15m])"
+
+      - name: node_load_1m_avg_over_15min
+        help: "aggregates the average value of node_cpunode_load_1m_usage over the last 15 minutess"
+        expr: "avg_over_time(node_load_1m[15m])"
+
+      - name: node_load_1m_p99_over_15min
+        help: "aggregates the P99 value of node_cpunode_load_1m_usage over the last 15 minutess"
+        expr: "quantile_over_time(0.99, node_load_1m[15m])"
+
+      - name: node_load_1m_predict_15min
+        help: "predicts the value of node_cpunode_load_1m_usage over the last 15 minutess"
+        expr: "predict_linear(node_load_1m[15m], 60)"
+        
+      - name: node_load_5m
+        help: "represents system load average over the last 5 minutess"
+
+      # aggregate node_load_1m over 1 minute
+      - name: node_load_5m_max_over_1min
+        help: "aggregates the max value of node_load_5m over the last minute"
+        expr: "max_over_time(node_load_5m[1m])"
+
+      - name: node_load_5m_min_over_1min
+        help: "aggregates the min value of node_load_5m over the last minute"
+        expr: "min_over_time(node_load_5m[1m])"
+
+      - name: node_load_5m_avg_over_1min
+        help: "aggregates the average value of node_load_5m over the last minute"
+        expr: "avg_over_time(node_load_5m[1m])"
+
+      - name: node_load_5m_p99_over_1min
+        help: "aggregates the P99 value of node_load_5m over the last minute"
+        expr: "quantile_over_time(0.99, node_load_5m[1m])"
+
+      - name: node_load_5m_predict_1min
+        help: "predicts the value of node_load_5m over the last minute"
+        expr: "predict_linear(node_load_5m[1m], 60)"
+
+      # aggregate node_load_5m over 5 minute
+      - name: node_load_5m_max_over_5min
+        help: "aggregates the max value of node_load_5m over the last 5 minutess"
+        expr: "max_over_time(node_load_5m[5m])"
+
+      - name: node_load_5m_min_over_5min
+        help: "aggregates the min value of node_load_5m over the last 5 minutess"
+        expr: "min_over_time(node_load_5m[5m])"
+
+      - name: node_load_5m_avg_over_5min
+        help: "aggregates the average value of node_load_5m over the last 5 minutess"
+        expr: "avg_over_time(node_load_5m[5m])"
+
+      - name: node_load_5m_p99_over_5min
+        help: "aggregates the P99 value of node_load_5m over the last 5 minutess"
+        expr: "quantile_over_time(0.99, node_load_5m[5m])"
+
+      - name: node_load_5m_predict_5min
+        help: "predicts the value of node_load_5m over the last 5 minutess"
+        expr: "predict_linear(node_load_5m[5m], 60)"
+
+      # aggregate node_load_5m over 15 minute
+      - name: node_load_5m_max_over_15min
+        help: "aggregates the max value of node_load_5m over the last 15 minutess"
+        expr: "max_over_time(node_load_5m[15m])"
+
+      - name: node_load_5m_min_over_15min
+        help: "aggregates the min value of node_load_5m over the last 15 minutess"
+        expr: "min_over_time(node_load_5m[15m])"
+
+      - name: node_load_5m_avg_over_15min
+        help: "aggregates the average value of node_load_5m over the last 15 minutess"
+        expr: "avg_over_time(node_load_5m[15m])"
+
+      - name: node_load_5m_p99_over_15min
+        help: "aggregates the P99 value of node_load_5m over the last 15 minutess"
+        expr: "quantile_over_time(0.99, node_load_5m[15m])"
+
+      - name: node_load_5m_predict_15min
+        help: "predicts the value of node_load_5m over the last 15 minutess"
+        expr: "predict_linear(node_load_5m[15m], 60)"
+        
+      - name: node_load_15m
+        help: "represents system load average over the last 15 minutess" 
+
+      # aggregate node_load_1m over 1 minute
+      - name: node_load_15m_max_over_1min
+        help: "aggregates the max value of node_load_15m over the last minute"
+        expr: "max_over_time(node_load_15m[1m])"
+
+      - name: node_load_15m_min_over_1min
+        help: "aggregates the min value of node_load_15m over the last minute"
+        expr: "min_over_time(node_load_15m[1m])"
+
+      - name: node_load_15m_avg_over_1min
+        help: "aggregates the average value of node_load_15m over the last minute"
+        expr: "avg_over_time(node_load_15m[1m])"
+
+      - name: node_load_15m_p99_over_1min
+        help: "aggregates the P99 value of node_load_15m over the last minute"
+        expr: "quantile_over_time(0.99, node_load_15m[1m])"
+
+      - name: node_load_15m_predict_1min
+        help: "predicts the value of node_load_15m over the last minute"
+        expr: "predict_linear(node_load_15m[1m], 60)"
+
+      # aggregate node_load_15m over 5 minute
+      - name: node_load_15m_max_over_5min
+        help: "aggregates the max value of node_load_15m over the last 5 minutess"
+        expr: "max_over_time(node_load_15m[5m])"
+
+      - name: node_load_15m_min_over_5min
+        help: "aggregates the min value of node_load_15m over the last 5 minutess"
+        expr: "min_over_time(node_load_15m[5m])"
+
+      - name: node_load_15m_avg_over_5min
+        help: "aggregates the average value of node_load_15m over the last 5 minutess"
+        expr: "avg_over_time(node_load_15m[5m])"
+
+      - name: node_load_15m_p99_over_5min
+        help: "aggregates the P99 value of node_load_15m over the last 5 minutess"
+        expr: "quantile_over_time(0.99, node_load_15m[5m])"
+
+      - name: node_load_15m_predict_5min
+        help: "predicts the value of node_load_15m over the last 5 minutess"
+        expr: "predict_linear(node_load_15m[5m], 60)"
+
+      # aggregate node_load_15m over 15 minutes
+      - name: node_load_15m_max_over_15min
+        help: "aggregates the max value of node_load_15m over the last 15 minutess"
+        expr: "max_over_time(node_load_15m[15m])"
+
+      - name: node_load_15m_min_over_15min
+        help: "aggregates the min value of node_load_15m over the last 15 minutess"
+        expr: "min_over_time(node_load_15m[15m])"
+
+      - name: node_load_15m_avg_over_15min
+        help: "aggregates the average value of node_load_15m over the last 15 minutess"
+        expr: "avg_over_time(node_load_15m[15m])"
+
+      - name: node_load_15m_p99_over_15min
+        help: "aggregates the P99 value of node_load_15m over the last 15 minutess"
+        expr: "quantile_over_time(0.99, node_load_15m[15m])"
+
+      - name: node_load_15m_predict_15min
+        help: "predicts the value of node_load_15m over the last 15 minutess"
+        expr: "predict_linear(node_load_15m[15m], 60)"
+        
+  - name: node_memory_metrics
+    help: "represents node memory metrics"
+    scraper: walle
+    type: node
+    metrics:
+      # node memory statistics
+      - name: node_memory_available_bytes
+        help: "represents the available memory bytes in OS-level"
+        expr: "node_memory_total_bytes-node_memory_workingset_bytes"
+
+      - name: node_memory_used_bytes
+        help: "represents the used memory bytes in OS-level"
+
+      - name: node_memory_workingset_bytes
+        help: "represents bytes of active pages that represents working set for all processes"

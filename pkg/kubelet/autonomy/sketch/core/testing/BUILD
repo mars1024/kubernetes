@@ -1,0 +1,12 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["tyeps_mock.go"],
+    importpath = "k8s.io/kubernetes/pkg/kubelet/autonomy/sketch/core/testing",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//pkg/kubelet/autonomy/sketch/core:go_default_library",
+        "//vendor/github.com/golang/mock/gomock:go_default_library",
+    ],
+)

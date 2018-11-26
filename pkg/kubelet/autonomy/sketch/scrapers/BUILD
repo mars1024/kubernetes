@@ -1,0 +1,24 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["manager.go"],
+    importpath = "k8s.io/kubernetes/pkg/kubelet/autonomy/sketch/scrapers",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//pkg/kubelet/autonomy/sketch/core:go_default_library",
+        "//vendor/github.com/golang/glog:go_default_library",
+        "//vendor/github.com/prometheus/client_golang/prometheus:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["manager_test.go"],
+    embed = [":go_default_library"],
+    deps = [
+        "//pkg/kubelet/autonomy/sketch/core:go_default_library",
+        "//pkg/kubelet/autonomy/sketch/core/testing:go_default_library",
+        "//vendor/github.com/golang/mock/gomock:go_default_library",
+    ],
+)

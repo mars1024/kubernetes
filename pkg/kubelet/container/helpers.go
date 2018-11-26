@@ -23,6 +23,8 @@ import (
 
 	"github.com/golang/glog"
 
+	"time"
+
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -36,7 +38,7 @@ import (
 
 // HandlerRunner runs a lifecycle handler for a container.
 type HandlerRunner interface {
-	Run(containerID ContainerID, pod *v1.Pod, container *v1.Container, handler *v1.Handler) (string, error)
+	Run(containerID ContainerID, pod *v1.Pod, container *v1.Container, handler *v1.Handler, timeout time.Duration) (string, error)
 }
 
 // RuntimeHelper wraps kubelet to make container runtime
@@ -48,11 +50,17 @@ type RuntimeHelper interface {
 	// of a pod.
 	GetPodCgroupParent(pod *v1.Pod) string
 	GetPodDir(podUID types.UID) string
-	GeneratePodHostNameAndDomain(pod *v1.Pod) (hostname string, hostDomain string, err error)
+	GeneratePodHostNameAndDomain(pod *v1.Pod, podIP string) (hostname string, hostDomain string, err error)
 	// GetExtraSupplementalGroupsForPod returns a list of the extra
 	// supplemental groups for the Pod. These extra supplemental groups come
 	// from annotations on persistent volumes that the pod depends on.
 	GetExtraSupplementalGroupsForPod(pod *v1.Pod) []int64
+	// UpdatePodCgroup updates the pod cgroup
+	UpdatePodCgroup(pod *v1.Pod) error
+	// UpdatePodStatusCache updates central pod cache
+	UpdatePodStatusCache(pod *v1.Pod) error
+	// GetNode get node
+	GetNode() (*v1.Node, error)
 }
 
 // ShouldContainerBeRestarted checks whether a container needs to be restarted.
@@ -90,9 +98,16 @@ func ShouldContainerBeRestarted(container *v1.Container, pod *v1.Pod, podStatus 
 
 // HashContainer returns the hash of the container. It is used to compare
 // the running container with its desired spec.
+// The changes of Resources, LivenessProbe, ReadinessProbe, ImagePullPolicy and Lifecycle won't trigger upgrade.
 func HashContainer(container *v1.Container) uint64 {
+	mungedContainer := *container
+	mungedContainer.Resources = v1.ResourceRequirements{}
+	mungedContainer.LivenessProbe = nil
+	mungedContainer.ReadinessProbe = nil
+	mungedContainer.Lifecycle = nil
+	mungedContainer.ImagePullPolicy = v1.PullPolicy("")
 	hash := fnv.New32a()
-	hashutil.DeepHashObject(hash, *container)
+	hashutil.DeepHashObject(hash, &mungedContainer)
 	return uint64(hash.Sum32())
 }
 

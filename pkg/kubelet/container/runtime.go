@@ -47,7 +47,8 @@ type Version interface {
 // value of a Container's Image field, but in the future it will include more detailed
 // information about the different image types.
 type ImageSpec struct {
-	Image string
+	Image   string
+	Timeout int64
 }
 
 // ImageStats contains statistics about all the images currently available.
@@ -321,7 +322,7 @@ type ContainerStatus struct {
 	Image string
 	// ID of the image.
 	ImageID string
-	// Hash of the container, used for comparison.
+	// Hash of the container without resource value, used for comparison.
 	Hash uint64
 	// Number of times that the container has been restarted.
 	RestartCount int
@@ -330,6 +331,8 @@ type ContainerStatus struct {
 	// Message written by the container before exiting (stored in
 	// TerminationMessagePath).
 	Message string
+	// Resource value of the container
+	Resources *runtimeapi.LinuxContainerResources
 }
 
 // FindContainerStatusByName returns container status in the pod status with the given name.
@@ -437,6 +440,8 @@ type RunContainerOptions struct {
 	ReadOnly bool
 	// hostname for pod containers
 	Hostname string
+	// host domain for pod containers
+	HostDomain string
 	// EnableHostUserNamespace sets userns=host when users request host namespaces (pid, ipc, net),
 	// are using non-namespaced capabilities (mknod, sys_time, sys_module), the pod contains a privileged container,
 	// or using host path volumes.

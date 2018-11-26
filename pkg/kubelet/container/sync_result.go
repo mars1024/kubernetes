@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 
+	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 )
 
@@ -62,6 +63,7 @@ const (
 	CreatePodSandbox SyncAction = "CreatePodSandbox"
 	ConfigPodSandbox SyncAction = "ConfigPodSandbox"
 	KillPodSandbox   SyncAction = "KillPodSandbox"
+	UpdateContainer  SyncAction = "UpdateContainer"
 )
 
 // SyncResult is the result of sync action.
@@ -94,6 +96,8 @@ type PodSyncResult struct {
 	SyncResults []*SyncResult
 	// Error encountered in SyncPod() and KillPod() that is not already included in SyncResults
 	SyncError error
+	// pod container action result
+	StateStatus sigmak8sapi.ContainerStateStatus
 }
 
 // AddSyncResult adds multiple SyncResult to current PodSyncResult

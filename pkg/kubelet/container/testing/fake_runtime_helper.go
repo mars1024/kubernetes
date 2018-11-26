@@ -54,7 +54,7 @@ func (f *FakeRuntimeHelper) GetPodDNS(pod *v1.Pod) (*runtimeapi.DNSConfig, error
 }
 
 // This is not used by docker runtime.
-func (f *FakeRuntimeHelper) GeneratePodHostNameAndDomain(pod *v1.Pod) (string, string, error) {
+func (f *FakeRuntimeHelper) GeneratePodHostNameAndDomain(pod *v1.Pod, podIP string) (string, string, error) {
 	return f.HostName, f.HostDomain, f.Err
 }
 
@@ -64,4 +64,16 @@ func (f *FakeRuntimeHelper) GetPodDir(podUID kubetypes.UID) string {
 
 func (f *FakeRuntimeHelper) GetExtraSupplementalGroupsForPod(pod *v1.Pod) []int64 {
 	return nil
+}
+
+func (f *FakeRuntimeHelper) UpdatePodCgroup(pod *v1.Pod) error {
+	return nil
+}
+
+func (f *FakeRuntimeHelper) UpdatePodStatusCache(pod *v1.Pod) error {
+	return nil
+}
+
+func (f *FakeRuntimeHelper) GetNode() (*v1.Node, error) {
+	return nil, nil
 }

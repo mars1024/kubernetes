@@ -111,7 +111,7 @@ func TestRunHandlerExec(t *testing.T) {
 	pod.ObjectMeta.Name = "podFoo"
 	pod.ObjectMeta.Namespace = "nsFoo"
 	pod.Spec.Containers = []v1.Container{container}
-	_, err := handlerRunner.Run(containerID, &pod, &container, container.Lifecycle.PostStart)
+	_, err := handlerRunner.Run(containerID, &pod, &container, container.Lifecycle.PostStart, 0)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -155,7 +155,7 @@ func TestRunHandlerHttp(t *testing.T) {
 	pod.ObjectMeta.Name = "podFoo"
 	pod.ObjectMeta.Namespace = "nsFoo"
 	pod.Spec.Containers = []v1.Container{container}
-	_, err := handlerRunner.Run(containerID, &pod, &container, container.Lifecycle.PostStart)
+	_, err := handlerRunner.Run(containerID, &pod, &container, container.Lifecycle.PostStart, 0)
 
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
@@ -182,7 +182,7 @@ func TestRunHandlerNil(t *testing.T) {
 	pod.ObjectMeta.Name = podName
 	pod.ObjectMeta.Namespace = podNamespace
 	pod.Spec.Containers = []v1.Container{container}
-	_, err := handlerRunner.Run(containerID, &pod, &container, container.Lifecycle.PostStart)
+	_, err := handlerRunner.Run(containerID, &pod, &container, container.Lifecycle.PostStart, 0)
 	if err == nil {
 		t.Errorf("expect error, but got nil")
 	}
@@ -213,7 +213,7 @@ func TestRunHandlerExecFailure(t *testing.T) {
 	pod.ObjectMeta.Namespace = "nsFoo"
 	pod.Spec.Containers = []v1.Container{container}
 	expectedErrMsg := fmt.Sprintf("Exec lifecycle hook (%s) for Container %q in Pod %q failed - error: %v, message: %q", command, containerName, format.Pod(&pod), expectedErr, expectedErr.Error())
-	msg, err := handlerRunner.Run(containerID, &pod, &container, container.Lifecycle.PostStart)
+	msg, err := handlerRunner.Run(containerID, &pod, &container, container.Lifecycle.PostStart, 0)
 	if err == nil {
 		t.Errorf("expected error: %v", expectedErr)
 	}
@@ -248,7 +248,7 @@ func TestRunHandlerHttpFailure(t *testing.T) {
 	pod.ObjectMeta.Namespace = "nsFoo"
 	pod.Spec.Containers = []v1.Container{container}
 	expectedErrMsg := fmt.Sprintf("Http lifecycle hook (%s) for Container %q in Pod %q failed - error: %v, message: %q", "bar", containerName, format.Pod(&pod), expectedErr, expectedErr.Error())
-	msg, err := handlerRunner.Run(containerID, &pod, &container, container.Lifecycle.PostStart)
+	msg, err := handlerRunner.Run(containerID, &pod, &container, container.Lifecycle.PostStart, 0)
 	if err == nil {
 		t.Errorf("expected error: %v", expectedErr)
 	}

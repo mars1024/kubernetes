@@ -24,6 +24,7 @@ import (
 
 	"github.com/golang/glog"
 
+	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/clock"
@@ -128,6 +129,16 @@ func (m *managerImpl) Admit(attrs *lifecycle.PodAdmitAttributes) lifecycle.PodAd
 	defer m.RUnlock()
 	if len(m.nodeConditions) == 0 {
 		return lifecycle.PodAdmitResult{Admit: true}
+	}
+
+	// 2.0 container upgrade to 3.1 , should be admin, even it have pressure.
+	// https://aone.alibaba-inc.com/req/17099502
+	if attrs.Pod != nil || len(attrs.Pod.Annotations) > 0 {
+		_, exist := attrs.Pod.Annotations[sigmak8sapi.AnnotationRebuildContainerInfo]
+		if exist {
+			glog.V(4).Infof("admin pod %s ,because it have %s annotation", format.Pod(attrs.Pod), sigmak8sapi.AnnotationRebuildContainerInfo)
+			return lifecycle.PodAdmitResult{Admit: true}
+		}
 	}
 	// Admit Critical pods even under resource pressure since they are required for system stability.
 	// https://github.com/kubernetes/kubernetes/issues/40573 has more details.
@@ -304,6 +315,11 @@ func (m *managerImpl) synchronize(diskInfoProvider DiskInfoProvider, podFunc Act
 
 	m.lastObservations = observations
 	m.Unlock()
+
+	// sigma: need to enable DisablePodEviction in feature gates if needed
+	if utilfeature.DefaultFeatureGate.Enabled(features.DisablePodEviction) {
+		return nil
+	}
 
 	// evict pods if there is a resource usage violation from local volume temporary storage
 	// If eviction happens in localStorageEviction function, skip the rest of eviction action

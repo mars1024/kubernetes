@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	dockertypes "github.com/docker/docker/api/types"
@@ -104,6 +105,17 @@ func (ds *dockerService) CreateContainer(_ context.Context, r *runtimeapi.Create
 	labels[containerLogPathLabelKey] = filepath.Join(sandboxConfig.LogDirectory, config.LogPath)
 	// Write the sandbox ID in the labels.
 	labels[sandboxIDLabelKey] = podSandboxID
+
+	// Write DiskQuota in the labels.
+	if config.Linux != nil && config.Linux.Resources != nil && len(config.Linux.Resources.DiskQuota) > 0 {
+		// Write AutoQuotaId as true in the labels.
+		labels[labelAutoQuotaId] = strconv.FormatBool(true)
+		labels[labelDiskQuota] = parseDiskQuotaToLabel(config.Linux.Resources.DiskQuota)
+	}
+	// Write QuotaId in the labels.
+	if quotaId, err := strconv.Atoi(config.QuotaId); err == nil && quotaId > 0 {
+		labels[labelQuotaId] = config.QuotaId
+	}
 
 	apiVersion, err := ds.getDockerAPIVersion()
 	if err != nil {
@@ -330,6 +342,8 @@ func (ds *dockerService) ContainerStatus(_ context.Context, req *runtimeapi.Cont
 		m := r.Mounts[i]
 		readonly := !m.RW
 		mounts = append(mounts, &runtimeapi.Mount{
+			// CRI Extension: add name of mount
+			Name:          m.Name,
 			HostPath:      m.Source,
 			ContainerPath: m.Destination,
 			Readonly:      readonly,
@@ -404,21 +418,39 @@ func (ds *dockerService) ContainerStatus(_ context.Context, req *runtimeapi.Cont
 		Labels:      labels,
 		Annotations: annotations,
 		LogPath:     r.Config.Labels[containerLogPathLabelKey],
+		Envs:        parseEnvList(r.Config.Env),
 	}
+	// CRI extension: get volumes of container
+	volumes := map[string]*runtimeapi.Volume{}
+	for key := range r.Config.Volumes {
+		volumes[key] = &runtimeapi.Volume{}
+	}
+	if len(volumes) > 0 {
+		status.Volumes = volumes
+	}
+
+	// CRI extension: get Resources of container
+	dockerContainerResource := r.HostConfig.Resources
+	CRIResource := toRuntimeAPIResources(&dockerContainerResource)
+	status.Resources = CRIResource
+
+	// CRI extension: get QuotaId of container
+	if quotaId, exists := getQuotaIdFromContainer(r); exists {
+		status.QuotaId = quotaId
+	}
+
+	// CRI extension: get DiskQuota of container
+	if diskQuota, exists := getDiskQuotaFromContainer(r); exists {
+		status.Resources.DiskQuota = diskQuota
+	}
+
 	return &runtimeapi.ContainerStatusResponse{Status: status}, nil
 }
 
 func (ds *dockerService) UpdateContainerResources(_ context.Context, r *runtimeapi.UpdateContainerResourcesRequest) (*runtimeapi.UpdateContainerResourcesResponse, error) {
 	resources := r.Linux
 	updateConfig := dockercontainer.UpdateConfig{
-		Resources: dockercontainer.Resources{
-			CPUPeriod:  resources.CpuPeriod,
-			CPUQuota:   resources.CpuQuota,
-			CPUShares:  resources.CpuShares,
-			Memory:     resources.MemoryLimitInBytes,
-			CpusetCpus: resources.CpusetCpus,
-			CpusetMems: resources.CpusetMems,
-		},
+		Resources: *toDockerResources(resources),
 	}
 
 	err := ds.client.UpdateContainerResources(r.ContainerId, updateConfig)

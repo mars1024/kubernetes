@@ -377,6 +377,24 @@ const (
 	//
 	// Allow TTL controller to clean up Pods and Jobs after they finish.
 	TTLAfterFinished utilfeature.Feature = "TTLAfterFinished"
+
+	// owner: @stephen.xd (stephen.xd@antfin.com)
+	// alpha: v1.10
+	//
+	// sigma does not evict pods by default, mainly for safety considerations
+	DisablePodEviction utilfeature.Feature = "DisablePodEviction"
+
+	// owner: @fankang.fk (fankang.fk@antfin.com)
+	// alpha: v1.10
+	//
+	// Enable container network related env for alipay
+	NetworkEnv utilfeature.Feature = "NetworkEnv"
+
+	// owner: @zibo.hzb (zibo.hzb@antfin.com)
+	// alpha: v1.10
+	//
+	// Ignore protection finalizer when do upgrade
+	IgnoreProtectionFinalizer utilfeature.Feature = "IgnoreProtectionFinalizer"
 )
 
 func init() {
@@ -443,6 +461,9 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	VolumeSnapshotDataSource:                    {Default: false, PreRelease: utilfeature.Alpha},
 	ProcMountType:                               {Default: false, PreRelease: utilfeature.Alpha},
 	TTLAfterFinished:                            {Default: false, PreRelease: utilfeature.Alpha},
+	DisablePodEviction:                          {Default: false, PreRelease: utilfeature.Alpha},
+	NetworkEnv:                                  {Default: false, PreRelease: utilfeature.Alpha},
+	IgnoreProtectionFinalizer:                   {Default: true, PreRelease: utilfeature.Alpha},
 
 	// inherited features from generic apiserver, relisted here to get a conflict if it is changed
 	// unintentionally on either side:

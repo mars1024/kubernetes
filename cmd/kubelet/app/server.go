@@ -106,6 +106,8 @@ const (
 
 // NewKubeletCommand creates a *cobra.Command object with default parameters
 func NewKubeletCommand(stopCh <-chan struct{}) *cobra.Command {
+	// set glog max size to 500M,
+	glog.MaxSize = 1024 * 1024 * 500
 	cleanFlagSet := pflag.NewFlagSet(componentKubelet, pflag.ContinueOnError)
 	cleanFlagSet.SetNormalizeFunc(flag.WordSepNormalizeFunc)
 	kubeletFlags := options.NewKubeletFlags()
@@ -533,7 +535,7 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.Dependencies, stopCh <-chan
 	if err != nil {
 		return err
 	}
-	nodeName, err := getNodeName(kubeDeps.Cloud, hostName)
+	nodeName, err := getNodeName(kubeDeps.Cloud, hostName, s.NodeNameOverride)
 	if err != nil {
 		return err
 	}
@@ -776,10 +778,13 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.Dependencies, stopCh <-chan
 }
 
 // getNodeName returns the node name according to the cloud provider
-// if cloud provider is specified. Otherwise, returns the hostname of the node.
-func getNodeName(cloud cloudprovider.Interface, hostname string) (types.NodeName, error) {
+// if cloud provider is specified. Otherwise, returns the SN of the node.
+// If nodeNameOverride not empty, nodename is nodeNameOverride, if
+// nodeNameOverride is empty, nodename is hostSN.
+// https://aone.alibaba-inc.com/issue/17038936
+func getNodeName(cloud cloudprovider.Interface, hostname, nodeNameOverride string) (types.NodeName, error) {
 	if cloud == nil {
-		return types.NodeName(hostname), nil
+		return nodeutil.GetNodeName(nodeNameOverride), nil
 	}
 
 	instances, ok := cloud.Instances()
@@ -919,8 +924,8 @@ func RunKubelet(kubeServer *options.KubeletServer, kubeDeps *kubelet.Dependencie
 	if err != nil {
 		return err
 	}
-	// Query the cloud provider for our node name, default to hostname if kubeDeps.Cloud == nil
-	nodeName, err := getNodeName(kubeDeps.Cloud, hostname)
+	// Query the cloud provider for our node name, default to node SN if kubeDeps.Cloud == nil
+	nodeName, err := getNodeName(kubeDeps.Cloud, hostname, kubeServer.NodeNameOverride)
 	if err != nil {
 		return err
 	}
@@ -967,6 +972,7 @@ func RunKubelet(kubeServer *options.KubeletServer, kubeDeps *kubelet.Dependencie
 		kubeServer.ContainerRuntime,
 		kubeServer.RuntimeCgroups,
 		kubeServer.HostnameOverride,
+		kubeServer.NodeNameOverride,
 		kubeServer.NodeIP,
 		kubeServer.ProviderID,
 		kubeServer.CloudProvider,
@@ -1040,6 +1046,7 @@ func CreateAndInitKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	containerRuntime string,
 	runtimeCgroups string,
 	hostnameOverride string,
+	nodeNameOverride string,
 	nodeIP string,
 	providerID string,
 	cloudProvider string,
@@ -1074,6 +1081,7 @@ func CreateAndInitKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		containerRuntime,
 		runtimeCgroups,
 		hostnameOverride,
+		nodeNameOverride,
 		nodeIP,
 		providerID,
 		cloudProvider,

@@ -61,6 +61,7 @@ import (
 	kubeletconfiginternal "k8s.io/kubernetes/pkg/kubelet/apis/config"
 	internalapi "k8s.io/kubernetes/pkg/kubelet/apis/cri"
 	pluginwatcherapi "k8s.io/kubernetes/pkg/kubelet/apis/pluginregistration/v1alpha1"
+	"k8s.io/kubernetes/pkg/kubelet/autonomy/sketch"
 	"k8s.io/kubernetes/pkg/kubelet/cadvisor"
 	kubeletcertificate "k8s.io/kubernetes/pkg/kubelet/certificate"
 	"k8s.io/kubernetes/pkg/kubelet/checkpointmanager"
@@ -162,6 +163,7 @@ const (
 	// backOffPeriod is the period to back off when pod syncing results in an
 	// error. It is also used as the base period for the exponential backoff
 	// container restarts and image pulls.
+	// It also used as the period to back off when pod patch in an error.
 	backOffPeriod = time.Second * 10
 
 	// ContainerGCPeriod is the period for performing container garbage collection.
@@ -171,6 +173,10 @@ const (
 
 	// Minimum number of dead containers to keep in a pod
 	minDeadContainerInPod = 1
+	// maxPatchRetry is the maximum number of conflicts retry for during a patch operation before returning failure.
+	maxPatchRetry = 5
+	// how many times we can retry before back off.
+	triesBeforeBackOff = 1
 )
 
 // SyncHandler is an interface implemented by Kubelet, for testability
@@ -330,6 +336,7 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	containerRuntime string,
 	runtimeCgroups string,
 	hostnameOverride string,
+	nodeNameOverride string,
 	nodeIP string,
 	providerID string,
 	cloudProvider string,
@@ -378,8 +385,10 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	if err != nil {
 		return nil, err
 	}
-	// Query the cloud provider for our node name, default to hostname
-	nodeName := types.NodeName(hostname)
+	// Query the cloud provider for our node name. If hostnameOverride is empty, only the hostname is modified,
+	// nodeName will always be nodeSN except nodeNameOverride is not empty.
+	// https://aone.alibaba-inc.com/issue/17038936
+	nodeName := nodeutil.GetNodeName(nodeNameOverride)
 	if kubeDeps.Cloud != nil {
 		var err error
 		instances, ok := kubeDeps.Cloud.Instances()
@@ -682,6 +691,8 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		kubeDeps.ContainerManager.InternalContainerLifecycle(),
 		legacyLogProvider,
 		klet.runtimeClassManager,
+		kubeCfg.UserinfoScriptPath,
+		klet.podManager,
 	)
 	if err != nil {
 		return nil, err
@@ -843,6 +854,11 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		klet.admitHandlers.AddPodAdmitHandler(runtimeSupport)
 		klet.admitHandlers.AddPodAdmitHandler(sysctlsWhitelist)
 	}
+	oversold, err := sysctl.NewOversoldAdmitHandler(klet.getNodeAnyWay)
+	if err != nil {
+		return nil, err
+	}
+	klet.admitHandlers.AddPodAdmitHandler(oversold)
 
 	// enable active deadline handler
 	activeDeadlineHandler, err := newActiveDeadlineHandler(klet.statusManager, kubeDeps.Recorder, klet.clock)
@@ -868,6 +884,12 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	}
 
 	klet.softAdmitHandlers.AddPodAdmitHandler(lifecycle.NewProcMountAdmitHandler(klet.containerRuntime))
+
+	options := sketch.NewOptions()
+	klet.sketchProvider, err = sketch.New(options, klet)
+	if err != nil {
+		return nil, err
+	}
 
 	// Finally, put the most recent version of the config on the Kubelet, so
 	// people can see how it was configured.
@@ -1205,6 +1227,9 @@ type Kubelet struct {
 
 	// Handles RuntimeClass objects for the Kubelet.
 	runtimeClassManager *runtimeclass.Manager
+
+	// StatsProvider provides the node and the container stats.
+	sketchProvider sketch.Provider
 }
 
 func allGlobalUnicastIPs() ([]net.IP, error) {
@@ -1333,6 +1358,10 @@ func (kl *Kubelet) initializeModules() error {
 	// Start resource analyzer
 	kl.resourceAnalyzer.Start()
 
+	if err := kl.sketchProvider.Start(); err != nil {
+		glog.Errorf("Failed to start sketchProvider %v", err)
+	}
+
 	return nil
 }
 
@@ -1408,6 +1437,14 @@ func (kl *Kubelet) Run(updates <-chan kubetypes.PodUpdate) {
 		// start syncing lease
 		if utilfeature.DefaultFeatureGate.Enabled(features.NodeLease) {
 			go kl.nodeLeaseController.Run(wait.NeverStop)
+		}
+		// Start executing autopilotService.
+		node, err := kl.getNodeAnyWay()
+		if err != nil {
+			// if do not get node, it is not necessary to start autopilot service.
+			glog.Errorf("get nodeinfo error: %v", err)
+		} else {
+			StartAutopilotService(kl.podManager, kl.resourceAnalyzer, kl.runtimeService, node, kl.heartbeatClient.CoreV1(), kl.nodeStatusUpdateFrequency, kl.cadvisor, kl.recorder, kl.machineInfo.NumCores, kl)
 		}
 	}
 	go wait.Until(kl.updateRuntimeUp, 5*time.Second, wait.NeverStop)
@@ -1662,6 +1699,29 @@ func (kl *Kubelet) syncPod(o syncPodOptions) error {
 
 	// Call the container runtime's SyncPod callback
 	result := kl.containerRuntime.SyncPod(pod, apiPodStatus, podStatus, pullSecrets, kl.backOff)
+	for _, syncResult := range result.SyncResults {
+		if syncResult.Action == kubecontainer.UpdateContainer && syncResult.Error == nil {
+			// The pod might have been resized, needs to update its cgroup.
+			if err := pcm.Update(pod); err != nil {
+				kl.recorder.Eventf(pod, v1.EventTypeWarning, events.FailedUpdatePodCgroup, "failed to ensure that the pod: %v cgroups exist and are correctly applied: %v", format.Pod(pod), err)
+				glog.Errorf("failed to ensure that the pod: %v cgroups exist and are correctly applied: %v", format.Pod(pod), err)
+			}
+		}
+	}
+	result.ContainerStateClean(pod)
+
+	// Get the latest pod from podManager
+	latestPod, exists := kl.podManager.GetPodByUID(pod.UID)
+	if !exists {
+		return fmt.Errorf("pod %s doesn't exist in pod manager", format.Pod(pod))
+	}
+	// Update pod's state-status.
+	if err := kl.updateStateStatus(latestPod, result, maxPatchRetry, triesBeforeBackOff, backOffPeriod); err != nil {
+		kl.recorder.Eventf(pod, v1.EventTypeWarning, events.FailedUpdatePodAnnotation, "Unable to update pod to client for pod %q: %v", format.Pod(pod), err)
+		glog.Errorf("pod annotation change, update pod: %s, error: %v", format.Pod(pod), err)
+	}
+
+	//TODO  update pod through api server
 	kl.reasonCache.Update(pod.UID, result)
 	if err := result.Error(); err != nil {
 		// Do not return error if the only failures were pods in backoff
@@ -2038,7 +2098,7 @@ func (kl *Kubelet) HandlePodAdditions(pods []*v1.Pod) {
 			continue
 		}
 
-		if !kl.podIsTerminated(pod) {
+		if !kl.skipAdmit(pod) {
 			// Only go through the admission process if the pod is not
 			// terminated.
 
@@ -2076,6 +2136,7 @@ func (kl *Kubelet) HandlePodUpdates(pods []*v1.Pod) {
 
 		mirrorPod, _ := kl.podManager.GetMirrorPodByPod(pod)
 		kl.dispatchWork(pod, kubetypes.SyncPodUpdate, mirrorPod, start)
+		kl.probeManager.UpdatePod(pod)
 	}
 }
 
@@ -2129,6 +2190,7 @@ func (kl *Kubelet) HandlePodSyncs(pods []*v1.Pod) {
 	for _, pod := range pods {
 		mirrorPod, _ := kl.podManager.GetMirrorPodByPod(pod)
 		kl.dispatchWork(pod, kubetypes.SyncPodSync, mirrorPod, start)
+		kl.probeManager.UpdatePod(pod)
 	}
 }
 
@@ -2201,12 +2263,12 @@ func (kl *Kubelet) ResyncInterval() time.Duration {
 
 // ListenAndServe runs the kubelet HTTP server.
 func (kl *Kubelet) ListenAndServe(address net.IP, port uint, tlsOptions *server.TLSOptions, auth server.AuthInterface, enableDebuggingHandlers, enableContentionProfiling bool) {
-	server.ListenAndServeKubeletServer(kl, kl.resourceAnalyzer, address, port, tlsOptions, auth, enableDebuggingHandlers, enableContentionProfiling, kl.redirectContainerStreaming, kl.criHandler)
+	server.ListenAndServeKubeletServer(kl, kl.resourceAnalyzer, address, port, tlsOptions, auth, enableDebuggingHandlers, enableContentionProfiling, kl.redirectContainerStreaming, kl.criHandler, kl.sketchProvider)
 }
 
 // ListenAndServeReadOnly runs the kubelet HTTP server in read-only mode.
 func (kl *Kubelet) ListenAndServeReadOnly(address net.IP, port uint) {
-	server.ListenAndServeKubeletReadOnlyServer(kl, kl.resourceAnalyzer, address, port)
+	server.ListenAndServeKubeletReadOnlyServer(kl, kl.resourceAnalyzer, address, port, kl.sketchProvider)
 }
 
 // Delete the eligible dead container instances in a pod. Depending on the configuration, the latest dead containers may be kept around.

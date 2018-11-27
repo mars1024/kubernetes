@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -62,6 +63,7 @@ func TestListContainers(t *testing.T) {
 		s := makeSandboxConfig(fmt.Sprintf("%s%d", podName, i),
 			fmt.Sprintf("%s%d", namespace, i), fmt.Sprintf("%d", i), 0)
 		labels := map[string]string{"abc.xyz": fmt.Sprintf("label%d", i)}
+		labels[labelAutoQuotaId] = strconv.FormatBool(true)
 		annotations := map[string]string{"foo.bar.baz": fmt.Sprintf("annotation%d", i)}
 		c := makeContainerConfig(s, fmt.Sprintf("%s%d", containerName, i),
 			fmt.Sprintf("%s:v%d", image, i), uint32(i), labels, annotations)
@@ -109,9 +111,12 @@ func TestContainerStatus(t *testing.T) {
 	ds, fDocker, fClock := newTestDockerService()
 	sConfig := makeSandboxConfig("foo", "bar", "1", 0)
 	labels := map[string]string{"abc.xyz": "foo"}
+	labels[labelAutoQuotaId] = strconv.FormatBool(true)
+
 	annotations := map[string]string{"foo.bar.baz": "abc"}
 	imageName := "iamimage"
 	config := makeContainerConfig(sConfig, "pause", imageName, 0, labels, annotations)
+	resources := runtimeapi.LinuxContainerResources{}
 
 	var defaultTime time.Time
 	dt := defaultTime.UnixNano()
@@ -136,6 +141,7 @@ func TestContainerStatus(t *testing.T) {
 		Mounts:      []*runtimeapi.Mount{},
 		Labels:      config.Labels,
 		Annotations: config.Annotations,
+		Resources:   &resources,
 	}
 
 	fDocker.InjectImages([]dockertypes.ImageSummary{{ID: imageName}})

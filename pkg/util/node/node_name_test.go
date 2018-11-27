@@ -8,7 +8,8 @@ import (
 )
 
 func TestGetNodeName(t *testing.T) {
-	hostname := GetHostname("")
+	hostname, err := GetHostname("")
+	assert.NoError(t, err)
 
 	if runtime.GOOS == "darwin" {
 		assert.Panics(t, func() { GetNodeName("") }, "In darwin env, nodeName cannot be SN and panic")

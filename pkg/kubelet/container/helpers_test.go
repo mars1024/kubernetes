@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -426,5 +427,168 @@ func TestMakePortMappings(t *testing.T) {
 	for i, tt := range tests {
 		actual := MakePortMappings(tt.container)
 		assert.Equal(t, tt.expectedPortMappings, actual, "[%d]", i)
+	}
+}
+
+func TestHashContainer(t *testing.T) {
+	tests := []struct {
+		container         *v1.Container
+		modifiedContainer *v1.Container
+		hashChanged       bool
+		message           string
+	}{
+		{
+			container: &v1.Container{
+				Name:  "fooContainer",
+				Image: "testImage:v1",
+			},
+			modifiedContainer: &v1.Container{
+				Name:  "fooContainer",
+				Image: "testImage:v2",
+			},
+			hashChanged: true,
+			message:     "Image changed, expect hash changed",
+		},
+		{
+			container: &v1.Container{
+				Name:    "fooContainer",
+				Image:   "testImage",
+				Command: []string{"command1"},
+			},
+			modifiedContainer: &v1.Container{
+				Name:    "fooContainer",
+				Image:   "testImage",
+				Command: []string{"command2"},
+			},
+			hashChanged: true,
+			message:     "Command changed, expect hash changed",
+		},
+		{
+			container: &v1.Container{
+				Name:            "fooContainer",
+				Image:           "testImage",
+				ImagePullPolicy: v1.PullAlways,
+			},
+			modifiedContainer: &v1.Container{
+				Name:            "fooContainer",
+				Image:           "testImage",
+				ImagePullPolicy: v1.PullNever,
+			},
+			hashChanged: false,
+			message:     "ImagePullPolicy changed, expect hash not changed",
+		},
+		{
+			container: &v1.Container{
+				Name:  "fooContainer",
+				Image: "testImage",
+				Resources: v1.ResourceRequirements{
+					Requests: v1.ResourceList(
+						map[v1.ResourceName]resource.Quantity{
+							v1.ResourceName("memory"): resource.MustParse("64Mi"),
+						}),
+				},
+			},
+			modifiedContainer: &v1.Container{
+				Name:  "fooContainer",
+				Image: "testImage",
+				Resources: v1.ResourceRequirements{
+					Requests: v1.ResourceList(
+						map[v1.ResourceName]resource.Quantity{
+							v1.ResourceName("memory"): resource.MustParse("128Mi"),
+						}),
+				},
+			},
+			hashChanged: false,
+			message:     "Resources changed, hash should not changed",
+		},
+		{
+			container: &v1.Container{
+				Name:  "fooContainer",
+				Image: "testImage",
+				LivenessProbe: &v1.Probe{
+					Handler: v1.Handler{
+						Exec: &v1.ExecAction{
+							Command: []string{"command1"},
+						},
+					},
+				},
+			},
+			modifiedContainer: &v1.Container{
+				Name:  "fooContainer",
+				Image: "testImage",
+				LivenessProbe: &v1.Probe{
+					Handler: v1.Handler{
+						Exec: &v1.ExecAction{
+							Command: []string{"command2"},
+						},
+					},
+				},
+			},
+			hashChanged: false,
+			message:     "LivenessProbe changed, hash should not changed",
+		},
+		{
+			container: &v1.Container{
+				Name:  "fooContainer",
+				Image: "testImage",
+				ReadinessProbe: &v1.Probe{
+					Handler: v1.Handler{
+						Exec: &v1.ExecAction{
+							Command: []string{"command1"},
+						},
+					},
+				},
+			},
+			modifiedContainer: &v1.Container{
+				Name:  "fooContainer",
+				Image: "testImage",
+				ReadinessProbe: &v1.Probe{
+					Handler: v1.Handler{
+						Exec: &v1.ExecAction{
+							Command: []string{"command2"},
+						},
+					},
+				},
+			},
+			hashChanged: false,
+			message:     "ReadinessProbe changed, hash should not changed",
+		},
+		{
+			container: &v1.Container{
+				Name:  "fooContainer",
+				Image: "testImage",
+				Lifecycle: &v1.Lifecycle{
+					PostStart: &v1.Handler{
+						Exec: &v1.ExecAction{
+							Command: []string{"command1"},
+						},
+					},
+				},
+			},
+			modifiedContainer: &v1.Container{
+				Name:  "fooContainer",
+				Image: "testImage",
+				Lifecycle: &v1.Lifecycle{
+					PostStart: &v1.Handler{
+						Exec: &v1.ExecAction{
+							Command: []string{"command2"},
+						},
+					},
+				},
+			},
+			hashChanged: false,
+			message:     "Lifecycle changed, hash should not changed",
+		},
+	}
+	for _, tt := range tests {
+		cHash := HashContainer(tt.container)
+		mHash := HashContainer(tt.modifiedContainer)
+		if tt.hashChanged && cHash == mHash {
+			t.Errorf("Test case, %q: unexpect hash got", tt.message)
+		}
+
+		if !tt.hashChanged && cHash != mHash {
+			t.Errorf("Test case, %q: unexpect hash got", tt.message)
+		}
 	}
 }

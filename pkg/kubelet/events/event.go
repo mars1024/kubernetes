@@ -26,6 +26,8 @@ const (
 	PreemptContainer        = "Preempting"
 	BackOffStartContainer   = "BackOff"
 	ExceededGracePeriod     = "ExceededGracePeriod"
+	FailedToUpdateContainer = "FailedUpdateContainer"
+	UpdatedContainer        = "Updated"
 
 	// Pod event reason list
 	FailedToKillPod                = "FailedKillPod"
@@ -76,6 +78,8 @@ const (
 	SandboxChanged                       = "SandboxChanged"
 	FailedCreatePodSandBox               = "FailedCreatePodSandBox"
 	FailedStatusPodSandBox               = "FailedPodSandBoxStatus"
+	FailedUpdatePodAnnotation            = "FailedUpdatePodAnnotation"
+	FailedUpdatePodCgroup                = "FailedUpdatePodCgroup"
 
 	// Image manager event reason list
 	InvalidDiskCapacity = "InvalidDiskCapacity"
@@ -94,4 +98,6 @@ const (
 	FailedPostStartHook   = "FailedPostStartHook"
 	FailedPreStopHook     = "FailedPreStopHook"
 	UnfinishedPreStopHook = "UnfinishedPreStopHook"
+	WithOutPostStartHook  = "WithOutPostStartHook"
+	SucceedPostStartHook  = "SucceedPostStartHook"
 )

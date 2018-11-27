@@ -17,6 +17,7 @@ limitations under the License.
 package kuberuntime
 
 import (
+	"encoding/json"
 	"reflect"
 	"sort"
 	"testing"
@@ -25,7 +26,7 @@ import (
 	cadvisorapi "github.com/google/cadvisor/info/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
+	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -689,24 +690,6 @@ func TestSyncPodWithInitContainers(t *testing.T) {
 		{name: containers[1].Name, attempt: 0, state: runtimeapi.ContainerState_CONTAINER_RUNNING},
 	}
 	verifyContainerStatuses(t, fakeRuntime, expected, "init container completed; all app containers should be running")
-
-	// 4. should restart the init container if needed to create a new podsandbox
-	// Stop the pod sandbox.
-	fakeRuntime.StopPodSandbox(sandboxID)
-	// Sync again.
-	podStatus, err = m.GetPodStatus(pod.UID, pod.Name, pod.Namespace)
-	assert.NoError(t, err)
-	result = m.SyncPod(pod, v1.PodStatus{}, podStatus, []v1.Secret{}, backOff)
-	assert.NoError(t, result.Error())
-	expected = []*cRecord{
-		// The first init container instance is purged and no longer visible.
-		// The second (attempt == 1) instance has been started and is running.
-		{name: initContainers[0].Name, attempt: 1, state: runtimeapi.ContainerState_CONTAINER_RUNNING},
-		// All containers are killed.
-		{name: containers[0].Name, attempt: 0, state: runtimeapi.ContainerState_CONTAINER_EXITED},
-		{name: containers[1].Name, attempt: 0, state: runtimeapi.ContainerState_CONTAINER_EXITED},
-	}
-	verifyContainerStatuses(t, fakeRuntime, expected, "kill all app containers, purge the existing init container, and restart a new one")
 }
 
 // A helper function to get a basic pod and its status assuming all sandbox and
@@ -714,9 +697,10 @@ func TestSyncPodWithInitContainers(t *testing.T) {
 func makeBasePodAndStatus() (*v1.Pod, *kubecontainer.PodStatus) {
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			UID:       "12345678",
-			Name:      "foo",
-			Namespace: "foo-ns",
+			UID:         "12345678",
+			Name:        "foo",
+			Namespace:   "foo-ns",
+			Annotations: make(map[string]string),
 		},
 		Spec: v1.PodSpec{
 			Containers: []v1.Container{
@@ -776,9 +760,14 @@ func TestComputePodActions(t *testing.T) {
 	// the specific fields.
 	basePod, baseStatus := makeBasePodAndStatus()
 	noAction := podActions{
-		SandboxID:         baseStatus.SandboxStatuses[0].Id,
-		ContainersToStart: []int{},
-		ContainersToKill:  map[kubecontainer.ContainerID]containerToKillInfo{},
+		SandboxID:                           baseStatus.SandboxStatuses[0].Id,
+		ContainersToStart:                   []int{},
+		ContainersToKill:                    map[kubecontainer.ContainerID]containerToKillInfo{},
+		ContainersToStartBecauseDesireState: make(map[kubecontainer.ContainerID]containerOperationInfo),
+		ContainersToKillBecauseDesireState:  make(map[kubecontainer.ContainerID]containerOperationInfo),
+		ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
+		ContainersToUpgrade:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
+		ContainersToStartBecausePause:       make(map[kubecontainer.ContainerID]containerOperationInfo),
 	}
 
 	for desc, test := range map[string]struct {
@@ -796,11 +785,16 @@ func TestComputePodActions(t *testing.T) {
 				status.ContainerStatuses = []*kubecontainer.ContainerStatus{}
 			},
 			actions: podActions{
-				KillPod:           true,
-				CreateSandbox:     true,
-				Attempt:           uint32(0),
-				ContainersToStart: []int{0, 1, 2},
-				ContainersToKill:  getKillMap(basePod, baseStatus, []int{}),
+				KillPod:                             true,
+				CreateSandbox:                       true,
+				Attempt:                             uint32(0),
+				ContainersToStart:                   []int{0, 1, 2},
+				ContainersToKill:                    getKillMap(basePod, baseStatus, []int{}),
+				ContainersToStartBecauseDesireState: make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToKillBecauseDesireState:  make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUpgrade:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToStartBecausePause:       make(map[kubecontainer.ContainerID]containerOperationInfo),
 			},
 		},
 		"restart exited containers if RestartPolicy == Always": {
@@ -815,9 +809,14 @@ func TestComputePodActions(t *testing.T) {
 				status.ContainerStatuses[1].ExitCode = 111
 			},
 			actions: podActions{
-				SandboxID:         baseStatus.SandboxStatuses[0].Id,
-				ContainersToStart: []int{0, 1},
-				ContainersToKill:  getKillMap(basePod, baseStatus, []int{}),
+				SandboxID:                           baseStatus.SandboxStatuses[0].Id,
+				ContainersToStart:                   []int{0, 1},
+				ContainersToKill:                    getKillMap(basePod, baseStatus, []int{}),
+				ContainersToStartBecauseDesireState: make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToKillBecauseDesireState:  make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUpgrade:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToStartBecausePause:       make(map[kubecontainer.ContainerID]containerOperationInfo),
 			},
 		},
 		"restart failed containers if RestartPolicy == OnFailure": {
@@ -832,9 +831,14 @@ func TestComputePodActions(t *testing.T) {
 				status.ContainerStatuses[1].ExitCode = 111
 			},
 			actions: podActions{
-				SandboxID:         baseStatus.SandboxStatuses[0].Id,
-				ContainersToStart: []int{1},
-				ContainersToKill:  getKillMap(basePod, baseStatus, []int{}),
+				SandboxID:                           baseStatus.SandboxStatuses[0].Id,
+				ContainersToStart:                   []int{1},
+				ContainersToKill:                    getKillMap(basePod, baseStatus, []int{}),
+				ContainersToStartBecauseDesireState: make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToKillBecauseDesireState:  make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUpgrade:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToStartBecausePause:       make(map[kubecontainer.ContainerID]containerOperationInfo),
 			},
 		},
 		"don't restart containers if RestartPolicy == Never": {
@@ -854,12 +858,16 @@ func TestComputePodActions(t *testing.T) {
 				status.SandboxStatuses[0].State = runtimeapi.PodSandboxState_SANDBOX_NOTREADY
 			},
 			actions: podActions{
-				KillPod:           true,
-				CreateSandbox:     true,
-				SandboxID:         baseStatus.SandboxStatuses[0].Id,
-				Attempt:           uint32(1),
-				ContainersToStart: []int{0, 1, 2},
-				ContainersToKill:  getKillMap(basePod, baseStatus, []int{}),
+				StartSandbox:                        true,
+				SandboxID:                           baseStatus.SandboxStatuses[0].Id,
+				Attempt:                             uint32(1),
+				ContainersToStart:                   []int{},
+				ContainersToKill:                    getKillMap(basePod, baseStatus, []int{}),
+				ContainersToStartBecauseDesireState: getExtendActionMap(basePod, baseStatus, []int{0, 1, 2}),
+				ContainersToKillBecauseDesireState:  getExtendActionMap(basePod, baseStatus, []int{0, 1, 2}),
+				ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUpgrade:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToStartBecausePause:       make(map[kubecontainer.ContainerID]containerOperationInfo),
 			},
 		},
 		"Kill pod and recreate all containers (except for the succeeded one) if the pod sandbox is dead, and RestartPolicy == OnFailure": {
@@ -870,12 +878,16 @@ func TestComputePodActions(t *testing.T) {
 				status.ContainerStatuses[1].ExitCode = 0
 			},
 			actions: podActions{
-				KillPod:           true,
-				CreateSandbox:     true,
-				SandboxID:         baseStatus.SandboxStatuses[0].Id,
-				Attempt:           uint32(1),
-				ContainersToStart: []int{0, 2},
-				ContainersToKill:  getKillMap(basePod, baseStatus, []int{}),
+				StartSandbox:                        true,
+				SandboxID:                           baseStatus.SandboxStatuses[0].Id,
+				Attempt:                             uint32(1),
+				ContainersToStart:                   []int{},
+				ContainersToKill:                    getKillMap(basePod, baseStatus, []int{}),
+				ContainersToStartBecauseDesireState: getExtendActionMap(basePod, baseStatus, []int{0, 2}),
+				ContainersToKillBecauseDesireState:  getExtendActionMap(basePod, baseStatus, []int{0, 2}),
+				ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUpgrade:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToStartBecausePause:       make(map[kubecontainer.ContainerID]containerOperationInfo),
 			},
 		},
 		"Kill pod and recreate all containers if the PodSandbox does not have an IP": {
@@ -883,15 +895,20 @@ func TestComputePodActions(t *testing.T) {
 				status.SandboxStatuses[0].Network.Ip = ""
 			},
 			actions: podActions{
-				KillPod:           true,
-				CreateSandbox:     true,
-				SandboxID:         baseStatus.SandboxStatuses[0].Id,
-				Attempt:           uint32(1),
-				ContainersToStart: []int{0, 1, 2},
-				ContainersToKill:  getKillMap(basePod, baseStatus, []int{}),
+				KillPod:                             true,
+				CreateSandbox:                       true,
+				SandboxID:                           baseStatus.SandboxStatuses[0].Id,
+				Attempt:                             uint32(1),
+				ContainersToStart:                   []int{0, 1, 2},
+				ContainersToKill:                    getKillMap(basePod, baseStatus, []int{}),
+				ContainersToStartBecauseDesireState: make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToKillBecauseDesireState:  make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUpgrade:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToStartBecausePause:       make(map[kubecontainer.ContainerID]containerOperationInfo),
 			},
 		},
-		"Kill and recreate the container if the container's spec changed": {
+		"Restart the container if the container's spec changed": {
 			mutatePodFn: func(pod *v1.Pod) {
 				pod.Spec.RestartPolicy = v1.RestartPolicyAlways
 			},
@@ -899,12 +916,80 @@ func TestComputePodActions(t *testing.T) {
 				status.ContainerStatuses[1].Hash = uint64(432423432)
 			},
 			actions: podActions{
-				SandboxID:         baseStatus.SandboxStatuses[0].Id,
-				ContainersToKill:  getKillMap(basePod, baseStatus, []int{1}),
-				ContainersToStart: []int{1},
+				SandboxID:                           baseStatus.SandboxStatuses[0].Id,
+				ContainersToKill:                    getKillMap(basePod, baseStatus, []int{}),
+				ContainersToStart:                   []int{},
+				ContainersToStartBecauseDesireState: make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToKillBecauseDesireState:  make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUpgrade:                 getExtendActionMap(basePod, baseStatus, []int{1}),
+				ContainersToStartBecausePause:       make(map[kubecontainer.ContainerID]containerOperationInfo),
 			},
 			// TODO: Add a test case for containers which failed the liveness
 			// check. Will need to fake the livessness check result.
+		},
+		"Upgrade the container in sigma3 if the container's spec changed": {
+			mutatePodFn: func(pod *v1.Pod) {
+				pod.Spec.RestartPolicy = v1.RestartPolicyAlways
+				pod.Annotations[sigmak8sapi.AnnotationContainerStateSpec] = "{\"states\":{\"foo2\":\"running\"}}"
+			},
+			mutateStatusFn: func(status *kubecontainer.PodStatus) {
+				status.ContainerStatuses[1].Hash = uint64(432423432)
+			},
+			actions: podActions{
+				SandboxID:                           baseStatus.SandboxStatuses[0].Id,
+				ContainersToKill:                    getKillMap(basePod, baseStatus, []int{}),
+				ContainersToStart:                   []int{},
+				ContainersToStartBecauseDesireState: make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToKillBecauseDesireState:  make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUpgrade:                 getExtendActionMap(basePod, baseStatus, []int{1}),
+				ContainersToStartBecausePause:       make(map[kubecontainer.ContainerID]containerOperationInfo),
+			},
+		},
+		"Pause the container in sigma3 if the container's expect state is paused": {
+			mutatePodFn: func(pod *v1.Pod) {
+				pod.Spec.RestartPolicy = v1.RestartPolicyAlways
+				pod.Annotations[sigmak8sapi.AnnotationContainerStateSpec] = "{\"states\":{\"foo2\":\"paused\"}}"
+				pod.Annotations[sigmak8sapi.AnnotationPodUpdateStatus] = "{\"statuses\":{\"foo2\":{\"currentState\":\"running\",\"lastState\":\"exited\"}}}"
+			},
+			mutateStatusFn: func(status *kubecontainer.PodStatus) {
+				status.ContainerStatuses[1].State = kubecontainer.ContainerStateExited
+				status.ContainerStatuses[1].ExitCode = 0
+			},
+			actions: podActions{
+				SandboxID:                           baseStatus.SandboxStatuses[0].Id,
+				ContainersToKill:                    getKillMap(basePod, baseStatus, []int{}),
+				ContainersToStart:                   []int{},
+				ContainersToStartBecauseDesireState: make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToKillBecauseDesireState:  make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUpgrade:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToStartBecausePause:       getExtendActionMap(basePod, baseStatus, []int{1}),
+			},
+			// TODO: Add a test case for containers which failed the liveness
+			// check. Will need to fake the livessness check result.
+		},
+		"Stop the container in sigma3 if the container's expect state changes -- paused to running": {
+			mutatePodFn: func(pod *v1.Pod) {
+				pod.Spec.RestartPolicy = v1.RestartPolicyAlways
+				pod.Annotations[sigmak8sapi.AnnotationContainerStateSpec] = "{\"states\":{\"foo2\":\"running\"}}"
+				pod.Annotations[sigmak8sapi.AnnotationPodUpdateStatus] = "{\"statuses\":{\"foo2\":{\"currentState\":\"paused\",\"lastState\":\"exited\"}}}"
+			},
+			mutateStatusFn: func(status *kubecontainer.PodStatus) {
+				status.ContainerStatuses[1].State = kubecontainer.ContainerStateExited
+				status.ContainerStatuses[1].ExitCode = 0
+			},
+			actions: podActions{
+				SandboxID:                           baseStatus.SandboxStatuses[0].Id,
+				ContainersToKill:                    getKillMap(basePod, baseStatus, []int{}),
+				ContainersToStart:                   []int{},
+				ContainersToStartBecauseDesireState: make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToKillBecauseDesireState:  getExtendActionMap(basePod, baseStatus, []int{1}),
+				ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUpgrade:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToStartBecausePause:       make(map[kubecontainer.ContainerID]containerOperationInfo),
+			},
 		},
 	} {
 		pod, status := makeBasePodAndStatus()
@@ -930,6 +1015,18 @@ func getKillMap(pod *v1.Pod, status *kubecontainer.PodStatus, cIndexes []int) ma
 	return m
 }
 
+func getExtendActionMap(pod *v1.Pod, status *kubecontainer.PodStatus, cIndexes []int) map[kubecontainer.ContainerID]containerOperationInfo {
+	m := map[kubecontainer.ContainerID]containerOperationInfo{}
+	for _, i := range cIndexes {
+		m[status.ContainerStatuses[i].ID] = containerOperationInfo{
+			container: &pod.Spec.Containers[i],
+			name:      pod.Spec.Containers[i].Name,
+		}
+	}
+	return m
+}
+
+// Clear the message field since we don't need to verify the message.
 func verifyActions(t *testing.T, expected, actual *podActions, desc string) {
 	if actual.ContainersToKill != nil {
 		// Clear the message field since we don't need to verify the message.
@@ -938,10 +1035,24 @@ func verifyActions(t *testing.T, expected, actual *podActions, desc string) {
 			actual.ContainersToKill[k] = info
 		}
 	}
+
+	// resetMessage can reset message field for extended action map.
+	resetExtendedActionMessage := func(m map[kubecontainer.ContainerID]containerOperationInfo) {
+		for k, info := range m {
+			info.message = ""
+			m[k] = info
+		}
+	}
+
+	resetExtendedActionMessage(actual.ContainersToStartBecauseDesireState)
+	resetExtendedActionMessage(actual.ContainersToKillBecauseDesireState)
+	resetExtendedActionMessage(actual.ContainersToUpdate)
+	resetExtendedActionMessage(actual.ContainersToUpgrade)
+	resetExtendedActionMessage(actual.ContainersToStartBecausePause)
 	assert.Equal(t, expected, actual, desc)
 }
 
-func TestComputePodActionsWithInitContainers(t *testing.T) {
+func TestComputePodActionsWithInitContainersExtension(t *testing.T) {
 	_, _, m, err := createTestRuntimeManager()
 	require.NoError(t, err)
 
@@ -949,9 +1060,14 @@ func TestComputePodActionsWithInitContainers(t *testing.T) {
 	// the specific fields.
 	basePod, baseStatus := makeBasePodAndStatusWithInitContainers()
 	noAction := podActions{
-		SandboxID:         baseStatus.SandboxStatuses[0].Id,
-		ContainersToStart: []int{},
-		ContainersToKill:  map[kubecontainer.ContainerID]containerToKillInfo{},
+		SandboxID:                           baseStatus.SandboxStatuses[0].Id,
+		ContainersToStart:                   []int{},
+		ContainersToKill:                    map[kubecontainer.ContainerID]containerToKillInfo{},
+		ContainersToStartBecauseDesireState: make(map[kubecontainer.ContainerID]containerOperationInfo),
+		ContainersToKillBecauseDesireState:  make(map[kubecontainer.ContainerID]containerOperationInfo),
+		ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
+		ContainersToUpgrade:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
+		ContainersToStartBecausePause:       make(map[kubecontainer.ContainerID]containerOperationInfo),
 	}
 
 	for desc, test := range map[string]struct {
@@ -961,9 +1077,14 @@ func TestComputePodActionsWithInitContainers(t *testing.T) {
 	}{
 		"initialization completed; start all containers": {
 			actions: podActions{
-				SandboxID:         baseStatus.SandboxStatuses[0].Id,
-				ContainersToStart: []int{0, 1, 2},
-				ContainersToKill:  getKillMap(basePod, baseStatus, []int{}),
+				SandboxID:                           baseStatus.SandboxStatuses[0].Id,
+				ContainersToStart:                   []int{0, 1, 2},
+				ContainersToKill:                    getKillMap(basePod, baseStatus, []int{}),
+				ContainersToStartBecauseDesireState: make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToKillBecauseDesireState:  make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUpgrade:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToStartBecausePause:       make(map[kubecontainer.ContainerID]containerOperationInfo),
 			},
 		},
 		"initialization in progress; do nothing": {
@@ -973,31 +1094,21 @@ func TestComputePodActionsWithInitContainers(t *testing.T) {
 			},
 			actions: noAction,
 		},
-		"Kill pod and restart the first init container if the pod sandbox is dead": {
-			mutatePodFn: func(pod *v1.Pod) { pod.Spec.RestartPolicy = v1.RestartPolicyAlways },
-			mutateStatusFn: func(status *kubecontainer.PodStatus) {
-				status.SandboxStatuses[0].State = runtimeapi.PodSandboxState_SANDBOX_NOTREADY
-			},
-			actions: podActions{
-				KillPod:                  true,
-				CreateSandbox:            true,
-				SandboxID:                baseStatus.SandboxStatuses[0].Id,
-				Attempt:                  uint32(1),
-				NextInitContainerToStart: &basePod.Spec.InitContainers[0],
-				ContainersToStart:        []int{},
-				ContainersToKill:         getKillMap(basePod, baseStatus, []int{}),
-			},
-		},
 		"initialization failed; restart the last init container if RestartPolicy == Always": {
 			mutatePodFn: func(pod *v1.Pod) { pod.Spec.RestartPolicy = v1.RestartPolicyAlways },
 			mutateStatusFn: func(status *kubecontainer.PodStatus) {
 				status.ContainerStatuses[2].ExitCode = 137
 			},
 			actions: podActions{
-				SandboxID:                baseStatus.SandboxStatuses[0].Id,
-				NextInitContainerToStart: &basePod.Spec.InitContainers[2],
-				ContainersToStart:        []int{},
-				ContainersToKill:         getKillMap(basePod, baseStatus, []int{}),
+				SandboxID:                           baseStatus.SandboxStatuses[0].Id,
+				NextInitContainerToStart:            &basePod.Spec.InitContainers[2],
+				ContainersToStart:                   []int{},
+				ContainersToKill:                    getKillMap(basePod, baseStatus, []int{}),
+				ContainersToStartBecauseDesireState: make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToKillBecauseDesireState:  make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUpgrade:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToStartBecausePause:       make(map[kubecontainer.ContainerID]containerOperationInfo),
 			},
 		},
 		"initialization failed; restart the last init container if RestartPolicy == OnFailure": {
@@ -1006,10 +1117,15 @@ func TestComputePodActionsWithInitContainers(t *testing.T) {
 				status.ContainerStatuses[2].ExitCode = 137
 			},
 			actions: podActions{
-				SandboxID:                baseStatus.SandboxStatuses[0].Id,
-				NextInitContainerToStart: &basePod.Spec.InitContainers[2],
-				ContainersToStart:        []int{},
-				ContainersToKill:         getKillMap(basePod, baseStatus, []int{}),
+				SandboxID:                           baseStatus.SandboxStatuses[0].Id,
+				NextInitContainerToStart:            &basePod.Spec.InitContainers[2],
+				ContainersToStart:                   []int{},
+				ContainersToKill:                    getKillMap(basePod, baseStatus, []int{}),
+				ContainersToStartBecauseDesireState: make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToKillBecauseDesireState:  make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUpgrade:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToStartBecausePause:       make(map[kubecontainer.ContainerID]containerOperationInfo),
 			},
 		},
 		"initialization failed; kill pod if RestartPolicy == Never": {
@@ -1018,10 +1134,15 @@ func TestComputePodActionsWithInitContainers(t *testing.T) {
 				status.ContainerStatuses[2].ExitCode = 137
 			},
 			actions: podActions{
-				KillPod:           true,
-				SandboxID:         baseStatus.SandboxStatuses[0].Id,
-				ContainersToStart: []int{},
-				ContainersToKill:  getKillMap(basePod, baseStatus, []int{}),
+				KillPod:                             true,
+				SandboxID:                           baseStatus.SandboxStatuses[0].Id,
+				ContainersToStart:                   []int{},
+				ContainersToKill:                    getKillMap(basePod, baseStatus, []int{}),
+				ContainersToStartBecauseDesireState: make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToKillBecauseDesireState:  make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUpgrade:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToStartBecausePause:       make(map[kubecontainer.ContainerID]containerOperationInfo),
 			},
 		},
 	} {
@@ -1073,4 +1194,69 @@ func makeBasePodAndStatusWithInitContainers() (*v1.Pod, *kubecontainer.PodStatus
 		},
 	}
 	return pod, status
+}
+
+func TestSyncPod_extension(t *testing.T) {
+	fakeRuntime, fakeImage, m, err := createTestRuntimeManager()
+	assert.NoError(t, err)
+
+	containers := []v1.Container{
+		{
+			Name:            "foo1",
+			Image:           "busybox",
+			ImagePullPolicy: v1.PullIfNotPresent,
+		},
+		{
+			Name:            "foo2",
+			Image:           "alpine",
+			ImagePullPolicy: v1.PullIfNotPresent,
+		},
+	}
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			UID:       "12345678",
+			Name:      "foo",
+			Namespace: "new",
+		},
+		Spec: v1.PodSpec{
+			Containers: containers,
+		},
+	}
+
+	backOff := flowcontrol.NewBackOff(time.Second, time.Minute)
+	m.SyncPod(pod, v1.PodStatus{}, &kubecontainer.PodStatus{}, []v1.Secret{}, backOff)
+	result := m.SyncPod(pod, v1.PodStatus{}, &kubecontainer.PodStatus{}, []v1.Secret{}, backOff)
+	assert.NoError(t, result.Error())
+	assert.Equal(t, 2, len(fakeRuntime.Containers))
+	assert.Equal(t, 2, len(fakeImage.Images))
+	assert.Equal(t, 1, len(fakeRuntime.Sandboxes))
+	for _, sandbox := range fakeRuntime.Sandboxes {
+		assert.Equal(t, runtimeapi.PodSandboxState_SANDBOX_READY, sandbox.State)
+	}
+	for _, c := range fakeRuntime.Containers {
+		assert.Equal(t, runtimeapi.ContainerState_CONTAINER_RUNNING, c.State)
+	}
+
+	assert.True(t, len(result.StateStatus.Statuses) > 0)
+	for _, status := range result.StateStatus.Statuses {
+		assert.True(t, status.Success)
+		assert.Equal(t, sigmak8sapi.StartContainerAction, status.Action)
+		assert.Equal(t, sigmak8sapi.ContainerStateRunning, status.CurrentState)
+	}
+	time.Sleep(time.Second * 5)
+	result.ContainerStateClean(pod)
+	result.UpdateStateToPodAnnotation(pod)
+
+	assert.True(t, len(pod.Annotations) > 0)
+	jsonValue := pod.Annotations[sigmak8sapi.AnnotationPodUpdateStatus]
+	actualValue := &sigmak8sapi.ContainerStateStatus{}
+	err = json.Unmarshal([]byte(jsonValue), actualValue)
+	assert.NoError(t, err)
+	for containerName, status := range result.StateStatus.Statuses {
+		actualStatus, ok := actualValue.Statuses[containerName]
+		assert.True(t, ok)
+		actualStatus.FinishTimestamp = status.FinishTimestamp
+		actualStatus.CreationTimestamp = status.CreationTimestamp
+		assert.Equal(t, status, actualStatus)
+	}
 }

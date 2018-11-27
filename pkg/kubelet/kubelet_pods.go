@@ -27,6 +27,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -388,9 +389,36 @@ func truncatePodHostnameIfNeeded(podName, hostname string) (string, error) {
 	return truncated, nil
 }
 
+// The regular expression of keyword in template such as {{.IP_ADDRESS}}
+var reg = regexp.MustCompile(`{{\..*}}`)
+
 // GeneratePodHostNameAndDomain creates a hostname and domain name for a pod,
 // given that pod's spec and annotations or returns an error.
-func (kl *Kubelet) GeneratePodHostNameAndDomain(pod *v1.Pod) (string, string, error) {
+func (kl *Kubelet) GeneratePodHostNameAndDomain(pod *v1.Pod, podIP string) (string, string, error) {
+	if len(podIP) > 0 {
+		name, domain, success, err := GeneratePodHostNameAndDomainByHostNameTemplate(pod, podIP)
+		if err != nil {
+			glog.Errorf(err.Error())
+			return "", "", err
+		}
+		if success {
+			glog.V(4).Infof("generate pod hostname:%s and domain: %s from annotation", name, domain)
+			return name, domain, nil
+		}
+	}
+
+	// Use template as hostname directly if hostname is not a true template.
+	// The hostname will be used by Sandbox, and the container will use Sandbox's hostname because of the "container" network mode.
+	// If the template string is not a template, the return value must be same as the value "name+domain" when len(podIP) > 0.
+	// Just used in alidocker environment. Remove this code if there is no Alidocker environment any more.
+	if hostname, err := GetPodHostNameTemplate(pod); err == nil && len(hostname) > 0 && len(reg.FindAllString(hostname, -1)) == 0 {
+		if len(hostname) > utilvalidation.DNS1123LabelMaxLength {
+			return "", "", fmt.Errorf("pod template %q is not a valid DNS label: %s", hostname,
+				utilvalidation.MaxLenError(utilvalidation.DNS1123LabelMaxLength))
+		}
+		return hostname, "", nil
+	}
+
 	// TODO(vmarmol): Handle better.
 	clusterDomain := kl.dnsConfigurer.ClusterDomain
 
@@ -433,7 +461,7 @@ func (kl *Kubelet) GenerateRunContainerOptions(pod *v1.Pod, container *v1.Contai
 		return nil, nil, err
 	}
 
-	hostname, hostDomainName, err := kl.GeneratePodHostNameAndDomain(pod)
+	hostname, hostDomainName, err := kl.GeneratePodHostNameAndDomain(pod, podIP)
 	if err != nil {
 		return nil, nil, err
 	}

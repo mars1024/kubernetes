@@ -19,9 +19,11 @@ limitations under the License.
 package kuberuntime
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
@@ -135,4 +137,40 @@ func TestGenerateContainerConfig(t *testing.T) {
 
 	_, _, err = m.generateContainerConfig(&podWithContainerSecurityContext.Spec.Containers[0], podWithContainerSecurityContext, 0, "", podWithContainerSecurityContext.Spec.Containers[0].Image, kubecontainer.ContainerTypeRegular)
 	assert.Error(t, err, "RunAsNonRoot should fail for non-numeric username")
+}
+
+func TestGenerateContainerConfigWithUlimits(t *testing.T) {
+	_, _, m, err := createTestRuntimeManager()
+	assert.NoError(t, err)
+
+	allocSpec := makeDefaultAllocSpec("bar")
+	allocSpecStr, err := json.Marshal(allocSpec)
+	assert.NoError(t, err)
+
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			UID:       "12345678",
+			Name:      "bar",
+			Namespace: "new",
+			Annotations: map[string]string{
+				sigmak8sapi.AnnotationPodAllocSpec: string(allocSpecStr),
+			},
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
+				{
+					Name:            "foo",
+					Image:           "busybox",
+					ImagePullPolicy: v1.PullIfNotPresent,
+					Command:         []string{"testCommand"},
+					WorkingDir:      "testWorkingDir",
+				},
+			},
+		},
+	}
+
+	expectedConfig := makeExpectedConfig(m, pod, 0)
+	containerConfig, _, err := m.generateContainerConfig(&pod.Spec.Containers[0], pod, 0, "", pod.Spec.Containers[0].Image, kubecontainer.ContainerTypeRegular)
+	assert.NoError(t, err)
+	assert.Equal(t, expectedConfig, containerConfig, "generate container config for kubelet runtime v1.")
 }

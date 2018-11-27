@@ -41,7 +41,10 @@ func (m *kubeGenericRuntimeManager) PullImage(image kubecontainer.ImageSpec, pul
 		return "", err
 	}
 
-	imgSpec := &runtimeapi.ImageSpec{Image: img}
+	imgSpec := &runtimeapi.ImageSpec{
+		Image:   img,
+		Timeout: image.Timeout,
+	}
 	creds, withCredentials := keyring.Lookup(repoToPull)
 	if !withCredentials {
 		glog.V(3).Infof("Pulling image %q without credentials", img)

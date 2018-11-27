@@ -35,15 +35,20 @@ import (
 	"github.com/armon/circbuf"
 	"github.com/golang/glog"
 
+	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubetypes "k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	"k8s.io/kubernetes/pkg/features"
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	"k8s.io/kubernetes/pkg/kubelet/events"
+	"k8s.io/kubernetes/pkg/kubelet/qos"
 	"k8s.io/kubernetes/pkg/kubelet/types"
+	"k8s.io/kubernetes/pkg/kubelet/util/annotation"
 	"k8s.io/kubernetes/pkg/kubelet/util/format"
 	"k8s.io/kubernetes/pkg/util/selinux"
 	"k8s.io/kubernetes/pkg/util/tail"
@@ -94,6 +99,21 @@ func (m *kubeGenericRuntimeManager) startContainer(podSandboxID string, podSandb
 		return msg, err
 	}
 
+	userinfoBackup := m.userinfoBackup
+	rebuildContainerID := getRebuildContainerIDFromPodAnnotation(pod)
+
+	// Backup userinfo from rebuildContainerID in sigma2 and restore it to new created container.
+	if userinfoBackup != nil && rebuildContainerID != "" {
+		glog.V(0).Infof("Start to backup userinfo from container %s in sigma2", rebuildContainerID)
+		msg, err := userinfoBackup.BackupUserinfo(pod, container, rebuildContainerID)
+		if err != nil {
+			glog.Errorf("Backup userinfo from container %q failed: %v, %q",
+				rebuildContainerID, err, msg)
+			return fmt.Sprintf("Failed to backup userinfo from container: %s", rebuildContainerID), err
+		}
+		glog.V(0).Infof("Backup userinfo from container %q in sigma2 successfully", rebuildContainerID)
+	}
+
 	// Step 2: create the container.
 	ref, err := kubecontainer.GenerateContainerRef(pod, container)
 	if err != nil {
@@ -117,6 +137,20 @@ func (m *kubeGenericRuntimeManager) startContainer(podSandboxID string, podSandb
 		return grpc.ErrorDesc(err), ErrCreateContainerConfig
 	}
 
+	// Set "/" quota as the size of ephemeral storage.
+	limitEphemeralStorage, limitESExists := container.Resources.Limits[v1.ResourceEphemeralStorage]
+	requestEphemeralStorage, requestESExists := container.Resources.Requests[v1.ResourceEphemeralStorage]
+	if limitESExists && requestESExists && !limitEphemeralStorage.IsZero() && limitEphemeralStorage.Cmp(requestEphemeralStorage) == 0 {
+		// 2.0 container to 3.1 container, quota id not empty
+		if containerConfig.QuotaId == "" {
+			// Set QuotaId as -1 to generate a new quotaid.
+			containerConfig.QuotaId = "-1"
+		}
+		// ".*" means the limitation of rootfs and volume.
+		// https://github.com/alibaba/pouch/blob/master/docs/features/pouch_with_diskquota.md#parameter-details
+		containerConfig.Linux.Resources.DiskQuota = map[string]string{".*": getDiskSize(limitEphemeralStorage.String())}
+	}
+
 	containerID, err := m.runtimeService.CreateContainer(podSandboxID, containerConfig, podSandboxConfig)
 	if err != nil {
 		m.recordContainerEvent(pod, container, containerID, v1.EventTypeWarning, events.FailedToCreateContainer, "Error: %v", grpc.ErrorDesc(err))
@@ -134,6 +168,33 @@ func (m *kubeGenericRuntimeManager) startContainer(podSandboxID string, podSandb
 			Type: m.runtimeName,
 			ID:   containerID,
 		}, ref)
+	}
+
+	// Backup userinfo from rebuildContainerID in sigma2 and restore it to new created container.
+	// If the new container is created, and userinfo restore procedure or userinfo delete procedure fails
+	// this container is called dirty container and will be processed by Upgrade.
+	if userinfoBackup != nil && rebuildContainerID != "" {
+		if _, err = userinfoBackup.CheckUserinfoExists(pod, container); err == nil {
+			// Userinfo dir in the disk should be deleted when we finish the restore procedure.
+			glog.V(0).Infof("Start to restore userinfo for container %q(id=%q) in pod %q",
+				container.Name, containerID, format.Pod(pod))
+			if msg, err := userinfoBackup.RestoreUserinfo(pod, container, containerID); err != nil {
+				glog.Errorf("Restore userinfo for container %q(id=%q) in pod %q failed: %v, %s",
+					container.Name, containerID, format.Pod(pod), err, msg)
+				return fmt.Sprintf("failed to restore userinfo to container %q", containerID), err
+			}
+			glog.V(0).Infof("Restore userinfo for container %q(id=%q) in pod %q successfully",
+				container.Name, containerID, format.Pod(pod))
+			// Delete userinfo dir in the disk.
+			// Removal of userinfo dir means that the container gets all creating steps finished and can be started now.
+			if msg, err := userinfoBackup.DeleteUserinfo(pod, container); err != nil {
+				glog.Errorf("Delete userinfo for container %q in pod %q failed: %v, %q",
+					container.Name, format.Pod(pod), err, msg)
+				return fmt.Sprintf("failed to delete userinfo for pod %q", format.Pod(pod)), err
+			}
+			glog.V(0).Infof("Delete userinfo for container %q(id=%q) in pod %q successfully",
+				container.Name, containerID, format.Pod(pod))
+		}
 	}
 
 	// Step 3: start the container.
@@ -165,11 +226,14 @@ func (m *kubeGenericRuntimeManager) startContainer(podSandboxID string, podSandb
 
 	// Step 4: execute the post start hook.
 	if container.Lifecycle != nil && container.Lifecycle.PostStart != nil {
+		timeout := annotation.GetTimeoutSecondsFromPodAnnotation(pod, container.Name, sigmak8sapi.PostStartHookTimeoutSeconds)
 		kubeContainerID := kubecontainer.ContainerID{
 			Type: m.runtimeName,
 			ID:   containerID,
 		}
-		msg, handlerErr := m.runner.Run(kubeContainerID, pod, container, container.Lifecycle.PostStart)
+		glog.V(4).Infof("Exec PostStartHook:%v in container %s-%s with timeout value: %d",
+			container.Lifecycle.PostStart, format.Pod(pod), container.Name, timeout)
+		msg, handlerErr := m.runner.Run(kubeContainerID, pod, container, container.Lifecycle.PostStart, time.Duration(timeout)*time.Second)
 		if handlerErr != nil {
 			m.recordContainerEvent(pod, container, kubeContainerID.ID, v1.EventTypeWarning, events.FailedPostStartHook, msg)
 			if err := m.killContainer(pod, kubeContainerID, container.Name, "FailedPostStartHook", nil); err != nil {
@@ -178,8 +242,29 @@ func (m *kubeGenericRuntimeManager) startContainer(podSandboxID string, podSandb
 			}
 			return msg, fmt.Errorf("%s: %v", ErrPostStartHook, handlerErr)
 		}
+		m.recordContainerEvent(pod, container, containerID, v1.EventTypeNormal, events.SucceedPostStartHook,
+			fmt.Sprintf("Container %s execute poststart hook success", container.Name))
+	} else {
+		m.recordContainerEvent(pod, container, containerID, v1.EventTypeNormal, events.WithOutPostStartHook,
+			fmt.Sprintf("Container %s with out poststart hook", container.Name))
 	}
 
+	return containerID, nil
+}
+
+func (m *kubeGenericRuntimeManager) updateContainer(containerID kubecontainer.ContainerID, container *v1.Container, pod *v1.Pod) (string, error) {
+	resources := m.generateLinuxContainerResources(container, pod)
+	err := m.runtimeService.UpdateContainerResources(containerID.ID, resources)
+	if err != nil {
+		message := fmt.Sprintf("Failed to update container %q(id=%q) in pod %q: %v", container.Name, containerID.String(), format.Pod(pod), err)
+		m.recordContainerEvent(pod, container, containerID.ID, v1.EventTypeWarning, events.FailedToUpdateContainer, message)
+		return "Update Container Failed", err
+	}
+	if err := m.internalLifecycle.PostResizeContainer(pod, container, containerID.ID); err != nil {
+		return "", err
+	}
+	message := fmt.Sprintf("Updated container %q(id=%q) in pod %q", container.Name, containerID.String(), format.Pod(pod))
+	m.recordContainerEvent(pod, container, containerID.ID, v1.EventTypeNormal, events.UpdatedContainer, message)
 	return "", nil
 }
 
@@ -227,6 +312,11 @@ func (m *kubeGenericRuntimeManager) generateContainerConfig(container *v1.Contai
 		Tty:         container.TTY,
 	}
 
+	// add anonymous volume which from annotation
+	// https://lark.alipay.com/sigma.pouch/sigma3.x/ia25vq
+	anonymousVolumeFromAnnotation := getAnonymousVolumesMount(pod)
+	config.Mounts = append(config.Mounts, anonymousVolumeFromAnnotation...)
+
 	// set platform specific configurations.
 	if err := m.applyPlatformSpecificContainerConfig(config, container, pod, uid, username); err != nil {
 		return nil, cleanupAction, err
@@ -241,9 +331,101 @@ func (m *kubeGenericRuntimeManager) generateContainerConfig(container *v1.Contai
 			Value: e.Value,
 		}
 	}
+	hostName := ""
+	if opts.Hostname != "" && opts.HostDomain != "" {
+		hostName = fmt.Sprintf("%s.%s", opts.Hostname, opts.HostDomain)
+	} else if opts.Hostname != "" {
+		hostName = opts.Hostname
+	}
+	if hostName != "" {
+		// add hostname to env
+		envs = append(envs, &runtimeapi.KeyValue{
+			Key:   "HOSTNAME",
+			Value: hostName,
+		})
+	}
+
+	// Add network env on sigmalet side.
+	// See: https://yuque.antfin-inc.com/sys/sigma3.x/tgpuxq
+	// The network can't be changed in pod's lifecycle.
+	if utilfeature.DefaultFeatureGate.Enabled(features.NetworkEnv) && !pod.Spec.HostNetwork {
+		newPod, exists := m.podManager.GetPodByUID(pod.UID)
+		if !exists {
+			return nil, cleanupAction, fmt.Errorf("Failed to get new pod %s from podManager", format.Pod(pod))
+		}
+		networkEnvs := generateNetworkEnvs(pod, m.podManager)
+		if len(networkEnvs) == 0 {
+			return nil, cleanupAction, fmt.Errorf("Failed to get network status or invalid network status got from pod: %s in podManager", format.Pod(newPod))
+		}
+		envs = append(envs, networkEnvs...)
+
+		node, err := m.runtimeHelper.GetNode()
+		if err != nil || node == nil {
+			return nil, cleanupAction, fmt.Errorf("Failed to get node: %v", err)
+		}
+
+		topologyEnvs := generateTopologyEnvs(node)
+		envs = append(envs, topologyEnvs...)
+
+		// Get pod ip from envs and add ip to config labels.
+		podIP := ""
+		labelPodIPKey := "PodIP"
+		for _, networkEnv := range networkEnvs {
+			if networkEnv.Key == envRequestIP {
+				podIP = networkEnv.Value
+				break
+			}
+		}
+		if podIP == "" {
+			glog.Warningf("Can't get pod ip from network status of pod: %s in podManager", format.Pod(newPod))
+		}
+		config.Labels[labelPodIPKey] = podIP
+	}
+
 	config.Envs = envs
+	config.QuotaId = GetDiskQuotaID(pod)
 
 	return config, cleanupAction, nil
+}
+
+// returns linux container resources to the container.
+func (m *kubeGenericRuntimeManager) generateLinuxContainerResources(container *v1.Container, pod *v1.Pod) *runtimeapi.LinuxContainerResources {
+	// set linux container resources
+	r := &runtimeapi.LinuxContainerResources{}
+	var cpuShares int64
+	cpuRequest := container.Resources.Requests.Cpu()
+	cpuLimit := container.Resources.Limits.Cpu()
+	memoryLimit := container.Resources.Limits.Memory().Value()
+	oomScoreAdj := int64(qos.GetContainerOOMScoreAdjust(pod, container,
+		int64(m.machineInfo.MemoryCapacity)))
+	// If request is not specified, but limit is, we want request to default to limit.
+	// API server does this for new containers, but we repeat this logic in Kubelet
+	// for containers running on existing Kubernetes clusters.
+	if cpuRequest.IsZero() && !cpuLimit.IsZero() {
+		cpuShares = milliCPUToShares(cpuLimit.MilliValue())
+	} else {
+		// if cpuRequest.Amount is nil, then milliCPUToShares will return the minimal number
+		// of CPU shares.
+		cpuShares = milliCPUToShares(cpuRequest.MilliValue())
+	}
+	r.CpuShares = cpuShares
+	if memoryLimit != 0 {
+		r.MemoryLimitInBytes = memoryLimit
+	}
+	// Set OOM score of the container based on qos policy. Processes in lower-priority pods should
+	// be killed first if the system runs out of memory.
+	r.OomScoreAdj = oomScoreAdj
+
+	if m.cpuCFSQuota {
+		// if cpuLimit.Amount is nil, then the appropriate default value is returned
+		// to allow full usage of cpu resource.
+		// TODO: [rebase 1.12] milliCPUToQuota' params has changed.
+		cpuQuota := milliCPUToQuota(cpuLimit.MilliValue(), 100000)
+		cpuPeriod := int64(100000)
+		r.CpuQuota = cpuQuota
+		r.CpuPeriod = cpuPeriod
+	}
+	return r
 }
 
 // makeDevices generates container devices for kubelet runtime v1.
@@ -464,7 +646,7 @@ func (m *kubeGenericRuntimeManager) executePreStopHook(pod *v1.Pod, containerID 
 	go func() {
 		defer close(done)
 		defer utilruntime.HandleCrash()
-		if msg, err := m.runner.Run(containerID, pod, containerSpec, containerSpec.Lifecycle.PreStop); err != nil {
+		if msg, err := m.runner.Run(containerID, pod, containerSpec, containerSpec.Lifecycle.PreStop, 0); err != nil {
 			glog.Errorf("preStop hook for container %q failed: %v", containerSpec.Name, err)
 			m.recordContainerEvent(pod, containerSpec, containerID.ID, v1.EventTypeWarning, events.FailedPreStopHook, msg)
 		}

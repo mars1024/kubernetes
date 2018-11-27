@@ -1,0 +1,5 @@
+# every 5 minutes
+*/5 * * * * root /usr/bin/sh /etc/kubernetes/sigma-slave-clean-expire-logs.sh /home/t4/kubernetes/logs ERROR 2 >/dev/null 2>&1 0>&1
+*/5 * * * * root /usr/bin/sh /etc/kubernetes/sigma-slave-clean-expire-logs.sh /home/t4/kubernetes/logs INFO 5 >/dev/null 2>&1 0>&1
+*/5 * * * * root /usr/bin/sh /etc/kubernetes/sigma-slave-clean-expire-logs.sh /home/t4/kubernetes/logs WARNING 2 >/dev/null 2>&1 0>&1
+*/5 * * * * root /usr/bin/sh /etc/kubernetes/sigma-slave-clean-expire-logs.sh /home/t4/kubernetes/logs FATAL 2 >/dev/null 2>&1 0>&1

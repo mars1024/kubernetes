@@ -1,0 +1,3 @@
+t-sigma-slave:
+  pkgpara:
+    DOCKER: 1

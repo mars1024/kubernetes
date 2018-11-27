@@ -201,11 +201,19 @@ const (
 
 	// ssh port
 	sshPort = "22"
+
+	// ImagePrePullingTimeout is the time we wait for the e2e-image-puller
+	// static pods to pull the list of seeded images. If they don't pull
+	// images within this time we simply log their output and carry on
+	// with the tests.
+	ImagePrePullingTimeout = 5 * time.Minute
 )
 
 var (
 	BusyBoxImage = imageutils.GetE2EImage(imageutils.BusyBox)
-
+	// Label allocated to the image puller static pod that runs on each node
+	// before e2es.
+	ImagePullerLabels = map[string]string{"name": "e2e-image-puller"}
 	// For parsing Kubectl version for version-skewed testing.
 	gitVersionRegexp = regexp.MustCompile("GitVersion:\"(v.+?)\"")
 
@@ -1666,6 +1674,8 @@ func WaitForPodNameUnschedulableInNamespace(c clientset.Interface, podName, name
 			}
 		}
 		if pod.Status.Phase == v1.PodRunning || pod.Status.Phase == v1.PodSucceeded || pod.Status.Phase == v1.PodFailed {
+			Logf("Unexpected pod.Spec: %+v.", pod.Spec)
+			Logf("Unexpected pod.Status: %+v.", pod.Status)
 			return true, fmt.Errorf("Expected pod %q in namespace %q to be in phase Pending, but got phase: %v", podName, namespace, pod.Status.Phase)
 		}
 		return false, nil

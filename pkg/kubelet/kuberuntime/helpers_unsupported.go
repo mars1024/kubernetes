@@ -24,6 +24,6 @@ func milliCPUToShares(milliCPU int64) int64 {
 }
 
 // milliCPUToQuota converts milliCPU to CFS quota and period values
-func milliCPUToQuota(milliCPU int64) (quota int64, period int64) {
-	return 0, 0
+func milliCPUToQuota(milliCPU int64, period int64) (quota int64) {
+	return 0
 }

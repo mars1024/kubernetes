@@ -1,0 +1,17 @@
+{
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+        "name": "vip-client"
+    },
+    "spec": {
+        "containers": [
+            {
+                "image": "reg.docker.alibaba-inc.com/ali/os:7u2",
+                "imagePullPolicy": "IfNotPresent",
+                "name": "client"
+            }
+        ],
+        "restartPolicy": "Never"
+    }
+}

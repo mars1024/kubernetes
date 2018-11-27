@@ -1,0 +1,1 @@
+test/sigma/common 目录下的用例用于全链路的E2E验证，每个用例会check多个功能点

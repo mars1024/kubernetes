@@ -1,0 +1,75 @@
+{
+  "kind": "Objects",
+  "apiVersion": "v1",
+  "metadata": {
+    "name": "test-bvt-container-lvcsuv1v-eu95",
+    "namespace": "test-bvt-container",
+    "creationTimestamp": null,
+    "labels": {
+      "meta.k8s.alipay.com/app-deploy-unit": "myapp-prod",
+      "sigma.ali/deploy-unit": "myapp-prod",
+      "sigma.ali/app-name": "alipay-test-bvt-container",
+      "meta.k8s.alipay.com/zone":"GZ",
+      "sigma.ali/instance-group": "sigma-alipay-test"
+    },
+    "annotations": {
+      "pod.beta1.sigma.ali/net-priority": "10"
+    }
+  },
+  "spec": {
+    "containers": [
+      {
+        "name": "test-bvt-container-lvcsuv1v-eu95",
+        "image": "reg.docker.alibaba-inc.com/sigma-api-bvt/nginx:1.13.5-alpine",
+        "env": [
+          {
+            "name": "SigmaTest",
+            "value": "bvt"
+          },
+          {
+            "name": "Sigma_Version",
+            "value": "Sigma3.1"
+          }
+        ],
+        "resources": {
+          "limits": {
+            "cpu": "1",
+            "ephemeral-storage": "1Gi",
+            "memory": "1Gi"
+          },
+          "requests": {
+            "cpu": "1",
+            "ephemeral-storage": "1Gi",
+            "memory": "1Gi"
+          }
+        },
+        "securityContext": {
+          "capabilities": {},
+          "privileged": false,
+          "readOnlyRootFilesystem": false
+        }
+      }
+    ],
+    "affinity": {
+      "nodeAffinity": {},
+      "podAffinity": {
+        "requiredDuringSchedulingIgnoredDuringExecution": [
+          {
+            "labelSelector": {},
+            "topologyKey": "kubernetes.io/hostname"
+          }
+        ]
+      },
+      "podAntiAffinity": {
+        "requiredDuringSchedulingIgnoredDuringExecution": [
+          {
+            "labelSelector": {},
+            "topologyKey": "kubernetes.io/hostname"
+          }
+        ]
+      }
+    },
+    "dnsConfig": {}
+  },
+  "status": {}
+}

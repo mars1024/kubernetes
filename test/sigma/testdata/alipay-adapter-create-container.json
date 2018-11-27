@@ -1,0 +1,26 @@
+{
+  "Image": "reg.docker.alibaba-inc.com/sigma-api-bvt/nginx:1.13.5-alpine",
+  "Labels": {
+    "ali.BizName": "sigma-test",
+    "ali.CpuSetMode": "default",
+    "ali.IncreaseReplica": "1",
+    "ali.MaxInstancePerHost": "10",
+    "ali.AppDeployUnit": "myapp-prod",
+    "ali.InstanceGroup": "sigma-alipay-test",
+    "ali.EnableOverQuota": "false",
+    "ali.NetPriority": "10",
+    "test.container.type": "bvt",
+    "ali.RegisterContainerAsHost": "true",
+    "ali.AppName": "alipay-test-bvt-container",
+    "ali.CpuCount": "1",
+    "ali.CpuQuota": "1",
+    "ali.MemoryHardlimit": "1073741824",
+    "ali.MemoryPredict": "1073741824",
+    "ali.DiskSize": "1G",
+    "DiskQuota": "1g",
+    "ali.Async": "true"
+  },
+  "Env": [
+    "SigmaTest=bvt"
+  ]
+}

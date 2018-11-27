@@ -73,6 +73,7 @@ type PodClient struct {
 // Create creates a new pod according to the framework specifications (don't wait for it to start).
 func (c *PodClient) Create(pod *v1.Pod) *v1.Pod {
 	c.mungeSpec(pod)
+	Logf("Create pod: %v", pod)
 	p, err := c.PodInterface.Create(pod)
 	ExpectNoError(err, "Error creating Pod")
 	return p

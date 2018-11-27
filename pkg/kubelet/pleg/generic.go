@@ -343,7 +343,9 @@ func (g *GenericPLEG) getPodIP(pid types.UID, status *kubecontainer.PodStatus) s
 
 	for _, sandboxStatus := range status.SandboxStatuses {
 		// If at least one sandbox is ready, then use this status update's pod IP
-		if sandboxStatus.State == runtimeapi.PodSandboxState_SANDBOX_READY {
+		// if status.ip is nil, return oldStatus.ip. When host reboot, before sandbox restart, status.ip is nil,
+		// then the pod will recreate which is what we undesired
+		if sandboxStatus.State == runtimeapi.PodSandboxState_SANDBOX_READY && len(status.IP) > 0 {
 			return status.IP
 		}
 	}
@@ -377,13 +379,20 @@ func (g *GenericPLEG) updateCache(pod *kubecontainer.Pod, pid types.UID) error {
 	// GetPodStatus(pod *kubecontainer.Pod) so that Docker can avoid listing
 	// all containers again.
 	status, err := g.runtime.GetPodStatus(pod.ID, pod.Name, pod.Namespace)
-	glog.V(4).Infof("PLEG: Write status for %s/%s: %#v (err: %v)", pod.Name, pod.Namespace, status, err)
+	glog.V(4).Infof("PLEG: Write status for %s/%s: %q (err: %v)", pod.Name, pod.Namespace, status, err)
 	if err == nil {
 		// Preserve the pod IP across cache updates if the new IP is empty.
 		// When a pod is torn down, kubelet may race with PLEG and retrieve
 		// a pod status after network teardown, but the kubernetes API expects
 		// the completed pod's IP to be available after the pod is dead.
 		status.IP = g.getPodIP(pid, status)
+		// podSandboxChanged func will return recreate when network.ip is nil, so set network.ip = status.ip
+		for _, sandboxStatus := range status.SandboxStatuses {
+			if sandboxStatus.Network == nil {
+				sandboxStatus.Network = &runtimeapi.PodSandboxNetworkStatus{}
+			}
+			sandboxStatus.Network.Ip = status.IP
+		}
 	}
 
 	g.cache.Set(pod.ID, status, err, timestamp)

@@ -70,6 +70,9 @@ type worker struct {
 	// proberResultsMetricLabels holds the labels attached to this worker
 	// for the ProberResults metric.
 	proberResultsMetricLabels prometheus.Labels
+
+	// Used by prober update to mark the result should be cached by manger or not.
+	isCacheResult bool
 }
 
 // Creates and starts a new probe worker.
@@ -80,11 +83,12 @@ func newWorker(
 	container v1.Container) *worker {
 
 	w := &worker{
-		stopCh:       make(chan struct{}, 1), // Buffer so stop() can be non-blocking.
-		pod:          pod,
-		container:    container,
-		probeType:    probeType,
-		probeManager: m,
+		stopCh:        make(chan struct{}, 1), // Buffer so stop() can be non-blocking.
+		pod:           pod,
+		container:     container,
+		probeType:     probeType,
+		probeManager:  m,
+		isCacheResult: false,
 	}
 
 	switch probeType {
@@ -109,12 +113,19 @@ func newWorker(
 	return w
 }
 
+// Set the max waiting time to 20 seconds
+const maxWaitingTime = 20 * time.Second
+
 // run periodically probes the container.
 func (w *worker) run() {
 	probeTickerPeriod := time.Duration(w.spec.PeriodSeconds) * time.Second
 
 	// If kubelet restarted the probes could be started in rapid succession.
 	// Let the worker wait for a random portion of tickerPeriod before probing.
+	waitingTime := maxWaitingTime
+	if waitingTime > probeTickerPeriod {
+		waitingTime = probeTickerPeriod
+	}
 	time.Sleep(time.Duration(rand.Float64() * float64(probeTickerPeriod)))
 
 	probeTicker := time.NewTicker(probeTickerPeriod)
@@ -122,6 +133,14 @@ func (w *worker) run() {
 	defer func() {
 		// Clean up.
 		probeTicker.Stop()
+		// Add result to manager cache is needed.
+		if w.isCacheResult {
+			w.addResultToManagerCache()
+		} else {
+			// Make sure manager cache is cleanup.
+			// Case: worker is topped when the new result is not generated.
+			w.removeResultFromManagerCache()
+		}
 		if !w.containerID.IsEmpty() {
 			w.resultsManager.Remove(w.containerID)
 		}
@@ -132,6 +151,7 @@ func (w *worker) run() {
 
 probeLoop:
 	for w.doProbe() {
+		w.removeResultFromManagerCacheWithCheck()
 		// Wait for next probe tick.
 		select {
 		case <-w.stopCh:
@@ -139,6 +159,47 @@ probeLoop:
 		case <-probeTicker.C:
 			// continue
 		}
+	}
+}
+
+// addResultToManagerCache will add result to manager cache.
+// So the result can be remained when update prober.
+// TODO: Support liveness prober.
+func (w *worker) addResultToManagerCache() {
+	switch w.probeType {
+	case readiness:
+		// Add result to updateReadinessCache if worker is stopped.
+		if result, ok := w.resultsManager.Get(w.containerID); ok {
+			w.probeManager.addReadinessResultCache(w.pod.UID, w.container.Name, result)
+		}
+	case liveness:
+	}
+}
+
+// removeResultFromManagerCache will remove result from manager cache.
+// TODO: Support liveness prober.
+func (w *worker) removeResultFromManagerCache() {
+	switch w.probeType {
+	case readiness:
+		w.probeManager.removeReadinessResultCache(w.pod.UID, w.container.Name)
+	case liveness:
+	}
+}
+
+// RemoveResultFromManagerCacheWithCheck will check the new result.
+// If new result is generated, then will remove the cached result from manager cache.
+// TODO: Support liveness prober.
+func (w *worker) removeResultFromManagerCacheWithCheck() {
+	switch w.probeType {
+	case readiness:
+		if _, exists := w.probeManager.getReadinessResultCache(w.pod.UID, w.container.Name); !exists {
+			return
+		}
+		// Delete result from updateReadinessCache if prober is working
+		if _, ok := w.resultsManager.Get(w.containerID); ok {
+			w.probeManager.removeReadinessResultCache(w.pod.UID, w.container.Name)
+		}
+	case liveness:
 	}
 }
 

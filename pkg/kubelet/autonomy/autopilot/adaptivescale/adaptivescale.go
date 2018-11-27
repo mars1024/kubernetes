@@ -204,7 +204,7 @@ func (r *ResourceAdjustController) resourceAdjust() error {
 				if err != nil {
 					glog.Errorf("container %s scales up memory limit failed, error: %v", container.Name, err)
 				} else {
-					glog.V(0).Info("container %s scales up memory limit successfully.", container.Name)
+					glog.V(0).Infof("container %s scales up memory limit successfully.", container.Name)
 				}
 			}
 		}

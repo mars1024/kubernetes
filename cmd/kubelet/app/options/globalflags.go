@@ -26,6 +26,7 @@ import (
 
 	// libs that provide registration functions
 	"k8s.io/apiserver/pkg/util/logs"
+	"k8s.io/kubernetes/pkg/kubelet/autonomy/sketch"
 	"k8s.io/kubernetes/pkg/version/verflag"
 
 	// ensure libs have a chance to globally register their flags
@@ -43,6 +44,7 @@ func AddGlobalFlags(fs *pflag.FlagSet) {
 	addCredentialProviderFlags(fs)
 	verflag.AddFlags(fs)
 	logs.AddFlags(fs)
+	sketch.AddFlagSet(fs)
 }
 
 // normalize replaces underscores with hyphens

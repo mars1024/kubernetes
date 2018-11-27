@@ -25,6 +25,7 @@ import (
 
 	flag "github.com/spf13/pflag"
 
+	apimachineryversion "k8s.io/apimachinery/pkg/version"
 	"k8s.io/kubernetes/pkg/version"
 )
 
@@ -101,10 +102,20 @@ func AddFlags(fs *flag.FlagSet) {
 // and, if so, print the version and exit.
 func PrintAndExitIfRequested() {
 	if *versionFlag == VersionRaw {
-		fmt.Printf("%#v\n", version.Get())
+		fmt.Printf("%#v\n", GetVersion(version.Get()))
 		os.Exit(0)
 	} else if *versionFlag == VersionTrue {
-		fmt.Printf("Kubernetes %s\n", version.Get())
+		fmt.Printf("Kubernetes %s\n", GetVersion(version.Get()))
 		os.Exit(0)
 	}
+}
+
+// GetVersion will return more version info.
+func GetVersion(versionInfo apimachineryversion.Info) string {
+	return fmt.Sprintf("%s %s %s", versionInfo.GitVersion, versionInfo.BuildDate, func() string {
+		if len(versionInfo.GitCommit) > 7 {
+			return versionInfo.GitCommit[:7]
+		}
+		return versionInfo.GitCommit
+	}())
 }

@@ -17,6 +17,7 @@ limitations under the License.
 package kubelet
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -40,6 +41,7 @@ import (
 	// api.Registry.GroupOrDie(v1.GroupName).GroupVersions[0].String() is changed
 	// to "v1"?
 
+	sigmaapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	_ "k8s.io/kubernetes/pkg/apis/core/install"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	containertest "k8s.io/kubernetes/pkg/kubelet/container/testing"
@@ -1467,7 +1469,71 @@ func TestPodPhaseWithRestartAlways(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		status := getPhase(&test.pod.Spec, test.pod.Status.ContainerStatuses)
+		status := getPhase(&test.pod.Spec, test.pod.Status.ContainerStatuses, nil)
+		assert.Equal(t, test.status, status, "[test %s]", test.test)
+	}
+}
+
+func TestPodPhaseShouldPending(t *testing.T) {
+	desiredState := v1.PodSpec{
+		NodeName: "machine",
+		Containers: []v1.Container{
+			{Name: "containerA"},
+			{Name: "containerB"},
+		},
+		RestartPolicy: v1.RestartPolicyAlways,
+	}
+
+	state := sigmaapi.ContainerStateSpec{
+		States: map[sigmaapi.ContainerInfo]sigmaapi.ContainerState{
+			sigmaapi.ContainerInfo{Name: "containerA"}: sigmaapi.ContainerStateExited,
+		},
+	}
+	stateBytes, err := json.Marshal(state)
+	assert.NoError(t, err)
+
+	tests := []struct {
+		pod    *v1.Pod
+		status v1.PodPhase
+		test   string
+	}{
+		{&v1.Pod{
+			Spec: desiredState,
+			Status: v1.PodStatus{
+				ContainerStatuses: []v1.ContainerStatus{
+					stoppedState("containerA"),
+					runningState("containerB"),
+				},
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "123",
+				Annotations: map[string]string{
+					sigmaapi.AnnotationContainerStateSpec: string(stateBytes),
+				},
+			}},
+			v1.PodPending, "container exist in desire state, so should be pod pending"},
+		{
+			&v1.Pod{
+				Spec: desiredState,
+				Status: v1.PodStatus{
+					ContainerStatuses: []v1.ContainerStatus{
+						waitingStateWithLastTermination("containerA"),
+						runningState("containerB"),
+					},
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "123",
+					Annotations: map[string]string{
+						sigmaapi.AnnotationContainerStateSpec: string(stateBytes),
+					},
+				},
+			},
+			v1.PodPending,
+			"container exist in desire state, so should be pod pending",
+		},
+	}
+	for _, test := range tests {
+		status := getPhase(&test.pod.Spec, test.pod.Status.ContainerStatuses, test.pod)
 		assert.Equal(t, test.status, status, "[test %s]", test.test)
 	}
 }
@@ -1567,7 +1633,7 @@ func TestPodPhaseWithRestartNever(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		status := getPhase(&test.pod.Spec, test.pod.Status.ContainerStatuses)
+		status := getPhase(&test.pod.Spec, test.pod.Status.ContainerStatuses, nil)
 		assert.Equal(t, test.status, status, "[test %s]", test.test)
 	}
 }
@@ -1680,7 +1746,7 @@ func TestPodPhaseWithRestartOnFailure(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		status := getPhase(&test.pod.Spec, test.pod.Status.ContainerStatuses)
+		status := getPhase(&test.pod.Spec, test.pod.Status.ContainerStatuses, nil)
 		assert.Equal(t, test.status, status, "[test %s]", test.test)
 	}
 }

@@ -42,7 +42,10 @@ import (
 	utiltaints "k8s.io/kubernetes/pkg/util/taints"
 )
 
-const defaultRootDir = "/var/lib/kubelet"
+const (
+	defaultRootDir        = "/var/lib/kubelet"
+	defaultUserinfoScript = "/etc/kubernetes/userinfo.sh"
+)
 
 // A configuration field should go in KubeletFlags instead of KubeletConfiguration if any of these are true:
 // - its value will never, or cannot safely be changed during the lifetime of a node
@@ -72,6 +75,11 @@ type KubeletFlags struct {
 	// HostnameOverride is the hostname used to identify the kubelet instead
 	// of the actual hostname.
 	HostnameOverride string
+
+	// NodeNameOverride is the node name used to identify the kubelet instead
+	// of the node SN.
+	NodeNameOverride string
+
 	// NodeIP is IP address of the node.
 	// If set, kubelet will use this IP address for the node.
 	NodeIP string
@@ -353,6 +361,7 @@ func (f *KubeletFlags) AddFlags(mainfs *pflag.FlagSet) {
 	fs.BoolVar(&f.EnableServer, "enable-server", f.EnableServer, "Enable the Kubelet's server")
 
 	fs.StringVar(&f.HostnameOverride, "hostname-override", f.HostnameOverride, "If non-empty, will use this string as identification instead of the actual hostname. If --cloud-provider is set, the cloud provider determines the name of the node (consult cloud provider documentation to determine if and how the hostname is used).")
+	fs.StringVar(&f.NodeNameOverride, "nodename-override", f.NodeNameOverride, "If non-empty, will use this string as identification instead of the actual node name.")
 
 	fs.StringVar(&f.NodeIP, "node-ip", f.NodeIP, "IP address of the node. If set, kubelet will use this IP address for the node")
 
@@ -442,6 +451,8 @@ func AddKubeletConfigFlags(mainfs *pflag.FlagSet, c *kubeletconfig.KubeletConfig
 	fs.BoolVar(&c.FailSwapOn, "experimental-fail-swap-on", c.FailSwapOn, "DEPRECATED: please use --fail-swap-on instead.")
 
 	fs.StringVar(&c.StaticPodPath, "pod-manifest-path", c.StaticPodPath, "Path to the directory containing static pod files to run, or the path to a single static pod file. Files starting with dots will be ignored.")
+	fs.StringVar(&c.UserinfoScriptPath, "userinfo-script-path", defaultUserinfoScript, "Userinfo script can backup and restore userinfo when upgrade a container.")
+	fs.StringSliceVar(&c.CustomCgroupParents, "custom-cgroup-parents", c.CustomCgroupParents, "Optional custom cgroup parents under which pod can run under except the default cgroup '/kubepods'")
 	fs.DurationVar(&c.SyncFrequency.Duration, "sync-frequency", c.SyncFrequency.Duration, "Max period between synchronizing running containers and config")
 	fs.DurationVar(&c.FileCheckFrequency.Duration, "file-check-frequency", c.FileCheckFrequency.Duration, "Duration between checking config files for new data")
 	fs.DurationVar(&c.HTTPCheckFrequency.Duration, "http-check-frequency", c.HTTPCheckFrequency.Duration, "Duration between checking http for new data")

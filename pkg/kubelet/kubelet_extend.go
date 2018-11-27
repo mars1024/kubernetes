@@ -141,7 +141,7 @@ func PodHaveRebuildAnnotation(pod *v1.Pod) bool {
 	}
 	_, exist := pod.Annotations[sigmak8sapi.AnnotationRebuildContainerInfo]
 	if exist {
-		glog.V(4).Infof("pod %s have %s annotation %t", format.Pod(pod), sigmak8sapi.AnnotationRebuildContainerInfo)
+		glog.V(4).Infof("pod %s have %s annotation", format.Pod(pod), sigmak8sapi.AnnotationRebuildContainerInfo)
 		return true
 	}
 	return false

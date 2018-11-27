@@ -34,6 +34,7 @@ import (
 	"sync"
 
 	"github.com/golang/glog"
+	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -55,8 +56,10 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/envvars"
 	"k8s.io/kubernetes/pkg/kubelet/eviction"
 	"k8s.io/kubernetes/pkg/kubelet/images"
+	"k8s.io/kubernetes/pkg/kubelet/kuberuntime"
 	"k8s.io/kubernetes/pkg/kubelet/server/portforward"
 	remotecommandserver "k8s.io/kubernetes/pkg/kubelet/server/remotecommand"
+	sigmautil "k8s.io/kubernetes/pkg/kubelet/sigma"
 	"k8s.io/kubernetes/pkg/kubelet/status"
 	kubetypes "k8s.io/kubernetes/pkg/kubelet/types"
 	"k8s.io/kubernetes/pkg/kubelet/util/format"
@@ -466,6 +469,7 @@ func (kl *Kubelet) GenerateRunContainerOptions(pod *v1.Pod, container *v1.Contai
 		return nil, nil, err
 	}
 	opts.Hostname = hostname
+	opts.HostDomain = hostDomainName
 	podName := volumeutil.GetUniquePodName(pod)
 	volumes := kl.volumeManager.GetMountedVolumesForPod(podName)
 
@@ -833,6 +837,10 @@ func (kl *Kubelet) killPod(pod *v1.Pod, runningPod *kubecontainer.Pod, status *k
 	} else {
 		return fmt.Errorf("one of the two arguments must be non-nil: runningPod, status")
 	}
+	if sigmautil.HasProtectionFinalizer(pod) {
+		glog.V(3).Infof("Pod %s has protection finalizer %s, could not kill it", format.Pod(pod), pod.Finalizers)
+		return nil
+	}
 
 	// Call the container runtime KillPod method which stops all running containers of the pod
 	if err := kl.containerRuntime.KillPod(pod, p, gracePeriodOverride); err != nil {
@@ -1082,7 +1090,8 @@ func (kl *Kubelet) HandlePodCleanups() error {
 
 	// Remove any cgroups in the hierarchy for pods that are no longer running.
 	if kl.cgroupsPerQOS {
-		kl.cleanupOrphanedPodCgroups(cgroupPods, activePods)
+		shouldPreservePod := kl.filterCgroupShouldPreservePods(allPods)
+		kl.cleanupOrphanedPodCgroups(cgroupPods, shouldPreservePod)
 	}
 
 	kl.backOff.GC()
@@ -1240,7 +1249,9 @@ func (kl *Kubelet) GetKubeletContainerLogs(ctx context.Context, podFullName, con
 }
 
 // getPhase returns the phase of a pod given its container info.
-func getPhase(spec *v1.PodSpec, info []v1.ContainerStatus) v1.PodPhase {
+func getPhase(spec *v1.PodSpec, info []v1.ContainerStatus, pod *v1.Pod) v1.PodPhase {
+	// if container terminate as user's expect, it should be considered as waiting to start
+	haveContainerStateAnnotation, containerDesiredState, _ := kuberuntime.GetContainerDesiredStateFromAnnotation(pod)
 	initialized := 0
 	pendingInitialization := 0
 	failedInitialization := 0
@@ -1292,15 +1303,26 @@ func getPhase(spec *v1.PodSpec, info []v1.ContainerStatus) v1.PodPhase {
 		case containerStatus.State.Running != nil:
 			running++
 		case containerStatus.State.Terminated != nil:
-			stopped++
-			if containerStatus.State.Terminated.ExitCode == 0 {
-				succeeded++
+			// it terminate as user expect, it should be considered as waiting to start
+			if haveContainerStateAnnotation && containerExistInDesiredState(containerDesiredState, container.Name) {
+				waiting++
 			} else {
-				failed++
+				stopped++
+				if containerStatus.State.Terminated.ExitCode == 0 {
+					succeeded++
+				} else {
+					failed++
+				}
 			}
 		case containerStatus.State.Waiting != nil:
 			if containerStatus.LastTerminationState.Terminated != nil {
-				stopped++
+				// it terminate as user expect, it should be considered as waiting to start
+				if haveContainerStateAnnotation && containerExistInDesiredState(containerDesiredState, container.Name) {
+					waiting++
+				} else {
+					stopped++
+				}
+
 			} else {
 				waiting++
 			}
@@ -1349,6 +1371,16 @@ func getPhase(spec *v1.PodSpec, info []v1.ContainerStatus) v1.PodPhase {
 	}
 }
 
+// containerExistInDesiredState return whether container exist in containerDesiredState.
+func containerExistInDesiredState(containerDesiredState sigmak8sapi.ContainerStateSpec, containerName string) bool {
+	for containerInfo := range containerDesiredState.States {
+		if strings.EqualFold(containerInfo.Name, containerName) {
+			return true
+		}
+	}
+	return false
+}
+
 // generateAPIPodStatus creates the final API pod status for a pod, given the
 // internal pod status.
 func (kl *Kubelet) generateAPIPodStatus(pod *v1.Pod, podStatus *kubecontainer.PodStatus) v1.PodStatus {
@@ -1370,7 +1402,7 @@ func (kl *Kubelet) generateAPIPodStatus(pod *v1.Pod, podStatus *kubecontainer.Po
 	// Assume info is ready to process
 	spec := &pod.Spec
 	allStatus := append(append([]v1.ContainerStatus{}, s.ContainerStatuses...), s.InitContainerStatuses...)
-	s.Phase = getPhase(spec, allStatus)
+	s.Phase = getPhase(spec, allStatus, pod)
 	// Check for illegal phase transition
 	if pod.Status.Phase == v1.PodFailed || pod.Status.Phase == v1.PodSucceeded {
 		// API server shows terminal phase; transitions are not allowed

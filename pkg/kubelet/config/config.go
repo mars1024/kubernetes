@@ -435,7 +435,8 @@ func podsDifferSemantically(existing, ref *v1.Pod) bool {
 		reflect.DeepEqual(existing.Labels, ref.Labels) &&
 		reflect.DeepEqual(existing.DeletionTimestamp, ref.DeletionTimestamp) &&
 		reflect.DeepEqual(existing.DeletionGracePeriodSeconds, ref.DeletionGracePeriodSeconds) &&
-		isAnnotationMapEqual(existing.Annotations, ref.Annotations) {
+		isAnnotationMapEqual(existing.Annotations, ref.Annotations) &&
+		len(existing.Finalizers) == len(ref.Finalizers) {
 		return false
 	}
 	return true
@@ -469,11 +470,15 @@ func checkAndUpdatePod(existing, ref *v1.Pod) (needUpdate, needReconcile, needGr
 	// internal annotation, there is no need to update.
 	ref.Annotations[kubetypes.ConfigFirstSeenAnnotationKey] = existing.Annotations[kubetypes.ConfigFirstSeenAnnotationKey]
 
+	// checkAndUpdatePod now just checks follow fields to determine whether ref makes
+	// a meaningful change, if needs to include other field change, please remember
+	// modify podsDifferSemantically accordingly and make filed copy here.
 	existing.Spec = ref.Spec
 	existing.Labels = ref.Labels
 	existing.DeletionTimestamp = ref.DeletionTimestamp
 	existing.DeletionGracePeriodSeconds = ref.DeletionGracePeriodSeconds
 	existing.Status = ref.Status
+	existing.Finalizers = ref.Finalizers
 	updateAnnotations(existing, ref)
 
 	// 2. this is an graceful delete

@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
@@ -248,6 +249,12 @@ func TestMemoryPressure(t *testing.T) {
 	bestEffortPodToAdmit, _ := podMaker("best-admit", defaultPriority, newResourceList("", "", ""), newResourceList("", "", ""), "0Gi")
 	burstablePodToAdmit, _ := podMaker("burst-admit", defaultPriority, newResourceList("100m", "100Mi", ""), newResourceList("200m", "200Mi", ""), "0Gi")
 
+	podShouldAdmit, _ := podMaker("best-admit", defaultPriority, newResourceList("", "", ""), newResourceList("", "", ""), "0Gi")
+	if len(podShouldAdmit.Annotations) == 0 {
+		podShouldAdmit.Annotations = make(map[string]string, 1)
+	}
+	podShouldAdmit.Annotations[sigmak8sapi.AnnotationRebuildContainerInfo] = "test"
+
 	// synchronize
 	manager.synchronize(diskInfoProvider, activePodsFunc)
 
@@ -358,8 +365,8 @@ func TestMemoryPressure(t *testing.T) {
 	}
 
 	// the best-effort pod should not admit, burstable should
-	expected = []bool{false, true}
-	for i, pod := range []*v1.Pod{bestEffortPodToAdmit, burstablePodToAdmit} {
+	expected = []bool{false, true, true}
+	for i, pod := range []*v1.Pod{bestEffortPodToAdmit, burstablePodToAdmit, podShouldAdmit} {
 		if result := manager.Admit(&lifecycle.PodAdmitAttributes{Pod: pod}); expected[i] != result.Admit {
 			t.Errorf("Admit pod: %v, expected: %v, actual: %v", pod, expected[i], result.Admit)
 		}

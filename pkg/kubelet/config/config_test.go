@@ -458,3 +458,21 @@ func TestPodRestore(t *testing.T) {
 	}
 	expectNoPodUpdate(t, ch)
 }
+
+func TestPodUpdateFinalizer(t *testing.T) {
+	channel, ch, _ := createPodConfigTester(PodConfigNotificationIncremental)
+
+	pod := CreateValidPod("foo2", "new")
+	pod.Finalizers = []string{"finalizer1", "finalizer2"}
+
+	clone := pod.DeepCopy()
+
+	podUpdate := CreatePodUpdate(kubetypes.SET, TestSource, clone)
+	channel <- podUpdate
+	expectPodUpdate(t, ch, CreatePodUpdate(kubetypes.ADD, TestSource, pod))
+
+	pod.Finalizers = []string{"finalizer1"}
+	podUpdate = CreatePodUpdate(kubetypes.SET, TestSource, pod)
+	channel <- podUpdate
+	expectPodUpdate(t, ch, CreatePodUpdate(kubetypes.UPDATE, TestSource, pod))
+}

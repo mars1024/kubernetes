@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"testing"
 	"time"
+	"reflect"
 
 	"github.com/golang/glog"
 	"k8s.io/api/core/v1"
@@ -318,6 +319,111 @@ func TestUpdateReadiness(t *testing.T) {
 	// Wait for failed status.
 	if err := waitForReadyStatus(m, false); err != nil {
 		t.Error(err)
+	}
+}
+
+func TestUpdatePod(t *testing.T) {
+	probe := &v1.Probe{
+		Handler: v1.Handler{
+			Exec: &v1.ExecAction{
+				Command: []string{},
+			},
+		},
+		TimeoutSeconds:   1,
+		PeriodSeconds:    1,
+		SuccessThreshold: 1,
+		FailureThreshold: 3,
+	}
+	probePod := v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			UID: "probe_pod",
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{{
+				Name:           "container1",
+				ReadinessProbe: probe,
+				LivenessProbe:  probe,
+			}},
+		},
+	}
+
+	readinessKey := probeKey{"probe_pod", "container1", readiness}
+	livenessKey := probeKey{"probe_pod", "container1", liveness}
+
+	m := newTestManager()
+	defer cleanup(t, m)
+	if err := expectProbes(m, nil); err != nil {
+		t.Error(err)
+	}
+
+	// Add a pod to manager
+	m.AddPod(&probePod)
+
+	for _, testCase := range []struct {
+		message        string
+		readinessProbe *v1.Probe
+		livenessProbe  *v1.Probe
+	}{
+		{
+			message:        "Update readinessProbe and livenessProbe",
+			readinessProbe: &v1.Probe{Handler: v1.Handler{Exec: &v1.ExecAction{[]string{"readiness command2"}}}},
+			livenessProbe:  &v1.Probe{Handler: v1.Handler{Exec: &v1.ExecAction{[]string{"liveness command2"}}}},
+		},
+		{
+			message:        "Delete readinessProbe and livenessProbe",
+			readinessProbe: nil,
+			livenessProbe:  nil,
+		},
+		{
+			message:        "Add readinessProbe and livenessProbe",
+			readinessProbe: &v1.Probe{Handler: v1.Handler{Exec: &v1.ExecAction{[]string{"readiness command3"}}}},
+			livenessProbe:  &v1.Probe{Handler: v1.Handler{Exec: &v1.ExecAction{[]string{"liveness command3"}}}},
+		},
+	} {
+		// Set ReadinessProbe and LivenessProbe
+		probePod.Spec.Containers[0].ReadinessProbe = testCase.readinessProbe
+		probePod.Spec.Containers[0].LivenessProbe = testCase.livenessProbe
+		if testCase.readinessProbe != nil {
+			probePod.Spec.Containers[0].ReadinessProbe.PeriodSeconds = 1
+		}
+		if testCase.livenessProbe != nil {
+			probePod.Spec.Containers[0].LivenessProbe.PeriodSeconds = 1
+		}
+
+		// UpdatePod
+		m.UpdatePod(&probePod)
+
+		// Check readinessProbe
+		if testCase.readinessProbe != nil {
+			worker, exists := m.workers[readinessKey]
+			if exists {
+				if !reflect.DeepEqual(worker.spec, probePod.Spec.Containers[0].ReadinessProbe) {
+					t.Fatalf("Failed worker: %v, spec: %v", worker, probePod.Spec.Containers[0].ReadinessProbe)
+				}
+			}
+		} else {
+			// Wait to worker to be deleted
+			time.Sleep(2 * time.Second)
+			worker, exists := m.workers[readinessKey]
+			if exists {
+				t.Fatalf("%s: get unexpected worker %v", testCase.message, worker)
+			}
+		}
+		if testCase.livenessProbe != nil {
+			worker, exists := m.workers[livenessKey]
+			if exists {
+				if !reflect.DeepEqual(worker.spec, probePod.Spec.Containers[0].LivenessProbe) {
+					t.Fatalf("Failed worker: %v, spec: %v", worker, probePod.Spec.Containers[0].ReadinessProbe)
+				}
+			}
+		} else {
+			// Wait to worker to be deleted
+			time.Sleep(2 * time.Second)
+			worker, exists := m.workers[livenessKey]
+			if exists {
+				t.Fatalf("%s: get unexpected worker %v", testCase.message, worker)
+			}
+		}
 	}
 }
 

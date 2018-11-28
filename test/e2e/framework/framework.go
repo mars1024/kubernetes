@@ -81,6 +81,7 @@ type Framework struct {
 	Namespace                *v1.Namespace   // Every test has at least one namespace unless creation is skipped
 	namespacesToDelete       []*v1.Namespace // Some tests have more than one.
 	NamespaceDeletionTimeout time.Duration
+	AllNodesReadyTimeout     time.Duration
 	SkipPrivilegedPSPBinding bool // Whether to skip creating a binding to the privileged PSP in the test namespace
 
 	gatherer *ContainerResourceGatherer
@@ -142,6 +143,7 @@ func NewFramework(baseName string, options FrameworkOptions, client clientset.In
 		AddonResourceConstraints: make(map[string]ResourceConstraint),
 		Options:                  options,
 		ClientSet:                client,
+		AllNodesReadyTimeout:     3 * time.Minute,
 	}
 
 	BeforeEach(f.BeforeEach)
@@ -398,9 +400,9 @@ func (f *Framework) AfterEach() {
 	// Check whether all nodes are ready after the test.
 	// This is explicitly done at the very end of the test, to avoid
 	// e.g. not removing namespace in case of this failure.
-	if err := AllNodesReady(f.ClientSet, 3*time.Minute); err != nil {
-		Failf("All nodes should be ready after test, %v", err)
-	}
+	// if err := AllNodesReady(f.ClientSet, f.NamespaceDeletionTimeout); err != nil {
+	// 	Failf("All nodes should be ready after test, %v", err)
+	// }
 }
 
 func (f *Framework) CreateNamespace(baseName string, labels map[string]string) (*v1.Namespace, error) {
@@ -418,6 +420,10 @@ func (f *Framework) CreateNamespace(baseName string, labels map[string]string) (
 	}
 
 	return ns, err
+}
+
+func (f *Framework) GetNamespacesToDelete() []*v1.Namespace {
+	return f.namespacesToDelete
 }
 
 func (f *Framework) RecordFlakeIfError(err error, optionalDescription ...interface{}) {

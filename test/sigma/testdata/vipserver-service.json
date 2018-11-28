@@ -1,0 +1,22 @@
+{
+    "apiVersion": "v1",
+    "kind": "Service",
+    "metadata": {
+        "labels": {
+            "sigma.ali/app-name": "sigma-integrate-test",
+            "sigma.ali/internal-lb": "vipserver",
+            "sigma.alibaba-inc.com/app-stage": "DAILY",
+            "sigma.alibaba-inc.com/app-unit": "CENTER_UNIT.center"
+        },
+        "name": "vipserver-service"
+    },
+    "spec": {
+        "clusterIP": "None",
+        "ports": [
+            {
+                "port": 1234,
+                "targetPort": 80
+            }
+        ]
+    }
+}

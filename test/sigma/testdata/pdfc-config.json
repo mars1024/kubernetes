@@ -1,0 +1,10 @@
+{
+    "apiVersion": "v1",
+    "data": {
+        "rules": "[{\"duration\":\"1m\",\"deleteLimit\":1000},{\"duration\":\"5m\",\"deleteLimit\":3000},{\"duration\":\"1h\",\"deleteLimit\":6000},{\"duration\":\"24h\",\"deleteLimit\":12000}]"
+    },
+    "kind": "ConfigMap",
+    "metadata": {
+        "name": "pod-deletion-flow-control"
+    }
+}

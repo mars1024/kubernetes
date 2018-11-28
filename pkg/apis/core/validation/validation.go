@@ -2672,7 +2672,7 @@ const (
 	// Limits on various DNS parameters. These are derived from
 	// restrictions in Linux libc name resolution handling.
 	// Max number of DNS name servers.
-	MaxDNSNameservers = 3
+	MaxDNSNameservers = 10
 	// Max number of domains in search path.
 	MaxDNSSearchPaths = 6
 	// Max number of characters in search path.

@@ -3,15 +3,23 @@ package nodestatus
 
 import (
 	"testing"
-
-	cadvisorapi "github.com/google/cadvisor/info/v1"
-	"github.com/stretchr/testify/assert"
-	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
-	"k8s.io/api/core/v1"
-
 	"encoding/json"
+	"os"
+	"net"
+	"fmt"
+	"k8s.io/api/core/v1"
+	"github.com/stretchr/testify/assert"
+	"k8s.io/kubernetes/staging/src/k8s.io/apimachinery/pkg/util/diff"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
+	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
+	cadvisorapi "github.com/google/cadvisor/info/v1"
+
 )
 
+const (
+	testKubeletHostIP = "127.0.0.1"
+)
 func TestSetNodeLocalInfo(t *testing.T) {
 	newMachineInfo := func(numCores int, topology []cadvisorapi.Node) *cadvisorapi.MachineInfo {
 		return &cadvisorapi.MachineInfo{
@@ -118,3 +126,135 @@ func TestSetNodeLocalInfo(t *testing.T) {
 	}
 }
 
+
+func TestSetNodeAddressWithoutCloudProvider(t *testing.T) {
+	hostname, err := os.Hostname()
+	assert.NoError(t, err)
+
+	var testKubeletIp string
+
+	addrs, err := net.InterfaceAddrs()
+	assert.NoError(t, err)
+	for _, addr := range addrs {
+		var ip net.IP
+		switch v := addr.(type) {
+		case *net.IPNet:
+			ip = v.IP
+		case *net.IPAddr:
+			ip = v.IP
+		}
+		if err := validateNodeIP(ip); err == nil {
+			testKubeletIp = ip.String()
+		}
+	}
+
+	type test struct {
+		existingNode      v1.Node
+		expectedAddresses []v1.NodeAddress
+		testName          string
+		success           bool
+	}
+
+	fmt.Println(testKubeletIp)
+	tests := []test{
+		{
+			existingNode: v1.Node{
+				ObjectMeta: metav1.ObjectMeta{Name: testKubeletIp},
+			},
+			expectedAddresses: []v1.NodeAddress{
+				{
+					Type:    v1.NodeInternalIP,
+					Address: testKubeletIp,
+				},
+				{
+					Type:    v1.NodeHostName,
+					Address: hostname,
+				},
+			},
+			success:  true,
+			testName: "node name is valid ip, so get host ip from node name",
+		},
+		{
+			existingNode: v1.Node{
+				ObjectMeta: metav1.ObjectMeta{Name: testKubeletHostIP},
+			},
+			expectedAddresses: []v1.NodeAddress{
+				{
+					Type:    v1.NodeInternalIP,
+					Address: testKubeletHostIP,
+				},
+				{
+					Type:    v1.NodeHostName,
+					Address: hostname,
+				},
+			},
+			success: false,
+			testName: "node name is invalid ip," +
+				"in this condition expected ip address is invalid ip, so not equal nodename in fact",
+		},
+	}
+
+
+
+	for _, test := range tests {
+		t.Run(test.testName, func(t *testing.T) {
+			// construct setter
+			setter := NodeAddress(nil,
+				validateNodeIP,
+				hostname,
+				false,
+				false,
+				nil,
+				nil)
+
+			// call setter on existing node
+			err := setter(&test.existingNode)
+			assert.NoError(t,err)
+			if test.success {
+				assert.True(t, apiequality.Semantic.DeepEqual(test.expectedAddresses, test.existingNode.Status.Addresses),
+					"%s", diff.ObjectDiff(test.expectedAddresses, test.existingNode.Status.Addresses))
+			} else {
+				assert.False(t, apiequality.Semantic.DeepEqual(test.expectedAddresses, test.existingNode.Status.Addresses),
+					"%s", diff.ObjectDiff(test.expectedAddresses, test.existingNode.Status.Addresses))
+			}
+		})
+	}
+}
+
+// Validate given node IP belongs to the current host
+func validateNodeIP(nodeIP net.IP) error {
+	// Honor IP limitations set in setNodeStatus()
+	if nodeIP.To4() == nil && nodeIP.To16() == nil {
+		return fmt.Errorf("nodeIP must be a valid IP address")
+	}
+	if nodeIP.IsLoopback() {
+		return fmt.Errorf("nodeIP can't be loopback address")
+	}
+	if nodeIP.IsMulticast() {
+		return fmt.Errorf("nodeIP can't be a multicast address")
+	}
+	if nodeIP.IsLinkLocalUnicast() {
+		return fmt.Errorf("nodeIP can't be a link-local unicast address")
+	}
+	if nodeIP.IsUnspecified() {
+		return fmt.Errorf("nodeIP can't be an all zeros address")
+	}
+
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return err
+	}
+	for _, addr := range addrs {
+		var ip net.IP
+		switch v := addr.(type) {
+		case *net.IPNet:
+			ip = v.IP
+		case *net.IPAddr:
+			ip = v.IP
+		}
+		if ip != nil && ip.Equal(nodeIP) {
+			return nil
+		}
+	}
+	return fmt.Errorf("node IP: %q not found in the host's network interfaces", nodeIP.String())
+}

@@ -173,6 +173,21 @@ func NodeAddress(nodeIP net.IP, // typically Kubelet.nodeIP
 						}
 					}
 				}
+				// Node name may be hostSN, in this condition, can't look up ip, so look up through kl.hostname.
+				if ipAddr == nil  && node.Name != hostname {
+					addrs, _ = net.LookupIP(hostname)
+					for _, addr := range addrs {
+						if err = validateNodeIPFunc(addr); err == nil {
+							if addr.To4() != nil {
+								ipAddr = addr
+								break
+							}
+							if addr.To16() != nil && ipAddr == nil {
+								ipAddr = addr
+							}
+						}
+					}
+				}
 
 				if ipAddr == nil {
 					ipAddr, err = utilnet.ChooseHostInterface()

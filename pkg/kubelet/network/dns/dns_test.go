@@ -186,15 +186,15 @@ func TestFormDNSNameserversFitsLimits(t *testing.T) {
 			expectedEvent:      false,
 		},
 		{
-			desc:               "valid: 3 nameservers",
-			nameservers:        []string{"127.0.0.1", "10.0.0.10", "8.8.8.8"},
-			expectedNameserver: []string{"127.0.0.1", "10.0.0.10", "8.8.8.8"},
+			desc:               "valid: 10 nameservers",
+			nameservers:        []string{"127.0.0.1", "10.0.0.10", "8.8.8.8", "1.1.1.1", "2.2.2.2", "3.3.3.3", "4.4.4.4", "5.5.5.5", "6.6.6.6", "7.7.7.7"},
+			expectedNameserver: []string{"127.0.0.1", "10.0.0.10", "8.8.8.8", "1.1.1.1", "2.2.2.2", "3.3.3.3", "4.4.4.4", "5.5.5.5", "6.6.6.6", "7.7.7.7"},
 			expectedEvent:      false,
 		},
 		{
-			desc:               "invalid: 4 nameservers, trimmed to 3",
-			nameservers:        []string{"127.0.0.1", "10.0.0.10", "8.8.8.8", "1.2.3.4"},
-			expectedNameserver: []string{"127.0.0.1", "10.0.0.10", "8.8.8.8"},
+			desc:               "invalid: 11 nameservers, trimmed to 10",
+			nameservers:        []string{"127.0.0.1", "10.0.0.10", "8.8.8.8", "1.1.1.1", "2.2.2.2", "3.3.3.3", "4.4.4.4", "5.5.5.5", "6.6.6.6", "7.7.7.7", "9.9.9.9"},
+			expectedNameserver: []string{"127.0.0.1", "10.0.0.10", "8.8.8.8", "1.1.1.1", "2.2.2.2", "3.3.3.3", "4.4.4.4", "5.5.5.5", "6.6.6.6", "7.7.7.7"},
 			expectedEvent:      true,
 		},
 	}

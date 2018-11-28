@@ -5865,9 +5865,9 @@ func TestValidatePodDNSConfig(t *testing.T) {
 			expectedError: false,
 		},
 		{
-			desc: "invalid: 4 nameservers",
+			desc: "invalid: 11 nameservers",
 			dnsConfig: &core.PodDNSConfig{
-				Nameservers: []string{"127.0.0.1", "10.0.0.10", "8.8.8.8", "1.2.3.4"},
+				Nameservers: []string{"127.0.0.1", "10.0.0.10", "8.8.8.8", "1.2.3.4", "127.0.0.1", "10.0.0.10", "8.8.8.8", "1.2.3.4", "127.0.0.1", "10.0.0.10", "8.8.8.8"},
 			},
 			expectedError: true,
 		},

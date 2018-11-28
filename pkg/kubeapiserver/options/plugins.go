@@ -59,6 +59,21 @@ import (
 	validatingwebhook "k8s.io/apiserver/pkg/admission/plugin/webhook/validating"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/kubernetes/pkg/features"
+	"k8s.io/kubernetes/plugin/pkg/admission/namespacedelete"
+	"k8s.io/kubernetes/plugin/pkg/admission/armory"
+	"k8s.io/kubernetes/plugin/pkg/admission/containerstate"
+	"k8s.io/kubernetes/plugin/pkg/admission/networkstatus"
+	"k8s.io/kubernetes/plugin/pkg/admission/sigmascheduling"
+	"k8s.io/kubernetes/plugin/pkg/admission/alipodlifecyclehook"
+	"k8s.io/kubernetes/plugin/pkg/admission/alipodinjectionpreschedule"
+	"k8s.io/kubernetes/plugin/pkg/admission/alipodinjectionpostschedule"
+	"k8s.io/kubernetes/plugin/pkg/admission/poddeletionflowcontrol"
+
+	alipaycmdb "k8s.io/kubernetes/plugin/pkg/admission/alipay/cmdb"
+	alipayinclusterkube "k8s.io/kubernetes/plugin/pkg/admission/alipay/inclusterkube"
+	alipaypodlocation "k8s.io/kubernetes/plugin/pkg/admission/alipay/podlocation"
+	alipaypodpreset "k8s.io/kubernetes/plugin/pkg/admission/alipay/podpreset"
+	alipayzappinfo "k8s.io/kubernetes/plugin/pkg/admission/alipay/zappinfo"
 )
 
 // AllOrderedPlugins is the list of all the plugins in order.
@@ -94,6 +109,23 @@ var AllOrderedPlugins = []string{
 	validatingwebhook.PluginName,            // ValidatingAdmissionWebhook
 	resourcequota.PluginName,                // ResourceQuota
 	deny.PluginName,                         // AlwaysDeny
+
+	namespacedelete.PluginName,              // NamespaceDelete
+
+	armory.PluginName,                      // Armory
+	containerstate.PluginName,              // ContainerState
+	networkstatus.PluginName,               // NetworkStatus
+	sigmascheduling.PluginName,             // SigmaScheduling
+	alipodlifecyclehook.PluginName,         // AliPodLifeTimeHook
+	alipodinjectionpreschedule.PluginName,  // AliPodInjectionPreSchedule
+	alipodinjectionpostschedule.PluginName, // AliPodInjectionPostSchedule
+	poddeletionflowcontrol.PluginName,      // PodDeletionFlowControl
+
+	alipaycmdb.PluginName,          // Alipay CMDB
+	alipayinclusterkube.PluginName, // Alipay in-cluster kubernetes service
+	alipaypodlocation.PluginName,   // Alipay PodLocation
+	alipaypodpreset.PluginName,     // Alipay PodPreset
+	alipayzappinfo.PluginName,      // Alipay ZAppInfo
 }
 
 // RegisterAllAdmissionPlugins registers all admission plugins and
@@ -125,6 +157,23 @@ func RegisterAllAdmissionPlugins(plugins *admission.Plugins) {
 	setdefault.Register(plugins)
 	resize.Register(plugins)
 	storageobjectinuseprotection.Register(plugins)
+
+	namespacedelete.Register(plugins)
+
+	armory.Register(plugins)
+	containerstate.Register(plugins)
+	networkstatus.Register(plugins)
+	sigmascheduling.Register(plugins)
+	alipodlifecyclehook.Register(plugins)
+	alipodinjectionpreschedule.Register(plugins)
+	alipodinjectionpostschedule.Register(plugins)
+	poddeletionflowcontrol.Register(plugins)
+
+	alipaycmdb.Register(plugins)
+	alipayinclusterkube.Register(plugins)
+	alipaypodlocation.Register(plugins)
+	alipaypodpreset.Register(plugins)
+	alipayzappinfo.Register(plugins)
 }
 
 // DefaultOffAdmissionPlugins get admission plugins off by default for kube-apiserver.

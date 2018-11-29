@@ -340,7 +340,7 @@ func (d *namespacedResourcesDeleter) deleteCollection(gvr schema.GroupVersionRes
 	// namespace controller does not want the garbage collector to insert the orphan finalizer since it calls
 	// resource deletions generically.  it will ensure all resources in the namespace are purged prior to releasing
 	// namespace itself.
-	background := metav1.DeletePropagationBackground
+	background := metav1.DeletePropagationForceBackground
 	opts := &metav1.DeleteOptions{PropagationPolicy: &background}
 	err := d.dynamicClient.Resource(gvr).Namespace(namespace).DeleteCollection(opts, metav1.ListOptions{})
 
@@ -410,7 +410,7 @@ func (d *namespacedResourcesDeleter) deleteEachItem(gvr schema.GroupVersionResou
 		return nil
 	}
 	for _, item := range unstructuredList.Items {
-		background := metav1.DeletePropagationBackground
+		background := metav1.DeletePropagationForceBackground
 		opts := &metav1.DeleteOptions{PropagationPolicy: &background}
 		if err = d.dynamicClient.Resource(gvr).Namespace(namespace).Delete(item.GetName(), opts); err != nil && !errors.IsNotFound(err) && !errors.IsMethodNotSupported(err) {
 			return err

@@ -54,7 +54,7 @@ func TestAdmitCreate(t *testing.T) {
 			Namespace: namespace,
 		},
 	}
-	err := handler.Admit(admission.NewAttributesRecord(&pod, nil, api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, api.Resource("pods").WithVersion("version"), "", admission.Create, nil))
+	err := handler.Admit(admission.NewAttributesRecord(&pod, nil, api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, api.Resource("pods").WithVersion("version"), "", admission.Create, false, nil))
 	if err != nil {
 		t.Errorf("Unexpected error returned from admission handler")
 	}
@@ -78,7 +78,7 @@ func TestAdmitUpdate(t *testing.T) {
 			},
 		},
 	}
-	err := handler.Admit(admission.NewAttributesRecord(&pod, nil, api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, api.Resource("pods").WithVersion("version"), "", admission.Update, nil))
+	err := handler.Admit(admission.NewAttributesRecord(&pod, nil, api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, api.Resource("pods").WithVersion("version"), "", admission.Update, false, nil))
 	if err != nil {
 		t.Errorf("Unexpected error returned from admission handler")
 	}
@@ -102,7 +102,7 @@ func TestValidateCreate(t *testing.T) {
 		},
 	}
 	expectedError := `must be set`
-	err := handler.Validate(admission.NewAttributesRecord(&pod, nil, api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, api.Resource("pods").WithVersion("version"), "", admission.Create, nil))
+	err := handler.Validate(admission.NewAttributesRecord(&pod, nil, api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, api.Resource("pods").WithVersion("version"), "", admission.Create, false, nil))
 	if err == nil {
 		t.Errorf("missing expected error")
 	}
@@ -111,7 +111,7 @@ func TestValidateCreate(t *testing.T) {
 	}
 
 	pod.ObjectMeta.Labels = nil
-	err = handler.Validate(admission.NewAttributesRecord(&pod, nil, api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, api.Resource("pods").WithVersion("version"), "", admission.Create, nil))
+	err = handler.Validate(admission.NewAttributesRecord(&pod, nil, api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, api.Resource("pods").WithVersion("version"), "", admission.Create, false, nil))
 	if err == nil {
 		t.Errorf("missing expected error")
 	}
@@ -124,7 +124,7 @@ func TestValidateCreate(t *testing.T) {
 		sigmaapi.LabelAppName: "app1",
 		sigmaapi.LabelSite:    "site0",
 	}
-	err = handler.Validate(admission.NewAttributesRecord(&pod, nil, api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, api.Resource("pods").WithVersion("version"), "", admission.Create, nil))
+	err = handler.Validate(admission.NewAttributesRecord(&pod, nil, api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, api.Resource("pods").WithVersion("version"), "", admission.Create, false, nil))
 	if err != nil {
 		t.Errorf("Unexpected error returned from admission handler")
 	}
@@ -152,7 +152,7 @@ func TestValidateUpdate(t *testing.T) {
 		},
 	}
 	expectedError := `pods "123" is forbidden: labels sigma.ali/sn can not update`
-	err := handler.Validate(admission.NewAttributesRecord(&pod, &oldPod, api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, api.Resource("pods").WithVersion("version"), "", admission.Update, nil))
+	err := handler.Validate(admission.NewAttributesRecord(&pod, &oldPod, api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, api.Resource("pods").WithVersion("version"), "", admission.Update, false, nil))
 	if err == nil {
 		t.Error("missing expected error")
 	}
@@ -164,7 +164,7 @@ func TestValidateUpdate(t *testing.T) {
 		"a": "b",
 		"sigma.ali/instance-group": "g1",
 	}
-	err = handler.Validate(admission.NewAttributesRecord(&pod, &oldPod, api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, api.Resource("pods").WithVersion("version"), "", admission.Update, nil))
+	err = handler.Validate(admission.NewAttributesRecord(&pod, &oldPod, api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, api.Resource("pods").WithVersion("version"), "", admission.Update, false, nil))
 	if err != nil {
 		t.Fatal("must not expected error")
 	}
@@ -174,7 +174,7 @@ func TestValidateUpdate(t *testing.T) {
 		"sigma.alibaba-inc.com/app-unit": "g1",
 	}
 	expectedError = `pods "123" is forbidden: labels sigma.alibaba-inc.com/app-unit can not update`
-	err = handler.Validate(admission.NewAttributesRecord(&pod, &oldPod, api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, api.Resource("pods").WithVersion("version"), "", admission.Update, nil))
+	err = handler.Validate(admission.NewAttributesRecord(&pod, &oldPod, api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, api.Resource("pods").WithVersion("version"), "", admission.Update, false, nil))
 	if err == nil {
 		t.Error("missing expected error")
 	}
@@ -229,7 +229,7 @@ func TestOtherResources(t *testing.T) {
 	for _, tc := range tests {
 		handler := &Armory{}
 
-		err := handler.Admit(admission.NewAttributesRecord(tc.object, nil, api.Kind(tc.kind).WithVersion("version"), namespace, name, api.Resource(tc.resource).WithVersion("version"), tc.subresource, admission.Create, nil))
+		err := handler.Admit(admission.NewAttributesRecord(tc.object, nil, api.Kind(tc.kind).WithVersion("version"), namespace, name, api.Resource(tc.resource).WithVersion("version"), tc.subresource, admission.Create, false, nil))
 
 		if tc.expectError {
 			if err == nil {
@@ -243,7 +243,7 @@ func TestOtherResources(t *testing.T) {
 			continue
 		}
 
-		err = handler.Validate(admission.NewAttributesRecord(tc.object, nil, api.Kind(tc.kind).WithVersion("version"), namespace, name, api.Resource(tc.resource).WithVersion("version"), tc.subresource, admission.Create, nil))
+		err = handler.Validate(admission.NewAttributesRecord(tc.object, nil, api.Kind(tc.kind).WithVersion("version"), namespace, name, api.Resource(tc.resource).WithVersion("version"), tc.subresource, admission.Create, false, nil))
 		if tc.expectError {
 			if err == nil {
 				t.Errorf("%s: unexpected nil error", tc.name)
@@ -282,7 +282,7 @@ func TestAdmissionError(t *testing.T) {
 		},
 	}
 	expectedError := `pods "123" is forbidden: labels sigma.ali/app-name, sigma.ali/site must be set`
-	err := handler.Validate(admission.NewAttributesRecord(&pod, &oldPod, api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, api.Resource("pods").WithVersion("version"), "", admission.Create, nil))
+	err := handler.Validate(admission.NewAttributesRecord(&pod, &oldPod, api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, api.Resource("pods").WithVersion("version"), "", admission.Create, false, nil))
 	if err == nil {
 		t.Errorf("missing expected error")
 	}
@@ -291,7 +291,7 @@ func TestAdmissionError(t *testing.T) {
 	}
 
 	expectedError = `Armory Admission only handles Create or Update event`
-	err = handler.Validate(admission.NewAttributesRecord(&pod, &oldPod, api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, api.Resource("pods").WithVersion("version"), "", admission.Delete, nil))
+	err = handler.Validate(admission.NewAttributesRecord(&pod, &oldPod, api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, api.Resource("pods").WithVersion("version"), "", admission.Delete, false, nil))
 	if err == nil {
 		t.Errorf("missing expected error")
 	}
@@ -300,7 +300,7 @@ func TestAdmissionError(t *testing.T) {
 	}
 
 	expectedError = `Armory Admission only handles Create or Update event`
-	err = handler.Admit(admission.NewAttributesRecord(&pod, &oldPod, api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, api.Resource("pods").WithVersion("version"), "", admission.Delete, nil))
+	err = handler.Admit(admission.NewAttributesRecord(&pod, &oldPod, api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, api.Resource("pods").WithVersion("version"), "", admission.Delete, false, nil))
 	if err == nil {
 		t.Errorf("missing expected error")
 	}
@@ -309,7 +309,7 @@ func TestAdmissionError(t *testing.T) {
 	}
 
 	expectedError = `Resource was marked with kind Pod but was unable to be converted`
-	err = handler.Validate(admission.NewAttributesRecord(&extensions.Deployment{}, &extensions.Deployment{}, api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, api.Resource("pods").WithVersion("version"), "", admission.Create, nil))
+	err = handler.Validate(admission.NewAttributesRecord(&extensions.Deployment{}, &extensions.Deployment{}, api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, api.Resource("pods").WithVersion("version"), "", admission.Create, false, nil))
 	if err == nil {
 		t.Errorf("missing expected error")
 	}
@@ -323,7 +323,7 @@ func TestAdmissionError(t *testing.T) {
 		sigmaapi.LabelSite:    "site0",
 	}
 	expectedError = `Resource was marked with kind Pod but was unable to be converted`
-	err = handler.Validate(admission.NewAttributesRecord(&pod, &extensions.Deployment{}, api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, api.Resource("pods").WithVersion("version"), "", admission.Update, nil))
+	err = handler.Validate(admission.NewAttributesRecord(&pod, &extensions.Deployment{}, api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, api.Resource("pods").WithVersion("version"), "", admission.Update, false, nil))
 	if err == nil {
 		t.Fatalf("missing expected error: %s", expectedError)
 	}

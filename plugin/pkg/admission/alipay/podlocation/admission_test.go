@@ -124,7 +124,7 @@ func TestAdmit(t *testing.T) {
 			op = admission.Update
 		}
 
-		a := admission.NewAttributesRecord(pod, old, core.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, core.Resource("pods").WithVersion("version"), "", op, nil)
+		a := admission.NewAttributesRecord(pod, old, core.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, core.Resource("pods").WithVersion("version"), "", op, false, nil)
 		err = handler.Admit(a)
 
 		if test.admit {
@@ -180,7 +180,7 @@ func TestOtherResources(t *testing.T) {
 	for _, tc := range tests {
 		handler := NewAlipayPodLocation()
 
-		err := handler.Admit(admission.NewAttributesRecord(tc.object, nil, core.Kind(tc.kind).WithVersion("version"), namespace, name, core.Resource(tc.resource).WithVersion("version"), tc.subresource, admission.Create, nil))
+		err := handler.Admit(admission.NewAttributesRecord(tc.object, nil, core.Kind(tc.kind).WithVersion("version"), namespace, name, core.Resource(tc.resource).WithVersion("version"), tc.subresource, admission.Create, false, nil))
 
 		if tc.expectError {
 			if err == nil {

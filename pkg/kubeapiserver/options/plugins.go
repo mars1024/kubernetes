@@ -59,15 +59,15 @@ import (
 	validatingwebhook "k8s.io/apiserver/pkg/admission/plugin/webhook/validating"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/kubernetes/pkg/features"
-	"k8s.io/kubernetes/plugin/pkg/admission/namespacedelete"
+	"k8s.io/kubernetes/plugin/pkg/admission/alipodinjectionpostschedule"
+	"k8s.io/kubernetes/plugin/pkg/admission/alipodinjectionpreschedule"
+	"k8s.io/kubernetes/plugin/pkg/admission/alipodlifecyclehook"
 	"k8s.io/kubernetes/plugin/pkg/admission/armory"
 	"k8s.io/kubernetes/plugin/pkg/admission/containerstate"
+	"k8s.io/kubernetes/plugin/pkg/admission/namespacedelete"
 	"k8s.io/kubernetes/plugin/pkg/admission/networkstatus"
-	"k8s.io/kubernetes/plugin/pkg/admission/sigmascheduling"
-	"k8s.io/kubernetes/plugin/pkg/admission/alipodlifecyclehook"
-	"k8s.io/kubernetes/plugin/pkg/admission/alipodinjectionpreschedule"
-	"k8s.io/kubernetes/plugin/pkg/admission/alipodinjectionpostschedule"
 	"k8s.io/kubernetes/plugin/pkg/admission/poddeletionflowcontrol"
+	"k8s.io/kubernetes/plugin/pkg/admission/sigmascheduling"
 
 	alipaycmdb "k8s.io/kubernetes/plugin/pkg/admission/alipay/cmdb"
 	alipayinclusterkube "k8s.io/kubernetes/plugin/pkg/admission/alipay/inclusterkube"
@@ -112,12 +112,13 @@ var AllOrderedPlugins = []string{
 
 	namespacedelete.PluginName,              // NamespaceDelete
 
-	armory.PluginName,                      // Armory
-	containerstate.PluginName,              // ContainerState
-	networkstatus.PluginName,               // NetworkStatus
+	armory.PluginName,                     // Armory
+	containerstate.PluginName,             // ContainerState
+	networkstatus.PluginName,              // NetworkStatus
+	alipodlifecyclehook.PluginName,        // AliPodLifeTimeHook
+	alipodinjectionpreschedule.PluginName, // AliPodInjectionPreSchedule
+	// sigmascheduling must admit after alipodinjectionpreschedule
 	sigmascheduling.PluginName,             // SigmaScheduling
-	alipodlifecyclehook.PluginName,         // AliPodLifeTimeHook
-	alipodinjectionpreschedule.PluginName,  // AliPodInjectionPreSchedule
 	alipodinjectionpostschedule.PluginName, // AliPodInjectionPostSchedule
 	poddeletionflowcontrol.PluginName,      // PodDeletionFlowControl
 
@@ -163,9 +164,9 @@ func RegisterAllAdmissionPlugins(plugins *admission.Plugins) {
 	armory.Register(plugins)
 	containerstate.Register(plugins)
 	networkstatus.Register(plugins)
-	sigmascheduling.Register(plugins)
 	alipodlifecyclehook.Register(plugins)
 	alipodinjectionpreschedule.Register(plugins)
+	sigmascheduling.Register(plugins)
 	alipodinjectionpostschedule.Register(plugins)
 	poddeletionflowcontrol.Register(plugins)
 

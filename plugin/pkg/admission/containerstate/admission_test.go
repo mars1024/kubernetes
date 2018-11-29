@@ -86,7 +86,7 @@ func TestAdmission(t *testing.T) {
 	}
 	err = handler.Validate(admission.NewAttributesRecord(&pod, nil,
 		api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name,
-		api.Resource("pods").WithVersion("version"), "", admission.Update, nil))
+		api.Resource("pods").WithVersion("version"), "", admission.Update, false, nil))
 	if err != nil {
 		t.Errorf("Unexpected error returned from admission handler: %s", err)
 	}
@@ -103,7 +103,7 @@ func TestAdmission(t *testing.T) {
 	expectedError := `pods "123" is forbidden: annotation pod.beta1.sigma.ali/update-status can not UPDATE due to container named name3 not found`
 	err = handler.Validate(admission.NewAttributesRecord(&pod, nil,
 		api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name,
-		api.Resource("pods").WithVersion("version"), "", admission.Update, nil))
+		api.Resource("pods").WithVersion("version"), "", admission.Update, false, nil))
 	if err == nil {
 		t.Fatal("missing expected error")
 	}
@@ -118,7 +118,7 @@ func TestAdmission(t *testing.T) {
 	expectedError = `pods "123" is forbidden: annotation pod.beta1.sigma.ali/update-status can not UPDATE due to container state wrong is not valid`
 	err = handler.Validate(admission.NewAttributesRecord(&pod, nil,
 		api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name,
-		api.Resource("pods").WithVersion("version"), "", admission.Update, nil))
+		api.Resource("pods").WithVersion("version"), "", admission.Update, false, nil))
 	if err == nil {
 		t.Fatal("missing expected error")
 	}
@@ -157,7 +157,7 @@ func TestAdmission(t *testing.T) {
 	expectedError = `pods "123" is forbidden: annotation pod.beta1.sigma.ali/update-status can not UPDATE due to container named name3 not found`
 	err = handler.Validate(admission.NewAttributesRecord(&pod, nil,
 		api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name,
-		api.Resource("pods").WithVersion("version"), "", admission.Update, nil))
+		api.Resource("pods").WithVersion("version"), "", admission.Update, false, nil))
 	if err == nil {
 		t.Fatal("missing expected error")
 	}
@@ -184,7 +184,7 @@ func TestAdmission(t *testing.T) {
 	expectedError = `pods "123" is forbidden: annotation pod.beta1.sigma.ali/update-status can not UPDATE due to container state wrong is not valid`
 	err = handler.Validate(admission.NewAttributesRecord(&pod, nil,
 		api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name,
-		api.Resource("pods").WithVersion("version"), "", admission.Update, nil))
+		api.Resource("pods").WithVersion("version"), "", admission.Update, false, nil))
 	if err == nil {
 		t.Fatal("missing expected error")
 	}
@@ -211,7 +211,7 @@ func TestAdmission(t *testing.T) {
 	expectedError = `pods "123" is forbidden: annotation pod.beta1.sigma.ali/update-status can not UPDATE due to container state wrong is not valid`
 	err = handler.Validate(admission.NewAttributesRecord(&pod, nil,
 		api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name,
-		api.Resource("pods").WithVersion("version"), "", admission.Update, nil))
+		api.Resource("pods").WithVersion("version"), "", admission.Update, false, nil))
 	if err == nil {
 		t.Fatal("missing expected error")
 	}
@@ -223,7 +223,7 @@ func TestAdmission(t *testing.T) {
 	pod.ObjectMeta.Annotations = nil
 	err = handler.Validate(admission.NewAttributesRecord(&pod, nil,
 		api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name,
-		api.Resource("pods").WithVersion("version"), "", admission.Update, nil))
+		api.Resource("pods").WithVersion("version"), "", admission.Update, false, nil))
 	if err != nil {
 		t.Errorf("Unexpected error returned from admission handler: %s", err)
 	}
@@ -270,7 +270,7 @@ func TestAdmission(t *testing.T) {
 	expectedError = `pods "123" is forbidden: annotation pod.beta1.sigma.ali/update-status can not UPDATE due to pod restart policy is never, so container can't be started`
 	err = handler.Validate(admission.NewAttributesRecord(&pod, nil,
 		api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name,
-		api.Resource("pods").WithVersion("version"), "", admission.Update, nil))
+		api.Resource("pods").WithVersion("version"), "", admission.Update, false, nil))
 	if err == nil {
 		t.Fatal("missing expected error")
 	}
@@ -325,7 +325,7 @@ func TestOtherResources(t *testing.T) {
 	for _, tc := range tests {
 		handler := &ContainerState{}
 
-		err := handler.Validate(admission.NewAttributesRecord(tc.object, nil, api.Kind(tc.kind).WithVersion("version"), namespace, name, api.Resource(tc.resource).WithVersion("version"), tc.subresource, admission.Update, nil))
+		err := handler.Validate(admission.NewAttributesRecord(tc.object, nil, api.Kind(tc.kind).WithVersion("version"), namespace, name, api.Resource(tc.resource).WithVersion("version"), tc.subresource, admission.Update, false, nil))
 
 		if tc.expectError {
 			if err == nil {
@@ -385,7 +385,7 @@ func TestAdmissionError(t *testing.T) {
 	expectedError := "pods \"123\" is forbidden: annotation pod.beta1.sigma.ali/update-status can not UPDATE due to json unmarshal error `invalid character 'e' looking for beginning of value`"
 	err = handler.Validate(admission.NewAttributesRecord(&pod, nil,
 		api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name,
-		api.Resource("pods").WithVersion("version"), "", admission.Update, nil))
+		api.Resource("pods").WithVersion("version"), "", admission.Update, false, nil))
 	if err == nil {
 		t.Fatal("missing expected error")
 	}
@@ -398,7 +398,7 @@ func TestAdmissionError(t *testing.T) {
 	expectedError = "pods \"123\" is forbidden: annotation pod.beta1.sigma.ali/update-status can not UPDATE due to json unmarshal error `invalid character 'e' looking for beginning of value`"
 	err = handler.Validate(admission.NewAttributesRecord(&pod, nil,
 		api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name,
-		api.Resource("pods").WithVersion("version"), "", admission.Update, nil))
+		api.Resource("pods").WithVersion("version"), "", admission.Update, false, nil))
 	if err == nil {
 		t.Fatal("missing expected error")
 	}
@@ -409,7 +409,7 @@ func TestAdmissionError(t *testing.T) {
 	expectedError = `ContainerState Admission only handles Update event`
 	err = handler.Validate(admission.NewAttributesRecord(&pod, nil,
 		api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name,
-		api.Resource("pods").WithVersion("version"), "", admission.Delete, nil))
+		api.Resource("pods").WithVersion("version"), "", admission.Delete, false, nil))
 	if err == nil {
 		t.Fatal("missing expected error")
 	}

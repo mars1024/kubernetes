@@ -21,7 +21,7 @@ func TestAdmissionNonNilAttributeZero(t *testing.T) {
 	err := handler.Validate(admission.NewAttributesRecord(nil, nil,
 		api.Kind("Namespace").WithVersion("version"), "namespace", "name",
 		api.Resource("resource").WithVersion("version"), "subresource",
-		admission.Delete, nil))
+		admission.Delete, false, nil))
 	if err != nil {
 		t.Errorf("Unexpected error returned from AuditDelete admission controller: %v", err)
 	}
@@ -33,7 +33,7 @@ func TestAdmissionNonNilAttributeOne(t *testing.T) {
 	err := handler.Validate(admission.NewAttributesRecord(nil, nil,
 		api.Kind("Namespace").WithVersion("version"), "namespace", "name",
 		api.Resource("resource").WithVersion("version"), "subresource",
-		admission.Delete, nil))
+		admission.Delete, false, nil))
 	if err == nil {
 		t.Errorf("Unexpected admit with one pod in the requested namespace")
 	}

@@ -167,7 +167,11 @@ func Run(c *config.CompletedConfig, stopCh <-chan struct{}) error {
 		}
 	}
 
+	leaderMetric.WithLabelValues().Set(0)
+
 	run := func(ctx context.Context) {
+		leaderMetric.WithLabelValues().Set(1)
+
 		rootClientBuilder := controller.SimpleControllerClientBuilder{
 			ClientConfig: c.Kubeconfig,
 		}

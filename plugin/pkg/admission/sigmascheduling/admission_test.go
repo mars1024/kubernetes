@@ -201,7 +201,7 @@ func TestAdmitPod(t *testing.T) {
 
 		err := handler.Admit(admission.NewAttributesRecord(&tc.pod, nil,
 			api.Kind("Pod").WithVersion("version"), tc.pod.Namespace, tc.pod.Name,
-			api.Resource("pods").WithVersion("version"), "", admission.Create, nil))
+			api.Resource("pods").WithVersion("version"), "", admission.Create, false, nil))
 		if tc.err != "" {
 			if err != nil {
 				if !strings.Contains(err.Error(), tc.err) {
@@ -869,7 +869,7 @@ func TestValidatePod(t *testing.T) {
 
 		err := handler.Validate(admission.NewAttributesRecord(&tc.pod, tc.oldPod,
 			api.Kind("Pod").WithVersion("version"), tc.pod.Namespace, tc.pod.Name,
-			api.Resource("pods").WithVersion("version"), "", tc.action, nil))
+			api.Resource("pods").WithVersion("version"), "", tc.action, false, nil))
 		if tc.err != "" {
 			if err != nil {
 				if !strings.Contains(err.Error(), tc.err) {
@@ -1340,7 +1340,7 @@ func TestValidatePodAffinity(t *testing.T) {
 
 		err := handler.Validate(admission.NewAttributesRecord(&tc.pod, tc.oldPod,
 			api.Kind("Pod").WithVersion("version"), tc.pod.Namespace, tc.pod.Name,
-			api.Resource("pods").WithVersion("version"), "", tc.action, nil))
+			api.Resource("pods").WithVersion("version"), "", tc.action, false, nil))
 		if tc.err != "" {
 			if err != nil {
 				if !strings.Contains(err.Error(), tc.err) {
@@ -1440,7 +1440,7 @@ func TestValidateNodeCreate(t *testing.T) {
 
 		err := handler.Validate(admission.NewAttributesRecord(&tc.node, nil,
 			api.Kind("Node").WithVersion("version"), tc.node.Namespace, tc.node.Name,
-			api.Resource("nodes").WithVersion("version"), "", admission.Create, nil))
+			api.Resource("nodes").WithVersion("version"), "", admission.Create, false, nil))
 		if tc.err != "" {
 			if err != nil {
 				if !strings.Contains(err.Error(), tc.err) {
@@ -1574,7 +1574,7 @@ func TestValidateNodeUpdate(t *testing.T) {
 
 		err := handler.Validate(admission.NewAttributesRecord(&tc.node, &tc.oldNode,
 			api.Kind("Node").WithVersion("version"), tc.node.Namespace, tc.node.Name,
-			api.Resource("nodes").WithVersion("version"), "", admission.Update, nil))
+			api.Resource("nodes").WithVersion("version"), "", admission.Update, false, nil))
 		if tc.err != "" {
 			if err != nil {
 				if !strings.Contains(err.Error(), tc.err) {
@@ -1644,7 +1644,7 @@ func TestOtherResources(t *testing.T) {
 	for _, tc := range tests {
 		handler := &SigmaScheduling{}
 
-		err := handler.Validate(admission.NewAttributesRecord(tc.object, nil, api.Kind(tc.kind).WithVersion("version"), namespace, name, api.Resource(tc.resource).WithVersion("version"), tc.subresource, admission.Update, nil))
+		err := handler.Validate(admission.NewAttributesRecord(tc.object, nil, api.Kind(tc.kind).WithVersion("version"), namespace, name, api.Resource(tc.resource).WithVersion("version"), tc.subresource, admission.Update, false, nil))
 
 		if tc.expectError {
 			if err == nil {
@@ -1658,7 +1658,7 @@ func TestOtherResources(t *testing.T) {
 			continue
 		}
 
-		err = handler.Admit(admission.NewAttributesRecord(tc.object, nil, api.Kind(tc.kind).WithVersion("version"), namespace, name, api.Resource(tc.resource).WithVersion("version"), tc.subresource, admission.Update, nil))
+		err = handler.Admit(admission.NewAttributesRecord(tc.object, nil, api.Kind(tc.kind).WithVersion("version"), namespace, name, api.Resource(tc.resource).WithVersion("version"), tc.subresource, admission.Update, false, nil))
 
 		if tc.expectError {
 			if err == nil {

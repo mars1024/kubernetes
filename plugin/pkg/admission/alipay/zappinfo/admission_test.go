@@ -78,7 +78,7 @@ func TestAdmit(t *testing.T) {
 			op = admission.Update
 		}
 
-		a := admission.NewAttributesRecord(new, old, core.Kind("Pod").WithVersion("version"), new.Namespace, new.Name, core.Resource("pods").WithVersion("version"), "", op, nil)
+		a := admission.NewAttributesRecord(new, old, core.Kind("Pod").WithVersion("version"), new.Namespace, new.Name, core.Resource("pods").WithVersion("version"), "", op, false, nil)
 		err := handler.Admit(a)
 
 		if test.admit {
@@ -180,7 +180,7 @@ func TestValidate(t *testing.T) {
 			op = admission.Update
 		}
 
-		a := admission.NewAttributesRecord(new, old, core.Kind("Pod").WithVersion("version"), new.Namespace, new.Name, core.Resource("pods").WithVersion("version"), "", op, nil)
+		a := admission.NewAttributesRecord(new, old, core.Kind("Pod").WithVersion("version"), new.Namespace, new.Name, core.Resource("pods").WithVersion("version"), "", op, false, nil)
 		err := handler.Validate(a)
 
 		if test.admit {
@@ -229,7 +229,7 @@ func TestOtherResources(t *testing.T) {
 	for _, tc := range tests {
 		handler := NewAlipayZAppInfo()
 
-		err := handler.Admit(admission.NewAttributesRecord(tc.object, nil, core.Kind(tc.kind).WithVersion("version"), pod.Namespace, pod.Name, core.Resource(tc.resource).WithVersion("version"), tc.subresource, admission.Create, nil))
+		err := handler.Admit(admission.NewAttributesRecord(tc.object, nil, core.Kind(tc.kind).WithVersion("version"), pod.Namespace, pod.Name, core.Resource(tc.resource).WithVersion("version"), tc.subresource, admission.Create, false, nil))
 
 		if tc.expectError {
 			if err == nil {
@@ -243,7 +243,7 @@ func TestOtherResources(t *testing.T) {
 			continue
 		}
 
-		err = handler.Validate(admission.NewAttributesRecord(tc.object, nil, core.Kind(tc.kind).WithVersion("version"), pod.Namespace, pod.Name, core.Resource(tc.resource).WithVersion("version"), tc.subresource, admission.Create, nil))
+		err = handler.Validate(admission.NewAttributesRecord(tc.object, nil, core.Kind(tc.kind).WithVersion("version"), pod.Namespace, pod.Name, core.Resource(tc.resource).WithVersion("version"), tc.subresource, admission.Create, false, nil))
 
 		if tc.expectError {
 			if err == nil {

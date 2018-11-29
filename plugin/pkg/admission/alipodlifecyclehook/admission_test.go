@@ -13,7 +13,6 @@ import (
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/fake"
 	informers "k8s.io/kubernetes/pkg/client/informers/informers_generated/internalversion"
 	"k8s.io/kubernetes/pkg/controller"
-	"k8s.io/kubernetes/staging/src/k8s.io/apiserver/pkg/authentication/user"
 )
 
 func TestRegister(t *testing.T) {
@@ -110,7 +109,8 @@ func TestAdmit(t *testing.T) {
 		api.Resource("pods").WithVersion("version"),
 		"",
 		admission.Update,
-		&user.DefaultInfo{},
+		false,
+		nil,
 	))
 
 	if !reflect.DeepEqual(pod0.Spec, expectPod.Spec) {
@@ -125,7 +125,8 @@ func TestAdmit(t *testing.T) {
 		api.Resource("pods").WithVersion("version"),
 		"",
 		admission.Create,
-		&user.DefaultInfo{},
+		false,
+		nil,
 	))
 
 	if !reflect.DeepEqual(pod0.Spec, expectPod.Spec) {
@@ -181,7 +182,8 @@ func TestAdmit(t *testing.T) {
 		api.Resource("pods").WithVersion("version"),
 		"",
 		admission.Create,
-		&user.DefaultInfo{},
+		false,
+		nil,
 	))
 
 	if !reflect.DeepEqual(pod1.Spec, expectPod.Spec) {
@@ -264,7 +266,8 @@ func TestAdmit(t *testing.T) {
 		api.Resource("pods").WithVersion("version"),
 		"",
 		admission.Update,
-		&user.DefaultInfo{},
+		false,
+		nil,
 	))
 
 	secrets, err := clientset.Core().Secrets("ns01").List(metav1.ListOptions{})
@@ -278,6 +281,9 @@ func TestAdmit(t *testing.T) {
 	}
 	if string(secrets.Items[0].Data[api.DockerConfigJsonKey]) != `{"auths":{"reg.docker.alibaba-inc.com":{"username":"aone","password":"abcd","email":"sigma.ali","auth":"YW9uZTphYmNk"}}}` {
 		t.Fatalf("secret %s not equal to expected", api.DockerConfigJsonKey)
+	}
+	if secrets.Items[0].Labels["usage"] != LabelSecretRegistryUsage {
+		t.Fatalf("secret has no label usage=%s ", LabelSecretRegistryUsage)
 	}
 	expectPod.Spec.ImagePullSecrets = []api.LocalObjectReference{
 		{Name: secrets.Items[0].Name},

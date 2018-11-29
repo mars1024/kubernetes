@@ -53,6 +53,7 @@ func validatePod(namespace string) error {
 		api.Resource("pods").WithVersion("version"),
 		"",
 		kadmission.Delete,
+		false,
 		&user.DefaultInfo{},
 	)
 

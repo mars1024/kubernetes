@@ -6598,6 +6598,47 @@ func TestValidatePod(t *testing.T) {
 				},
 			),
 		},
+		{ // Serialized node affinity requirements.
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "123",
+				Namespace: "ns",
+			},
+			Spec: validPodSpec(
+				// TODO: Uncomment and move this block and move inside NodeAffinity once
+				// RequiredDuringSchedulingRequiredDuringExecution is implemented
+				//		RequiredDuringSchedulingRequiredDuringExecution: &core.NodeSelector{
+				//			NodeSelectorTerms: []core.NodeSelectorTerm{
+				//				{
+				//					MatchExpressions: []core.NodeSelectorRequirement{
+				//						{
+				//							Key: "key1",
+				//							Operator: core.NodeSelectorOpExists
+				//						},
+				//					},
+				//				},
+				//			},
+				//		},
+				&core.Affinity{
+					NodeAffinity: &core.NodeAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &core.NodeSelector{
+							NodeSelectorTerms: []core.NodeSelectorTerm{
+								{
+									MatchExpressions: []core.NodeSelectorRequirement{},
+								},
+							},
+						},
+						PreferredDuringSchedulingIgnoredDuringExecution: []core.PreferredSchedulingTerm{
+							{
+								Weight: 10,
+								Preference: core.NodeSelectorTerm{
+									MatchExpressions: []core.NodeSelectorRequirement{},
+								},
+							},
+						},
+					},
+				},
+			),
+		},
 		{ // Serialized pod affinity in affinity requirements in annotations.
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "123",
@@ -7153,22 +7194,6 @@ func TestValidatePod(t *testing.T) {
 									},
 								},
 							},
-						},
-					},
-				}),
-			},
-		},
-		"invalid requiredDuringSchedulingIgnoredDuringExecution node selector, nodeSelectorTerms must have at least one term": {
-			expectedError: "spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms",
-			spec: core.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "123",
-					Namespace: "ns",
-				},
-				Spec: validPodSpec(&core.Affinity{
-					NodeAffinity: &core.NodeAffinity{
-						RequiredDuringSchedulingIgnoredDuringExecution: &core.NodeSelector{
-							NodeSelectorTerms: []core.NodeSelectorTerm{},
 						},
 					},
 				}),
@@ -7797,6 +7822,8 @@ func TestValidatePodUpdate(t *testing.T) {
 		grace  = int64(30)
 		grace2 = int64(31)
 	)
+	shareProcessNamespace := true
+	unshareProcessNamespace := false
 
 	tests := []struct {
 		new  core.Pod
@@ -8218,7 +8245,7 @@ func TestValidatePodUpdate(t *testing.T) {
 					},
 				},
 			},
-			"spec: Forbidden: pod updates may not change fields",
+			"",
 			"cpu change",
 		},
 		{
@@ -8248,7 +8275,7 @@ func TestValidatePodUpdate(t *testing.T) {
 					},
 				},
 			},
-			"spec: Forbidden: pod updates may not change fields",
+			"",
 			"port change",
 		},
 		{
@@ -8465,7 +8492,7 @@ func TestValidatePodUpdate(t *testing.T) {
 					PriorityClassName: "foo-priority",
 				},
 			},
-			"spec: Forbidden: pod updates",
+			"",
 			"changed priority class name",
 		},
 		{
@@ -8487,8 +8514,202 @@ func TestValidatePodUpdate(t *testing.T) {
 					PriorityClassName: "foo-priority",
 				},
 			},
-			"spec: Forbidden: pod updates",
+			"",
 			"removed priority class name",
+		},
+		{
+			core.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "foo",
+				},
+				Spec: core.PodSpec{
+					NodeName: "node1",
+					NodeSelector: map[string]string{
+						"a": "b",
+					},
+				},
+			},
+			core.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "foo",
+				},
+				Spec: core.PodSpec{
+					NodeName: "node1",
+					NodeSelector: map[string]string{
+						"c": "d",
+					},
+				},
+			},
+			"spec: Forbidden: pod updates may not change fields",
+			"update nodeSelector",
+		},
+		{
+			core.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "foo",
+				},
+				Spec: core.PodSpec{
+					NodeName: "node1",
+				},
+			},
+			core.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "foo",
+				},
+				Spec: core.PodSpec{
+					NodeName: "node2",
+				},
+			},
+			"spec: Forbidden: pod updates may not change fields",
+			"update nodeName",
+		},
+		{
+			core.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "foo",
+				},
+				Spec: core.PodSpec{
+					NodeName: "node1",
+					Hostname: "hn1",
+				},
+			},
+			core.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "foo",
+				},
+				Spec: core.PodSpec{
+					NodeName: "node1",
+					Hostname: "hn2",
+				},
+			},
+			"spec: Forbidden: pod updates may not change fields",
+			"update hostname",
+		},
+		{
+			core.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "foo",
+				},
+				Spec: core.PodSpec{
+					NodeName:  "node1",
+					Subdomain: "sd1",
+				},
+			},
+			core.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "foo",
+				},
+				Spec: core.PodSpec{
+					NodeName:  "node1",
+					Subdomain: "sd2",
+				},
+			},
+			"spec: Forbidden: pod updates may not change fields",
+			"update subdomain",
+		},
+		{
+			core.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "foo",
+				},
+				Spec: core.PodSpec{
+					NodeName:  "node1",
+					SecurityContext: &core.PodSecurityContext{
+						HostNetwork: true,
+					},
+				},
+			},
+			core.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "foo",
+				},
+				Spec: core.PodSpec{
+					NodeName:  "node1",
+					SecurityContext: &core.PodSecurityContext{
+						HostNetwork: false,
+					},
+				},
+			},
+			"spec: Forbidden: pod updates may not change fields",
+			"update hostNetwork",
+		},
+		{
+			core.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "foo",
+				},
+				Spec: core.PodSpec{
+					NodeName:  "node1",
+					SecurityContext: &core.PodSecurityContext{
+						HostIPC: true,
+					},
+				},
+			},
+			core.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "foo",
+				},
+				Spec: core.PodSpec{
+					NodeName:  "node1",
+					SecurityContext: &core.PodSecurityContext{
+						HostIPC: false,
+					},
+				},
+			},
+			"spec: Forbidden: pod updates may not change fields",
+			"update hostIPC",
+		},
+		{
+			core.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "foo",
+				},
+				Spec: core.PodSpec{
+					NodeName:  "node1",
+					SecurityContext: &core.PodSecurityContext{
+						HostPID: true,
+					},
+				},
+			},
+			core.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "foo",
+				},
+				Spec: core.PodSpec{
+					NodeName:  "node1",
+					SecurityContext: &core.PodSecurityContext{
+						HostPID: false,
+					},
+				},
+			},
+			"spec: Forbidden: pod updates may not change fields",
+			"update hostIPC",
+		},
+		{
+			core.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "foo",
+				},
+				Spec: core.PodSpec{
+					NodeName:  "node1",
+					SecurityContext: &core.PodSecurityContext{
+						ShareProcessNamespace: &shareProcessNamespace,
+					},
+				},
+			},
+			core.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "foo",
+				},
+				Spec: core.PodSpec{
+					NodeName:  "node1",
+					SecurityContext: &core.PodSecurityContext{
+						ShareProcessNamespace: &unshareProcessNamespace,
+					},
+				},
+			},
+			"spec: Forbidden: pod updates may not change fields",
+			"update shareProcessNamespace",
 		},
 	}
 

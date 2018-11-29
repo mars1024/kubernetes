@@ -3508,10 +3508,11 @@ func ValidatePodUpdate(newPod, oldPod *core.Pod) field.ErrorList {
 	allErrs = append(allErrs, ValidatePodSpecificAnnotationUpdates(newPod, oldPod, fldPath.Child("annotations"))...)
 	specPath := field.NewPath("spec")
 
-	// validate updateable fields:
-	// 1.  spec.containers[*].image
-	// 2.  spec.initContainers[*].image
-	// 3.  spec.activeDeadlineSeconds
+	// validate updatable fields:
+	// 1.  spec.containers[*].* except name
+	// 2.  spec.initContainers[*].* except name
+	// 3.  spec.* except nodeSelector, nodeName, hostname, subdomain, securityContext.hostNetwork, securityContext.hostIPC, securityContext.hostPID, securityContext.shareProcessNamespace, Qos
+
 
 	containerErrs, stop := ValidateContainerUpdates(newPod.Spec.Containers, oldPod.Spec.Containers, specPath.Child("containers"))
 	allErrs = append(allErrs, containerErrs...)
@@ -3544,31 +3545,61 @@ func ValidatePodUpdate(newPod, oldPod *core.Pod) field.ErrorList {
 		allErrs = append(allErrs, field.Invalid(specPath.Child("activeDeadlineSeconds"), newPod.Spec.ActiveDeadlineSeconds, "must not update from a positive integer to nil value"))
 	}
 
+	containerErrs, stop = ValidateContainerQoSUpdate(newPod, oldPod, specPath.Child("containers"))
+	allErrs = append(allErrs, containerErrs...)
+	if stop {
+		return allErrs
+	}
+
 	// handle updateable fields by munging those fields prior to deep equal comparison.
-	mungedPod := *newPod
-	// munge spec.containers[*].image
+	mungedPod := *oldPod
+
+	// munge spec.containers[*].name
 	var newContainers []core.Container
 	for ix, container := range mungedPod.Spec.Containers {
-		container.Image = oldPod.Spec.Containers[ix].Image
+		container.Name = newPod.Spec.Containers[ix].Name
 		newContainers = append(newContainers, container)
 	}
 	mungedPod.Spec.Containers = newContainers
-	// munge spec.initContainers[*].image
+
+	// munge spec.initContainers[*].name
 	var newInitContainers []core.Container
 	for ix, container := range mungedPod.Spec.InitContainers {
-		container.Image = oldPod.Spec.InitContainers[ix].Image
+		container.Name = newPod.Spec.InitContainers[ix].Name
 		newInitContainers = append(newInitContainers, container)
 	}
 	mungedPod.Spec.InitContainers = newInitContainers
-	// munge spec.activeDeadlineSeconds
-	mungedPod.Spec.ActiveDeadlineSeconds = nil
-	if oldPod.Spec.ActiveDeadlineSeconds != nil {
-		activeDeadlineSeconds := *oldPod.Spec.ActiveDeadlineSeconds
-		mungedPod.Spec.ActiveDeadlineSeconds = &activeDeadlineSeconds
+
+	// munge spec.nodeSelector
+	mungedPod.Spec.NodeSelector = newPod.Spec.NodeSelector
+
+	// munge spec.nodeName
+	mungedPod.Spec.NodeName = newPod.Spec.NodeName
+
+	// munge spec.hostname
+	mungedPod.Spec.Hostname = newPod.Spec.Hostname
+
+	// munge spec.subdomain
+	mungedPod.Spec.Subdomain = newPod.Spec.Subdomain
+
+	if mungedPod.Spec.SecurityContext != nil && newPod.Spec.SecurityContext != nil {
+		sc := *mungedPod.Spec.SecurityContext
+		mungedPod.Spec.SecurityContext = &sc
+
+		mungedPod.Spec.SecurityContext.HostNetwork = newPod.Spec.SecurityContext.HostNetwork
+		mungedPod.Spec.SecurityContext.HostIPC = newPod.Spec.SecurityContext.HostIPC
+		mungedPod.Spec.SecurityContext.HostPID = newPod.Spec.SecurityContext.HostPID
+		if newPod.Spec.SecurityContext.ShareProcessNamespace != nil {
+			share := *newPod.Spec.SecurityContext.ShareProcessNamespace
+			mungedPod.Spec.SecurityContext.ShareProcessNamespace = &share
+		} else {
+			mungedPod.Spec.SecurityContext.ShareProcessNamespace = nil
+		}
+	} else { // mungedPod.Spec.SecurityContext == nil
+		mungedPod.Spec.SecurityContext = newPod.Spec.SecurityContext
 	}
 
-	// Allow only additions to tolerations updates.
-	mungedPod.Spec.Tolerations = oldPod.Spec.Tolerations
+
 	allErrs = append(allErrs, validateOnlyAddedTolerations(newPod.Spec.Tolerations, oldPod.Spec.Tolerations, specPath.Child("tolerations"))...)
 
 	if !apiequality.Semantic.DeepEqual(mungedPod.Spec, oldPod.Spec) {

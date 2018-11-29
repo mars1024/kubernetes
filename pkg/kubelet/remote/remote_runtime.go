@@ -36,6 +36,7 @@ import (
 type RemoteRuntimeService struct {
 	timeout       time.Duration
 	runtimeClient runtimeapi.RuntimeServiceClient
+	volumeClient  runtimeapi.VolumeServiceClient
 }
 
 // NewRemoteRuntimeService creates a new internalapi.RuntimeService.
@@ -57,6 +58,7 @@ func NewRemoteRuntimeService(endpoint string, connectionTimeout time.Duration) (
 	return &RemoteRuntimeService{
 		timeout:       connectionTimeout,
 		runtimeClient: runtimeapi.NewRuntimeServiceClient(conn),
+		volumeClient:  runtimeapi.NewVolumeServiceClient(conn),
 	}, nil
 }
 
@@ -260,7 +262,13 @@ func (r *RemoteRuntimeService) RemoveContainer(containerID string) error {
 	ctx, cancel := getContextWithTimeout(r.timeout)
 	defer cancel()
 
-	_, err := r.runtimeClient.RemoveContainer(ctx, &runtimeapi.RemoveContainerRequest{
+	containerStatus, err := r.ContainerStatus(containerID)
+	if err != nil {
+		glog.V(0).Infof("Ignore remove container %s from runtime: %v", containerID, err)
+		return nil
+	}
+
+	_, err = r.runtimeClient.RemoveContainer(ctx, &runtimeapi.RemoveContainerRequest{
 		ContainerId: containerID,
 	})
 	if err != nil {
@@ -268,7 +276,51 @@ func (r *RemoteRuntimeService) RemoveContainer(containerID string) error {
 		return err
 	}
 
+	// Remove container's anonymous volumes
+	mounts := containerStatus.Mounts
+	for _, mount := range mounts {
+		if mount.Name != "" {
+			r.removeVolumeWithCheck(mount.Name)
+		}
+	}
+
 	return nil
+}
+
+// removeVolumeWithCheck remove a volume if there is no container using it.
+// It doesn't guarantee the volume is deleted successfully
+func (r *RemoteRuntimeService) removeVolumeWithCheck(volumeName string) {
+	ctx, cancel := getContextWithTimeout(r.timeout)
+	defer cancel()
+	containers, err := r.ListContainers(&runtimeapi.ContainerFilter{})
+	if err != nil {
+		glog.Errorf("Ignore remove volume %s: can't list containers from runtime with error: %v", volumeName, err)
+		return
+	}
+
+	for _, container := range containers {
+		containerStatus, err := r.ContainerStatus(container.Id)
+		if err != nil {
+			glog.Errorf("Ignore remove volume %s: can't get the status of container %v", volumeName, container.Id)
+			return
+		}
+		for _, mount := range containerStatus.Mounts {
+			if volumeName == mount.Name {
+				glog.V(2).Infof("Ignore remove volume %s: it is used by other container", volumeName)
+				return
+			}
+		}
+	}
+
+	_, err = r.volumeClient.RemoveVolume(ctx, &runtimeapi.RemoveVolumeRequest{
+		VolumeName: volumeName,
+	})
+	if err != nil {
+		glog.V(0).Infof("Remove volume %s from runtime failed: %v", volumeName, err)
+		return
+	}
+
+	glog.V(0).Infof("Volume %s is removed successfully", volumeName)
 }
 
 // ListContainers lists containers by filters.
@@ -336,7 +388,11 @@ func (r *RemoteRuntimeService) ExecSync(containerID string, cmd []string, timeou
 	if timeout != 0 {
 		// Use timeout + default timeout (2 minutes) as timeout to leave some time for
 		// the runtime to do cleanup.
-		ctx, cancel = getContextWithTimeout(r.timeout + timeout)
+		// If timeout is less than rpc request timeout, set timeout as rpc request timeout.
+		if timeout < r.timeout {
+			timeout = r.timeout
+		}
+		ctx, cancel = getContextWithTimeout(timeout)
 	} else {
 		ctx, cancel = getContextWithCancel()
 	}

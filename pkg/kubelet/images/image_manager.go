@@ -21,11 +21,13 @@ import (
 
 	dockerref "github.com/docker/distribution/reference"
 	"github.com/golang/glog"
+	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	"k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/flowcontrol"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	"k8s.io/kubernetes/pkg/kubelet/events"
+	"k8s.io/kubernetes/pkg/kubelet/util/annotation"
 	"k8s.io/kubernetes/pkg/util/parsers"
 )
 
@@ -127,6 +129,11 @@ func (m *imageManager) EnsureImageExists(pod *v1.Pod, container *v1.Container, p
 	}
 	m.logIt(ref, v1.EventTypeNormal, events.PullingImage, logPrefix, fmt.Sprintf("pulling image %q", container.Image), glog.Info)
 	pullChan := make(chan pullResult)
+
+	// Get timeout value from pod's annotation.
+	timeout := annotation.GetTimeoutSecondsFromPodAnnotation(pod, container.Name, sigmak8sapi.ImagePullTimeoutSeconds)
+	spec.Timeout = int64(timeout)
+
 	m.puller.pullImage(spec, pullSecrets, pullChan)
 	imagePullResult := <-pullChan
 	if imagePullResult.err != nil {

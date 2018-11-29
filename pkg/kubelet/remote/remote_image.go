@@ -101,7 +101,14 @@ func (r *RemoteImageService) ImageStatus(image *runtimeapi.ImageSpec) (*runtimea
 
 // PullImage pulls an image with authentication config.
 func (r *RemoteImageService) PullImage(image *runtimeapi.ImageSpec, auth *runtimeapi.AuthConfig) (string, error) {
-	ctx, cancel := getContextWithCancel()
+	timeout := image.Timeout
+	// Default timeout is 15 minute
+	defaultTimeout := 15 * 60
+	if timeout == 0 {
+		timeout = int64(defaultTimeout)
+	}
+	// Use timeout context to support image pull timeout feature.
+	ctx, cancel := getContextWithTimeout(time.Duration(timeout) * time.Second)
 	defer cancel()
 
 	resp, err := r.imageClient.PullImage(ctx, &runtimeapi.PullImageRequest{

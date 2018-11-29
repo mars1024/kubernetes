@@ -52,7 +52,7 @@ var once sync.Once
 var ctrdClient containerdClient = nil
 
 const (
-	address           = "/var/run/containerd/containerd.sock"
+	address           = "/run/containerd/containerd.sock"
 	maxBackoffDelay   = 3 * time.Second
 	connectionTimeout = 2 * time.Second
 )

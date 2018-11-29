@@ -63,9 +63,10 @@ install -p -D -m 0644 rpm/conf/sigma-slave-clean-log.cron $RPM_BUILD_ROOT/etc/cr
 %pre
 
 %post
+set -x
 /etc/kubernetes/clean-certificate.sh /etc/kubernetes > /tmp/sigma-slave-error.log 2>&1
 /etc/kubernetes/modify_start_up_params.sh /etc/systemd/system/sigma-slave.service.d/sigma-slave-start.conf /etc/cron.d/sigma-slave-clean-log > /tmp/sigma-slave-error.log  2>&1
-
+set +x
 systemctl daemon-reload
 systemctl enable sigma-slave
 systemctl restart sigma-slave

@@ -80,7 +80,7 @@ func TestAdmission(t *testing.T) {
 
 	err = handler.Validate(admission.NewAttributesRecord(&pod, &oldPod,
 		api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name,
-		api.Resource("pods").WithVersion("version"), "", admission.Create, nil))
+		api.Resource("pods").WithVersion("version"), "", admission.Create, false, nil))
 	if err == nil {
 		t.Fatal("missing expected error")
 	}
@@ -91,7 +91,7 @@ func TestAdmission(t *testing.T) {
 	// nil Annotations
 	err = handler.Validate(admission.NewAttributesRecord(&pod, &oldPod,
 		api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name,
-		api.Resource("pods").WithVersion("version"), "", admission.Update, nil))
+		api.Resource("pods").WithVersion("version"), "", admission.Update, false, nil))
 	if err != nil {
 		t.Errorf("Unexpected error returned from admission handler: %s", err)
 	}
@@ -102,7 +102,7 @@ func TestAdmission(t *testing.T) {
 
 	err = handler.Validate(admission.NewAttributesRecord(&pod, &oldPod,
 		api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name,
-		api.Resource("pods").WithVersion("version"), "", admission.Update, nil))
+		api.Resource("pods").WithVersion("version"), "", admission.Update, false, nil))
 	if err != nil {
 		t.Errorf("Unexpected error returned from admission handler: %s", err)
 	}
@@ -112,7 +112,7 @@ func TestAdmission(t *testing.T) {
 
 	err = handler.Validate(admission.NewAttributesRecord(&pod, &oldPod,
 		api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name,
-		api.Resource("pods").WithVersion("version"), "", admission.Update, nil))
+		api.Resource("pods").WithVersion("version"), "", admission.Update, false, nil))
 	if err != nil {
 		t.Errorf("Unexpected error returned from admission handler: %s", err)
 	}
@@ -123,7 +123,7 @@ func TestAdmission(t *testing.T) {
 
 	err = handler.Validate(admission.NewAttributesRecord(&pod, &oldPod,
 		api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name,
-		api.Resource("pods").WithVersion("version"), "", admission.Update, nil))
+		api.Resource("pods").WithVersion("version"), "", admission.Update, false, nil))
 	if err != nil {
 		t.Errorf("Unexpected error returned from admission handler: %s", err)
 	}
@@ -137,7 +137,7 @@ func TestAdmission(t *testing.T) {
 
 	err = handler.Validate(admission.NewAttributesRecord(&pod, &oldPod,
 		api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name,
-		api.Resource("pods").WithVersion("version"), "", admission.Update, nil))
+		api.Resource("pods").WithVersion("version"), "", admission.Update, false, nil))
 	if err != nil {
 		t.Errorf("Unexpected error returned from admission handler: %s", err)
 	}
@@ -151,7 +151,7 @@ func TestAdmission(t *testing.T) {
 
 	err = handler.Validate(admission.NewAttributesRecord(&pod, &oldPod,
 		api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name,
-		api.Resource("pods").WithVersion("version"), "", admission.Update, nil))
+		api.Resource("pods").WithVersion("version"), "", admission.Update, false, nil))
 	if err == nil {
 		t.Errorf("expected error is missing")
 	}
@@ -163,7 +163,7 @@ func TestAdmission(t *testing.T) {
 	expectedError = `pods "123" is forbidden: annotation pod.beta1.sigma.ali/network-status can not update`
 	err = handler.Validate(admission.NewAttributesRecord(&pod, &oldPod,
 		api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name,
-		api.Resource("pods").WithVersion("version"), "", admission.Update, nil))
+		api.Resource("pods").WithVersion("version"), "", admission.Update, false, nil))
 	if err != nil {
 		t.Fatalf("Unexpected expected error: %v", err)
 	}
@@ -180,7 +180,7 @@ func TestAdmission(t *testing.T) {
 	expectedError = `pods "123" is forbidden: annotation pod.beta1.sigma.ali/network-status can not update due to invalid field: vlan must be between 1 and 4095, inclusive, invalid field: networkPrefixLen must be between 0 and 32, inclusive, invalid field: gateway must be a valid IP address, (e.g. 10.9.8.7), invalid field: macAddress address 02:42:64:58:17:19x: invalid MAC address`
 	err = handler.Validate(admission.NewAttributesRecord(&pod, &oldPod,
 		api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name,
-		api.Resource("pods").WithVersion("version"), "", admission.Update, nil))
+		api.Resource("pods").WithVersion("version"), "", admission.Update, false, nil))
 	if err == nil {
 		t.Fatal("missing expected error")
 	}
@@ -200,7 +200,7 @@ func TestAdmission(t *testing.T) {
 	expectedError = `pods "123" is forbidden: annotation pod.beta1.sigma.ali/network-status can not update due to invalid field: vlan strconv.Atoi: parsing "vlan0": invalid syntax, invalid field: networkPrefixLen must be between 0 and 32, inclusive, invalid field: gateway must be a valid IP address, (e.g. 10.9.8.7), invalid field: macAddress address 02:42:64:58:17:19x: invalid MAC address`
 	err = handler.Validate(admission.NewAttributesRecord(&pod, &oldPod,
 		api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name,
-		api.Resource("pods").WithVersion("version"), "", admission.Update, nil))
+		api.Resource("pods").WithVersion("version"), "", admission.Update, false, nil))
 	if err == nil {
 		t.Fatal("missing expected error")
 	}
@@ -229,7 +229,7 @@ func TestAdmission(t *testing.T) {
 	expectedError = "pods \"123\" is forbidden: annotation pod.beta1.sigma.ali/network-status can not update due to invalid field: vlan must be between 1 and 4095, inclusive, invalid field: networkPrefixLen must be between 0 and 32, inclusive, invalid field: gateway must be a valid IP address, (e.g. 10.9.8.7), invalid field: macAddress address 02:42:64:58:17:19x: invalid MAC address"
 	err = handler.Validate(admission.NewAttributesRecord(&pod, &oldPod,
 		api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name,
-		api.Resource("pods").WithVersion("version"), "", admission.Update, nil))
+		api.Resource("pods").WithVersion("version"), "", admission.Update, false, nil))
 	if err == nil {
 		t.Fatal("missing expected error")
 	}
@@ -248,7 +248,7 @@ func TestAdmission(t *testing.T) {
 	oldPod.ObjectMeta.Annotations[sigmaapi.AnnotationPodNetworkStats] = string(statusBytes)
 	err = handler.Validate(admission.NewAttributesRecord(&pod, &oldPod,
 		api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name,
-		api.Resource("pods").WithVersion("version"), "", admission.Update, nil))
+		api.Resource("pods").WithVersion("version"), "", admission.Update, false, nil))
 	if err != nil {
 		t.Fatalf("uexpected error: %v", err)
 	}
@@ -265,7 +265,7 @@ func TestAdmission(t *testing.T) {
 	oldPod.ObjectMeta.Annotations[sigmaapi.AnnotationPodNetworkStats] = string(statusBytes)
 	err = handler.Validate(admission.NewAttributesRecord(&pod, &oldPod,
 		api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name,
-		api.Resource("pods").WithVersion("version"), "", admission.Update, nil))
+		api.Resource("pods").WithVersion("version"), "", admission.Update, false, nil))
 	if err != nil {
 		t.Fatalf("uexpected error: %v", err)
 	}
@@ -317,7 +317,7 @@ func TestOtherResources(t *testing.T) {
 	for _, tc := range tests {
 		handler := &NetworkStatus{}
 
-		err := handler.Validate(admission.NewAttributesRecord(tc.object, nil, api.Kind(tc.kind).WithVersion("version"), namespace, name, api.Resource(tc.resource).WithVersion("version"), tc.subresource, admission.Update, nil))
+		err := handler.Validate(admission.NewAttributesRecord(tc.object, nil, api.Kind(tc.kind).WithVersion("version"), namespace, name, api.Resource(tc.resource).WithVersion("version"), tc.subresource, admission.Update, false, nil))
 
 		if tc.expectError {
 			if err == nil {
@@ -367,7 +367,7 @@ func TestAdmissionError(t *testing.T) {
 	expectedError := `Resource was marked with kind Pod but was unable to be converted`
 	err = handler.Validate(admission.NewAttributesRecord(&pod, &extensions.Deployment{},
 		api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name,
-		api.Resource("pods").WithVersion("version"), "", admission.Update, nil))
+		api.Resource("pods").WithVersion("version"), "", admission.Update, false, nil))
 	if err == nil {
 		t.Fatal("missing expected error")
 	}
@@ -380,7 +380,7 @@ func TestAdmissionError(t *testing.T) {
 	expectedError = "pods \"123\" is forbidden: annotation pod.beta1.sigma.ali/network-status can not update due to json unmarshal error `invalid character 'e' looking for beginning of value`"
 	err = handler.Validate(admission.NewAttributesRecord(&pod, &oldPod,
 		api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name,
-		api.Resource("pods").WithVersion("version"), "", admission.Update, nil))
+		api.Resource("pods").WithVersion("version"), "", admission.Update, false, nil))
 	if err == nil {
 		t.Fatal("missing expected error")
 	}
@@ -393,7 +393,7 @@ func TestAdmissionError(t *testing.T) {
 	expectedError = "pods \"123\" is forbidden: annotation pod.beta1.sigma.ali/network-status can not update due to json unmarshal error `invalid character 'e' looking for beginning of value`"
 	err = handler.Validate(admission.NewAttributesRecord(&pod, &oldPod,
 		api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name,
-		api.Resource("pods").WithVersion("version"), "", admission.Update, nil))
+		api.Resource("pods").WithVersion("version"), "", admission.Update, false, nil))
 	if err == nil {
 		t.Fatal("missing expected error")
 	}

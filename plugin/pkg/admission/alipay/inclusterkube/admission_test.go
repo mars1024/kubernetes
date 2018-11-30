@@ -131,7 +131,7 @@ func TestAdmit(t *testing.T) {
 			test.initpod(pod)
 		}
 
-		a := admission.NewAttributesRecord(pod, nil, core.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, core.Resource("pods").WithVersion("version"), "", admission.Create, nil)
+		a := admission.NewAttributesRecord(pod, nil, core.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, core.Resource("pods").WithVersion("version"), "", admission.Create, false, nil)
 		err = handler.Admit(a)
 
 		if test.admit {
@@ -190,7 +190,7 @@ func TestOtherResources(t *testing.T) {
 	for _, tc := range tests {
 		handler := NewAlipayInClusterKubernetes()
 
-		err := handler.Admit(admission.NewAttributesRecord(tc.object, nil, core.Kind(tc.kind).WithVersion("version"), namespace, name, core.Resource(tc.resource).WithVersion("version"), tc.subresource, admission.Create, nil))
+		err := handler.Admit(admission.NewAttributesRecord(tc.object, nil, core.Kind(tc.kind).WithVersion("version"), namespace, name, core.Resource(tc.resource).WithVersion("version"), tc.subresource, admission.Create, false, nil))
 
 		if tc.expectError {
 			if err == nil {

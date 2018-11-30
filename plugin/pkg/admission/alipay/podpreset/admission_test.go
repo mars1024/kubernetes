@@ -110,7 +110,7 @@ func TestValidate(t *testing.T) {
 			test.initfunc(cm)
 		}
 
-		a := admission.NewAttributesRecord(cm, nil, core.Kind("ConfigMap").WithVersion("version"), cm.Namespace, cm.Name, core.Resource("configmaps").WithVersion("version"), "", admission.Create, nil)
+		a := admission.NewAttributesRecord(cm, nil, core.Kind("ConfigMap").WithVersion("version"), cm.Namespace, cm.Name, core.Resource("configmaps").WithVersion("version"), "", admission.Create, false, nil)
 		err = handler.Validate(a)
 
 		if test.admit {
@@ -216,7 +216,7 @@ func TestAdmit(t *testing.T) {
 			test.initfunc(pod, test.cm)
 		}
 
-		a := admission.NewAttributesRecord(pod, nil, core.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, core.Resource("pods").WithVersion("version"), "", admission.Create, nil)
+		a := admission.NewAttributesRecord(pod, nil, core.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, core.Resource("pods").WithVersion("version"), "", admission.Create, false, nil)
 		err = handler.Admit(a)
 
 		if test.admit {
@@ -266,7 +266,7 @@ func TestAdmitOtherResources(t *testing.T) {
 	for _, tc := range tests {
 		handler := NewAlipayPodPreset()
 
-		err := handler.Admit(admission.NewAttributesRecord(tc.object, nil, core.Kind(tc.kind).WithVersion("version"), pod.Namespace, pod.Name, core.Resource(tc.resource).WithVersion("version"), tc.subresource, admission.Create, nil))
+		err := handler.Admit(admission.NewAttributesRecord(tc.object, nil, core.Kind(tc.kind).WithVersion("version"), pod.Namespace, pod.Name, core.Resource(tc.resource).WithVersion("version"), tc.subresource, admission.Create, false, nil))
 
 		if tc.expectError {
 			if err == nil {
@@ -316,7 +316,7 @@ func TestValidateOtherResources(t *testing.T) {
 	for _, tc := range tests {
 		handler := NewAlipayPodPreset()
 
-		err := handler.Validate(admission.NewAttributesRecord(tc.object, nil, core.Kind(tc.kind).WithVersion("version"), cm.Namespace, cm.Name, core.Resource(tc.resource).WithVersion("version"), tc.subresource, admission.Create, nil))
+		err := handler.Validate(admission.NewAttributesRecord(tc.object, nil, core.Kind(tc.kind).WithVersion("version"), cm.Namespace, cm.Name, core.Resource(tc.resource).WithVersion("version"), tc.subresource, admission.Create, false, nil))
 
 		if tc.expectError {
 			if err == nil {

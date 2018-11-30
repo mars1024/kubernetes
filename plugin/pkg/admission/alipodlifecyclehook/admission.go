@@ -27,10 +27,11 @@ const (
 	ConfigName = "sigma-alipodlifecyclehook-config"
 
 	AnnotationDisableLifeCycleHook = "pod.beta1.sigma.ali/disable-lifecycle-hook"
+	LabelSecretRegistryUsage       = "ali-registry-user-account"
 )
 
 var (
-	secretRegistryUserAccountSelector, _ = labels.NewRequirement("usage", selection.In, []string{"ali-registry-user-account"})
+	secretRegistryUserAccountSelector, _ = labels.NewRequirement("usage", selection.In, []string{LabelSecretRegistryUsage})
 )
 
 // aliPodLifeCycleHook is an implementation of admission.Interface.
@@ -293,6 +294,7 @@ func generateSecretDockerRegistryCfg(generateName, username, password, server, e
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: generateName,
 			Labels: map[string]string{
+				"usage":    LabelSecretRegistryUsage,
 				"username": username,
 				"server":   server,
 			},

@@ -28,7 +28,7 @@ func TestValidateCreate(t *testing.T) {
 	handler := NewAlipayCMDB()
 	pod := newPod()
 
-	err := handler.Validate(admission.NewAttributesRecord(pod, nil, core.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, core.Resource("pods").WithVersion("version"), "", admission.Create, nil))
+	err := handler.Validate(admission.NewAttributesRecord(pod, nil, core.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, core.Resource("pods").WithVersion("version"), "", admission.Create, false, nil))
 	if err != nil {
 		t.Errorf("Validate pod %#v error: %v", pod, err)
 	}
@@ -40,7 +40,7 @@ func TestValidateCreateError(t *testing.T) {
 	for _, k := range mustRequiredCMDBLabels {
 		pod := newPod()
 		delete(pod.Labels, k)
-		err := handler.Validate(admission.NewAttributesRecord(pod, nil, core.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, core.Resource("pods").WithVersion("version"), "", admission.Create, nil))
+		err := handler.Validate(admission.NewAttributesRecord(pod, nil, core.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, core.Resource("pods").WithVersion("version"), "", admission.Create, false, nil))
 		if err == nil {
 			t.Errorf("Validate pod %#v expect an error", pod)
 		} else {
@@ -55,7 +55,7 @@ func TestValidateUpdate(t *testing.T) {
 	handler := NewAlipayCMDB()
 	pod := newPod()
 
-	err := handler.Validate(admission.NewAttributesRecord(pod, pod, core.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, core.Resource("pods").WithVersion("version"), "", admission.Update, nil))
+	err := handler.Validate(admission.NewAttributesRecord(pod, pod, core.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, core.Resource("pods").WithVersion("version"), "", admission.Update, false, nil))
 	if err != nil {
 		t.Errorf("Validate pod %#v update error: %v", pod, err)
 	}
@@ -68,7 +68,7 @@ func TestValidateUpdateError(t *testing.T) {
 	for _, k := range mustRequiredCMDBLabels {
 		pod := old.DeepCopy()
 		pod.Labels[k] = old.Labels[k] + " "
-		err := handler.Validate(admission.NewAttributesRecord(pod, old, core.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, core.Resource("pods").WithVersion("version"), "", admission.Update, nil))
+		err := handler.Validate(admission.NewAttributesRecord(pod, old, core.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, core.Resource("pods").WithVersion("version"), "", admission.Update, false, nil))
 		if err == nil {
 			t.Errorf("Validate pod %#v expect an error", pod)
 		} else {
@@ -141,7 +141,7 @@ func TestOtherResources(t *testing.T) {
 	for _, tc := range tests {
 		handler := NewAlipayCMDB()
 
-		err := handler.Validate(admission.NewAttributesRecord(tc.object, nil, core.Kind(tc.kind).WithVersion("version"), namespace, name, core.Resource(tc.resource).WithVersion("version"), tc.subresource, admission.Create, nil))
+		err := handler.Validate(admission.NewAttributesRecord(tc.object, nil, core.Kind(tc.kind).WithVersion("version"), namespace, name, core.Resource(tc.resource).WithVersion("version"), tc.subresource, admission.Create, false, nil))
 
 		if tc.expectError {
 			if err == nil {

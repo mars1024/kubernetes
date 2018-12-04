@@ -432,6 +432,14 @@ type podActions struct {
 	// ContainersToStartBecausePause keeps a map of containers in paused state.
 	// Paused container is in running state without doing PostStartHook.
 	ContainersToStartBecausePause map[kubecontainer.ContainerID]containerOperationInfo
+	// ContainersToSuspend keeps a map of containers that need to be suspended (e.g. docker pause), note that
+	// the key is the container ID of the container, while
+	// the value contains necessary information to update a container.
+	ContainersToSuspend map[kubecontainer.ContainerID]containerOperationInfo
+	// ContainersToUnsuspend keeps a map of containers that need to be unsuspended (e.g. docker unpause), note that
+	// the key is the container ID of the container, while
+	// the value contains necessary information to update a container.
+	ContainersToUnsuspend map[kubecontainer.ContainerID]containerOperationInfo
 }
 
 // podSandboxChanged checks whether the spec of the pod is changed and returns
@@ -576,6 +584,8 @@ func (m *kubeGenericRuntimeManager) computePodActions(pod *v1.Pod, podStatus *ku
 		ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
 		ContainersToUpgrade:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
 		ContainersToStartBecausePause:       make(map[kubecontainer.ContainerID]containerOperationInfo),
+		ContainersToSuspend:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
+		ContainersToUnsuspend:               make(map[kubecontainer.ContainerID]containerOperationInfo),
 	}
 
 	// If we need to (re-)create the pod sandbox, everything will need to be
@@ -655,10 +665,36 @@ func (m *kubeGenericRuntimeManager) computePodActions(pod *v1.Pod, podStatus *ku
 		containerStatus := podStatus.FindContainerStatusByName(container.Name)
 		containerPreviousResult := sigmautil.GetStatusFromAnnotation(pod, container.Name)
 
+		// suspend the container
+		if containerPreviousResult != nil && haveContainerStateAnnotation && wantsContainerToDesiredState(containerDesiredState, container.Name, sigmak8sapi.ContainerStateSuspended) {
+			if containerPreviousResult.CurrentState != sigmak8sapi.ContainerStateSuspended {
+				changes.ContainersToSuspend[containerStatus.ID] = containerOperationInfo{
+					name:      containerStatus.Name,
+					container: &pod.Spec.Containers[idx],
+					message:   fmt.Sprintf("container %s needs to be suspended", container.Name),
+				}
+				continue
+			}
+			keepCount += 1
+			continue
+		}
+
+		// unsuspend the container
+		if containerPreviousResult != nil && haveContainerStateAnnotation && wantsContainerToDesiredState(containerDesiredState, container.Name, sigmak8sapi.ContainerStateRunning) {
+			if containerPreviousResult.CurrentState == sigmak8sapi.ContainerStateSuspended {
+				changes.ContainersToUnsuspend[containerStatus.ID] = containerOperationInfo{
+					name:      containerStatus.Name,
+					container: &pod.Spec.Containers[idx],
+					message:   fmt.Sprintf("container %s needs to be unsuspended", container.Name),
+				}
+				continue
+			}
+		}
+
 		// Pause the container.
 		// Paused container is in running state and user can debug the program in the container.
 		// TODO: Add update-status when containerStatus is nil.
-		if haveContainerStateAnnotation && isContainerPaused(containerDesiredState, container.Name) {
+		if haveContainerStateAnnotation && wantsContainerToDesiredState(containerDesiredState, container.Name, sigmak8sapi.ContainerStatePaused) {
 			if containerStatus != nil && containerStatus.State != kubecontainer.ContainerStateRunning {
 				changes.ContainersToStartBecausePause[containerStatus.ID] = containerOperationInfo{
 					name:      containerStatus.Name,
@@ -794,7 +830,8 @@ func (m *kubeGenericRuntimeManager) computePodActions(pod *v1.Pod, podStatus *ku
 
 	if keepCount == 0 && len(changes.ContainersToStart) == 0 && len(changes.ContainersToUpgrade) == 0 &&
 		len(changes.ContainersToKillBecauseDesireState) == 0 && len(changes.ContainersToStartBecauseDesireState) == 0 &&
-		len(changes.ContainersToStartBecausePause) == 0 {
+		len(changes.ContainersToStartBecausePause) == 0  && len(changes.ContainersToSuspend) == 0 &&
+		len(changes.ContainersToUnsuspend) == 0 {
 		changes.KillPod = true
 	}
 
@@ -1037,12 +1074,14 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 		len(podContainerChanges.ContainersToStartBecauseDesireState) > 0 ||
 		len(podContainerChanges.ContainersToUpgrade) > 0 ||
 		len(podContainerChanges.ContainersToUpdate) > 0 ||
-		len(podContainerChanges.ContainersToStartBecausePause) > 0 {
-		glog.V(4).Infof("pod %s containers have change about start, stop, update, upgrade, pause:%+v",
+		len(podContainerChanges.ContainersToStartBecausePause) > 0 ||
+		len(podContainerChanges.ContainersToSuspend) > 0 ||
+		len(podContainerChanges.ContainersToUnsuspend) > 0 {
+		glog.V(4).Infof("pod %s containers have change about start, stop, update, upgrade, pause, suspend, unsuspend:%+v",
 			format.Pod(pod), podContainerChanges)
 		m.SyncPodExtension(podSandboxConfig, pod, podStatus, pullSecrets, podIP, &result, podContainerChanges, backOff)
 	} else {
-		glog.V(4).Infof("pod %s containers have no change about start, stop, update, upgrade, pause", format.Pod(pod))
+		glog.V(4).Infof("pod %s containers have no change about start, stop, update, upgrade, pause, suspend, unsuspend", format.Pod(pod))
 	}
 	return
 }

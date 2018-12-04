@@ -17,9 +17,16 @@ limitations under the License.
 package remote
 
 import (
+	"strings"
+
 	"github.com/golang/glog"
 
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
+)
+
+const (
+	dockerPauseContainerError = "already paused"
+	pouchPauseContainerError  = "not running: paused"
 )
 
 // PauseContainer pauses the container.
@@ -31,6 +38,9 @@ func (r *RemoteRuntimeService) PauseContainer(containerID string) error {
 		ContainerId: containerID,
 	})
 	if err != nil {
+		if strings.Contains(err.Error(), dockerPauseContainerError) || strings.Contains(err.Error(), pouchPauseContainerError) {
+			return nil
+		}
 		glog.Errorf("PauseContainer %q from runtime service failed: %v", containerID, err)
 		return err
 	}

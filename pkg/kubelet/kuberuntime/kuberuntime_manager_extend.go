@@ -51,6 +51,10 @@ const (
 	CreateStartAndPostStartContainerSuccess = "create start and post start success"
 	// PauseContainerSuccess pause container success message
 	PauseContainerSuccess = "pause container success"
+	// SuspendContainerSuccess suspend container success message
+	SuspendContainerSuccess = "suspend container success"
+	// UnsuspendContainerSuccess unsuspend container success message
+	UnsuspendContainerSuccess = "unsuspend container success"
 )
 
 // containerOperationInfo contains necessary information about the operation to the container.
@@ -280,6 +284,58 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 			}
 		}
 	}
+
+	for containerID, containerInfo := range changes.ContainersToSuspend {
+		container := containerInfo.container
+		suspendContainerResult := kubecontainer.NewSyncResult(kubecontainer.SyncAction("SuspendContainer"), container.Name)
+		result.AddSyncResult(suspendContainerResult)
+
+		containerStatus := createContainerStatus(podStatus, sigmak8sapi.SuspendContainerAction, containerInfo.name, pod)
+
+		glog.V(4).Infof("suspend container %+v in pod %v", containerInfo.container, format.Pod(pod))
+
+		ref, err := kubecontainer.GenerateContainerRef(pod, container)
+		if err != nil {
+			glog.Errorf("Couldn't make a ref to pod %q: '%v'", format.Pod(pod), err)
+		}
+
+		if err := m.runtimeService.PauseContainer(containerID.ID); err != nil {
+			m.recorder.Eventf(ref, v1.EventTypeWarning, events.SuspendedContainer, "Failed to suspend container")
+			glog.V(0).Infof("Failed to suspend container %s in %s: %s",
+				container.Name, format.Pod(pod), err.Error())
+			m.updateContainerStateStatus(containerStatus, containerInfo.name, containerID.ID, result.StateStatus, false, err.Error())
+		} else {
+			m.recorder.Eventf(ref, v1.EventTypeNormal, events.SuspendedContainer, "Success to suspend container")
+			containerStatus.CurrentState = sigmak8sapi.ContainerStateSuspended
+			m.updateContainerStateStatus(containerStatus, containerInfo.name, containerID.ID, result.StateStatus, true, SuspendContainerSuccess)
+		}
+	}
+
+	for containerID, containerInfo := range changes.ContainersToUnsuspend {
+		container := containerInfo.container
+		unSuspendContainerResult := kubecontainer.NewSyncResult(kubecontainer.SyncAction("UnsuspendContainer"), container.Name)
+		result.AddSyncResult(unSuspendContainerResult)
+
+		containerStatus := createContainerStatus(podStatus, sigmak8sapi.UnsuspendContainerAction, containerInfo.name, pod)
+
+		glog.V(4).Infof("unsuspend container %+v in pod %v", containerInfo.container, format.Pod(pod))
+
+		ref, err := kubecontainer.GenerateContainerRef(pod, container)
+		if err != nil {
+			glog.Errorf("Couldn't make a ref to pod %q: '%v'", format.Pod(pod), err)
+		}
+
+		if err := m.runtimeService.UnpauseContainer(containerID.ID); err != nil {
+			m.recorder.Eventf(ref, v1.EventTypeWarning, events.UnsuspendedContainer, "Failed to unsuspend container")
+			glog.V(0).Infof("Failed to unsuspend container %s in %s: %s",
+				container.Name, format.Pod(pod), err.Error())
+			m.updateContainerStateStatus(containerStatus, containerInfo.name, containerID.ID, result.StateStatus, false, err.Error())
+		} else {
+			m.recorder.Eventf(ref, v1.EventTypeNormal, events.UnsuspendedContainer, "Success to unsuspend container")
+			containerStatus.CurrentState = sigmak8sapi.ContainerStateRunning
+			m.updateContainerStateStatus(containerStatus, containerInfo.name, containerID.ID, result.StateStatus, true, UnsuspendContainerSuccess)
+		}
+	}
 }
 
 // If a container is still in backoff, the function will return a brief backoff error and
@@ -483,7 +539,9 @@ func (m *kubeGenericRuntimeManager) updateContainerStateStatus(status sigmak8sap
 		status.RetryCount = 0
 	}
 
-	if status.CurrentState == sigmak8sapi.ContainerStatePaused {
+	// short circuit here, due to `ContainerStatus` did not include our customized states
+	// and we don't want to upgrade that neither to bring in some changes to current ContainerStatus implementation .
+	if status.CurrentState == sigmak8sapi.ContainerStatePaused || status.CurrentState == sigmak8sapi.ContainerStateSuspended {
 		stateStatus.Statuses[sigmak8sapi.ContainerInfo{Name: containerName}] = status
 		return
 	}
@@ -519,12 +577,13 @@ func CompareCurrentStateAndDesiredState(containerDesiredState sigmak8sapi.Contai
 	return false, ContainerDoNothing
 }
 
-func isContainerPaused(containerDesiredState sigmak8sapi.ContainerStateSpec, containerName string) bool {
+// wantsContainerToDesiredState checks whether the container is in desired states
+func wantsContainerToDesiredState(containerDesiredState sigmak8sapi.ContainerStateSpec, containerName string, cstate sigmak8sapi.ContainerState) bool {
 	for containerInfo, state := range containerDesiredState.States {
 		if !strings.EqualFold(containerInfo.Name, containerName) {
 			continue
 		}
-		return state == sigmak8sapi.ContainerStatePaused
+		return state == cstate
 	}
 	return false
 }

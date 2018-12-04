@@ -768,6 +768,8 @@ func TestComputePodActions(t *testing.T) {
 		ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
 		ContainersToUpgrade:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
 		ContainersToStartBecausePause:       make(map[kubecontainer.ContainerID]containerOperationInfo),
+		ContainersToSuspend:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
+		ContainersToUnsuspend:               make(map[kubecontainer.ContainerID]containerOperationInfo),
 	}
 
 	for desc, test := range map[string]struct {
@@ -795,6 +797,8 @@ func TestComputePodActions(t *testing.T) {
 				ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
 				ContainersToUpgrade:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
 				ContainersToStartBecausePause:       make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToSuspend:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUnsuspend:               make(map[kubecontainer.ContainerID]containerOperationInfo),
 			},
 		},
 		"restart exited containers if RestartPolicy == Always": {
@@ -817,6 +821,8 @@ func TestComputePodActions(t *testing.T) {
 				ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
 				ContainersToUpgrade:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
 				ContainersToStartBecausePause:       make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToSuspend:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUnsuspend:               make(map[kubecontainer.ContainerID]containerOperationInfo),
 			},
 		},
 		"restart failed containers if RestartPolicy == OnFailure": {
@@ -839,6 +845,8 @@ func TestComputePodActions(t *testing.T) {
 				ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
 				ContainersToUpgrade:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
 				ContainersToStartBecausePause:       make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToSuspend:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUnsuspend:               make(map[kubecontainer.ContainerID]containerOperationInfo),
 			},
 		},
 		"don't restart containers if RestartPolicy == Never": {
@@ -868,6 +876,8 @@ func TestComputePodActions(t *testing.T) {
 				ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
 				ContainersToUpgrade:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
 				ContainersToStartBecausePause:       make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToSuspend:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUnsuspend:               make(map[kubecontainer.ContainerID]containerOperationInfo),
 			},
 		},
 		"Kill pod and recreate all containers (except for the succeeded one) if the pod sandbox is dead, and RestartPolicy == OnFailure": {
@@ -888,6 +898,8 @@ func TestComputePodActions(t *testing.T) {
 				ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
 				ContainersToUpgrade:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
 				ContainersToStartBecausePause:       make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToSuspend:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUnsuspend:               make(map[kubecontainer.ContainerID]containerOperationInfo),
 			},
 		},
 		"Kill pod and recreate all containers if the PodSandbox does not have an IP": {
@@ -906,6 +918,8 @@ func TestComputePodActions(t *testing.T) {
 				ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
 				ContainersToUpgrade:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
 				ContainersToStartBecausePause:       make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToSuspend:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUnsuspend:               make(map[kubecontainer.ContainerID]containerOperationInfo),
 			},
 		},
 		"Restart the container if the container's spec changed": {
@@ -924,6 +938,8 @@ func TestComputePodActions(t *testing.T) {
 				ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
 				ContainersToUpgrade:                 getExtendActionMap(basePod, baseStatus, []int{1}),
 				ContainersToStartBecausePause:       make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToSuspend:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUnsuspend:               make(map[kubecontainer.ContainerID]containerOperationInfo),
 			},
 			// TODO: Add a test case for containers which failed the liveness
 			// check. Will need to fake the livessness check result.
@@ -945,6 +961,8 @@ func TestComputePodActions(t *testing.T) {
 				ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
 				ContainersToUpgrade:                 getExtendActionMap(basePod, baseStatus, []int{1}),
 				ContainersToStartBecausePause:       make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToSuspend:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUnsuspend:               make(map[kubecontainer.ContainerID]containerOperationInfo),
 			},
 		},
 		"Pause the container in sigma3 if the container's expect state is paused": {
@@ -966,6 +984,8 @@ func TestComputePodActions(t *testing.T) {
 				ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
 				ContainersToUpgrade:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
 				ContainersToStartBecausePause:       getExtendActionMap(basePod, baseStatus, []int{1}),
+				ContainersToSuspend:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUnsuspend:               make(map[kubecontainer.ContainerID]containerOperationInfo),
 			},
 			// TODO: Add a test case for containers which failed the liveness
 			// check. Will need to fake the livessness check result.
@@ -989,6 +1009,52 @@ func TestComputePodActions(t *testing.T) {
 				ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
 				ContainersToUpgrade:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
 				ContainersToStartBecausePause:       make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToSuspend:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUnsuspend:               make(map[kubecontainer.ContainerID]containerOperationInfo),
+			},
+		},
+		"Suspend the container in sigma3 if the container's expect state is suspended": {
+			mutatePodFn: func(pod *v1.Pod) {
+				pod.Spec.RestartPolicy = v1.RestartPolicyAlways
+				pod.Annotations[sigmak8sapi.AnnotationContainerStateSpec] = "{\"states\":{\"foo2\":\"suspended\"}}"
+				pod.Annotations[sigmak8sapi.AnnotationPodUpdateStatus] = "{\"statuses\":{\"foo2\":{\"currentState\":\"running\",\"lastState\":\"exited\"}}}"
+			},
+			mutateStatusFn: func(status *kubecontainer.PodStatus) {
+				status.ContainerStatuses[1].ExitCode = 0
+			},
+			actions: podActions{
+				SandboxID:                           baseStatus.SandboxStatuses[0].Id,
+				ContainersToKill:                    getKillMap(basePod, baseStatus, []int{}),
+				ContainersToStart:                   []int{},
+				ContainersToStartBecauseDesireState: []int{},
+				ContainersToKillBecauseDesireState:  make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUpgrade:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToStartBecausePause:       make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToSuspend:                 getExtendActionMap(basePod, baseStatus, []int{1}),
+				ContainersToUnsuspend:               make(map[kubecontainer.ContainerID]containerOperationInfo),
+			},
+		},
+		"Unsuspend the container in sigma3 if the container's expect state changes -- suspended to running": {
+			mutatePodFn: func(pod *v1.Pod) {
+				pod.Spec.RestartPolicy = v1.RestartPolicyAlways
+				pod.Annotations[sigmak8sapi.AnnotationContainerStateSpec] = "{\"states\":{\"foo2\":\"running\"}}"
+				pod.Annotations[sigmak8sapi.AnnotationPodUpdateStatus] = "{\"statuses\":{\"foo2\":{\"currentState\":\"suspended\",\"lastState\":\"running\"}}}"
+			},
+			mutateStatusFn: func(status *kubecontainer.PodStatus) {
+				status.ContainerStatuses[1].ExitCode = 0
+			},
+			actions: podActions{
+				SandboxID:                           baseStatus.SandboxStatuses[0].Id,
+				ContainersToKill:                    getKillMap(basePod, baseStatus, []int{}),
+				ContainersToStart:                   []int{},
+				ContainersToStartBecauseDesireState: []int{},
+				ContainersToKillBecauseDesireState:  make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUpgrade:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToStartBecausePause:       make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToSuspend:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUnsuspend:               getExtendActionMap(basePod, baseStatus, []int{1}),
 			},
 		},
 	} {
@@ -1048,6 +1114,8 @@ func verifyActions(t *testing.T, expected, actual *podActions, desc string) {
 	resetExtendedActionMessage(actual.ContainersToUpdate)
 	resetExtendedActionMessage(actual.ContainersToUpgrade)
 	resetExtendedActionMessage(actual.ContainersToStartBecausePause)
+	resetExtendedActionMessage(actual.ContainersToSuspend)
+	resetExtendedActionMessage(actual.ContainersToUnsuspend)
 	assert.Equal(t, expected, actual, desc)
 }
 
@@ -1067,6 +1135,8 @@ func TestComputePodActionsWithInitContainersExtension(t *testing.T) {
 		ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
 		ContainersToUpgrade:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
 		ContainersToStartBecausePause:       make(map[kubecontainer.ContainerID]containerOperationInfo),
+		ContainersToSuspend:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
+		ContainersToUnsuspend:               make(map[kubecontainer.ContainerID]containerOperationInfo),
 	}
 
 	for desc, test := range map[string]struct {
@@ -1084,6 +1154,8 @@ func TestComputePodActionsWithInitContainersExtension(t *testing.T) {
 				ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
 				ContainersToUpgrade:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
 				ContainersToStartBecausePause:       make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToSuspend:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUnsuspend:               make(map[kubecontainer.ContainerID]containerOperationInfo),
 			},
 		},
 		"initialization in progress; do nothing": {
@@ -1108,6 +1180,8 @@ func TestComputePodActionsWithInitContainersExtension(t *testing.T) {
 				ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
 				ContainersToUpgrade:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
 				ContainersToStartBecausePause:       make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToSuspend:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUnsuspend:               make(map[kubecontainer.ContainerID]containerOperationInfo),
 			},
 		},
 		"initialization failed; restart the last init container if RestartPolicy == OnFailure": {
@@ -1125,6 +1199,8 @@ func TestComputePodActionsWithInitContainersExtension(t *testing.T) {
 				ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
 				ContainersToUpgrade:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
 				ContainersToStartBecausePause:       make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToSuspend:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUnsuspend:               make(map[kubecontainer.ContainerID]containerOperationInfo),
 			},
 		},
 		"initialization failed; kill pod if RestartPolicy == Never": {
@@ -1142,6 +1218,8 @@ func TestComputePodActionsWithInitContainersExtension(t *testing.T) {
 				ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
 				ContainersToUpgrade:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
 				ContainersToStartBecausePause:       make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToSuspend:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
+				ContainersToUnsuspend:               make(map[kubecontainer.ContainerID]containerOperationInfo),
 			},
 		},
 	} {

@@ -39,6 +39,10 @@ type ContainerManager interface {
 	StopContainer(containerID string, timeout int64) error
 	// RemoveContainer removes the container.
 	RemoveContainer(containerID string) error
+	// PauseContainer pauses the container.
+	PauseContainer(containerID string) error
+	// UnpauseContainer unpauses the container.
+	UnpauseContainer(containerID string) error
 	// ListContainers lists all containers by filters.
 	ListContainers(filter *runtimeapi.ContainerFilter) ([]*runtimeapi.Container, error)
 	// ContainerStatus returns the status of the container.

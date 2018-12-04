@@ -60,6 +60,10 @@ service RuntimeService {
     // This call is idempotent, and must not return an error if the container has
     // already been removed.
     rpc RemoveContainer(RemoveContainerRequest) returns (RemoveContainerResponse) {}
+    // PauseContainer pauses the container.
+    rpc PauseContainer(PauseContainerRequest) returns (PauseContainerResponse) {}
+    // UnpauseContainer unpauses the container.
+    rpc UnpauseContainer(UnpauseContainerRequest) returns (UnpauseContainerResponse) {}
     // ListContainers lists all containers by filters.
     rpc ListContainers(ListContainersRequest) returns (ListContainersResponse) {}
     // ContainerStatus returns status of the container. If the container is not
@@ -849,6 +853,20 @@ message RemoveContainerRequest {
 }
 
 message RemoveContainerResponse {}
+
+message PauseContainerRequest {
+    // ID of the container to pause.
+    string container_id = 1;
+}
+
+message PauseContainerResponse {}
+
+message UnpauseContainerRequest {
+    // ID of the container to unpause.
+    string container_id = 1;
+}
+
+message UnpauseContainerResponse {}
 
 enum ContainerState {
     CONTAINER_CREATED = 0;

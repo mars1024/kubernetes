@@ -1,21 +1,12 @@
 package util
 
 import (
-	"encoding/json"
-	"errors"
-	"html"
-	"io/ioutil"
-	"net/http"
-	"net/url"
-	"strings"
-
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/golang/glog"
-)
-
-const (
-	namingBackend = "armory"
+	"k8s.io/kubernetes/test/sigma/util/skyline"
 )
 
 // ArmoryInfo copy from sigma-k8s-controller/pkg/util/naming/ns.go
@@ -42,61 +33,86 @@ type ArmoryQueryResult struct {
 	Data    []ArmoryInfo `json:"result"`
 }
 
-// QueryArmory query the daily armory.
-func QueryArmory(query string) ([]ArmoryInfo, error) {
-	selectRows := "[default],rack,location_in_rack,logic_region_flag,product_name,app_use_type,product_id,product_name,hw_cpu,hw_harddisk,hw_mem,hw_raid,room,sm_name,app_use_type,create_time,modify_time,parent_service_tag"
-
-	paramMap := map[string]string{
-		"_username": "zeus",
-		"key":       "iabSU71PfURu90Lz6LE5vg==",
-		"select":    selectRows,
-		"q":         query,
+// QueryArmory query skyline and covert to armory info.
+func QueryArmory(queryString string) ([]ArmoryInfo, error) {
+	if strings.Contains(queryString, "dns_ip") {
+		queryString = strings.Replace(queryString, "dns_ip", "ip", -1)
 	}
+	queryString = strings.Replace(queryString, "==", "=", -1)
 
-	// hardcoding daily armory url
-	armoryURL := "http://gapi.a.alibaba-inc.com/page/api/free/opsfreeInterface/search.htm"
-
-	values := url.Values{}
-	for k, v := range paramMap {
-		values.Set(k, v)
+	skylineManager := skyline.NewSkylineManager()
+	queryItem := &skyline.QueryItem{
+		From: "server",
+		Select: strings.Join([]string{skyline.SelectDiskSize, skyline.SelectAppUseType, skyline.SelectParentSn,
+			skyline.SelectSn, skyline.SelectIp, skyline.SelectAppGroup, skyline.SelectAppName,
+			skyline.SelectParentSn, skyline.SelectHostName, skyline.SelectAppServerState,
+			skyline.SelectSecurityDomain, skyline.SelectSite, skyline.SelectModel}, ","),
+		Condition: queryString,
+		Page:      1,
+		Num:       100,
 	}
-
-	//glog.Info("Query armory args:%v", values)
-
-	resp, err := http.PostForm(armoryURL, values)
+	result, err := skylineManager.Query(queryItem)
 	if err != nil {
 		return nil, err
 	}
-
-	defer resp.Body.Close()
-	data, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
+	if result == nil {
+		// try one more
+		time.Sleep(5 * time.Second)
+		result, err = skylineManager.Query(queryItem)
+		if err != nil {
+			return nil, err
+		}
+		if result == nil {
+			return nil, fmt.Errorf("no skyline record is found for %s", queryString)
+		}
 	}
 
-	armoryResult := &ArmoryQueryResult{}
-	if err := json.Unmarshal(data, armoryResult); err != nil {
-		return nil, err
-	}
+	armoryInfos := make([]ArmoryInfo, 0)
+	for _, item := range result.Value.ItemList {
+		armoryInfo := ArmoryInfo{}
+		val, ok := item[skyline.SelectIp]
+		if ok {
+			armoryInfo.IP = val.(string)
+		}
+		val, ok = item[skyline.SelectSn]
+		if ok {
+			armoryInfo.ServiceTag = val.(string)
+		}
+		val, ok = item[skyline.SelectHostName]
+		if ok {
+			armoryInfo.NodeName = val.(string)
+		}
+		val, ok = item[skyline.SelectAppGroup]
+		if ok {
+			armoryInfo.NodeGroup = val.(string)
+		}
+		val, ok = item[skyline.SelectParentSn]
+		if ok {
+			armoryInfo.ParentServiceTag = val.(string)
+		}
+		val, ok = item[skyline.SelectAppServerState]
+		if ok {
+			armoryInfo.State = val.(string)
+		}
+		val, ok = item[skyline.SelectSite]
+		if ok {
+			armoryInfo.Site = val.(string)
+		}
+		val, ok = item[skyline.SelectModel]
+		if ok {
+			armoryInfo.Model = val.(string)
+		}
+		val, ok = item[skyline.SelectAppName]
+		if ok {
+			armoryInfo.ProductName = val.(string)
+		}
 
-	if armoryResult.Error != "" {
-		info, _ := url.QueryUnescape(armoryResult.Message)
-		return nil, errors.New(html.UnescapeString(info))
+		armoryInfos = append(armoryInfos, armoryInfo)
 	}
-
-	//glog.Info("armoryresult :%v ", armoryResult)
-	if armoryResult.Num <= 0 {
-		return nil, nil
-	}
-
-	for _, data := range armoryResult.Data {
-		data.Site = strings.ToLower(data.Site)
-	}
-
-	return armoryResult.Data, nil
+	return armoryInfos, nil
 }
 
-// GetHostSnFromIp get the host SN from host IP.
+// GetHostSnFromHostIp get the host SN from host IP.
 func GetHostSnFromHostIp(ip string) string {
 	nsInfo, err := QueryArmory(fmt.Sprintf("dns_ip=='%v'", ip))
 	if err != nil {

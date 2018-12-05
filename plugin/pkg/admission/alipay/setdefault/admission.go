@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
@@ -17,15 +18,20 @@ import (
 )
 
 var (
-	defaultCGroupName = flag.String("default-cgroup-parent", "/sigma", "default cgroup parent for each pods")
+	defaultCGroupName = flag.String("default-cgroup-parent", defaultCGroupParent, "default cgroup parent for each pods")
 )
 
 const (
 	PluginName = "AlipaySetDefault"
 
-	customCgroupParentNamespace = "kube-system"
-	customCgroupParentName      = "custom-cgroup-parents"
-	customCgroupParentDataKey   = "custom-cgroup-parents"
+	customCGroupParentNamespace = "kube-system"
+	customCGroupParentName      = "custom-cgroup-parents"
+	customCGroupParentDataKey   = "custom-cgroup-parents"
+)
+
+const (
+	bestEffortCGroupName = "/sigma-stream"
+	defaultCGroupParent  = "/sigma"
 )
 
 type AlipaySetDefault struct {
@@ -96,18 +102,18 @@ func (c *AlipaySetDefault) Admit(a admission.Attributes) (err error) {
 		return admission.NewForbidden(a, err)
 	}
 
-	if err = setDefaultCgroupParent(pod); err != nil {
+	if err = setDefaultHostConfig(pod); err != nil {
 		return admission.NewForbidden(a, err)
 	}
 	return nil
 }
 
 func (c *AlipaySetDefault) cgroupParents() ([]string, error) {
-	cm, err := c.configMapLister.ConfigMaps(customCgroupParentNamespace).Get(customCgroupParentName)
+	cm, err := c.configMapLister.ConfigMaps(customCGroupParentNamespace).Get(customCGroupParentName)
 	if err != nil {
 		return nil, err
 	}
-	return strings.Split(cm.Data[customCgroupParentDataKey], ";"), nil
+	return strings.Split(cm.Data[customCGroupParentDataKey], ";"), nil
 }
 
 func addEnvSNToContainer(pod *core.Pod) error {
@@ -128,7 +134,7 @@ next:
 	return nil
 }
 
-func setDefaultCgroupParent(pod *core.Pod) error {
+func setDefaultHostConfig(pod *core.Pod) error {
 	allocSpec, err := podAllocSpec(pod)
 	if err != nil {
 		return err
@@ -151,11 +157,27 @@ next:
 		allocSpec.Containers = append(allocSpec.Containers, sigmak8sapi.Container{})
 	}
 
+	// 设置默认的cgroup 根节点名，这里比较tricky的是部分参数是根据设置的 cgroup parent来决定使用值.
+	// 期望能有更好的方式解决这类配置问题
+	netPriority := podNetPriority(pod)
 	for i, c := range allocSpec.Containers {
 		if len(c.HostConfig.CgroupParent) == 0 {
 			c.HostConfig.CgroupParent = *defaultCGroupName
 		}
 		allocSpec.Containers[i].HostConfig.CgroupParent = addSlashFrontIfNotExists(c.HostConfig.CgroupParent)
+
+		switch allocSpec.Containers[i].HostConfig.CgroupParent {
+		case bestEffortCGroupName:
+			allocSpec.Containers[i].HostConfig.CPUBvtWarpNs = -1
+			netPriority = 7
+		default:
+			if c.HostConfig.CPUBvtWarpNs == 0 {
+				allocSpec.Containers[i].HostConfig.CPUBvtWarpNs = 1
+			}
+			if netPriority == 0 {
+				netPriority = 5
+			}
+		}
 	}
 
 	data, err := json.Marshal(allocSpec)
@@ -163,6 +185,7 @@ next:
 		return err
 	}
 	pod.Annotations[sigmak8sapi.AnnotationPodAllocSpec] = string(data)
+	pod.Annotations[sigmak8sapi.AnnotationNetPriority] = strconv.FormatInt(netPriority, 10)
 	return nil
 }
 
@@ -202,6 +225,14 @@ func podAllocSpec(pod *core.Pod) (*sigmak8sapi.AllocSpec, error) {
 		return allocSpec, nil
 	}
 	return nil, nil
+}
+
+func podNetPriority(pod *core.Pod) int64 {
+	if v, exists := pod.Annotations[sigmak8sapi.AnnotationNetPriority]; exists {
+		i, _ := strconv.ParseInt(v, 10, 64)
+		return i
+	}
+	return 0
 }
 
 func shouldIgnore(a admission.Attributes) bool {

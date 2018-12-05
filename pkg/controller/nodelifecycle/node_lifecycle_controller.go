@@ -31,6 +31,7 @@ import (
 
 	"github.com/golang/glog"
 
+	coordv1beta1 "k8s.io/api/coordination/v1beta1"
 	"k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -39,10 +40,13 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	coordinformers "k8s.io/client-go/informers/coordination/v1beta1"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	extensionsinformers "k8s.io/client-go/informers/extensions/v1beta1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
+	coordlisters "k8s.io/client-go/listers/coordination/v1beta1"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	extensionslisters "k8s.io/client-go/listers/extensions/v1beta1"
 	"k8s.io/client-go/tools/cache"
@@ -54,6 +58,7 @@ import (
 	"k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/controller/nodelifecycle/scheduler"
 	nodeutil "k8s.io/kubernetes/pkg/controller/util/node"
+	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/scheduler/algorithm"
 	"k8s.io/kubernetes/pkg/util/metrics"
 	utilnode "k8s.io/kubernetes/pkg/util/node"
@@ -128,14 +133,15 @@ const (
 )
 
 const (
-	// The amount of time the nodecontroller should sleep between retrying NodeStatus updates
+	// The amount of time the nodecontroller should sleep between retrying node health updates
 	retrySleepTime = 20 * time.Millisecond
 )
 
-type nodeStatusData struct {
+type nodeHealthData struct {
 	probeTimestamp           metav1.Time
 	readyTransitionTimestamp metav1.Time
-	status                   v1.NodeStatus
+	status                   *v1.NodeStatus
+	lease                    *coordv1beta1.Lease
 }
 
 // Controller is the controller that manages node's life cycle.
@@ -155,8 +161,8 @@ type Controller struct {
 	computeZoneStateFunc       func(nodeConditions []*v1.NodeCondition) (int, ZoneState)
 
 	knownNodeSet map[string]*v1.Node
-	// per Node map storing last observed Status together with a local time when it was observed.
-	nodeStatusMap map[string]nodeStatusData
+	// per Node map storing last observed health together with a local time when it was observed.
+	nodeHealthMap map[string]*nodeHealthData
 
 	// Lock to access evictor workers
 	evictorLock sync.Mutex
@@ -172,6 +178,8 @@ type Controller struct {
 	daemonSetStore          extensionslisters.DaemonSetLister
 	daemonSetInformerSynced cache.InformerSynced
 
+	leaseLister                 coordlisters.LeaseLister
+	leaseInformerSynced         cache.InformerSynced
 	nodeLister                  corelisters.NodeLister
 	nodeInformerSynced          cache.InformerSynced
 	nodeExistsInCloudProvider   func(types.NodeName) (bool, error)
@@ -180,28 +188,35 @@ type Controller struct {
 	recorder record.EventRecorder
 
 	// Value controlling Controller monitoring period, i.e. how often does Controller
-	// check node status posted from kubelet. This value should be lower than nodeMonitorGracePeriod.
-	// TODO: Change node status monitor to watch based.
+	// check node health signal posted from kubelet. This value should be lower than
+	// nodeMonitorGracePeriod.
+	// TODO: Change node health monitor to watch based.
 	nodeMonitorPeriod time.Duration
 
-	// Value used if sync_nodes_status=False, only for node startup. When node
-	// is just created, e.g. cluster bootstrap or node creation, we give a longer grace period.
+	// When node is just created, e.g. cluster bootstrap or node creation, we give
+	// a longer grace period.
 	nodeStartupGracePeriod time.Duration
 
-	// Value used if sync_nodes_status=False. Controller will not proactively
-	// sync node status in this case, but will monitor node status updated from kubelet. If
-	// it doesn't receive update for this amount of time, it will start posting "NodeReady==
-	// ConditionUnknown". The amount of time before which Controller start evicting pods
-	// is controlled via flag 'pod-eviction-timeout'.
-	// Note: be cautious when changing the constant, it must work with nodeStatusUpdateFrequency
-	// in kubelet. There are several constraints:
-	// 1. nodeMonitorGracePeriod must be N times more than nodeStatusUpdateFrequency, where
-	//    N means number of retries allowed for kubelet to post node status. It is pointless
-	//    to make nodeMonitorGracePeriod be less than nodeStatusUpdateFrequency, since there
-	//    will only be fresh values from Kubelet at an interval of nodeStatusUpdateFrequency.
-	//    The constant must be less than podEvictionTimeout.
-	// 2. nodeMonitorGracePeriod can't be too large for user experience - larger value takes
-	//    longer for user to see up-to-date node status.
+	// Controller will not proactively sync node health, but will monitor node
+	// health signal updated from kubelet. There are 2 kinds of node healthiness
+	// signals: NodeStatus and NodeLease. NodeLease signal is generated only when
+	// NodeLease feature is enabled. If it doesn't receive update for this amount
+	// of time, it will start posting "NodeReady==ConditionUnknown". The amount of
+	// time before which Controller start evicting pods is controlled via flag
+	// 'pod-eviction-timeout'.
+	// Note: be cautious when changing the constant, it must work with
+	// nodeStatusUpdateFrequency in kubelet and renewInterval in NodeLease
+	// controller. The node health signal update frequency is the minimal of the
+	// two.
+	// There are several constraints:
+	// 1. nodeMonitorGracePeriod must be N times more than  the node health signal
+	//    update frequency, where N means number of retries allowed for kubelet to
+	//    post node status/lease. It is pointless to make nodeMonitorGracePeriod
+	//    be less than the node health signal update frequency, since there will
+	//    only be fresh values from Kubelet at an interval of node health signal
+	//    update frequency. The constant must be less than podEvictionTimeout.
+	// 2. nodeMonitorGracePeriod can't be too large for user experience - larger
+	//    value takes longer for user to see up-to-date node health.
 	nodeMonitorGracePeriod time.Duration
 
 	podEvictionTimeout          time.Duration
@@ -226,7 +241,9 @@ type Controller struct {
 }
 
 // NewNodeLifecycleController returns a new taint controller.
-func NewNodeLifecycleController(podInformer coreinformers.PodInformer,
+func NewNodeLifecycleController(
+	leaseInformer coordinformers.LeaseInformer,
+	podInformer coreinformers.PodInformer,
 	nodeInformer coreinformers.NodeInformer,
 	daemonSetInformer extensionsinformers.DaemonSetInformer,
 	cloud cloudprovider.Interface,
@@ -259,7 +276,7 @@ func NewNodeLifecycleController(podInformer coreinformers.PodInformer,
 		kubeClient:    kubeClient,
 		now:           metav1.Now,
 		knownNodeSet:  make(map[string]*v1.Node),
-		nodeStatusMap: make(map[string]nodeStatusData),
+		nodeHealthMap: make(map[string]*nodeHealthData),
 		nodeExistsInCloudProvider: func(nodeName types.NodeName) (bool, error) {
 			return nodeutil.ExistsInCloudProvider(cloud, nodeName)
 		},
@@ -370,6 +387,9 @@ func NewNodeLifecycleController(podInformer coreinformers.PodInformer,
 		}),
 	})
 
+	nc.leaseLister = leaseInformer.Lister()
+	nc.leaseInformerSynced = leaseInformer.Informer().HasSynced
+
 	nc.nodeLister = nodeInformer.Lister()
 	nc.nodeInformerSynced = nodeInformer.Informer().HasSynced
 
@@ -386,7 +406,7 @@ func (nc *Controller) Run(stopCh <-chan struct{}) {
 	glog.Infof("Starting node controller")
 	defer glog.Infof("Shutting down node controller")
 
-	if !controller.WaitForCacheSync("taint", stopCh, nc.nodeInformerSynced, nc.podInformerSynced, nc.daemonSetInformerSynced) {
+	if !controller.WaitForCacheSync("taint", stopCh, nc.leaseInformerSynced, nc.nodeInformerSynced, nc.podInformerSynced, nc.daemonSetInformerSynced) {
 		return
 	}
 
@@ -419,10 +439,10 @@ func (nc *Controller) Run(stopCh <-chan struct{}) {
 		go wait.Until(nc.doEvictionPass, scheduler.NodeEvictionPeriod, stopCh)
 	}
 
-	// Incorporate the results of node status pushed from kubelet to master.
+	// Incorporate the results of node health signal pushed from kubelet to master.
 	go wait.Until(func() {
-		if err := nc.monitorNodeStatus(); err != nil {
-			glog.Errorf("Error monitoring node status: %v", err)
+		if err := nc.monitorNodeHealth(); err != nil {
+			glog.Errorf("Error monitoring node health: %v", err)
 		}
 	}, nc.nodeMonitorPeriod, stopCh)
 
@@ -608,10 +628,10 @@ func (nc *Controller) doEvictionPass() {
 	}
 }
 
-// monitorNodeStatus verifies node status are constantly updated by kubelet, and if not,
-// post "NodeReady==ConditionUnknown". It also evicts all pods if node is not ready or
-// not reachable for a long period of time.
-func (nc *Controller) monitorNodeStatus() error {
+// monitorNodeHealth verifies node health are constantly updated by kubelet, and
+// if not, post "NodeReady==ConditionUnknown". It also evicts all pods if node
+// is not ready or not reachable for a long period of time.
+func (nc *Controller) monitorNodeHealth() error {
 	// We are listing nodes from local cache as we can tolerate some small delays
 	// comparing to state from etcd and there is eventual consistency anyway.
 	nodes, err := nc.nodeLister.List(labels.Everything())
@@ -648,20 +668,20 @@ func (nc *Controller) monitorNodeStatus() error {
 		var observedReadyCondition v1.NodeCondition
 		var currentReadyCondition *v1.NodeCondition
 		node := nodes[i].DeepCopy()
-		if err := wait.PollImmediate(retrySleepTime, retrySleepTime*scheduler.NodeStatusUpdateRetry, func() (bool, error) {
-			gracePeriod, observedReadyCondition, currentReadyCondition, err = nc.tryUpdateNodeStatus(node)
+		if err := wait.PollImmediate(retrySleepTime, retrySleepTime*scheduler.NodeHealthUpdateRetry, func() (bool, error) {
+			gracePeriod, observedReadyCondition, currentReadyCondition, err = nc.tryUpdateNodeHealth(node)
 			if err == nil {
 				return true, nil
 			}
 			name := node.Name
 			node, err = nc.kubeClient.CoreV1().Nodes().Get(name, metav1.GetOptions{})
 			if err != nil {
-				glog.Errorf("Failed while getting a Node to retry updating NodeStatus. Probably Node %s was deleted.", name)
+				glog.Errorf("Failed while getting a Node to retry updating node health. Probably Node %s was deleted.", name)
 				return false, err
 			}
 			return false, nil
 		}); err != nil {
-			glog.Errorf("Update status of Node '%v' from Controller error: %v. "+
+			glog.Errorf("Update health of Node '%v' from Controller error: %v. "+
 				"Skipping - no pods will be evicted.", node.Name, err)
 			continue
 		}
@@ -689,12 +709,12 @@ func (nc *Controller) monitorNodeStatus() error {
 						)
 					}
 				} else {
-					if decisionTimestamp.After(nc.nodeStatusMap[node.Name].readyTransitionTimestamp.Add(nc.podEvictionTimeout)) {
+					if decisionTimestamp.After(nc.nodeHealthMap[node.Name].readyTransitionTimestamp.Add(nc.podEvictionTimeout)) {
 						if nc.evictPods(node) {
 							glog.V(2).Infof("Node is NotReady. Adding Pods on Node %s to eviction queue: %v is later than %v + %v",
 								node.Name,
 								decisionTimestamp,
-								nc.nodeStatusMap[node.Name].readyTransitionTimestamp,
+								nc.nodeHealthMap[node.Name].readyTransitionTimestamp,
 								nc.podEvictionTimeout,
 							)
 						}
@@ -716,12 +736,12 @@ func (nc *Controller) monitorNodeStatus() error {
 						)
 					}
 				} else {
-					if decisionTimestamp.After(nc.nodeStatusMap[node.Name].probeTimestamp.Add(nc.podEvictionTimeout)) {
+					if decisionTimestamp.After(nc.nodeHealthMap[node.Name].probeTimestamp.Add(nc.podEvictionTimeout)) {
 						if nc.evictPods(node) {
 							glog.V(2).Infof("Node is unresponsive. Adding Pods on Node %s to eviction queues: %v is later than %v + %v",
 								node.Name,
 								decisionTimestamp,
-								nc.nodeStatusMap[node.Name].readyTransitionTimestamp,
+								nc.nodeHealthMap[node.Name].readyTransitionTimestamp,
 								nc.podEvictionTimeout-gracePeriod,
 							)
 						}
@@ -799,16 +819,16 @@ func (nc *Controller) monitorNodeStatus() error {
 	return nil
 }
 
-// tryUpdateNodeStatus checks a given node's conditions and tries to update it. Returns grace period to
+// tryUpdateNodeHealth checks a given node's conditions and tries to update it. Returns grace period to
 // which given node is entitled, state of current and last observed Ready Condition, and an error if it occurred.
-func (nc *Controller) tryUpdateNodeStatus(node *v1.Node) (time.Duration, v1.NodeCondition, *v1.NodeCondition, error) {
+func (nc *Controller) tryUpdateNodeHealth(node *v1.Node) (time.Duration, v1.NodeCondition, *v1.NodeCondition, error) {
 	var err error
 	var gracePeriod time.Duration
 	var observedReadyCondition v1.NodeCondition
 	_, currentReadyCondition := v1node.GetNodeCondition(&node.Status, v1.NodeReady)
 	if currentReadyCondition == nil {
 		// If ready condition is nil, then kubelet (or nodecontroller) never posted node status.
-		// A fake ready condition is created, where LastProbeTime and LastTransitionTime is set
+		// A fake ready condition is created, where LastHeartbeatTime and LastTransitionTime is set
 		// to node.CreationTimestamp to avoid handle the corner case.
 		observedReadyCondition = v1.NodeCondition{
 			Type:               v1.NodeReady,
@@ -817,10 +837,14 @@ func (nc *Controller) tryUpdateNodeStatus(node *v1.Node) (time.Duration, v1.Node
 			LastTransitionTime: node.CreationTimestamp,
 		}
 		gracePeriod = nc.nodeStartupGracePeriod
-		nc.nodeStatusMap[node.Name] = nodeStatusData{
-			status:                   node.Status,
-			probeTimestamp:           node.CreationTimestamp,
-			readyTransitionTimestamp: node.CreationTimestamp,
+		if _, found := nc.nodeHealthMap[node.Name]; found {
+			nc.nodeHealthMap[node.Name].status = &node.Status
+		} else {
+			nc.nodeHealthMap[node.Name] = &nodeHealthData{
+				status:                   &node.Status,
+				probeTimestamp:           node.CreationTimestamp,
+				readyTransitionTimestamp: node.CreationTimestamp,
+			}
 		}
 	} else {
 		// If ready condition is not nil, make a copy of it, since we may modify it in place later.
@@ -828,7 +852,7 @@ func (nc *Controller) tryUpdateNodeStatus(node *v1.Node) (time.Duration, v1.Node
 		gracePeriod = nc.nodeMonitorGracePeriod
 	}
 
-	savedNodeStatus, found := nc.nodeStatusMap[node.Name]
+	savedNodeHealth, found := nc.nodeHealthMap[node.Name]
 	// There are following cases to check:
 	// - both saved and new status have no Ready Condition set - we leave everything as it is,
 	// - saved status have no Ready Condition, but current one does - Controller was restarted with Node data already present in etcd,
@@ -844,29 +868,31 @@ func (nc *Controller) tryUpdateNodeStatus(node *v1.Node) (time.Duration, v1.Node
 	//   - currently only correct Ready State transition outside of Node Controller is marking it ready by Kubelet, we don't check
 	//     if that's the case, but it does not seem necessary.
 	var savedCondition *v1.NodeCondition
+	var savedLease *coordv1beta1.Lease
 	if found {
-		_, savedCondition = v1node.GetNodeCondition(&savedNodeStatus.status, v1.NodeReady)
+		_, savedCondition = v1node.GetNodeCondition(savedNodeHealth.status, v1.NodeReady)
+		savedLease = savedNodeHealth.lease
 	}
 	_, observedCondition := v1node.GetNodeCondition(&node.Status, v1.NodeReady)
 	if !found {
 		glog.Warningf("Missing timestamp for Node %s. Assuming now as a timestamp.", node.Name)
-		savedNodeStatus = nodeStatusData{
-			status:                   node.Status,
+		savedNodeHealth = &nodeHealthData{
+			status:                   &node.Status,
 			probeTimestamp:           nc.now(),
 			readyTransitionTimestamp: nc.now(),
 		}
 	} else if savedCondition == nil && observedCondition != nil {
 		glog.V(1).Infof("Creating timestamp entry for newly observed Node %s", node.Name)
-		savedNodeStatus = nodeStatusData{
-			status:                   node.Status,
+		savedNodeHealth = &nodeHealthData{
+			status:                   &node.Status,
 			probeTimestamp:           nc.now(),
 			readyTransitionTimestamp: nc.now(),
 		}
 	} else if savedCondition != nil && observedCondition == nil {
 		glog.Errorf("ReadyCondition was removed from Status of Node %s", node.Name)
 		// TODO: figure out what to do in this case. For now we do the same thing as above.
-		savedNodeStatus = nodeStatusData{
-			status:                   node.Status,
+		savedNodeHealth = &nodeHealthData{
+			status:                   &node.Status,
 			probeTimestamp:           nc.now(),
 			readyTransitionTimestamp: nc.now(),
 		}
@@ -878,24 +904,36 @@ func (nc *Controller) tryUpdateNodeStatus(node *v1.Node) (time.Duration, v1.Node
 			glog.V(3).Infof("ReadyCondition for Node %s transitioned from %v to %v", node.Name, savedCondition, observedCondition)
 			transitionTime = nc.now()
 		} else {
-			transitionTime = savedNodeStatus.readyTransitionTimestamp
+			transitionTime = savedNodeHealth.readyTransitionTimestamp
 		}
 		if glog.V(5) {
-			glog.V(5).Infof("Node %s ReadyCondition updated. Updating timestamp: %+v vs %+v.", node.Name, savedNodeStatus.status, node.Status)
+			glog.V(5).Infof("Node %s ReadyCondition updated. Updating timestamp: %+v vs %+v.", node.Name, savedNodeHealth.status, node.Status)
 		} else {
 			glog.V(3).Infof("Node %s ReadyCondition updated. Updating timestamp.", node.Name)
 		}
-		savedNodeStatus = nodeStatusData{
-			status:                   node.Status,
+		savedNodeHealth = &nodeHealthData{
+			status:                   &node.Status,
 			probeTimestamp:           nc.now(),
 			readyTransitionTimestamp: transitionTime,
 		}
 	}
-	nc.nodeStatusMap[node.Name] = savedNodeStatus
+	var observedLease *coordv1beta1.Lease
+	if utilfeature.DefaultFeatureGate.Enabled(features.NodeLease) {
+		// Always update the probe time if node lease is renewed.
+		// Note: If kubelet never posted the node status, but continues renewing the
+		// heartbeat leases, the node controller will assume the node is healthy and
+		// take no action.
+		observedLease, _ = nc.leaseLister.Leases(v1.NamespaceNodeLease).Get(node.Name)
+		if observedLease != nil && (savedLease == nil || savedLease.Spec.RenewTime.Before(observedLease.Spec.RenewTime)) {
+			savedNodeHealth.lease = observedLease
+			savedNodeHealth.probeTimestamp = nc.now()
+		}
+	}
+	nc.nodeHealthMap[node.Name] = savedNodeHealth
 
-	if nc.now().After(savedNodeStatus.probeTimestamp.Add(gracePeriod)) {
-		// NodeReady condition was last set longer ago than gracePeriod, so update it to Unknown
-		// (regardless of its current value) in the master.
+	if nc.now().After(savedNodeHealth.probeTimestamp.Add(gracePeriod)) {
+		// NodeReady condition or lease was last set longer ago than gracePeriod, so
+		// update it to Unknown (regardless of its current value) in the master.
 		if currentReadyCondition == nil {
 			glog.V(2).Infof("node %v is never updated by kubelet", node.Name)
 			node.Status.Conditions = append(node.Status.Conditions, v1.NodeCondition{
@@ -908,7 +946,7 @@ func (nc *Controller) tryUpdateNodeStatus(node *v1.Node) (time.Duration, v1.Node
 			})
 		} else {
 			glog.V(4).Infof("node %v hasn't been updated for %+v. Last ready condition is: %+v",
-				node.Name, nc.now().Time.Sub(savedNodeStatus.probeTimestamp.Time), observedReadyCondition)
+				node.Name, nc.now().Time.Sub(savedNodeHealth.probeTimestamp.Time), observedReadyCondition)
 			if observedReadyCondition.Status != v1.ConditionUnknown {
 				currentReadyCondition.Status = v1.ConditionUnknown
 				currentReadyCondition.Reason = "NodeStatusUnknown"
@@ -924,6 +962,7 @@ func (nc *Controller) tryUpdateNodeStatus(node *v1.Node) (time.Duration, v1.Node
 			v1.NodeOutOfDisk,
 			v1.NodeMemoryPressure,
 			v1.NodeDiskPressure,
+			v1.NodePIDPressure,
 			// We don't change 'NodeNetworkUnavailable' condition, as it's managed on a control plane level.
 			// v1.NodeNetworkUnavailable,
 		}
@@ -943,7 +982,7 @@ func (nc *Controller) tryUpdateNodeStatus(node *v1.Node) (time.Duration, v1.Node
 				})
 			} else {
 				glog.V(4).Infof("node %v hasn't been updated for %+v. Last %v is: %+v",
-					node.Name, nc.now().Time.Sub(savedNodeStatus.probeTimestamp.Time), nodeConditionType, currentCondition)
+					node.Name, nc.now().Time.Sub(savedNodeHealth.probeTimestamp.Time), nodeConditionType, currentCondition)
 				if currentCondition.Status != v1.ConditionUnknown {
 					currentCondition.Status = v1.ConditionUnknown
 					currentCondition.Reason = "NodeStatusUnknown"
@@ -959,10 +998,11 @@ func (nc *Controller) tryUpdateNodeStatus(node *v1.Node) (time.Duration, v1.Node
 				glog.Errorf("Error updating node %s: %v", node.Name, err)
 				return gracePeriod, observedReadyCondition, currentReadyCondition, err
 			}
-			nc.nodeStatusMap[node.Name] = nodeStatusData{
-				status:                   node.Status,
-				probeTimestamp:           nc.nodeStatusMap[node.Name].probeTimestamp,
+			nc.nodeHealthMap[node.Name] = &nodeHealthData{
+				status:                   &node.Status,
+				probeTimestamp:           nc.nodeHealthMap[node.Name].probeTimestamp,
 				readyTransitionTimestamp: nc.now(),
+				lease:                    observedLease,
 			}
 			return gracePeriod, observedReadyCondition, currentReadyCondition, nil
 		}
@@ -1043,10 +1083,10 @@ func (nc *Controller) handleDisruption(zoneToNodeConditions map[string][]*v1.Nod
 			// When exiting disruption mode update probe timestamps on all Nodes.
 			now := nc.now()
 			for i := range nodes {
-				v := nc.nodeStatusMap[nodes[i].Name]
+				v := nc.nodeHealthMap[nodes[i].Name]
 				v.probeTimestamp = now
 				v.readyTransitionTimestamp = now
-				nc.nodeStatusMap[nodes[i].Name] = v
+				nc.nodeHealthMap[nodes[i].Name] = v
 			}
 			// We reset all rate limiters to settings appropriate for the given state.
 			for k := range nc.zoneStates {

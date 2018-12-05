@@ -23,7 +23,6 @@ import (
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	serializer "k8s.io/apimachinery/pkg/runtime/serializer"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	admissionregistrationinternalversion "k8s.io/kubernetes/pkg/apis/admissionregistration"
 	appsinternalversion "k8s.io/kubernetes/pkg/apis/apps"
 	authenticationinternalversion "k8s.io/kubernetes/pkg/apis/authentication"
@@ -66,6 +65,11 @@ var localSchemeBuilder = runtime.SchemeBuilder{
 	storageinternalversion.AddToScheme,
 }
 
+func init() {
+	v1.AddToGroupVersion(scheme, schema.GroupVersion{Version: "v1"})
+	AddToScheme(scheme)
+}
+
 // AddToScheme adds all types of this clientset into the given scheme. This allows composition
 // of clientsets, like in:
 //
@@ -80,9 +84,23 @@ var localSchemeBuilder = runtime.SchemeBuilder{
 //
 // After this, RawExtensions in Kubernetes types will serialize kube-aggregator types
 // correctly.
-var AddToScheme = localSchemeBuilder.AddToScheme
 
-func init() {
-	v1.AddToGroupVersion(scheme, schema.GroupVersion{Version: "v1"})
-	utilruntime.Must(AddToScheme(scheme))
+func AddToScheme(scheme *runtime.Scheme) {
+	admissionregistrationinternalversion.AddToScheme(scheme)
+	coreinternalversion.AddToScheme(scheme)
+	appsinternalversion.AddToScheme(scheme)
+	authenticationinternalversion.AddToScheme(scheme)
+	authorizationinternalversion.AddToScheme(scheme)
+	autoscalinginternalversion.AddToScheme(scheme)
+	batchinternalversion.AddToScheme(scheme)
+	certificatesinternalversion.AddToScheme(scheme)
+	coordinationinternalversion.AddToScheme(scheme)
+	eventsinternalversion.AddToScheme(scheme)
+	extensionsinternalversion.AddToScheme(scheme)
+	networkinginternalversion.AddToScheme(scheme)
+	policyinternalversion.AddToScheme(scheme)
+	rbacinternalversion.AddToScheme(scheme)
+	schedulinginternalversion.AddToScheme(scheme)
+	settingsinternalversion.AddToScheme(scheme)
+	storageinternalversion.AddToScheme(scheme)
 }

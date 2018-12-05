@@ -7,7 +7,7 @@ import (
 	"k8s.io/api/core/v1"
 )
 
-// LoadDeploymentFromFile create a deployment object from file
+// LoadConfigMapFromFile create a configmap object from file
 func LoadConfigMapFromFile(file string) (*v1.ConfigMap, error) {
 	fileContent, err := ioutil.ReadFile(file)
 	if err != nil {

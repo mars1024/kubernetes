@@ -87,7 +87,7 @@ func IsFullyQualifiedName(fldPath *field.Path, name string) field.ErrorList {
 
 const labelValueFmt string = "(" + qualifiedNameFmt + ")?"
 const labelValueErrMsg string = "a valid label must be an empty string or consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character"
-const LabelValueMaxLength int = 63
+const LabelValueMaxLength int = 127
 
 var labelValueRegexp = regexp.MustCompile("^" + labelValueFmt + "$")
 

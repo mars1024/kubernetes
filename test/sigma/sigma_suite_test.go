@@ -19,6 +19,7 @@ import (
 
 	// test sources
 	_ "k8s.io/kubernetes/test/sigma/ant-sigma-bvt"
+	_ "k8s.io/kubernetes/test/sigma/apiserver"
 	_ "k8s.io/kubernetes/test/sigma/cni"
 	_ "k8s.io/kubernetes/test/sigma/common"
 	_ "k8s.io/kubernetes/test/sigma/controller"

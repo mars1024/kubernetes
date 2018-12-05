@@ -1,0 +1,11 @@
+{
+    "apiVersion": "v1",
+    "data": {
+        "custom-cgroup-parents": "/fakecgroup/test;/fakecgroup/test1"
+    },
+    "kind": "ConfigMap",
+    "metadata": {
+        "name": "custom-cgroup-parents",
+        "namespace": "kube-system"
+    }
+}

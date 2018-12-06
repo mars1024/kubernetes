@@ -46,6 +46,8 @@ import (
 	schedutil "k8s.io/kubernetes/pkg/scheduler/util"
 	"k8s.io/kubernetes/pkg/scheduler/volumebinder"
 	volumeutil "k8s.io/kubernetes/pkg/volume/util"
+
+	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 )
 
 const (
@@ -721,6 +723,33 @@ func podName(pod *v1.Pod) string {
 	return pod.Namespace + "/" + pod.Name
 }
 
+func CPUOverQuotaRatio(nodeInfo *schedulercache.NodeInfo) (float64, bool) {
+	if v, exists := nodeInfo.Node().Labels[sigmak8sapi.LabelCPUOverQuota]; exists {
+		if ratio, err := strconv.ParseFloat(v, 64); err == nil {
+			return ratio, true
+		}
+	}
+	return 1.0, false
+}
+
+func MemoryOverQuotaRatio(nodeInfo *schedulercache.NodeInfo) (float64, bool) {
+	if v, exists := nodeInfo.Node().Labels[sigmak8sapi.LabelMemOverQuota]; exists {
+		if ratio, err := strconv.ParseFloat(v, 64); err == nil {
+			return ratio, true
+		}
+	}
+	return 1.0, false
+}
+
+func EphemeralStorageOverQuotaRatio(nodeInfo *schedulercache.NodeInfo) (float64, bool) {
+	if v, exists := nodeInfo.Node().Labels[sigmak8sapi.LabelDiskOverQuota]; exists {
+		if ratio, err := strconv.ParseFloat(v, 64); err == nil {
+			return ratio, true
+		}
+	}
+	return 1.0, false
+}
+
 // PodFitsResources checks if a node has sufficient resources, such as cpu, memory, gpu, opaque int resources etc to run a pod.
 // First return value indicates whether a node has sufficient resources to run a pod while the second return value indicates the
 // predicate failure reasons if the node has insufficient resources to run the pod.
@@ -756,14 +785,19 @@ func PodFitsResources(pod *v1.Pod, meta algorithm.PredicateMetadata, nodeInfo *s
 		return len(predicateFails) == 0, predicateFails, nil
 	}
 
+	// TODO import sigma unified scheduler's PodFitResource, including overquota
+	const precision int64 = 100
 	allocatable := nodeInfo.AllocatableResource()
-	if allocatable.MilliCPU < podRequest.MilliCPU+nodeInfo.RequestedResource().MilliCPU {
+	overQuotaRatio, _ := CPUOverQuotaRatio(nodeInfo)
+	if allocatable.MilliCPU*int64(overQuotaRatio*float64(precision)) < precision*(podRequest.MilliCPU+nodeInfo.RequestedResource().MilliCPU) {
 		predicateFails = append(predicateFails, NewInsufficientResourceError(v1.ResourceCPU, podRequest.MilliCPU, nodeInfo.RequestedResource().MilliCPU, allocatable.MilliCPU))
 	}
-	if allocatable.Memory < podRequest.Memory+nodeInfo.RequestedResource().Memory {
+	overQuotaRatio, _ = MemoryOverQuotaRatio(nodeInfo)
+	if allocatable.Memory*int64(overQuotaRatio*float64(precision)) < precision*(podRequest.Memory+nodeInfo.RequestedResource().Memory) {
 		predicateFails = append(predicateFails, NewInsufficientResourceError(v1.ResourceMemory, podRequest.Memory, nodeInfo.RequestedResource().Memory, allocatable.Memory))
 	}
-	if allocatable.EphemeralStorage < podRequest.EphemeralStorage+nodeInfo.RequestedResource().EphemeralStorage {
+	overQuotaRatio, _ = EphemeralStorageOverQuotaRatio(nodeInfo)
+	if allocatable.EphemeralStorage*int64(overQuotaRatio*float64(precision)) < precision*(podRequest.EphemeralStorage+nodeInfo.RequestedResource().EphemeralStorage) {
 		predicateFails = append(predicateFails, NewInsufficientResourceError(v1.ResourceEphemeralStorage, podRequest.EphemeralStorage, nodeInfo.RequestedResource().EphemeralStorage, allocatable.EphemeralStorage))
 	}
 

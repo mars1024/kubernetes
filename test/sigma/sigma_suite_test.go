@@ -24,6 +24,7 @@ import (
 	_ "k8s.io/kubernetes/test/sigma/common"
 	_ "k8s.io/kubernetes/test/sigma/controller"
 	_ "k8s.io/kubernetes/test/sigma/kubelet"
+	_ "k8s.io/kubernetes/test/sigma/scheduler"
 )
 
 func init() {

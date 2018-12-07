@@ -57,7 +57,9 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 		//start pod
 		By("Start pod.")
 		MustOperatePod(s, f.ClientSet, result.ContainerSn, &pod, "start", v1.PodRunning)
+		By("check pod dnsPolicy")
 
+		checkDNSPolicy(f, &pod)
 		//restart pod
 		By("Restart pod.")
 		MustOperatePod(s, f.ClientSet, result.ContainerSn, &pod, "restart", v1.PodRunning)
@@ -65,7 +67,7 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 		//upgrade pod
 		By("Upgrade pod.")
 		requestId := string(uuid.NewRandom().String())
-		framework.Logf("requestId:%v", requestId)
+		framework.Logf("upgrade pod %#v, requestId:%v", pod, requestId)
 		upgradeConfig := NewUpgradeConfig("FOO=bar")
 		MustUpgradeContainer(s, result.ContainerSn, requestId, false, upgradeConfig)
 		//check status
@@ -86,6 +88,7 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 		requestId = string(uuid.NewRandom().String())
 		framework.Logf("requestId:%v", requestId)
 		upgradeConfig2 := NewUpgradeConfig("FOO2=bar2")
+		framework.Logf("upgrade pod %#v, requestId:%v", pod, requestId)
 		MustUpgradeContainer(s, result.ContainerSn, requestId, true, upgradeConfig2)
 
 		//check status
@@ -122,6 +125,8 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 		Expect(err).To(BeNil(), "[Sigma3.1LifeCycle] get created sigma3.1 pod failed.")
 		Expect(newPod).NotTo(BeNil(), "[Sigma3.1LifeCycle] get created sigma3.1 pod nil.")
 		CheckSigmaCreateResource(f, newPod)
+		checkDNSPolicy(f, newPod)
+
 		//stop pod
 		By("Stop sigma3.1 pod.")
 		err = StopOrStartSigmaPod(f.ClientSet, newPod, k8sApi.ContainerStateExited)
@@ -130,6 +135,8 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 		By("Start sigma3.1 pod.")
 		err = StopOrStartSigmaPod(f.ClientSet, newPod, k8sApi.ContainerStateRunning)
 		Expect(err).To(BeNil(), "[Sigma3.1LifeCycle] Start sigma3.1 pod failed.")
+		checkDNSPolicy(f, newPod)
+
 		//upgrade pod.
 		By("Upgrade sigma3.1 pod, expect exited.")
 		err = UpgradeSigmaPod(f.ClientSet, newPod, NewUpgradePod(upgradeEnv), k8sApi.ContainerStateExited)
@@ -140,10 +147,12 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 		Expect(err).To(BeNil(), "[Sigma3.1LifeCycle] Start sigma3.1 pod failed after upgrade.")
 		CheckSigmaUpgradeResource(f, newPod, NewUpgradePod(upgradeEnv))
 		//upgrade pod.
-		By("Upgrade sigma3.1 pod, expect exited.")
+		By("Upgrade sigma3.1 pod, expect running.")
 		err = UpgradeSigmaPod(f.ClientSet, newPod, NewUpgradePod(upgradeEnv2), k8sApi.ContainerStateRunning)
 		Expect(err).To(BeNil(), "[Sigma3.1LifeCycle] Upgrade created sigma3.1 expect running pod failed.")
 		CheckSigmaUpgradeResource(f, newPod, NewUpgradePod(upgradeEnv2))
+		checkDNSPolicy(f, newPod)
+
 		//delete pod
 		By("Delete sigma3.1 pod.")
 		err = util.DeletePod(f.ClientSet, newPod)
@@ -174,6 +183,7 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 
 				By("Check container info.")
 				CheckAdapterCreateResource(f, &pod, result, createConfig)
+
 				//delete pod
 				By("Delete pod.")
 				resp, err := s.DeleteContainer(result.ContainerSn, true)
@@ -191,7 +201,7 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 		Expect(num).To(Equal(count), "[AdapterLifeCycle] all create action should be succeed.")
 	})
 
-	It("[ant][sigma-alipay-bvt][sigma3-concurrency] test sigma3 pod lifecycle use adapter with concurrency.", func() {
+	It("[ant][sigma-alipay-bvt][sigma3-concurrency] test sigma3 pod lifecycle use sigma3.1 with concurrency.", func() {
 		var wg sync.WaitGroup
 		var lock sync.Mutex
 		count := 20

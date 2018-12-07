@@ -313,7 +313,7 @@ func (s *AdapterServer) DeleteContainer(name string, force bool) (string, error)
 //MustUpgradeContainer() upgrade container, wait pod ready.
 func MustUpgradeContainer(s *AdapterServer, name, requestId string, nostart bool, c *dockerclient.ContainerConfig) {
 	reqInfo, err := json.Marshal(c)
-	framework.Logf("ReqInfo:%v", string(reqInfo))
+	framework.Logf("Upgrade pod %v, ReqInfo:%v", name, string(reqInfo))
 	Expect(err).NotTo(HaveOccurred(), "[AdapterLifeCycle]marshal upgrade ReqInfo failed.")
 	upgradeResp, message, err := s.UpgradeContainer(name, requestId, nostart, reqInfo)
 	Expect(err).NotTo(HaveOccurred(), "[AdapterLifeCycle] upgrade pod error.")

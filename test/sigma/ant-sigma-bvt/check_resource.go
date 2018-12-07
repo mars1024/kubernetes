@@ -15,6 +15,7 @@ import (
 	"k8s.io/kubernetes/staging/src/k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/sigma/swarm"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 //CheckAdapterCreateResource()  check created container info by adapter, cpu/disk/mem/hostname/ip/env/network/armory.
@@ -69,11 +70,17 @@ func CheckAdapterCreateResource(f *framework.Framework, testPod *v1.Pod, result 
 
 	By("sigma-adapter: check container armory info.")
 	CheckArmory(testPod)
+
+	By("sigma-adapter:check container dnsConfig")
+	checkDNSPolicy(f, testPod)
 }
 
 //CheckAdapterUpgradeResource() check resource upgraded by adapter. check env/ip/network/armory
 func CheckAdapterUpgradeResource(f *framework.Framework, testPod *v1.Pod, upgradeConfig *dockerclient.ContainerConfig) () {
 	By("sigma-adapter: [upgrade] check container env should same as pod.")
+	upPod, err := f.ClientSet.CoreV1().Pods(testPod.Namespace).Get(testPod.Name, metav1.GetOptions{})
+	Expect(err).NotTo(HaveOccurred(), "[AdapterLifeCycle] get pod list failed.")
+	framework.Logf("newPod env:%v", upPod.Spec.Containers[0].Env)
 	cmd := []string{"env"}
 	stdout, _, err := RetryExec(f, testPod, cmd, "check_env", 10, 2)
 	Expect(err).NotTo(HaveOccurred(), "[AdapterLifeCycle] [upgrade] get 3.1 pod env error")
@@ -86,6 +93,9 @@ func CheckAdapterUpgradeResource(f *framework.Framework, testPod *v1.Pod, upgrad
 
 	By("sigma-adapter: check container armory info.")
 	CheckArmory(testPod)
+
+	By("sigma-adapter:check container dnsConfig")
+	checkDNSPolicy(f, testPod)
 }
 
 //CheckNewWorkSettings() check network-settings, ip/ping
@@ -198,7 +208,7 @@ func CheckSigmaCreateResource(f *framework.Framework, testPod *v1.Pod) {
 	Expect(err).NotTo(HaveOccurred(), "[Sigma3.1LifeCycle] check 3.1 pod cpu is not equal with input.")
 	Expect(isEqual).To(BeTrue(), "[Sigma3.1LifeCycle] check 3.1 pod cpu is not equal with input.")
 
-	By("sigma-adapter: check container disksize should same as pod.")
+	By("sigma 3.1: check container disksize should same as pod.")
 	cmd = []string{"df", "-h"}
 	stdout, _, err = RetryExec(f, testPod, cmd, "check_disk", 10, 2)
 	Expect(err).NotTo(HaveOccurred(), "[Sigma3.1LifeCycle] get 3.1 pod disksize error")
@@ -207,7 +217,7 @@ func CheckSigmaCreateResource(f *framework.Framework, testPod *v1.Pod) {
 	Expect(err).NotTo(HaveOccurred(), "[Sigma3.1LifeCycle] check 3.1 pod disksize is not equal with input.")
 	Expect(isEqual).To(BeTrue(), "[Sigma3.1LifeCycle] check 3.1 pod disksize is not equal with input.")
 
-	By("sigma-adapter: check container env should same as pod.")
+	By("sigma 3.1: check container env should same as pod.")
 	cmd = []string{"env"}
 	stdout, _, err = RetryExec(f, testPod, cmd, "check_env", 10, 2)
 	Expect(err).NotTo(HaveOccurred(), "[Sigma3.1LifeCycle] get 3.1 pod env error")
@@ -219,11 +229,14 @@ func CheckSigmaCreateResource(f *framework.Framework, testPod *v1.Pod) {
 	Expect(err).NotTo(HaveOccurred(), "[Sigma3.1LifeCycle] check 3.1 pod env is not equal with input.")
 	Expect(isEqual).To(BeTrue(), "[Sigma3.1LifeCycle] check 3.1 pod env is not equal with input.")
 
-	By("sigma-adapter: check container network settings.")
+	By("sigma 3.1: check container network settings.")
 	CheckNewWorkSettings(f, testPod)
 
-	By("sigma-adapter: check container armory info.")
+	By("sigma 3.1: check container armory info.")
 	CheckArmory(testPod)
+
+	By("sigma 3.1: check container dnsConfig")
+	checkDNSPolicy(f, testPod)
 }
 
 //CheckSigmaUpgradeResource() check upgraded container resource by simga3.1, check env/network-settings/armory.
@@ -245,6 +258,9 @@ func CheckSigmaUpgradeResource(f *framework.Framework, testPod *v1.Pod, upgradeP
 
 	By("sigma 3.1: check container armory info.")
 	CheckArmory(testPod)
+
+	By("sigma 3.1: check container dnsConfig")
+	checkDNSPolicy(f, testPod)
 }
 
 //RetryExec() retry exec commands if err is not nil.

@@ -362,7 +362,7 @@ func (m *kubeGenericRuntimeManager) startContainerWithOutPullImage(podSandboxCon
 			Type: m.runtimeName,
 			ID:   containerID,
 		}
-		glog.V(4).Infof("Exec PostStartHook:%v in container %s-%s with timeout value: %d",
+		glog.V(4).Infof("Exec PostStartHook: %v in container %s-%s with timeout value: %d",
 			container.Lifecycle.PostStart, format.Pod(pod), container.Name, timeout)
 		msg, handlerErr := m.runner.Run(kubeContainerID, pod, container, container.Lifecycle.PostStart, time.Duration(timeout)*time.Second)
 		if handlerErr != nil {
@@ -384,7 +384,7 @@ func (m *kubeGenericRuntimeManager) startContainerWithOutPullImage(podSandboxCon
 	return "", nil
 }
 
-// containerStateConvert containerState type convert,from kubecontainer.containerState
+// containerStateConvert containerState type convert from kubecontainer.containerState.
 func containerStateConvertFromKubeContainer(state kubecontainer.ContainerState) sigmak8sapi.ContainerState {
 	switch state {
 	case kubecontainer.ContainerStateCreated:
@@ -397,7 +397,7 @@ func containerStateConvertFromKubeContainer(state kubecontainer.ContainerState) 
 	return sigmak8sapi.ContainerStateUnknown
 }
 
-// containerStateConvert containerState type convert,from runtimeApi.containerState
+// containerStateConvert containerState type convert from runtimeApi.containerState.
 func containerStateConvertFromRunTimeAPI(state runtimeapi.ContainerState) sigmak8sapi.ContainerState {
 	switch state {
 	case runtimeapi.ContainerState_CONTAINER_CREATED:
@@ -466,7 +466,7 @@ func (m *kubeGenericRuntimeManager) updateContainerStateStatus(status sigmak8sap
 	var state runtimeapi.ContainerState
 	containerStatusFromRunTime, err := m.runtimeService.ContainerStatus(containerID)
 	if err != nil {
-		glog.Errorf("get container %s runtime status err :%s", containerName, err.Error())
+		glog.Errorf("get container %s runtime status err: %s", containerName, err.Error())
 		state = runtimeapi.ContainerState_CONTAINER_UNKNOWN
 	} else {
 		state = containerStatusFromRunTime.State

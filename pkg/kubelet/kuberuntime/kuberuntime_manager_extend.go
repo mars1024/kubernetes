@@ -169,10 +169,11 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 
 		for _, container := range pod.Spec.Containers {
 			containerStatus := podStatus.FindContainerStatusByName(container.Name)
-			newLC := m.generateLinuxContainerResources(&container, pod)
 			if containerStatus.Resources != nil {
 				currentPodCPUQuota += containerStatus.Resources.CpuQuota
 			}
+
+			newLC := m.generateLinuxContainerResources(&container, pod)
 			newPodCPUQuota += newLC.CpuQuota
 		}
 
@@ -182,16 +183,36 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 		if m.cpuCFSQuota && (newPodCPUQuota > currentPodCPUQuota) {
 			if err := m.runtimeHelper.UpdatePodCgroup(pod); err != nil {
 				result.AddSyncResult(updatePodResult)
-				updatePodResult.Fail(err, "Update the pod's cgroup failed")
+				errMsg := fmt.Sprintf("update cgroup of pod(%s/%s) failed", pod.Namespace, pod.Name)
+				updatePodResult.Fail(err, errMsg)
+				for containerID, containerInfo := range changes.ContainersToUpdate {
+					containerStatus := createContainerStatus(podStatus, sigmak8sapi.UpdateContainerAction, containerInfo.name, pod)
+					containerStatus.Message = errMsg
+					containerStatus.Success = false
+					m.updateContainerStateStatus(containerStatus, containerInfo.name, containerID.ID,
+						result.StateStatus, false, errMsg)
+				}
 				return
 			}
 		}
 
 		for containerID, containerInfo := range changes.ContainersToUpdate {
+			container := containerInfo.container
 			updateContainerResult := kubecontainer.NewSyncResult(kubecontainer.UpdateContainer, containerInfo.name)
 			result.AddSyncResult(updateContainerResult)
-			containerStatus := createContainerStatus(podStatus, sigmak8sapi.UpdateContainerAction, containerInfo.name, pod)
 
+			// If previous update failed, call doBackOffExtension.
+			previousResult := getStatusFromAnnotation(pod, container.Name)
+			if previousResult != nil && !previousResult.Success {
+				isInBackOff, msg, err := m.doBackOffExtension(pod, container, podStatus, backOff)
+				if isInBackOff {
+					updateContainerResult.Fail(err, msg)
+					glog.V(4).Infof("Backing Off updating container %+v in pod %v", container, format.Pod(pod))
+					return
+				}
+			}
+
+			containerStatus := createContainerStatus(podStatus, sigmak8sapi.UpdateContainerAction, containerInfo.name, pod)
 			if msg, err := m.updateContainer(containerID, containerInfo.container, pod); err != nil {
 				m.updateContainerStateStatus(containerStatus, containerInfo.name, containerID.ID, result.StateStatus, false, msg)
 				updateContainerResult.Fail(err, msg)

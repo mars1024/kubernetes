@@ -620,6 +620,7 @@ func toKubeContainerStatus(status *runtimeapi.ContainerStatus, runtimeName strin
 		Hash:         annotatedInfo.Hash,
 		RestartCount: annotatedInfo.RestartCount,
 		State:        toKubeContainerState(status.State),
+		Resources:    status.Resources,
 		CreatedAt:    time.Unix(0, status.CreatedAt),
 	}
 

@@ -18,7 +18,33 @@ import (
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/sigma/swarm"
 	"k8s.io/kubernetes/test/sigma/util"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
+
+
+func WaitTimeOutForArmoryStatus(pod *v1.Pod, isExist bool) error {
+	return wait.Poll(5*time.Second, 5*time.Minute, func() (done bool, err error) {
+		nsInfo, err := util.QueryArmory(fmt.Sprintf("dns_ip=='%v'", pod.Status.PodIP))
+		if err != nil {
+			framework.Logf("query naming service error: %s", err.Error())
+			return false, err
+		}
+
+		if isExist {
+			if len(nsInfo) != 1 {
+				framework.Logf("armory info :%v", nsInfo)
+				return false, fmt.Errorf("should only have one result in armory, but get %d", len(nsInfo))
+			}
+			return true, nil
+		} else {
+			if len(nsInfo) != 0 {
+				framework.Logf("armory info :%v", nsInfo)
+				return false, fmt.Errorf("should not have any result in armory, but get %d", len(nsInfo))
+			}
+			return true, nil
+		}
+	})
+}
 
 var _ = Describe("[sigma-common] Pod", func() {
 	f := framework.NewDefaultFramework("sigma-common")
@@ -60,19 +86,16 @@ var _ = Describe("[sigma-common] Pod", func() {
 
 		By("check pod has been registered in armory")
 		// could query by both name and ip
-		nsInfo, err := util.QueryArmory(fmt.Sprintf("dns_ip=='%v'", getPod.Status.PodIP))
-		Expect(err).NotTo(HaveOccurred(), "query naming service should pass")
-		Expect(nsInfo).NotTo(BeEmpty(), "naming service info should not be empty")
-		Expect(len(nsInfo)).Should(Equal(1), "should only have one result in armory")
-		framework.Logf("nsinfo :%v", nsInfo)
+		err = WaitTimeOutForArmoryStatus(getPod, true)
+		Expect(err).NotTo(HaveOccurred(), "pod is not registered in armory")
 
 		By("delete a pod should success")
 		err = util.DeletePod(f.ClientSet, testPod)
 		Expect(err).NotTo(HaveOccurred(), "delete pod should succeed")
 
 		By("check pod should have been unregistered from armory")
-		newNsInfo, _ := util.QueryArmory(fmt.Sprintf("dns_ip=='%v'", getPod.Status.PodIP))
-		Expect(newNsInfo).To(BeEmpty(), "naming service info should not be empty")
+		err = WaitTimeOutForArmoryStatus(getPod, false)
+		Expect(err).NotTo(HaveOccurred(), "pod is not unregistered in armory")
 	})
 
 })

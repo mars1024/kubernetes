@@ -146,10 +146,13 @@ func (m *podContainerManagerImpl) GetPodContainerName(pod *v1.Pod) (CgroupName, 
 		if !isLegal {
 			glog.Warningf("Invalid cgroup parent: %s in pod %s, only support %v",
 				userDefinedCgroupParent, format.Pod(pod), m.customCgroupParents)
-			return nil, ""
+		} else {
+			// Remove unnecessary /.
+			userDefinedCgroupParent := strings.Trim(userDefinedCgroupParent, "/")
+			// Split custom cgroup parent into slice.
+			userDefinedCgroupParentSlice := strings.Split(userDefinedCgroupParent, "/")
+			cgroupName = NewCgroupName(userDefinedCgroupParentSlice, podContainer)
 		}
-		userDefinedParentContainer := []string{userDefinedCgroupParent}
-		cgroupName = NewCgroupName(userDefinedParentContainer, podContainer)
 	}
 	// Get the literal cgroupfs name
 	cgroupfsName := m.cgroupManager.Name(cgroupName)

@@ -59,7 +59,7 @@ var _ = Describe("[sigma-kubelet] Container start/stop check", func() {
 		err = util.WaitTimeoutForPodStatus(f.ClientSet, getPod, v1.PodPending, 3*time.Minute)
 		Expect(err).NotTo(HaveOccurred(), "pod status is not pending, but should be pending")
 		// check container update status from annotation
-		err = util.WaitTimeoutForContainerUpdateStatus(f.ClientSet, getPod, containerName, 1*time.Minute, "kill container success")
+		err = util.WaitTimeoutForContainerUpdateStatus(f.ClientSet, getPod, containerName, 1*time.Minute, "kill container success", true)
 		Expect(err).NotTo(HaveOccurred(), "\"kill container success\" does not appear in container update status")
 		// log into slave node and check container status, container should be stopped
 		runOutput := util.GetDockerPsOutput(getPod.Status.HostIP, containerName)

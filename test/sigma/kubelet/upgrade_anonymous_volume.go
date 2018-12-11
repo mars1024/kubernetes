@@ -50,7 +50,7 @@ func doUpgradeAnonymousVolumeTestCase(f *framework.Framework, testCase *UpgradeA
 
 	// Step4: Wait for upgrade action finished.
 	By("wait until pod is upgraded")
-	err = util.WaitTimeoutForContainerUpdateStatus(f.ClientSet, upgradedPod, containerName, 3*time.Minute, testCase.upgradeSuccessStr)
+	err = util.WaitTimeoutForContainerUpdateStatus(f.ClientSet, upgradedPod, containerName, 3*time.Minute, testCase.upgradeSuccessStr, true)
 	Expect(err).NotTo(HaveOccurred(), "upgrade pod err")
 
 	// Step5: Check upgraded container

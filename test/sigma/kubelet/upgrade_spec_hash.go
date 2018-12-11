@@ -47,7 +47,7 @@ func doUpgradeSpecHashTestCase(f *framework.Framework, testCase *UpgradeSpecHash
 
 	// Step4: Wait for upgrade action finished.
 	By("wait until pod is upgraded")
-	err = util.WaitTimeoutForContainerUpdateStatus(f.ClientSet, upgradedPod, containerName, 3*time.Minute, upgradeSuccessStr)
+	err = util.WaitTimeoutForContainerUpdateStatus(f.ClientSet, upgradedPod, containerName, 3*time.Minute, upgradeSuccessStr, true)
 	Expect(err).NotTo(HaveOccurred(), "upgrade pod err")
 
 	// Step5: Check upgraded container

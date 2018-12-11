@@ -63,12 +63,12 @@ var _ = Describe("[sigma-kubelet] inplace_update_001 update container's resource
 		}
 		doInplaceUpdateContainerResourceTestCase(f, &testCase)
 	})
-	// It("update container's resource requirement with QoS class change", func() {
-	// 	testCase := InplaceUpdateContainerResourceTestCase{
-	// 		pod:           generateRunningPodWithInitResource(initResource),
-	// 		patchData:     `{"spec":{"containers":[{"name":"pod-base","resources":{"requests": {"cpu": "1000m", "memory": "256Mi"}, "limits": {"cpu": "2000m", "memory": "256Mi"}}}]}}`,
-	// 		expectSuccess: false,
-	// 	}
-	// 	doInplaceUpdateContainerResourceTestCase(f, &testCase)
-	// })
+	It("update container's resource requirement with QoS class change", func() {
+		testCase := InplaceUpdateContainerResourceTestCase{
+			pod:           generateRunningPodWithInitResource(initResource),
+			patchData:     `{"spec":{"containers":[{"name":"pod-base","resources":{"requests": {"cpu": "1000m", "memory": "256Mi"}, "limits": {"cpu": "2000m", "memory": "256Mi"}}}]}}`,
+			expectSuccess: false,
+		}
+		doInplaceUpdateContainerResourceTestCase(f, &testCase)
+	})
 })

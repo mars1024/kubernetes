@@ -88,7 +88,7 @@ func doUpgradeQuotaIDTestCase(f *framework.Framework, testCase *upgradeQuotaIDTe
 
 	// Step5: Wait for upgrade action finished.
 	By("wait until pod is upgraded")
-	err = util.WaitTimeoutForContainerUpdateStatus(f.ClientSet, upgradedPod, containerName, 3*time.Minute, upgradeSuccessStr)
+	err = util.WaitTimeoutForContainerUpdateStatus(f.ClientSet, upgradedPod, containerName, 3*time.Minute, upgradeSuccessStr, true)
 	Expect(err).NotTo(HaveOccurred(), "upgrade pod err")
 
 	// Step6: Check upgraded container

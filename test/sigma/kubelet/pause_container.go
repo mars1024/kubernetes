@@ -31,7 +31,7 @@ var _ = Describe("[sigma-kubelet][pause-container] pause the container", func() 
 
 		// Step2: Wait the fail message to start container.
 		By("wait until pod is starting and failed")
-		err = util.WaitTimeoutForContainerUpdateMessage(f.ClientSet, testPod, containerName, 3*time.Minute, postStartHookErr)
+		err = util.WaitTimeoutForContainerUpdateStatus(f.ClientSet, testPod, containerName, 3*time.Minute, postStartHookErr, false)
 		Expect(err).NotTo(HaveOccurred(), "failed to wait pod with postStartHook err")
 
 		// Step3: pause the container.
@@ -57,12 +57,12 @@ var _ = Describe("[sigma-kubelet][pause-container] pause the container", func() 
 
 		// Step7: The unpaused container should be stopped first. So wait container is exited.
 		By("wait until container is stopped")
-		err = util.WaitTimeoutForContainerUpdateStatus(f.ClientSet, testPod, containerName, 3*time.Minute, killSuccessStr)
+		err = util.WaitTimeoutForContainerUpdateStatus(f.ClientSet, testPod, containerName, 3*time.Minute, killSuccessStr, true)
 		Expect(err).NotTo(HaveOccurred(), "failed to wait container to be exited")
 
 		// Step8: The unpaused container will be started because desire state is running.
 		By("wait until container is starting")
-		err = util.WaitTimeoutForContainerUpdateStatus(f.ClientSet, testPod, containerName, 3*time.Minute, startSuccessStr)
+		err = util.WaitTimeoutForContainerUpdateStatus(f.ClientSet, testPod, containerName, 3*time.Minute, startSuccessStr, true)
 		Expect(err).NotTo(HaveOccurred(), "failed to wait container to be running")
 
 	})

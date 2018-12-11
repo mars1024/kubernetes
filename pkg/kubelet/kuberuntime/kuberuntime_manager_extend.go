@@ -183,7 +183,7 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 		if m.cpuCFSQuota && (newPodCPUQuota > currentPodCPUQuota) {
 			if err := m.runtimeHelper.UpdatePodCgroup(pod); err != nil {
 				result.AddSyncResult(updatePodResult)
-				errMsg := fmt.Sprintf("update cgroup of pod(%s/%s) failed", pod.Namespace, pod.Name)
+				errMsg := fmt.Sprintf("update cgroup of pod(%s) failed", format.Pod(pod))
 				updatePodResult.Fail(err, errMsg)
 				for containerID, containerInfo := range changes.ContainersToUpdate {
 					containerStatus := createContainerStatus(podStatus, sigmak8sapi.UpdateContainerAction, containerInfo.name, pod)
@@ -202,7 +202,7 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 			result.AddSyncResult(updateContainerResult)
 
 			// If previous update failed, call doBackOffExtension.
-			previousResult := getStatusFromAnnotation(pod, container.Name)
+			previousResult := sigmautil.GetStatusFromAnnotation(pod, container.Name)
 			if previousResult != nil && !previousResult.Success {
 				isInBackOff, msg, err := m.doBackOffExtension(pod, container, podStatus, backOff)
 				if isInBackOff {

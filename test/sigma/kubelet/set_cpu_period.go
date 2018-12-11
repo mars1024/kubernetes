@@ -65,6 +65,7 @@ var _ = Describe("[sigma-kubelet]", func() {
 		By(caseName + "check cpu period")
 		// log into slave node and check container cpu period
 		realCpuPeriod := getCPUPeriod(getPod)
+		framework.Logf("realCpuPeriod: %d", realCpuPeriod)
 		Expect(realCpuPeriod).Should(Equal(int64(cpuPeriod)))
 	})
 })

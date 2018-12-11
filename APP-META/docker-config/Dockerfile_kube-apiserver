@@ -1,0 +1,15 @@
+FROM reg.docker.alibaba-inc.com/ajdk/8.alios5
+RUN mkdir -p /home/admin/kube-apiserver/log && \
+    mkdir -p /home/admin/log && \
+    yum install -y -b current t-staragent-agent2 && \
+    yum install -y ali-sls-ilogtail
+ENTRYPOINT ["/sbin/init"]
+VOLUME ["/home/admin/kube-apiserver/log","/home/admin/log","/home/staragent/plugins"]
+COPY environment/alibaba/kube-apiserver/cfg/audit.yaml /home/admin/kube-apiserver/cfg/
+COPY environment/alibaba/kube-apiserver/bin/logrotate /etc/cron.daily/
+COPY environment/alibaba/kube-apiserver/cfg/logrotate.conf /etc/logrotate.d/apiserver
+COPY environment/alibaba/kube-apiserver/bin/rc.local /etc/rc.local
+COPY environment/alibaba/kube-apiserver/bin/start-k8s-apiserver.sh /home/admin/kube-apiserver/bin/
+COPY environment/alibaba/kube-apiserver/bin/kube-apiserver /home/admin/kube-apiserver/bin/
+WORKDIR /home/admin/kube-apiserver
+

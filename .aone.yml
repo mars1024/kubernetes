@@ -1,3 +1,6 @@
 t-sigma-slave:
   pkgpara:
     DOCKER: 1
+t-sigma-slave-binary:
+  pkgpara:
+    DOCKER: 1

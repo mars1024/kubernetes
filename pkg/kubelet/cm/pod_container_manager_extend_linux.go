@@ -28,11 +28,6 @@ import (
 // Update updates pod level cgroup
 func (m *podContainerManagerImpl) Update(pod *v1.Pod) error {
 	podContainerName, _ := m.GetPodContainerName(pod)
-	// If podContainerName is nil, it means invalid custom cgroup parent is applied.
-	// Just return invalid custom cgroup parent error
-	if podContainerName == nil {
-		return fmt.Errorf("Invalid custom cgroup parent")
-	}
 
 	containerConfig := &CgroupConfig{
 		Name:               podContainerName,

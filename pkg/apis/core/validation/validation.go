@@ -3481,9 +3481,11 @@ func ValidatePodSecurityContext(securityContext *core.PodSecurityContext, spec *
 
 func ValidateContainerUpdates(newContainers, oldContainers []core.Container, fldPath *field.Path) (allErrs field.ErrorList, stop bool) {
 	allErrs = field.ErrorList{}
-	if len(newContainers) != len(oldContainers) {
+	// currently only supports adding containers to a pod
+	// TODO: removing this check when removing containers are supported as well
+	if len(newContainers) < len(oldContainers) {
 		//TODO: Pinpoint the specific container that causes the invalid error after we have strategic merge diff
-		allErrs = append(allErrs, field.Forbidden(fldPath, "pod updates may not add or remove containers"))
+		allErrs = append(allErrs, field.Forbidden(fldPath, "pod updates may not remove containers"))
 		return allErrs, true
 	}
 
@@ -3556,6 +3558,11 @@ func ValidatePodUpdate(newPod, oldPod *core.Pod) field.ErrorList {
 
 	// munge spec.containers[*].name
 	var newContainers []core.Container
+	// currently only supports adding containers to a pod
+	// TODO: if removing containers in a pod is supported, that means we're as well allowing
+	// 		* changing container's name
+	//		* switching containers' order in Pod.Spec.Containers
+	//      then removing below for loop.
 	for ix, container := range mungedPod.Spec.Containers {
 		container.Name = newPod.Spec.Containers[ix].Name
 		newContainers = append(newContainers, container)

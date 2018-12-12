@@ -24,6 +24,7 @@ import (
 	"k8s.io/api/core/v1"
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 	"k8s.io/kubernetes/pkg/kubelet/qos"
+	sigmautil "k8s.io/kubernetes/pkg/kubelet/sigma"
 )
 
 // applyPlatformSpecificContainerConfig applies platform specific configurations to runtimeapi.ContainerConfig.
@@ -74,7 +75,7 @@ func (m *kubeGenericRuntimeManager) generateLinuxContainerConfig(container *v1.C
 		AdjustResourcesByAnnotation(pod, container.Name, lc.Resources, cpuLimit.MilliValue())
 	}
 
-	ulimits := GetUlimitsFromAnnotation(container, pod)
+	ulimits := sigmautil.GetUlimitsFromAnnotation(container, pod)
 	if len(ulimits) != 0 {
 		for _, ulimit := range ulimits {
 			lc.Resources.Ulimits = append(lc.Resources.Ulimits, &runtimeapi.Ulimit{Name: ulimit.Name, Soft: ulimit.Soft, Hard: ulimit.Hard})

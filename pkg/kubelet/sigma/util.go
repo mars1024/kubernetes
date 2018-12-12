@@ -3,9 +3,9 @@ package sigma
 import (
 	"regexp"
 
-	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
-
 	"k8s.io/api/core/v1"
+
+	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 )
 
 var protectionFinalizerRegexp = regexp.MustCompile(sigmak8sapi.FinalizerPodProtectionFmt)

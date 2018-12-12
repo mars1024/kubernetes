@@ -56,7 +56,6 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/envvars"
 	"k8s.io/kubernetes/pkg/kubelet/eviction"
 	"k8s.io/kubernetes/pkg/kubelet/images"
-	"k8s.io/kubernetes/pkg/kubelet/kuberuntime"
 	"k8s.io/kubernetes/pkg/kubelet/server/portforward"
 	remotecommandserver "k8s.io/kubernetes/pkg/kubelet/server/remotecommand"
 	sigmautil "k8s.io/kubernetes/pkg/kubelet/sigma"
@@ -1251,7 +1250,7 @@ func (kl *Kubelet) GetKubeletContainerLogs(ctx context.Context, podFullName, con
 // getPhase returns the phase of a pod given its container info.
 func getPhase(spec *v1.PodSpec, info []v1.ContainerStatus, pod *v1.Pod) v1.PodPhase {
 	// if container terminate as user's expect, it should be considered as waiting to start
-	haveContainerStateAnnotation, containerDesiredState, _ := kuberuntime.GetContainerDesiredStateFromAnnotation(pod)
+	haveContainerStateAnnotation, containerDesiredState, _ := sigmautil.GetContainerDesiredStateFromAnnotation(pod)
 	initialized := 0
 	pendingInitialization := 0
 	failedInitialization := 0

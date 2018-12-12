@@ -14,73 +14,6 @@ import (
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 )
 
-func TestGetContainerRebuildInfoFromAnnotation(t *testing.T) {
-	testCase := []struct {
-		name                     string
-		annotationValue          *sigmak8sapi.RebuildContainerInfo
-		expectError              bool
-		withWrongAnnotationValue bool
-		withWrongAnnotationKey   bool
-	}{
-		{
-			name:            "annotation is nil, should error",
-			expectError:     true,
-			annotationValue: nil,
-		},
-		{
-			name:        "every thing is ok",
-			expectError: false,
-			annotationValue: &sigmak8sapi.RebuildContainerInfo{
-				ContainerID: "123-test",
-			},
-		},
-		{
-			name:        "with wrong annotation value, so exist error",
-			expectError: true,
-			annotationValue: &sigmak8sapi.RebuildContainerInfo{
-				ContainerID: "123-test",
-			},
-			withWrongAnnotationValue: true,
-		},
-		{
-			name:        "with wrong annotation key, so exist error",
-			expectError: true,
-			annotationValue: &sigmak8sapi.RebuildContainerInfo{
-				ContainerID: "123-test",
-			},
-			withWrongAnnotationKey: true,
-		},
-	}
-
-	for _, cs := range testCase {
-		t.Run(cs.name, func(t *testing.T) {
-			pod := &v1.Pod{}
-			if cs.annotationValue != nil {
-				annotationValue, err := json.Marshal(cs.annotationValue)
-				assert.NoError(t, err)
-
-				pod.Annotations = map[string]string{
-					sigmak8sapi.AnnotationRebuildContainerInfo: string(annotationValue),
-				}
-				if cs.withWrongAnnotationValue {
-					pod.Annotations[sigmak8sapi.AnnotationRebuildContainerInfo] = "test"
-				}
-				if cs.withWrongAnnotationKey {
-					pod.Annotations["testKey"] = "testValue"
-					delete(pod.Annotations, sigmak8sapi.AnnotationRebuildContainerInfo)
-				}
-			}
-			rebuildContainerInfo, err := GetContainerRebuildInfoFromAnnotation(pod)
-			if cs.expectError {
-				assert.Error(t, err)
-				return
-			}
-			assert.NoError(t, err)
-			assert.Equal(t, rebuildContainerInfo, cs.annotationValue)
-		})
-	}
-}
-
 func TestGetAnonymousVolumesMount(t *testing.T) {
 	testCase := []struct {
 		name            string
@@ -146,77 +79,6 @@ func TestGetAnonymousVolumesMount(t *testing.T) {
 	}
 }
 
-func TestGetUlimitsFromAnnotation(t *testing.T) {
-	testCase := []struct {
-		name            string
-		annotationValue *sigmak8sapi.AllocSpec
-		expectUlimits   []sigmak8sapi.Ulimit
-	}{
-		{
-			name:            "annotation is nil",
-			annotationValue: nil,
-			expectUlimits:   []sigmak8sapi.Ulimit{},
-		},
-		{
-			name:            "container not exists",
-			annotationValue: makeDefaultAllocSpec("foo"),
-			expectUlimits:   []sigmak8sapi.Ulimit{},
-		},
-		{
-			name: "no host config info",
-			annotationValue: &sigmak8sapi.AllocSpec{
-				Containers: []sigmak8sapi.Container{
-					{
-						Name: "bar",
-					},
-				},
-			},
-			expectUlimits: nil,
-		},
-		{
-			name:            "everything is ok",
-			annotationValue: makeDefaultAllocSpec("bar"),
-			expectUlimits:   []sigmak8sapi.Ulimit{{Name: "nofile", Soft: 1024, Hard: 8196}},
-		},
-	}
-
-	for _, cs := range testCase {
-		t.Run(cs.name, func(t *testing.T) {
-			pod := &v1.Pod{}
-			if cs.annotationValue != nil {
-				annotation, err := json.Marshal(cs.annotationValue)
-				assert.NoError(t, err)
-
-				pod.Annotations = map[string]string{
-					sigmak8sapi.AnnotationPodAllocSpec: string(annotation),
-				}
-			}
-			container := &v1.Container{Name: "bar"}
-			ulimits := GetUlimitsFromAnnotation(container, pod)
-			assert.Equal(t, cs.expectUlimits, ulimits)
-		})
-	}
-}
-
-func makeDefaultAllocSpec(containerName string) *sigmak8sapi.AllocSpec {
-	return &sigmak8sapi.AllocSpec{
-		Containers: []sigmak8sapi.Container{
-			{
-				Name: containerName,
-				HostConfig: sigmak8sapi.HostConfigInfo{
-					Ulimits: []sigmak8sapi.Ulimit{
-						{
-							Name: "nofile",
-							Soft: 1024,
-							Hard: 8196,
-						},
-					},
-				},
-			},
-		},
-	}
-}
-
 func TestGetDiskQuotaID(t *testing.T) {
 	testCase := []struct {
 		name            string
@@ -256,49 +118,6 @@ func TestGetDiskQuotaID(t *testing.T) {
 			quotaID := GetDiskQuotaID(pod)
 			assert.Equal(t, quotaID, cs.expectValue)
 		})
-	}
-}
-
-func TestNetworkStatusFromAnnotation(t *testing.T) {
-	networkStatus := sigmak8sapi.NetworkStatus{
-		VlanID:              "700",
-		NetworkPrefixLength: 22,
-		Gateway:             "100.81.187.247",
-		Ip:                  "100.81.187.21",
-	}
-	networkStatusStr, err := json.Marshal(networkStatus)
-	if err != nil {
-		t.Errorf("Failed to marshal %v", networkStatus)
-	}
-	testPodWithNetworkStatus := &v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        "bar",
-			Namespace:   "default",
-			Annotations: map[string]string{sigmak8sapi.AnnotationPodNetworkStats: string(networkStatusStr)},
-		},
-	}
-	testPodWithoutNetworkStatus := &v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "bar",
-			Namespace: "default",
-		},
-	}
-
-	for desc, test := range map[string]struct {
-		pod                 *v1.Pod
-		expectNetworkStatus *sigmak8sapi.NetworkStatus
-	}{
-		"pod has network status annotation": {
-			pod:                 testPodWithNetworkStatus,
-			expectNetworkStatus: &networkStatus,
-		},
-		"pod has no network status annotation": {
-			pod:                 testPodWithoutNetworkStatus,
-			expectNetworkStatus: nil,
-		},
-	} {
-		networkStatus := getNetworkStatusFromAnnotation(test.pod)
-		assert.Equal(t, test.expectNetworkStatus, networkStatus, desc)
 	}
 }
 

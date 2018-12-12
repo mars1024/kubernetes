@@ -1,19 +1,18 @@
 package kuberuntime
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/golang/glog"
 	"k8s.io/api/core/v1"
 	"k8s.io/kubernetes/pkg/kubelet/util/format"
 
+	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	alipaysigmak8sapi "gitlab.alipay-inc.com/sigma/apis/pkg/apis"
 	alipaysigmav2 "gitlab.alipay-inc.com/sigma/apis/pkg/v2"
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 	kubepod "k8s.io/kubernetes/pkg/kubelet/pod"
-
-	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
+	sigmautil "k8s.io/kubernetes/pkg/kubelet/sigma"
 )
 
 var (
@@ -29,32 +28,9 @@ var (
 	envVpcECS = "VpcECS"
 )
 
-// GetContainerRebuildInfoFromAnnotation get container which create by sigma2.0 info annotation.
-func GetContainerRebuildInfoFromAnnotation(pod *v1.Pod) (*sigmak8sapi.RebuildContainerInfo, error) {
-	if pod == nil || len(pod.Annotations) == 0 {
-		return nil, fmt.Errorf("pod: %v is nil, or pod annotation  len is zero", pod)
-	}
-	// get container info which come from sigma3.0 container through annotation
-	rebuildContainerInfoJSON, ok := pod.Annotations[sigmak8sapi.AnnotationRebuildContainerInfo]
-	if !ok {
-		return nil, fmt.Errorf("pod %s has no annotation :%s",
-			format.Pod(pod), sigmak8sapi.AnnotationRebuildContainerInfo)
-	}
-	glog.V(4).Infof("pod %s has annotation : %s,value is %s",
-		format.Pod(pod), sigmak8sapi.AnnotationRebuildContainerInfo, rebuildContainerInfoJSON)
-
-	rebuildContainerInfo := &sigmak8sapi.RebuildContainerInfo{}
-	// unmarshal container info .
-	if err := json.Unmarshal([]byte(rebuildContainerInfoJSON), rebuildContainerInfo); err != nil {
-		// Because can't unmarshal annotation content, so assume container info annotation is invalid.
-		return nil, fmt.Errorf("unmarshal container info spec err :%v", err)
-	}
-	return rebuildContainerInfo, nil
-}
-
 // getAnonymousVolumesMount get anonymous volume from pod  annotation.
 func getAnonymousVolumesMount(pod *v1.Pod) []*runtimeapi.Mount {
-	rebuildContainerInfo, err := GetContainerRebuildInfoFromAnnotation(pod)
+	rebuildContainerInfo, err := sigmautil.GetContainerRebuildInfoFromAnnotation(pod)
 	if err != nil {
 		glog.V(4).Info(err.Error())
 		return nil
@@ -74,29 +50,9 @@ func getAnonymousVolumesMount(pod *v1.Pod) []*runtimeapi.Mount {
 	return mounts
 }
 
-// GetUlimitsFromAnnotation extracts ulimits settings from pod annotations
-func GetUlimitsFromAnnotation(container *v1.Container, pod *v1.Pod) []sigmak8sapi.Ulimit {
-	podAllocSpecJSON, ok := pod.Annotations[sigmak8sapi.AnnotationPodAllocSpec]
-	if !ok {
-		return []sigmak8sapi.Ulimit{}
-	}
-	podAllocSpec := &sigmak8sapi.AllocSpec{}
-	// unmarshal pod allocation spec
-	if err := json.Unmarshal([]byte(podAllocSpecJSON), podAllocSpec); err != nil {
-		glog.Errorf("could not get ulimits, unmarshal alloc spec err: %v", err)
-		return []sigmak8sapi.Ulimit{}
-	}
-	for _, containerInfo := range podAllocSpec.Containers {
-		if containerInfo.Name == container.Name {
-			return containerInfo.HostConfig.Ulimits
-		}
-	}
-	return []sigmak8sapi.Ulimit{}
-}
-
 // GetDiskQuotaID get disk quota ID which get from sigma2.0 container, if not exist, return ""
 func GetDiskQuotaID(pod *v1.Pod) string {
-	rebuildContainerInfo, err := GetContainerRebuildInfoFromAnnotation(pod)
+	rebuildContainerInfo, err := sigmautil.GetContainerRebuildInfoFromAnnotation(pod)
 	if err != nil {
 		glog.V(4).Info(err.Error())
 		return ""
@@ -106,23 +62,6 @@ func GetDiskQuotaID(pod *v1.Pod) string {
 		return ""
 	}
 	return rebuildContainerInfo.DiskQuotaID
-}
-
-// getNetworkStatusFromAnnotation can get network status from certain annotation.
-func getNetworkStatusFromAnnotation(pod *v1.Pod) *sigmak8sapi.NetworkStatus {
-	key := sigmak8sapi.AnnotationPodNetworkStats
-	statusStr, exists := pod.Annotations[key]
-	if !exists {
-		glog.V(4).Infof("No network status found in pod: %v", format.Pod(pod))
-		return nil
-	}
-	networkStatus := &sigmak8sapi.NetworkStatus{}
-	err := json.Unmarshal([]byte(statusStr), networkStatus)
-	if err != nil {
-		glog.V(4).Infof("Failed to unmarshal %s from pod %s into NetworkStatus: %v", statusStr, format.Pod(pod), err)
-		return nil
-	}
-	return networkStatus
 }
 
 // getCidrIPMask converts mask lenth to the format such as 255.255.0.0
@@ -184,7 +123,7 @@ func generateNetworkEnvs(pod *v1.Pod, podManager kubepod.Manager) []*runtimeapi.
 	if !exists {
 		return []*runtimeapi.KeyValue{}
 	}
-	networkStatus := getNetworkStatusFromAnnotation(newPod)
+	networkStatus := sigmautil.GetNetworkStatusFromAnnotation(newPod)
 	if networkStatus == nil {
 		return []*runtimeapi.KeyValue{}
 	}

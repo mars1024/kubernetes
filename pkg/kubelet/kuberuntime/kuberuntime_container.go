@@ -47,8 +47,8 @@ import (
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	"k8s.io/kubernetes/pkg/kubelet/events"
 	"k8s.io/kubernetes/pkg/kubelet/qos"
+	sigmautil "k8s.io/kubernetes/pkg/kubelet/sigma"
 	"k8s.io/kubernetes/pkg/kubelet/types"
-	"k8s.io/kubernetes/pkg/kubelet/util/annotation"
 	"k8s.io/kubernetes/pkg/kubelet/util/format"
 	"k8s.io/kubernetes/pkg/util/selinux"
 	"k8s.io/kubernetes/pkg/util/tail"
@@ -100,7 +100,7 @@ func (m *kubeGenericRuntimeManager) startContainer(podSandboxID string, podSandb
 	}
 
 	userinfoBackup := m.userinfoBackup
-	rebuildContainerID := getRebuildContainerIDFromPodAnnotation(pod)
+	rebuildContainerID := sigmautil.GetRebuildContainerIDFromPodAnnotation(pod)
 
 	// Backup userinfo from rebuildContainerID in sigma2 and restore it to new created container.
 	if userinfoBackup != nil && rebuildContainerID != "" {
@@ -226,7 +226,7 @@ func (m *kubeGenericRuntimeManager) startContainer(podSandboxID string, podSandb
 
 	// Step 4: execute the post start hook.
 	if container.Lifecycle != nil && container.Lifecycle.PostStart != nil {
-		timeout := annotation.GetTimeoutSecondsFromPodAnnotation(pod, container.Name, sigmak8sapi.PostStartHookTimeoutSeconds)
+		timeout := sigmautil.GetTimeoutSecondsFromPodAnnotation(pod, container.Name, sigmak8sapi.PostStartHookTimeoutSeconds)
 		kubeContainerID := kubecontainer.ContainerID{
 			Type: m.runtimeName,
 			ID:   containerID,

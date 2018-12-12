@@ -27,7 +27,7 @@ import (
 	"k8s.io/client-go/util/flowcontrol"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	"k8s.io/kubernetes/pkg/kubelet/events"
-	"k8s.io/kubernetes/pkg/kubelet/util/annotation"
+	sigmautil "k8s.io/kubernetes/pkg/kubelet/sigma"
 	"k8s.io/kubernetes/pkg/util/parsers"
 )
 
@@ -131,7 +131,7 @@ func (m *imageManager) EnsureImageExists(pod *v1.Pod, container *v1.Container, p
 	pullChan := make(chan pullResult)
 
 	// Get timeout value from pod's annotation.
-	timeout := annotation.GetTimeoutSecondsFromPodAnnotation(pod, container.Name, sigmak8sapi.ImagePullTimeoutSeconds)
+	timeout := sigmautil.GetTimeoutSecondsFromPodAnnotation(pod, container.Name, sigmak8sapi.ImagePullTimeoutSeconds)
 	spec.Timeout = int64(timeout)
 
 	m.puller.pullImage(spec, pullSecrets, pullChan)

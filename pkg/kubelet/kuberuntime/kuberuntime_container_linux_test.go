@@ -143,7 +143,23 @@ func TestGenerateContainerConfigWithUlimits(t *testing.T) {
 	_, _, m, err := createTestRuntimeManager()
 	assert.NoError(t, err)
 
-	allocSpec := makeDefaultAllocSpec("bar")
+	allocSpec := &sigmak8sapi.AllocSpec{
+		Containers: []sigmak8sapi.Container{
+			{
+				Name: "bar",
+				HostConfig: sigmak8sapi.HostConfigInfo{
+					Ulimits: []sigmak8sapi.Ulimit{
+						{
+							Name: "nofile",
+							Soft: 1024,
+							Hard: 8196,
+						},
+					},
+				},
+			},
+		},
+	}
+
 	allocSpecStr, err := json.Marshal(allocSpec)
 	assert.NoError(t, err)
 

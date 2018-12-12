@@ -346,44 +346,6 @@ func TestComputeContainerAction(t *testing.T) {
 
 }
 
-func TestGetContainerDesiredStateFromAnnotation(t *testing.T) {
-	pod := &v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			UID:         "12345678",
-			Name:        "foo",
-			Namespace:   "new",
-			Annotations: make(map[string]string),
-		},
-	}
-
-	haveContainerStateAnnotation, _, _ := GetContainerDesiredStateFromAnnotation(nil)
-	assert.False(t, haveContainerStateAnnotation, "should not have annotation, because pod is nil")
-
-	haveContainerStateAnnotation, _, _ = GetContainerDesiredStateFromAnnotation(pod)
-	assert.Falsef(t, haveContainerStateAnnotation, "should not have annotation, because pod have no anotation: %s",
-		sigmak8sapi.AnnotationContainerStateSpec)
-
-	pod.Annotations[sigmak8sapi.AnnotationContainerStateSpec] = "fakeData"
-	haveContainerStateAnnotation, _, _ = GetContainerDesiredStateFromAnnotation(pod)
-	assert.False(t, haveContainerStateAnnotation, "should not have annotation, because pod annotation is invalid data")
-
-	stateSpec := sigmak8sapi.ContainerStateSpec{
-		States: map[sigmak8sapi.ContainerInfo]sigmak8sapi.ContainerState{
-			sigmak8sapi.ContainerInfo{Name: "foo1"}: sigmak8sapi.ContainerStateRunning,
-		}}
-	containerStateSpecByte, err := json.Marshal(stateSpec)
-	assert.NoError(t, err)
-	pod.Annotations[sigmak8sapi.AnnotationContainerStateSpec] = string(containerStateSpecByte)
-	haveContainerStateAnnotation, containerDesiredState, _ := GetContainerDesiredStateFromAnnotation(pod)
-
-	assert.True(t, haveContainerStateAnnotation, "should have valid annotation")
-	assert.True(t, reflect.DeepEqual(stateSpec, containerDesiredState))
-
-	pod.Annotations = nil
-	haveContainerStateAnnotation, _, _ = GetContainerDesiredStateFromAnnotation(pod)
-	assert.False(t, haveContainerStateAnnotation, "should not have annotation, because pod annotation is nil")
-}
-
 func TestCompareCurrentStateAndDesiredState(t *testing.T) {
 	test := []struct {
 		name               string
@@ -709,85 +671,6 @@ func getOperatorContainerMap(action ContainerAction, containerList []string, pod
 	return resultMap
 }
 
-func TestGetStatusFromAnnotation(t *testing.T) {
-	annotations := map[string]string{sigmak8sapi.AnnotationPodUpdateStatus: "{\"statuses\":{\"test\":{\"creationTimestamp\":\"2018-07-18T18:28:28.039600678+08:00\",\"finishTimestamp\":\"2018-07-18T18:28:28.403536805+08:00\",\"currentState\":\"created\",\"lastState\":\"created\",\"message\":\"exit status 1\",\"specHash\":\"cf455531\"}}}"}
-	testPodWithStatuses := &v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        "bar",
-			Namespace:   "default",
-			Annotations: annotations,
-		},
-		Spec: v1.PodSpec{
-			Containers: []v1.Container{
-				{
-					Name:  "foo",
-					Image: "busybox",
-				},
-			},
-		},
-	}
-	// Get right container's status
-	containerName := "test"
-	status := getStatusFromAnnotation(testPodWithStatuses, containerName)
-	if status == nil {
-		t.Errorf("Failed to get update-satus of %v from pod: %v", containerName, testPodWithStatuses)
-	}
-	// Get wrong container's status
-	containerName = "test1"
-	status = getStatusFromAnnotation(testPodWithStatuses, containerName)
-	if status != nil {
-		t.Errorf("Failed to get update-satus of %v from pod: %v", containerName, testPodWithStatuses)
-	}
-
-	testPodWithoutStatuses := &v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "bar",
-			Namespace: "default",
-		},
-		Spec: v1.PodSpec{
-			Containers: []v1.Container{
-				{
-					Name:  "foo",
-					Image: "busybox",
-				},
-			},
-		},
-	}
-	containerName = "test"
-	status = getStatusFromAnnotation(testPodWithoutStatuses, containerName)
-	if status != nil {
-		t.Errorf("Failed to get update-satus of %v from pod: %v", containerName, testPodWithStatuses)
-	}
-}
-
-func TestGetSpecHashFromAnnotation(t *testing.T) {
-	hashStr := "12345678"
-	testPodWithSpecHash := &v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        "bar",
-			Namespace:   "default",
-			Annotations: map[string]string{sigmak8sapi.AnnotationPodSpecHash: hashStr},
-		},
-	}
-	specHashStr, exists := getSpecHashFromAnnotation(testPodWithSpecHash)
-	if !exists {
-		t.Errorf("Failed to get signature from testPodWithSignature")
-	}
-	if specHashStr != hashStr {
-		t.Errorf("Failed to get signature from testPodWithSignature")
-	}
-	testPodWithoutSpecHash := &v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "bar",
-			Namespace: "default",
-		},
-	}
-	_, exists = getSpecHashFromAnnotation(testPodWithoutSpecHash)
-	if exists {
-		t.Errorf("Failed to get signature from testPodWithSignature")
-	}
-}
-
 func getResourceRequirements(requests, limits v1.ResourceList) v1.ResourceRequirements {
 	res := v1.ResourceRequirements{}
 	res.Requests = requests
@@ -804,75 +687,6 @@ func getResourceList(cpu, memory string) v1.ResourceList {
 		res[v1.ResourceMemory] = resource.MustParse(memory)
 	}
 	return res
-}
-
-func TestGetRebuildContainerIDFromPodAnnotation(t *testing.T) {
-	containerID := "7090b74e9300"
-	rebuildContainerInfo := sigmak8sapi.RebuildContainerInfo{
-		ContainerID: containerID,
-		DiskQuotaID: "123",
-		AliAdminUID: "567",
-	}
-	rebuildContainerInfoBytes, err := json.Marshal(rebuildContainerInfo)
-	if err != nil {
-		t.Errorf("Failed to marshal RebuildContainerInfo %v", rebuildContainerInfo)
-	}
-	for caseName, testCase := range map[string]struct {
-		pod        *v1.Pod
-		expectedID string
-	}{
-		"pod has empty annotation": {
-			pod: &v1.Pod{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "v1",
-					Kind:       "Pod",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					UID:         "12345678",
-					Name:        "foo",
-					Namespace:   "new",
-					Annotations: map[string]string{},
-				},
-			},
-			expectedID: "",
-		},
-		"pod has right annotation": {
-			pod: &v1.Pod{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "v1",
-					Kind:       "Pod",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					UID:         "12345678",
-					Name:        "foo",
-					Namespace:   "new",
-					Annotations: map[string]string{sigmak8sapi.AnnotationRebuildContainerInfo: string(rebuildContainerInfoBytes)},
-				},
-			},
-			expectedID: containerID,
-		},
-		"pod has wrong annotation": {
-			pod: &v1.Pod{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "v1",
-					Kind:       "Pod",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					UID:         "12345678",
-					Name:        "foo",
-					Namespace:   "new",
-					Annotations: map[string]string{"test-key": string(rebuildContainerInfoBytes)},
-				},
-			},
-			expectedID: "",
-		},
-	} {
-		buildContainerID := getRebuildContainerIDFromPodAnnotation(testCase.pod)
-		if buildContainerID != testCase.expectedID {
-			t.Errorf("Case %s: expect buildContainerID %s bug got %s", caseName, buildContainerID, testCase.expectedID)
-		}
-
-	}
 }
 
 func TestValidateMessage(t *testing.T) {

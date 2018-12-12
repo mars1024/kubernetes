@@ -1,7 +1,6 @@
 package kuberuntime
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,13 +12,13 @@ import (
 	"k8s.io/api/core/v1"
 	"k8s.io/client-go/util/flowcontrol"
 	"k8s.io/kubernetes/pkg/kubelet/events"
-	"k8s.io/kubernetes/pkg/kubelet/util/annotation"
 	"k8s.io/kubernetes/pkg/kubelet/util/format"
 
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
+	sigmautil "k8s.io/kubernetes/pkg/kubelet/sigma"
 )
 
 // ContainerAction describe what action should do.
@@ -126,7 +125,7 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 		result.AddSyncResult(upgradeContainerResult)
 
 		// If previous upgrade failed, doBackoff check should be done.
-		previousResult := getStatusFromAnnotation(pod, container.Name)
+		previousResult := sigmautil.GetStatusFromAnnotation(pod, container.Name)
 		if previousResult != nil && !previousResult.Success {
 			isInBackOff, msg, err := m.doBackOffExtension(pod, container, podStatus, backOff)
 			if isInBackOff {
@@ -242,7 +241,7 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 func (m *kubeGenericRuntimeManager) doBackOffExtension(pod *v1.Pod, container *v1.Container, podStatus *kubecontainer.PodStatus, backOff *flowcontrol.Backoff) (bool, string, error) {
 	glog.Infof("checking backoff for container %q in pod %q", container.Name, format.Pod(pod))
 	// Use the FinishTimestamp in update-status as the start point to calculate whether to do back-off or not.
-	containerStatus := getStatusFromAnnotation(pod, container.Name)
+	containerStatus := sigmautil.GetStatusFromAnnotation(pod, container.Name)
 
 	if containerStatus == nil {
 		return false, "", nil
@@ -261,35 +260,6 @@ func (m *kubeGenericRuntimeManager) doBackOffExtension(pod *v1.Pod, container *v
 
 	backOff.Next(key, ts)
 	return false, "", nil
-}
-
-// getStatusFromAnnotation can get container's status from certain annotation.
-func getStatusFromAnnotation(pod *v1.Pod, containerName string) *sigmak8sapi.ContainerStatus {
-	key := sigmak8sapi.AnnotationPodUpdateStatus
-	statusStr, exists := pod.Annotations[key]
-	if !exists {
-		return nil
-	}
-	containerStatuses := sigmak8sapi.ContainerStateStatus{}
-	err := json.Unmarshal([]byte(statusStr), &containerStatuses)
-	if err != nil {
-		return nil
-	}
-	containerStatus, exists := containerStatuses.Statuses[sigmak8sapi.ContainerInfo{containerName}]
-	if !exists {
-		return nil
-	}
-	return &containerStatus
-}
-
-// getSpecHashFromAnnotation can get user defined spec hash from certain annotation.
-func getSpecHashFromAnnotation(pod *v1.Pod) (string, bool) {
-	if pod.Annotations == nil {
-		return "", false
-	}
-	specHashKey := sigmak8sapi.AnnotationPodSpecHash
-	hashStr, specHashExists := pod.Annotations[specHashKey]
-	return hashStr, specHashExists
 }
 
 // computeContainerAction analysis what action should do for a container by compare expect state with current state.
@@ -366,7 +336,7 @@ func (m *kubeGenericRuntimeManager) startContainerWithOutPullImage(podSandboxCon
 	// Step 2: execute the post start hook.
 	if container.Lifecycle != nil && container.Lifecycle.PostStart != nil {
 		// Get postStartHook timeout from pod annotation.
-		timeout := annotation.GetTimeoutSecondsFromPodAnnotation(pod, container.Name, sigmak8sapi.PostStartHookTimeoutSeconds)
+		timeout := sigmautil.GetTimeoutSecondsFromPodAnnotation(pod, container.Name, sigmak8sapi.PostStartHookTimeoutSeconds)
 		kubeContainerID := kubecontainer.ContainerID{
 			Type: m.runtimeName,
 			ID:   containerID,
@@ -434,7 +404,7 @@ func createContainerStatus(podStatus *kubecontainer.PodStatus, action sigmak8sap
 		LastState:         lastState,
 	}
 	// Use user hash as spec hash
-	hashStr, specHashExists := getSpecHashFromAnnotation(pod)
+	hashStr, specHashExists := sigmautil.GetSpecHashFromAnnotation(pod)
 	if specHashExists {
 		cs.SpecHash = hashStr
 	}
@@ -485,49 +455,6 @@ func (m *kubeGenericRuntimeManager) updateContainerStateStatus(status sigmak8sap
 	stateStatus.Statuses[sigmak8sapi.ContainerInfo{Name: containerName}] = status
 }
 
-// GetContainerDesiredStateFromAnnotation parse whether the pod have valid annotation which represent containers
-// desired state, and get the value of containers desired state,
-// the value of containers status in annotation which update by previous process.
-func GetContainerDesiredStateFromAnnotation(pod *v1.Pod) (haveContainerStateAnnotation bool,
-	containerDesiredState sigmak8sapi.ContainerStateSpec, stateStatus sigmak8sapi.ContainerStateStatus) {
-
-	containerDesiredState =
-		sigmak8sapi.ContainerStateSpec{States: make(map[sigmak8sapi.ContainerInfo]sigmak8sapi.ContainerState)}
-	stateStatus =
-		sigmak8sapi.ContainerStateStatus{Statuses: make(map[sigmak8sapi.ContainerInfo]sigmak8sapi.ContainerStatus)}
-	if pod == nil || len(pod.Annotations) == 0 {
-		glog.V(4).Infof("pod is %v nil, or pod annotation  len is zero", pod)
-		return false, containerDesiredState, stateStatus
-	}
-
-	haveContainerStateAnnotation = false
-
-	// get container desired state through annotation
-	containerStateSpec, ok := pod.Annotations[sigmak8sapi.AnnotationContainerStateSpec]
-	if ok {
-		glog.V(4).Infof("pod %s has annotation : %s,value is %s",
-			format.Pod(pod), sigmak8sapi.AnnotationContainerStateSpec, containerStateSpec)
-		// unmarshal user's desired.
-		if err := json.Unmarshal([]byte(containerStateSpec), &containerDesiredState); err != nil {
-			glog.Errorf("unmarshal container state spec err :%v", err)
-		} else {
-			haveContainerStateAnnotation = true
-		}
-	} else {
-		glog.V(4).Infof("pod %s has no annotation :%s",
-			format.Pod(pod), sigmak8sapi.AnnotationContainerStateSpec)
-	}
-
-	// get stateStatus through annotation
-	stateStatusJSONFromAnnotation, ok := pod.Annotations[sigmak8sapi.AnnotationPodUpdateStatus]
-	if ok {
-		if err := json.Unmarshal([]byte(stateStatusJSONFromAnnotation), &stateStatus); err != nil {
-			glog.Errorf("unmarshal container state status err :%v", err)
-		}
-	}
-	return haveContainerStateAnnotation, containerDesiredState, stateStatus
-}
-
 // CompareCurrentStateAndDesiredState compare whether the container exist in desired state spec, and get action
 func CompareCurrentStateAndDesiredState(containerDesiredState sigmak8sapi.ContainerStateSpec,
 	containerStatus *kubecontainer.ContainerStatus, containerName string) (containerExistInDesire bool, action ContainerAction) {
@@ -554,19 +481,4 @@ func isContainerPaused(containerDesiredState sigmak8sapi.ContainerStateSpec, con
 		return state == sigmak8sapi.ContainerStatePaused
 	}
 	return false
-}
-
-// getRebuildContainerIDFromPodAnnotation get the source cotainer id in sigma2
-func getRebuildContainerIDFromPodAnnotation(pod *v1.Pod) string {
-	rebuildContainerStr, exists := pod.Annotations[sigmak8sapi.AnnotationRebuildContainerInfo]
-	if !exists {
-		return ""
-	}
-	rebuildContainerInfo := sigmak8sapi.RebuildContainerInfo{}
-	if err := json.Unmarshal([]byte(rebuildContainerStr), &rebuildContainerInfo); err != nil {
-		glog.Errorf("Failed to get rebuildContainerInf from pod %s because of invalid data", format.Pod(pod))
-		return ""
-	}
-
-	return rebuildContainerInfo.ContainerID
 }

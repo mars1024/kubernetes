@@ -114,6 +114,7 @@ func GetHollowKubeletConfig(
 	f.EnableServer = true
 	f.RootDirectory = testRootDir
 	f.HostnameOverride = nodeName
+	f.NodeNameOverride = nodeName
 	f.MinimumGCAge = metav1.Duration{Duration: 1 * time.Minute}
 	f.MaxContainerCount = 100
 	f.MaxPerPodContainerCount = 2

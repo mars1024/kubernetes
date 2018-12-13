@@ -98,5 +98,6 @@ func GetE2EImage(image ImageConfig) string {
 
 // GetPauseImageName returns the pause image name with proper version
 func GetPauseImageName() string {
-	return GetE2EImage(Pause)
+	return "reg.docker.alibaba-inc.com/k8s-test/pause:3.1"
+	//return GetE2EImage(Pause)
 }

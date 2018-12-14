@@ -622,3 +622,116 @@ func TestGetAllocResourceFromAnnotation(t *testing.T) {
 		assert.Equal(t, test.expectAllocResource, allocResource)
 	}
 }
+
+func TestGetDanglingPodsFromNodeAnnotation(t *testing.T) {
+	danglingPods := []sigmak8sapi.DanglingPod{
+		sigmak8sapi.DanglingPod{
+			Name:      "pod1",
+			Namespace: "namespace1",
+		},
+		sigmak8sapi.DanglingPod{
+			Name:      "pod2",
+			Namespace: "namespace2",
+		},
+		sigmak8sapi.DanglingPod{
+			Name:      "pod2",
+			Namespace: "namespace2",
+		},
+	}
+
+	danglingPodsBytes, err := json.Marshal(danglingPods)
+	if err != nil {
+		t.Errorf("Failed to marshal danglingPods: %v, error: %v", danglingPods, err)
+	}
+
+	for caseName, testCase := range map[string]struct {
+		node                 *v1.Node
+		expectErrorOccurs    bool
+		expectedDanglingPods []sigmak8sapi.DanglingPod
+	}{
+		"node is nil": {
+			node:                 nil,
+			expectErrorOccurs:    true,
+			expectedDanglingPods: []sigmak8sapi.DanglingPod{},
+		},
+		"node has empty annotation": {
+			node: &v1.Node{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "v1",
+					Kind:       "Node",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					UID:         "12345678",
+					Name:        "foo",
+					Namespace:   "new",
+					Annotations: map[string]string{},
+				},
+			},
+			expectErrorOccurs:    false,
+			expectedDanglingPods: []sigmak8sapi.DanglingPod{},
+		},
+		"node has valid annotation": {
+			node: &v1.Node{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "v1",
+					Kind:       "Node",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					UID:       "12345678",
+					Name:      "foo",
+					Namespace: "new",
+					Annotations: map[string]string{
+						sigmak8sapi.AnnotationDanglingPods: string(danglingPodsBytes),
+					},
+				},
+			},
+			expectErrorOccurs:    false,
+			expectedDanglingPods: danglingPods,
+		},
+		"node has invalid annotation": {
+			node: &v1.Node{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "v1",
+					Kind:       "Node",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					UID:       "12345678",
+					Name:      "foo",
+					Namespace: "new",
+					Annotations: map[string]string{
+						sigmak8sapi.AnnotationDanglingPods: "invalid string",
+					},
+				},
+			},
+			expectErrorOccurs:    true,
+			expectedDanglingPods: []sigmak8sapi.DanglingPod{},
+		},
+		"node has other annotation": {
+			node: &v1.Node{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "v1",
+					Kind:       "Node",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					UID:       "12345678",
+					Name:      "foo",
+					Namespace: "new",
+					Annotations: map[string]string{
+						"otherAnnotation": "value",
+					},
+				},
+			},
+			expectErrorOccurs:    false,
+			expectedDanglingPods: []sigmak8sapi.DanglingPod{},
+		},
+	} {
+		actualDanglingPods, err := GetDanglingPodsFromNodeAnnotation(testCase.node)
+		if testCase.expectErrorOccurs && err == nil {
+			t.Errorf("Case %s: expect error occurs but not", caseName)
+		}
+		if !reflect.DeepEqual(actualDanglingPods, testCase.expectedDanglingPods) {
+			t.Errorf("Case %s: expect danglingPods %v bug got %v", caseName, testCase.expectedDanglingPods, actualDanglingPods)
+		}
+
+	}
+}

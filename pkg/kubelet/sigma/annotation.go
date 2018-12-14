@@ -268,3 +268,24 @@ func GetAllocResourceFromAnnotation(pod *v1.Pod, containerName string) *sigmak8s
 	glog.V(4).Infof("No Resource found in pod %s for container %s", format.Pod(pod), containerName)
 	return nil
 }
+
+// GetDanglingPodsFromNodeAnnotation can get danglingPod information from node's annotation.
+func GetDanglingPodsFromNodeAnnotation(node *v1.Node) ([]sigmak8sapi.DanglingPod, error) {
+	if node == nil {
+		return []sigmak8sapi.DanglingPod{}, fmt.Errorf("invalid node: %v", node)
+	}
+	if len(node.Annotations) == 0 {
+		return []sigmak8sapi.DanglingPod{}, nil
+	}
+
+	danglingPodsStr, exists := node.Annotations[sigmak8sapi.AnnotationDanglingPods]
+	if !exists {
+		return []sigmak8sapi.DanglingPod{}, nil
+	}
+	var danglingPods []sigmak8sapi.DanglingPod
+	if err := json.Unmarshal([]byte(danglingPodsStr), &danglingPods); err != nil {
+		glog.Errorf("[DanglingPod] Failed to unmarshal dangling pods: %s", danglingPodsStr)
+		return []sigmak8sapi.DanglingPod{}, err
+	}
+	return danglingPods, nil
+}

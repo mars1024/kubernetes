@@ -32,6 +32,22 @@ const (
 const (
 	bestEffortCGroupName = "/sigma-stream"
 	defaultCGroupParent  = "/sigma"
+
+	// 网络优先级的分配： 保留:0-2， 在线业务: 3-7, 离线业务： 8-15
+	// Network QoS http://docs.alibaba-inc.com/pages/viewpage.action?pageId=479572415
+	netPriorityUnknown          = 0
+	netPriorityLatencySensitive = 5
+	netPriorityBatchJobs        = 7
+
+	// 在线任务使用1，离线任务使用-1, 目前仅调度在线任务固定使用1
+	// http://baike.corp.taobao.com/index.php/Task_prempt
+	// http://baike.corp.taobao.com/index.php/Cpu_Isolation_Config
+	cpuBvtWarpUnknown           = 0
+	cpuBvtWarpNsLatencySensitve = 1
+	cpuBvtWarpNsBatchJobs       = -1
+
+	// 每个容器都要需要设置 SN 环境变量
+	containerSNEnvName = "SN"
 )
 
 type AlipaySetDefault struct {
@@ -125,11 +141,11 @@ func addEnvSNToContainer(pod *core.Pod) error {
 next:
 	for i, c := range pod.Spec.Containers {
 		for _, env := range c.Env {
-			if env.Name == "SN" {
+			if env.Name == containerSNEnvName {
 				continue next
 			}
 		}
-		pod.Spec.Containers[i].Env = append(c.Env, core.EnvVar{Name: "SN", Value: sn})
+		pod.Spec.Containers[i].Env = append(c.Env, core.EnvVar{Name: containerSNEnvName, Value: sn})
 	}
 	return nil
 }
@@ -168,14 +184,14 @@ next:
 
 		switch allocSpec.Containers[i].HostConfig.CgroupParent {
 		case bestEffortCGroupName:
-			allocSpec.Containers[i].HostConfig.CPUBvtWarpNs = -1
-			netPriority = 7
+			allocSpec.Containers[i].HostConfig.CPUBvtWarpNs = cpuBvtWarpNsBatchJobs
+			netPriority = netPriorityBatchJobs
 		default:
-			if c.HostConfig.CPUBvtWarpNs == 0 {
-				allocSpec.Containers[i].HostConfig.CPUBvtWarpNs = 1
+			if c.HostConfig.CPUBvtWarpNs == cpuBvtWarpUnknown {
+				allocSpec.Containers[i].HostConfig.CPUBvtWarpNs = cpuBvtWarpNsLatencySensitve
 			}
-			if netPriority == 0 {
-				netPriority = 5
+			if netPriority == netPriorityUnknown {
+				netPriority = netPriorityLatencySensitive
 			}
 		}
 	}

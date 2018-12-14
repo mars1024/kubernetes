@@ -154,11 +154,11 @@ func TestAdmit(t *testing.T) {
 				assert.Nil(t, err)
 				for i := 0; i < 2; i++ {
 					assert.Equal(t, defaultCGroupParent, allocSpec.Containers[i].HostConfig.CgroupParent)
-					assert.Equal(t, "SN", pod.Spec.Containers[i].Env[0].Name)
+					assert.Equal(t, containerSNEnvName, pod.Spec.Containers[i].Env[0].Name)
 					assert.Equal(t, "sn1", pod.Spec.Containers[i].Env[0].Value)
-					assert.Equal(t, 1, allocSpec.Containers[i].HostConfig.CPUBvtWarpNs)
+					assert.Equal(t, cpuBvtWarpNsLatencySensitve, allocSpec.Containers[i].HostConfig.CPUBvtWarpNs)
 				}
-				assert.Equal(t, int64(5), podNetPriority(pod))
+				assert.Equal(t, int64(netPriorityLatencySensitive), podNetPriority(pod))
 			},
 		},
 		{
@@ -178,21 +178,21 @@ func TestAdmit(t *testing.T) {
 				allocSpec, err := podAllocSpec(pod)
 				assert.Nil(t, err)
 				for i := 0; i < 2; i++ {
-					assert.Equal(t, pod.Spec.Containers[i].Env[0].Name, "SN")
+					assert.Equal(t, pod.Spec.Containers[i].Env[0].Name, containerSNEnvName)
 					assert.Equal(t, pod.Spec.Containers[i].Env[0].Value, "sn1")
 				}
 				assert.Equal(t, allocSpec.Containers[0].HostConfig.CgroupParent, bestEffortCGroupName)
-				assert.Equal(t, allocSpec.Containers[0].HostConfig.CPUBvtWarpNs, -1)
+				assert.Equal(t, allocSpec.Containers[0].HostConfig.CPUBvtWarpNs, cpuBvtWarpNsBatchJobs)
 				assert.Equal(t, allocSpec.Containers[1].HostConfig.CgroupParent, defaultCGroupParent)
-				assert.Equal(t, allocSpec.Containers[1].HostConfig.CPUBvtWarpNs, 1)
-				assert.Equal(t, int64(7), podNetPriority(pod))
+				assert.Equal(t, allocSpec.Containers[1].HostConfig.CPUBvtWarpNs, cpuBvtWarpNsLatencySensitve)
+				assert.Equal(t, int64(netPriorityBatchJobs), podNetPriority(pod))
 			},
 		},
 		{
 			name: "env SN exists",
 			initfunc: func() *core.Pod {
 				pod := newPod()
-				pod.Spec.Containers[0].Env = append(pod.Spec.Containers[0].Env, core.EnvVar{Name: "SN", Value: "sn2"})
+				pod.Spec.Containers[0].Env = append(pod.Spec.Containers[0].Env, core.EnvVar{Name: containerSNEnvName, Value: "sn2"})
 				return pod
 			},
 			validate: func(pod *core.Pod) {
@@ -200,11 +200,11 @@ func TestAdmit(t *testing.T) {
 				assert.Nil(t, err)
 				for i := 0; i < 2; i++ {
 					assert.Equal(t, allocSpec.Containers[i].HostConfig.CgroupParent, defaultCGroupParent)
-					assert.Equal(t, allocSpec.Containers[i].HostConfig.CPUBvtWarpNs, 1)
+					assert.Equal(t, allocSpec.Containers[i].HostConfig.CPUBvtWarpNs, cpuBvtWarpNsLatencySensitve)
 					assert.Len(t, pod.Spec.Containers[i].Env, 1)
-					assert.Equal(t, pod.Spec.Containers[i].Env[0].Name, "SN")
+					assert.Equal(t, pod.Spec.Containers[i].Env[0].Name, containerSNEnvName)
 				}
-				assert.Equal(t, int64(5), podNetPriority(pod))
+				assert.Equal(t, int64(netPriorityLatencySensitive), podNetPriority(pod))
 				assert.Equal(t, pod.Spec.Containers[0].Env[0].Value, "sn2")
 				assert.Equal(t, pod.Spec.Containers[1].Env[0].Value, "sn1")
 			},

@@ -626,14 +626,14 @@ func (m *kubeGenericRuntimeManager) computePodActions(pod *v1.Pod, podStatus *ku
 		return changes
 	}
 
-	haveContainerStateAnnotation, containerDesiredState, _ := GetContainerDesiredStateFromAnnotation(pod)
+	haveContainerStateAnnotation, containerDesiredState, _ := sigmautil.GetContainerDesiredStateFromAnnotation(pod)
 	hasProtectFinalizer := sigmautil.HasProtectionFinalizer(pod)
 	// Number of running containers to keep.
 	keepCount := 0
 	// check the status of containers.
 	for idx, container := range pod.Spec.Containers {
 		containerStatus := podStatus.FindContainerStatusByName(container.Name)
-		containerPreviousResult := getStatusFromAnnotation(pod, container.Name)
+		containerPreviousResult := sigmautil.GetStatusFromAnnotation(pod, container.Name)
 
 		// Pause the container.
 		// Paused container is in running state and user can debug the program in the container.
@@ -798,7 +798,7 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 	// Step 1: Compute sandbox and container changes.
 	podContainerChanges := m.computePodActions(pod, podStatus)
 	// result.StateStatus get from annotation, if failed or not exist, create a new one.
-	_, _, result.StateStatus = GetContainerDesiredStateFromAnnotation(pod)
+	_, _, result.StateStatus = sigmautil.GetContainerDesiredStateFromAnnotation(pod)
 	glog.V(3).Infof("computePodActions got %+v for pod %q", podContainerChanges, format.Pod(pod))
 	if podContainerChanges.CreateSandbox {
 		ref, err := ref.GetReference(legacyscheme.Scheme, pod)

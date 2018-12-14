@@ -5,8 +5,7 @@ package kuberuntime
 import (
 	"k8s.io/api/core/v1"
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
-
-	annotationutil "k8s.io/kubernetes/pkg/kubelet/util/annotation"
+	sigmautil "k8s.io/kubernetes/pkg/kubelet/sigma"
 )
 
 // AdjustResourcesByAnnotation adjusts container resource requirement(currently only adjust cpu period) according
@@ -16,7 +15,7 @@ func AdjustResourcesByAnnotation(pod *v1.Pod, containerName string, resources *r
 	if currentCpuPeriod == 0 {
 		return
 	}
-	newCpuPeriod := annotationutil.GetCpuPeriodFromAnnotation(pod, containerName)
+	newCpuPeriod := sigmautil.GetCpuPeriodFromAnnotation(pod, containerName)
 	if newCpuPeriod < quotaPeriod {
 		return
 	}

@@ -17,6 +17,7 @@ limitations under the License.
 package core
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"math"
@@ -26,6 +27,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"k8s.io/kubernetes/pkg/features"
+
 	"github.com/golang/glog"
 
 	"k8s.io/api/core/v1"
@@ -33,6 +36,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/errors"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	utiltrace "k8s.io/apiserver/pkg/util/trace"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/util/workqueue"
@@ -111,6 +115,19 @@ type genericScheduler struct {
 	percentageOfNodesToScore int32
 }
 
+// printNodesName concatenates the nodes name into a string for logging
+func printNodesName(nodes []*v1.Node) string {
+	if nodes == nil || len(nodes) == 0 {
+		return ""
+	}
+	var b bytes.Buffer
+	for _, node := range nodes {
+		b.WriteString(node.Name)
+		b.WriteString(",")
+	}
+	return b.String()
+}
+
 // Schedule tries to schedule the given pod to one of the nodes in the node list.
 // If it succeeds, it will return the name of the node.
 // If it fails, it will return a FitError error with reasons.
@@ -139,7 +156,10 @@ func (g *genericScheduler) Schedule(pod *v1.Pod, nodeLister algorithm.NodeLister
 	trace.Step("Computing predicates")
 	startPredicateEvalTime := time.Now()
 	filteredNodes, failedPredicateMap, err := g.findNodesThatFit(pod, nodes)
+	glog.V(5).Infof("Pod %s found %d nodes that fit: %v", pod.Name, len(filteredNodes), printNodesName(nodes))
+
 	if err != nil {
+		glog.Errorf("error in findNodesThatFit: %v", err)
 		return "", err
 	}
 
@@ -170,7 +190,40 @@ func (g *genericScheduler) Schedule(pod *v1.Pod, nodeLister algorithm.NodeLister
 	metrics.SchedulingLatency.WithLabelValues(metrics.PriorityEvaluation).Observe(metrics.SinceInSeconds(startPriorityEvalTime))
 
 	trace.Step("Selecting host")
-	return g.selectHost(priorityList)
+	if utilfeature.DefaultFeatureGate.Enabled(features.VolumeScheduling) {
+		return g.selectHostForVolumes(pod, priorityList)
+	} else {
+		return g.selectHost(priorityList)
+	}
+}
+
+// selectHostForVolumes will prefer nodes with bound volumes. if not found, then look for nodes for dynamic provision.
+// first splits the nodes into two categories
+// 1) nodes with bound volumes, 2) nodes without bound volumes (for dynamic provisioning)
+// Then, select the host in category 1) with highest score
+// Then, select the host in category 2) with highest score
+func (g *genericScheduler) selectHostForVolumes(pod *v1.Pod, priorityList schedulerapi.HostPriorityList) (string, error) {
+	var nodesWithBoundVolumes schedulerapi.HostPriorityList
+	var nodesWithoutBoundVolumes schedulerapi.HostPriorityList
+
+	for _, node := range priorityList {
+		// If the node has bound volumes for the pod
+		if len(g.volumeBinder.Binder.GetBindingsCache().GetBindings(pod, node.Host)) > 0 {
+			nodesWithBoundVolumes = append(nodesWithBoundVolumes, node)
+		} else {
+			nodesWithoutBoundVolumes = append(nodesWithoutBoundVolumes, node)
+		}
+	}
+
+	if len(nodesWithBoundVolumes) > 0 {
+		host, err := g.selectHost(nodesWithBoundVolumes)
+		glog.Infof("selected host %s with bound volume", host)
+		return host, err
+	}
+	host, err := g.selectHost(nodesWithoutBoundVolumes)
+	glog.Infof("selected host %s without bound volume", host)
+	return host, err
+
 }
 
 // Prioritizers returns a slice containing all the scheduler's priority

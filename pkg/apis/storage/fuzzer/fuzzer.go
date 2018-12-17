@@ -29,7 +29,7 @@ var Funcs = func(codecs runtimeserializer.CodecFactory) []interface{} {
 	return []interface{}{
 		func(obj *storage.StorageClass, c fuzz.Continue) {
 			c.FuzzNoCustom(obj) // fuzz self without calling this function again
-			reclamationPolicies := []api.PersistentVolumeReclaimPolicy{api.PersistentVolumeReclaimDelete, api.PersistentVolumeReclaimRetain}
+			reclamationPolicies := []api.PersistentVolumeReclaimPolicy{api.PersistentVolumeReclaimDelete, api.PersistentVolumeReclaimRetain, api.PersistentVolumeReclaimReuse}
 			obj.ReclaimPolicy = &reclamationPolicies[c.Rand.Intn(len(reclamationPolicies))]
 			bindingModes := []storage.VolumeBindingMode{storage.VolumeBindingImmediate, storage.VolumeBindingWaitForFirstConsumer}
 			obj.VolumeBindingMode = &bindingModes[c.Rand.Intn(len(bindingModes))]

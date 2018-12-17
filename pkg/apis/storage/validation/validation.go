@@ -109,7 +109,7 @@ func validateParameters(params map[string]string, fldPath *field.Path) field.Err
 	return allErrs
 }
 
-var supportedReclaimPolicy = sets.NewString(string(api.PersistentVolumeReclaimDelete), string(api.PersistentVolumeReclaimRetain))
+var supportedReclaimPolicy = sets.NewString(string(api.PersistentVolumeReclaimDelete), string(api.PersistentVolumeReclaimRetain), string(api.PersistentVolumeReclaimReuse))
 
 // validateReclaimPolicy tests that the reclaim policy is one of the supported. It is up to the volume plugin to reject
 // provisioning for storage classes with impossible reclaim policies, e.g. EBS is not Recyclable

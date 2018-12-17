@@ -128,6 +128,10 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][resource][Serial]", func() {
 		framework.ExpectNodeHasLabel(cs, nodeName, sigmak8sapi.LabelMemOverQuota, "1.1")
 		defer framework.RemoveLabelOffNode(cs, nodeName, sigmak8sapi.LabelMemOverQuota)
 
+		// due to bug: 18296033, MUST also add overquota lable in sigma2.0
+		swarm.SetNodeOverQuota(nodeName, 2, 1.1)
+		defer swarm.SetNodeToNotOverQuota(nodeName)
+
 		overQuotaTaint := v1.Taint{
 			Key:    sigmak8sapi.LabelEnableOverQuota,
 			Value:  "true",
@@ -473,6 +477,10 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][resource][Serial]", func() {
 		framework.AddOrUpdateLabelOnNode(cs, nodeName, sigmak8sapi.LabelMemOverQuota, "1.1")
 		framework.ExpectNodeHasLabel(cs, nodeName, sigmak8sapi.LabelMemOverQuota, "1.1")
 		defer framework.RemoveLabelOffNode(cs, nodeName, sigmak8sapi.LabelMemOverQuota)
+
+		// due to bug: 18296033, MUST also add overquota lable in sigma2.0
+		swarm.SetNodeOverQuota(nodeName, 1.5, 1.1)
+		defer swarm.SetNodeToNotOverQuota(nodeName)
 
 		overQuotaTaint := v1.Taint{
 			Key:    sigmak8sapi.LabelEnableOverQuota,

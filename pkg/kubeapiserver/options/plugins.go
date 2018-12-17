@@ -73,6 +73,7 @@ import (
 	alipayinclusterkube "k8s.io/kubernetes/plugin/pkg/admission/alipay/inclusterkube"
 	alipaypodlocation "k8s.io/kubernetes/plugin/pkg/admission/alipay/podlocation"
 	alipaypodpreset "k8s.io/kubernetes/plugin/pkg/admission/alipay/podpreset"
+	alipaysetdefault "k8s.io/kubernetes/plugin/pkg/admission/alipay/setdefault"
 	alipayzappinfo "k8s.io/kubernetes/plugin/pkg/admission/alipay/zappinfo"
 )
 
@@ -122,6 +123,7 @@ var AllOrderedPlugins = []string{
 	alipodinjectionpostschedule.PluginName, // AliPodInjectionPostSchedule
 	poddeletionflowcontrol.PluginName,      // PodDeletionFlowControl
 
+	alipaysetdefault.PluginName,    // Alipay SetDefault
 	alipaycmdb.PluginName,          // Alipay CMDB
 	alipayinclusterkube.PluginName, // Alipay in-cluster kubernetes service
 	alipaypodlocation.PluginName,   // Alipay PodLocation
@@ -170,6 +172,7 @@ func RegisterAllAdmissionPlugins(plugins *admission.Plugins) {
 	alipodinjectionpostschedule.Register(plugins)
 	poddeletionflowcontrol.Register(plugins)
 
+	alipaysetdefault.Register(plugins)
 	alipaycmdb.Register(plugins)
 	alipayinclusterkube.Register(plugins)
 	alipaypodlocation.Register(plugins)

@@ -43,18 +43,21 @@ func GetPouchPsOutput(hostIP, containerName string) string {
 
 // GetContainerDType execute 'pouch info' and 'docker info' to get containerd type
 func GetContainerDType(hostIP string) (ContainerdType, error) {
+	glog.Infof("get container runtime of host: %s", hostIP)
 	hostSn := GetHostSnFromHostIp(hostIP)
 	cmd := "cmd://pouch info"
 	resp, err := ResponseFromStarAgentTask(cmd, hostIP, hostSn)
 	if err == nil {
-		if strings.Contains(resp, hostIP) {
+		if strings.Contains(resp, "Containers:") {
+			glog.Infof("runtime of host %s is pouch", hostIP)
 			return ContainerdTypePouch, nil
 		}
 	}
 	cmd = "cmd://docker info"
 	resp, err = ResponseFromStarAgentTask(cmd, hostIP, hostSn)
 	if err == nil {
-		if strings.Contains(resp, hostIP) {
+		if strings.Contains(resp, "Containers:") {
+			glog.Infof("runtime of host %s is docker", hostIP)
 			return ContainerdTypeDocker, nil
 		}
 	}
@@ -66,7 +69,7 @@ func GetContainerInspectField(hostIP, containerID, format string) (string, error
 	hostSn := GetHostSnFromHostIp(hostIP)
 	runtimeType, err := GetContainerDType(hostIP)
 	if err != nil {
-		return "", fmt.Errorf("Failed to get runtime type of node: %s", hostIP)
+		return "", fmt.Errorf("Failed to get runtime type of node: %s, error: %s", hostIP, err.Error())
 	}
 	cmd := ""
 	switch runtimeType {

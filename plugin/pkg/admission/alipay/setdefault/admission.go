@@ -39,11 +39,11 @@ const (
 	netPriorityLatencySensitive = 5
 	netPriorityBatchJobs        = 7
 
-	// 在线任务使用1，离线任务使用-1, 目前仅调度在线任务固定使用1
+	// 在线任务使用1，离线任务使用-1, 目前仅调度在线任务固定使用2，ali2010rc1内核需要使用1，但蚂蚁线上没有此内核版本的机器
 	// http://baike.corp.taobao.com/index.php/Task_prempt
 	// http://baike.corp.taobao.com/index.php/Cpu_Isolation_Config
 	cpuBvtWarpUnknown           = 0
-	cpuBvtWarpNsLatencySensitve = 1
+	cpuBvtWarpNsLatencySensitve = 2
 	cpuBvtWarpNsBatchJobs       = -1
 
 	// 每个容器都要需要设置 SN 环境变量

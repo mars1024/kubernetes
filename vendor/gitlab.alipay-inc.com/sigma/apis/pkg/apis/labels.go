@@ -26,6 +26,12 @@ const (
 	// Label default PodPreset
 	LabelDefaultPodPreset = "podpreset." + AlipayGroupName + "/default"
 
+	// Label default MOSN sidecar config
+	LabelDefaultMOSNSidecar = MOSNSidecarAlipayPrefix + "/default"
+
 	// Label Zone
 	LabelZone = MetaAlipayPrefix + "/zone"
+
+	// LabelPodAppEnv is the application environment for pod
+	LabelPodAppEnv = MetaAlipayPrefix + "/app-env"
 )

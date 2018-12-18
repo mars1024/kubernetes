@@ -46,7 +46,6 @@ import (
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	"k8s.io/kubernetes/pkg/kubelet/events"
-	"k8s.io/kubernetes/pkg/kubelet/qos"
 	sigmautil "k8s.io/kubernetes/pkg/kubelet/sigma"
 	"k8s.io/kubernetes/pkg/kubelet/types"
 	"k8s.io/kubernetes/pkg/kubelet/util/format"
@@ -390,42 +389,7 @@ func (m *kubeGenericRuntimeManager) generateContainerConfig(container *v1.Contai
 
 // returns linux container resources to the container.
 func (m *kubeGenericRuntimeManager) generateLinuxContainerResources(container *v1.Container, pod *v1.Pod) *runtimeapi.LinuxContainerResources {
-	// set linux container resources
-	r := &runtimeapi.LinuxContainerResources{}
-	var cpuShares int64
-	cpuRequest := container.Resources.Requests.Cpu()
-	cpuLimit := container.Resources.Limits.Cpu()
-	memoryLimit := container.Resources.Limits.Memory().Value()
-	oomScoreAdj := int64(qos.GetContainerOOMScoreAdjust(pod, container,
-		int64(m.machineInfo.MemoryCapacity)))
-	// If request is not specified, but limit is, we want request to default to limit.
-	// API server does this for new containers, but we repeat this logic in Kubelet
-	// for containers running on existing Kubernetes clusters.
-	if cpuRequest.IsZero() && !cpuLimit.IsZero() {
-		cpuShares = milliCPUToShares(cpuLimit.MilliValue())
-	} else {
-		// if cpuRequest.Amount is nil, then milliCPUToShares will return the minimal number
-		// of CPU shares.
-		cpuShares = milliCPUToShares(cpuRequest.MilliValue())
-	}
-	r.CpuShares = cpuShares
-	if memoryLimit != 0 {
-		r.MemoryLimitInBytes = memoryLimit
-	}
-	// Set OOM score of the container based on qos policy. Processes in lower-priority pods should
-	// be killed first if the system runs out of memory.
-	r.OomScoreAdj = oomScoreAdj
-
-	if m.cpuCFSQuota {
-		// if cpuLimit.Amount is nil, then the appropriate default value is returned
-		// to allow full usage of cpu resource.
-		// TODO: [rebase 1.12] milliCPUToQuota' params has changed.
-		cpuQuota := milliCPUToQuota(cpuLimit.MilliValue(), 100000)
-		cpuPeriod := int64(100000)
-		r.CpuQuota = cpuQuota
-		r.CpuPeriod = cpuPeriod
-	}
-	return r
+	return m.generateLinuxContainerConfig(container, pod, nil, "").Resources
 }
 
 // makeDevices generates container devices for kubelet runtime v1.
@@ -695,8 +659,8 @@ func (m *kubeGenericRuntimeManager) restoreSpecsFromContainerLabels(containerID 
 		},
 	}
 	container = &v1.Container{
-		Name:  l.ContainerName,
-		Ports: a.ContainerPorts,
+		Name:                   l.ContainerName,
+		Ports:                  a.ContainerPorts,
 		TerminationMessagePath: a.TerminationMessagePath,
 	}
 	if a.PreStopHandler != nil {

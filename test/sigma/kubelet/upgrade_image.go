@@ -48,7 +48,7 @@ func doUpgradeImageTestCase(f *framework.Framework, testCase *UpgradeImageTestCa
 	case "exited":
 		// Step2.1: Wait for container's creation finished.
 		By("wait until pod is stopped after creation")
-		err = util.WaitTimeoutForContainerUpdateStatus(f.ClientSet, testPod, containerName, 3*time.Minute, stopSuccessStr)
+		err = util.WaitTimeoutForContainerUpdateStatus(f.ClientSet, testPod, containerName, 3*time.Minute, stopSuccessStr, true)
 		Expect(err).NotTo(HaveOccurred(), "start/stop pod err")
 	}
 
@@ -59,7 +59,7 @@ func doUpgradeImageTestCase(f *framework.Framework, testCase *UpgradeImageTestCa
 
 	// Step4: Wait for upgrade action finished.
 	By("wait until pod is upgraded")
-	err = util.WaitTimeoutForContainerUpdateStatus(f.ClientSet, upgradedPod, containerName, 3*time.Minute, upgradeSuccessStr)
+	err = util.WaitTimeoutForContainerUpdateStatus(f.ClientSet, upgradedPod, containerName, 3*time.Minute, upgradeSuccessStr, true)
 	Expect(err).NotTo(HaveOccurred(), "upgrade pod err")
 
 	// Step5: Check upgraded container
@@ -78,7 +78,7 @@ func doUpgradeImageTestCase(f *framework.Framework, testCase *UpgradeImageTestCa
 		}
 	case "exited":
 		By("wait until pod is stopped")
-		err = util.WaitTimeoutForContainerUpdateStatus(f.ClientSet, upgradedPod, containerName, 3*time.Minute, stopSuccessStr)
+		err = util.WaitTimeoutForContainerUpdateStatus(f.ClientSet, upgradedPod, containerName, 3*time.Minute, stopSuccessStr, true)
 		Expect(err).NotTo(HaveOccurred(), "stop pod err")
 	}
 }

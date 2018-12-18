@@ -46,7 +46,7 @@ func doUpgradeShieldFieldTestCase(f *framework.Framework, testCase *UpgradeShiel
 
 	// Step4: Wait for upgrade action finished.
 	By("wait until pod is upgraded")
-	err = util.WaitTimeoutForContainerUpdateStatus(f.ClientSet, upgradedPod, containerName, 1*time.Minute, upgradeSuccessStr)
+	err = util.WaitTimeoutForContainerUpdateStatus(f.ClientSet, upgradedPod, containerName, 1*time.Minute, upgradeSuccessStr, true)
 	if err != nil && strings.Contains(err.Error(), timeoutStr) {
 		glog.Infof("Timeout, the container is not upgraded as expect")
 	} else {

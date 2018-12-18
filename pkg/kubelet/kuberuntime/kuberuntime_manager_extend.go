@@ -169,10 +169,11 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 
 		for _, container := range pod.Spec.Containers {
 			containerStatus := podStatus.FindContainerStatusByName(container.Name)
-			newLC := m.generateLinuxContainerResources(&container, pod)
 			if containerStatus.Resources != nil {
 				currentPodCPUQuota += containerStatus.Resources.CpuQuota
 			}
+
+			newLC := m.generateLinuxContainerResources(&container, pod)
 			newPodCPUQuota += newLC.CpuQuota
 		}
 
@@ -182,16 +183,36 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 		if m.cpuCFSQuota && (newPodCPUQuota > currentPodCPUQuota) {
 			if err := m.runtimeHelper.UpdatePodCgroup(pod); err != nil {
 				result.AddSyncResult(updatePodResult)
-				updatePodResult.Fail(err, "Update the pod's cgroup failed")
+				errMsg := fmt.Sprintf("update cgroup of pod(%s) failed", format.Pod(pod))
+				updatePodResult.Fail(err, errMsg)
+				for containerID, containerInfo := range changes.ContainersToUpdate {
+					containerStatus := createContainerStatus(podStatus, sigmak8sapi.UpdateContainerAction, containerInfo.name, pod)
+					containerStatus.Message = errMsg
+					containerStatus.Success = false
+					m.updateContainerStateStatus(containerStatus, containerInfo.name, containerID.ID,
+						result.StateStatus, false, errMsg)
+				}
 				return
 			}
 		}
 
 		for containerID, containerInfo := range changes.ContainersToUpdate {
+			container := containerInfo.container
 			updateContainerResult := kubecontainer.NewSyncResult(kubecontainer.UpdateContainer, containerInfo.name)
 			result.AddSyncResult(updateContainerResult)
-			containerStatus := createContainerStatus(podStatus, sigmak8sapi.UpdateContainerAction, containerInfo.name, pod)
 
+			// If previous update failed, call doBackOffExtension.
+			previousResult := sigmautil.GetStatusFromAnnotation(pod, container.Name)
+			if previousResult != nil && !previousResult.Success {
+				isInBackOff, msg, err := m.doBackOffExtension(pod, container, podStatus, backOff)
+				if isInBackOff {
+					updateContainerResult.Fail(err, msg)
+					glog.V(4).Infof("Backing Off updating container %+v in pod %v", container, format.Pod(pod))
+					return
+				}
+			}
+
+			containerStatus := createContainerStatus(podStatus, sigmak8sapi.UpdateContainerAction, containerInfo.name, pod)
 			if msg, err := m.updateContainer(containerID, containerInfo.container, pod); err != nil {
 				m.updateContainerStateStatus(containerStatus, containerInfo.name, containerID.ID, result.StateStatus, false, msg)
 				updateContainerResult.Fail(err, msg)
@@ -341,7 +362,7 @@ func (m *kubeGenericRuntimeManager) startContainerWithOutPullImage(podSandboxCon
 			Type: m.runtimeName,
 			ID:   containerID,
 		}
-		glog.V(4).Infof("Exec PostStartHook:%v in container %s-%s with timeout value: %d",
+		glog.V(4).Infof("Exec PostStartHook: %v in container %s-%s with timeout value: %d",
 			container.Lifecycle.PostStart, format.Pod(pod), container.Name, timeout)
 		msg, handlerErr := m.runner.Run(kubeContainerID, pod, container, container.Lifecycle.PostStart, time.Duration(timeout)*time.Second)
 		if handlerErr != nil {
@@ -363,7 +384,7 @@ func (m *kubeGenericRuntimeManager) startContainerWithOutPullImage(podSandboxCon
 	return "", nil
 }
 
-// containerStateConvert containerState type convert,from kubecontainer.containerState
+// containerStateConvert containerState type convert from kubecontainer.containerState.
 func containerStateConvertFromKubeContainer(state kubecontainer.ContainerState) sigmak8sapi.ContainerState {
 	switch state {
 	case kubecontainer.ContainerStateCreated:
@@ -376,7 +397,7 @@ func containerStateConvertFromKubeContainer(state kubecontainer.ContainerState) 
 	return sigmak8sapi.ContainerStateUnknown
 }
 
-// containerStateConvert containerState type convert,from runtimeApi.containerState
+// containerStateConvert containerState type convert from runtimeApi.containerState.
 func containerStateConvertFromRunTimeAPI(state runtimeapi.ContainerState) sigmak8sapi.ContainerState {
 	switch state {
 	case runtimeapi.ContainerState_CONTAINER_CREATED:
@@ -445,7 +466,7 @@ func (m *kubeGenericRuntimeManager) updateContainerStateStatus(status sigmak8sap
 	var state runtimeapi.ContainerState
 	containerStatusFromRunTime, err := m.runtimeService.ContainerStatus(containerID)
 	if err != nil {
-		glog.Errorf("get container %s runtime status err :%s", containerName, err.Error())
+		glog.Errorf("get container %s runtime status err: %s", containerName, err.Error())
 		state = runtimeapi.ContainerState_CONTAINER_UNKNOWN
 	} else {
 		state = containerStatusFromRunTime.State

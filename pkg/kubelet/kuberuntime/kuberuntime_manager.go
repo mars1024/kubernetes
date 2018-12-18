@@ -637,7 +637,7 @@ func (m *kubeGenericRuntimeManager) computePodActions(pod *v1.Pod, podStatus *ku
 
 		// Pause the container.
 		// Paused container is in running state and user can debug the program in the container.
-		// TODO: Add upate-status when containerStatus is nil.
+		// TODO: Add update-status when containerStatus is nil.
 		if haveContainerStateAnnotation && isContainerPaused(containerDesiredState, container.Name) {
 			if containerStatus != nil && containerStatus.State != kubecontainer.ContainerStateRunning {
 				changes.ContainersToStartBecausePause[containerStatus.ID] = containerOperationInfo{

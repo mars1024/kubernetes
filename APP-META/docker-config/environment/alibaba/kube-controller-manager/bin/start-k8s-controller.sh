@@ -11,5 +11,6 @@ $workDir/bin/kube-controller-manager \
     --kube-api-burst=300 --kube-api-qps=200 \
     --service-account-private-key-file=$certDir/sa.key \
     --use-service-account-credentials=true \
+    --secure-port 0 \
     --v=5 >> $workDir/log/k8s-controller.log 2>&1 &
 }

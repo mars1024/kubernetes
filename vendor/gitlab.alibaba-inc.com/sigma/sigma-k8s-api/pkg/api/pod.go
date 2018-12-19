@@ -2,6 +2,7 @@ package api
 
 import (
 	"k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -272,4 +273,10 @@ type NetworkStatus struct {
 	SandboxId string `json:"sandboxId"`
 	// Ip, e.g. 11.172.32.180
 	Ip string `json:"ip"`
+	// Ip allocate time
+	AllocationTimestamp *metav1.Time `json:"allocationTimestamp,omitempty"`
+	// Ip release time
+	ReleaseTimestamp *metav1.Time `json:"releaseTimestamp,omitempty"`
+	// Ip security domain
+	SecurityDomain string `json:"securityDomain,omitempty"`
 }

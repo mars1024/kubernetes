@@ -71,6 +71,7 @@ import (
 
 	alipaycmdb "k8s.io/kubernetes/plugin/pkg/admission/alipay/cmdb"
 	alipayinclusterkube "k8s.io/kubernetes/plugin/pkg/admission/alipay/inclusterkube"
+	alipaymosnsidecar "k8s.io/kubernetes/plugin/pkg/admission/alipay/mosnsidecar"
 	alipaypodlocation "k8s.io/kubernetes/plugin/pkg/admission/alipay/podlocation"
 	alipaypodpreset "k8s.io/kubernetes/plugin/pkg/admission/alipay/podpreset"
 	alipaysetdefault "k8s.io/kubernetes/plugin/pkg/admission/alipay/setdefault"
@@ -110,7 +111,6 @@ var AllOrderedPlugins = []string{
 	validatingwebhook.PluginName,            // ValidatingAdmissionWebhook
 	resourcequota.PluginName,                // ResourceQuota
 	deny.PluginName,                         // AlwaysDeny
-
 	namespacedelete.PluginName,              // NamespaceDelete
 
 	armory.PluginName,                     // Armory
@@ -123,6 +123,7 @@ var AllOrderedPlugins = []string{
 	alipodinjectionpostschedule.PluginName, // AliPodInjectionPostSchedule
 	poddeletionflowcontrol.PluginName,      // PodDeletionFlowControl
 
+	alipaymosnsidecar.PluginName,   // Alipay MOSN Sidecar
 	alipaysetdefault.PluginName,    // Alipay SetDefault
 	alipaycmdb.PluginName,          // Alipay CMDB
 	alipayinclusterkube.PluginName, // Alipay in-cluster kubernetes service
@@ -172,6 +173,7 @@ func RegisterAllAdmissionPlugins(plugins *admission.Plugins) {
 	alipodinjectionpostschedule.Register(plugins)
 	poddeletionflowcontrol.Register(plugins)
 
+	alipaymosnsidecar.Register(plugins)
 	alipaysetdefault.Register(plugins)
 	alipaycmdb.Register(plugins)
 	alipayinclusterkube.Register(plugins)

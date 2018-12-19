@@ -1,4 +1,4 @@
-package podpreset
+package zappinfo
 
 import (
 	"testing"

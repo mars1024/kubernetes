@@ -31,6 +31,15 @@ const (
 	PauseContainerAction   ContainerAction = "pause"
 )
 
+// InplaceUpdateState is inplace update state.
+// https://yuque.antfin-inc.com/sys/sigma3.x/inplace-update-design-doc
+const (
+	InplaceUpdateStateCreated   string = "created"
+	InplaceUpdateStateAccepted  string = "accepted"
+	InplaceUpdateStateFailed    string = "failed"
+	InplaceUpdateStateSucceeded string = "succeeded"
+)
+
 // ContainerStateSpec is containers desired state.
 type ContainerStateSpec struct {
 	// It can contain all containers, but it not force. It should contain containers which you want operation.
@@ -97,7 +106,7 @@ func (c *ContainerInfo) ParseString(data string) error {
 	return nil
 }
 
-// RebuildContainerInfo  container info from sigma2.0 container.
+// RebuildContainerInfo container info from sigma 2.0 container.
 type RebuildContainerInfo struct {
 	// ContainerID container id.
 	ContainerID string `json:"container_id,omitempty"`
@@ -105,7 +114,7 @@ type RebuildContainerInfo struct {
 	DiskQuotaID string `json:"disk_quota_id,omitempty"`
 	// AliAdminUID uid of admin in node.
 	AliAdminUID string `json:"ali_admin_uid,omitempty"`
-	// AnonymousVolumesMounts anonymous volume in sigma2.0 container.
+	// AnonymousVolumesMounts anonymous volume in sigma 2.0 container.
 	AnonymousVolumesMounts []MountPoint `json:"anonymous_volumes_mounts,omitempty"`
 }
 

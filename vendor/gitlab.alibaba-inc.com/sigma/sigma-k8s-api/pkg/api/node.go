@@ -109,6 +109,8 @@ const (
 	LabelECSDeploymentSetID string = "sigma.ali/ecs-deployment-set-id"
 	// e.g. ecs region id
 	LabelECSRegionID string = "sigma.ali/ecs-region-id"
+	// e.g. ecs env
+	LabelECSENV string = "sigma.ali/ecs-env"
 
 	// ratio of cpu over-commit, value should be equal or greater than 1.0
 	LabelCPUOverQuota string = "sigma.ali/cpu-over-quota"

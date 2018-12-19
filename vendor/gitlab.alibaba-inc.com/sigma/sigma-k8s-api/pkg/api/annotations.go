@@ -27,11 +27,18 @@ const (
 	// Update result should be stored in this annotation
 	AnnotationPodUpdateStatus = "pod.beta1.sigma.ali/update-status"
 
+	// PodInplaceUpdateState is used to store inplace update state.
+	// The state should be one of "created"/"accepted"/"failed".
+	// https://yuque.antfin-inc.com/sys/sigma3.x/inplace-update-design-doc
+	AnnotationPodInplaceUpdateState = "pod.beta1.sigma.ali/inplace-update-state"
+
 	AnnotationLocalInfo = "node.beta1.sigma.ali/local-info"
 
 	AnnotationPodAllocSpec = "pod.beta1.sigma.ali/alloc-spec"
 
 	AnnotationPodNetworkStats = "pod.beta1.sigma.ali/network-status"
+
+	AnnotationPodNetworkStatsHistory = "pod.beta1.sigma.ali/network-status-history"
 
 	// numeric number of network priority
 	// http://docs.alibaba-inc.com/pages/viewpage.action?pageId=479572415

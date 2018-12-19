@@ -407,6 +407,25 @@ const (
 	//
 	// Enable DNS feature implemented in alidocker
 	AliDockerDNS utilfeature.Feature = "AliDockerDNS"
+
+	// owner: @chenjun.cj (chenjun.cj@alibaba-inc.com)
+	// alpha: v1.12
+	//
+	// Disable Node-Lifecycle-Controller evict Pods when Node Ready condition is False or Unknown
+	// Node-Lifecycle-Controller will also clear all Nodes' taints node.kubernetes.io/unreachable=:NoExecute and node.kubernetes.io/not-ready=:NoExecute
+	DisableEvictPodByNodeReadyCondition utilfeature.Feature = "DisableEvictPodByNodeReadyCondition"
+
+	// owner: @chenjun.cj (chenjun.cj@alibaba-inc.com)
+	// alpha: v1.12
+	//
+	// Evict Pod by Policy instead of delete Pods directly
+	EvictPodByPolicy utilfeature.Feature = "EvictPodByPolicy"
+
+	// owner: @chenjun.cj (chenjun.cj@alibaba-inc.com)
+	// alpha: v1.12
+	//
+	// Disable Node-Lifecycle-Controller change Pod status when Node Ready condition is False or Unknown
+	DisableChangePodStatusByNodeReadyCondition utilfeature.Feature = "DisableChangePodStatusByNodeReadyCondition"
 )
 
 func init() {
@@ -422,7 +441,7 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	ExperimentalHostUserNamespaceDefaultingGate: {Default: false, PreRelease: utilfeature.Beta},
 	ExperimentalCriticalPodAnnotation:           {Default: false, PreRelease: utilfeature.Alpha},
 	DevicePlugins:                               {Default: true, PreRelease: utilfeature.Beta},
-	TaintBasedEvictions:                         {Default: false, PreRelease: utilfeature.Alpha},
+	TaintBasedEvictions:                         {Default: true, PreRelease: utilfeature.Alpha},
 	RotateKubeletServerCertificate:              {Default: true, PreRelease: utilfeature.Beta},
 	RotateKubeletClientCertificate:              {Default: true, PreRelease: utilfeature.Beta},
 	PersistentLocalVolumes:                      {Default: true, PreRelease: utilfeature.Beta},
@@ -478,6 +497,9 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	IgnoreProtectionFinalizer:                   {Default: true, PreRelease: utilfeature.Alpha},
 	StartContainerByOrder:                       {Default: false, PreRelease: utilfeature.Alpha},
 	AliDockerDNS:                                {Default: false, PreRelease: utilfeature.Alpha},
+	DisableEvictPodByNodeReadyCondition:         {Default: true, PreRelease: utilfeature.Beta},
+	EvictPodByPolicy:                            {Default: true, PreRelease: utilfeature.Alpha},
+	DisableChangePodStatusByNodeReadyCondition:  {Default: true, PreRelease: utilfeature.Beta},
 
 	// inherited features from generic apiserver, relisted here to get a conflict if it is changed
 	// unintentionally on either side:

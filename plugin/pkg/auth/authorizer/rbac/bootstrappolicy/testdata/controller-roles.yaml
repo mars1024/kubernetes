@@ -709,6 +709,7 @@ items:
     verbs:
     - delete
     - list
+    - patch
   - apiGroups:
     - ""
     resources:

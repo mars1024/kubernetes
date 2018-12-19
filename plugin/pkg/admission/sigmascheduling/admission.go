@@ -376,11 +376,8 @@ func validateNodeLabels(node *api.Node) []error {
 }
 
 func isInInplaceUpdateProcess(pod *api.Pod) bool {
-	if _, ok := pod.Annotations[sigmaapi.AnnotationPodInplaceUpdateState]; ok {
-		return true
-	}
-
-	return false
+	_, ok := pod.Annotations[sigmaapi.AnnotationPodInplaceUpdateState]
+	return ok
 }
 
 func validateNode(attributes admission.Attributes) error {

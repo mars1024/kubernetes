@@ -1,0 +1,35 @@
+{
+    "apiVersion": "v1",
+    "kind": "ConfigMap",
+    "metadata": {
+        "name": "injection-pre-schdule-buy2",
+        "labels": {
+            "sigma.ali/app-name": "buy2",
+            "sigma.ali/container-model": "dockervm",
+            "sigma.ali/deploy-unit": "buy2host",
+            "sigma.ali/instance-group": "buy2host",
+            "sigma.ali/site": "su18",
+            "sigma.ali/sn": "eba1aa49-f401-4546-9db4-ea340fba138a",
+            "sigma.alibaba-inc.com/app-stage": "PUBLISH",
+            "sigma.alibaba-inc.com/app-unit": "CENTER_UNIT.unsz",
+            "sigma.alibaba-inc.com/ip-label": "",
+            "sigma.alibaba-inc.com/appconfig-beta1":"true"
+        }
+    },
+
+    "data": {
+        "constraints": "{\"server.owner\": \"sigma_public\",\"ali.SubBizPool\": \"app_swift\",\"DiskPreference\": \"capacity\",\"IsPubNetServer\": \"true\",\"sep\": \"aip-vpc\",\"YarnCpuQuota\": \"800\",\"sigmaTestMandatoryLabel\": \"testMandatoryLabelValue\",\"IsMixrun\": \"true\",\"Test\": \"performance\",\"IsEcs\": \"true\",\"CpuSpec\": \"high\",\"MachineModel\": \"test\",\"ResourcePool\": \"sigma_public\",\"OS\": \"alios5u7\"}",
+
+        "spread": "{\"ali.MaxInstancePerHost\":1,\"ali.MaxInstancePerPhyHost\":1}",
+
+        "alloSpec": "{\"ali.EnableOverQuota\": \"false\"}",
+
+        "hostConfig": "{\"Privileged\": \"true\",\"MemoryWmarkRatio\": 1,\"Binds\": [\"/usr/local/cuda-8.0:/usr/local/cuda-8.0:ro\",\"/usr/share/fonts/luban:/usr/share/fonts/luban:ro\"],\"NetworkMode\":\"host\",\"NetPriority\": {\"DEFAULT\": \"010010\",\"sigmabosshost\": \"010001\"}}",
+
+        "extConfig": "{\"IsHost\":\"true\",\"IpLabel\": \"ae_security_pci\",\"CpuSetModeAdvConfig\":{\"AppName\":\"tpsrv\",\"NodeGroupRules\":[{\"NodeGroup\":\"tpsrvhost\",\"CpuSetMode\":\"default\",\"CpuPolicy\":\"S20\",\"Modifier\":\"system\",\"ModifyTime\":\"2018-06-06 20:33:09\"},{\"NodeGroup\":\"tpsrv_prehost\",\"CpuSetMode\":\"default\",\"CpuPolicy\":\"S20\",\"Modifier\":\"system\",\"ModifyTime\":\"2018-06-06 20:33:09\"}]}}",
+
+        "monopolize": "{\"AppMonopolize\" : \"true\",\"CpuSetMonopolize\" : \"true\"}",
+
+        "prohibit": "{\"AppConstraints\": {\"key1\":1,\"key2\":2}}"
+    }
+}

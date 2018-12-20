@@ -60,6 +60,7 @@ import (
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/plugin/pkg/admission/alipodinjectionpostschedule"
+	"k8s.io/kubernetes/plugin/pkg/admission/newalipodinjectionpreschedule"
 	"k8s.io/kubernetes/plugin/pkg/admission/alipodinjectionpreschedule"
 	"k8s.io/kubernetes/plugin/pkg/admission/alipodlifecyclehook"
 	"k8s.io/kubernetes/plugin/pkg/admission/armory"
@@ -119,6 +120,7 @@ var AllOrderedPlugins = []string{
 	networkstatus.PluginName,              // NetworkStatus
 	alipodlifecyclehook.PluginName,        // AliPodLifeTimeHook
 	alipodinjectionpreschedule.PluginName, // AliPodInjectionPreSchedule
+	newalipodinjectionpreschedule.PluginName, // AliPodInjectionPreSchedule
 	// sigmascheduling must admit after alipodinjectionpreschedule
 	sigmascheduling.PluginName,             // SigmaScheduling
 	alipodinjectionpostschedule.PluginName, // AliPodInjectionPostSchedule
@@ -169,6 +171,7 @@ func RegisterAllAdmissionPlugins(plugins *admission.Plugins) {
 	networkstatus.Register(plugins)
 	alipodlifecyclehook.Register(plugins)
 	alipodinjectionpreschedule.Register(plugins)
+	newalipodinjectionpreschedule.Register(plugins)
 	sigmascheduling.Register(plugins)
 	alipodinjectionpostschedule.Register(plugins)
 	poddeletionflowcontrol.Register(plugins)

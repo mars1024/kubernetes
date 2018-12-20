@@ -1,4 +1,4 @@
-package alipodinjectionpreschedule
+package newalipodinjectionpreschedule
 
 import (
 	"bytes"
@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"reflect"
-	"strconv"
 	"strings"
 	"text/template"
 
@@ -17,6 +16,8 @@ import (
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+    "k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apiserver/pkg/admission"
 	api "k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
@@ -27,29 +28,39 @@ import (
 )
 
 const (
-	PluginName                   = "AliPodInjectionPreSchedule"
+	PluginName                   = "NewAliPodInjectionPreSchedule"
 	globalConfigName             = "sigma-alipodglobalrules-config"
-	appConfigName                = "sigma-alipodapprules-config"
+	//appConfigName                = "sigma-alipodapprules-config"
 	globalLabelMappingConfigName = "sigma2-sigma3-label-mapping"
 
 	labelPodIpLabel = "sigma.alibaba-inc.com/ip-label"
 	labelAppUnit    = "sigma.alibaba-inc.com/app-unit"
 	labelAppStage   = "sigma.alibaba-inc.com/app-stage"
 
-	grayScaleApp    = "sigma-injectionappgrayscale-config"
+	//return punish if match failed(eg."su18" == na62)
+	labelMatchPunish = -10000
+
+	grayScaleApp = "sigma-injectionappgrayscale-config"
+
 )
 
+var matchLabelKey = map[string]int{sigmak8sapi.LabelInstanceGroup:1000, labelAppStage:100,
+	labelAppUnit:10, sigmak8sapi.LabelSite:1}
+
+//check
 // aliPodInjectionPreSchedule is an implementation of admission.Interface.
-type aliPodInjectionPreSchedule struct {
+type newaliPodInjectionPreSchedule struct {
 	*admission.Handler
 	client          internalclientset.Interface
 	configMapLister settingslisters.ConfigMapLister
 }
 
-var _ admission.MutationInterface = &aliPodInjectionPreSchedule{}
-var _ = kubeapiserveradmission.WantsInternalKubeInformerFactory(&aliPodInjectionPreSchedule{})
-var _ = kubeapiserveradmission.WantsInternalKubeClientSet(&aliPodInjectionPreSchedule{})
+//check
+var _ admission.MutationInterface = &newaliPodInjectionPreSchedule{}
+var _ = kubeapiserveradmission.WantsInternalKubeInformerFactory(&newaliPodInjectionPreSchedule{})
+var _ = kubeapiserveradmission.WantsInternalKubeClientSet(&newaliPodInjectionPreSchedule{})
 
+//check
 // Register registers a plugin
 func Register(plugins *admission.Plugins) {
 	plugins.Register(PluginName, func(config io.Reader) (admission.Interface, error) {
@@ -57,70 +68,73 @@ func Register(plugins *admission.Plugins) {
 	})
 }
 
+//check
 // NewPlugin creates a new aliPodInjectionPreSchedule plugin.
-func NewPlugin() *aliPodInjectionPreSchedule {
-	return &aliPodInjectionPreSchedule{
+func NewPlugin() *newaliPodInjectionPreSchedule {
+	return &newaliPodInjectionPreSchedule{
 		Handler: admission.NewHandler(admission.Create, admission.Update),
 	}
 }
 
-func (plugin *aliPodInjectionPreSchedule) ValidateInitialization() error {
+//check
+func (plugin *newaliPodInjectionPreSchedule) ValidateInitialization() error {
 	if plugin.client == nil {
-		return fmt.Errorf("%s requires a client", PluginName)
+		return fmt.Errorf("[newinjection]%s requires a client", PluginName)
 	}
 	return nil
 }
 
-func (c *aliPodInjectionPreSchedule) SetInternalKubeClientSet(client internalclientset.Interface) {
+//check
+func (c *newaliPodInjectionPreSchedule) SetInternalKubeClientSet(client internalclientset.Interface) {
 	c.client = client
 }
 
-func (a *aliPodInjectionPreSchedule) SetInternalKubeInformerFactory(f informers.SharedInformerFactory) {
+//check
+func (a *newaliPodInjectionPreSchedule) SetInternalKubeInformerFactory(f informers.SharedInformerFactory) {
 	configMapInformer := f.Core().InternalVersion().ConfigMaps()
 	a.configMapLister = configMapInformer.Lister()
 	a.SetReadyFunc(func() bool { return configMapInformer.Informer().HasSynced() })
 }
 
 // Admit injects a pod with the specific fields for each pod preset it matches.
-func (c *aliPodInjectionPreSchedule) Admit(a admission.Attributes) error {
+func (c *newaliPodInjectionPreSchedule) Admit(a admission.Attributes) error {
 
 	if a.GetResource().GroupResource() != api.Resource("pods") {
 		return nil
 	}
 
 	//glog.V(3).Infof("aliPodInjectionPreSchedule preStart to admit %s, operation: %v, subresource: %v, pod: %v", key, a.GetOperation(), a.GetSubresource(), dumpJson(pod))
-
+	//the resource of the admission is subresource of pod(eg./pods/foo/status),and operation is Create
 	if len(a.GetSubresource()) != 0 || a.GetOperation() != admission.Create {
 		return nil
 	}
 
 	pod, ok := a.GetObject().(*api.Pod)
 	if !ok {
-		return errors.NewBadRequest("Resource was marked with kind Pod but was unable to be converted by aliPodInjectionPreSchedule")
+		return errors.NewBadRequest("[newinjection]Resource was marked with kind Pod but was unable to be converted by newaliPodInjectionPreSchedule")
 	}
 	key := pod.Namespace + "/" + pod.Name
-	glog.V(3).Infof("aliPodInjectionPreSchedule start to admit %s, operation: %v, subresource: %v, pod: %v", key, a.GetOperation(), a.GetSubresource(), dumpJson(pod))
+	//glog.V(3).Infof("[newinjection]new aliPodInjectionPreSchedule start to admit %s, operation: %v, subresource: %v, pod: %v", key, a.GetOperation(), a.GetSubresource(), dumpJson(pod))
 
 	grayScale, err := c.configMapLister.ConfigMaps("kube-system").Get(grayScaleApp)
-
 	if err != nil {
 		if errors.IsNotFound(err) {
-			glog.V(3).Infof("[injection]new aliPodInjectionPreSchedule not found grayScale config map for %s, enter", key)
+			glog.V(3).Infof("[newinjection]new aliPodInjectionPreSchedule not found grayScale config map for %s, exit", key)
 		} else {
-			glog.V(3).Infof("[injection]new aliPodInjectionPreSchedule load configmap grascaleApp error %b", err)
+			glog.V(3).Infof("[newinjection]new aliPodInjectionPreSchedule load configmap grascaleApp error %b, exit", err)
 		}
-	} else {
-		grayscaleData := grayScale.Data
-
-		if isGray(pod.Labels[sigmak8sapi.LabelAppName], grayscaleData) {
-            glog.V(3).Infof("[injection] new aliPodInjectionPreSchedule %s is gray, exit", pod.Labels[sigmak8sapi.LabelAppName])
-			return nil
-		}
+		return nil
 	}
 
-	//glog.V(3).Infof("[newinjection] new aliPodInjectionPreSchedule %s is not gray", pod.Labels[sigmak8sapi.LabelAppName])
+	grayScaleData := grayScale.Data
+	if !isGray(pod.Labels[sigmak8sapi.LabelAppName], grayScaleData) {
+		return nil
+	}
+
+	glog.V(3).Infof("[newinjection] new aliPodInjectionPreSchedule %s is gray, enter", pod.Labels[sigmak8sapi.LabelAppName])
 
 	if pod.Labels[sigmak8sapi.LabelPodContainerModel] != "dockervm" {
+		glog.V(3).Infof("[newinjection] sigmak8sapi.LabelPodContainerModel] != dockervm, %s", pod.Labels[sigmak8sapi.LabelPodContainerModel])
 		return nil
 	}
 
@@ -130,37 +144,31 @@ func (c *aliPodInjectionPreSchedule) Admit(a admission.Attributes) error {
 	if getMainContainer(pod) == nil {
 		errors.NewBadRequest("Not found main container in pod")
 	}
-
+	//glog.V(3).Infof("[newinjection] start load global rules")
 	// global配置
 	globalConfigMap, err := c.configMapLister.ConfigMaps("kube-system").Get(globalConfigName)
 	if errors.IsNotFound(err) {
-		glog.V(5).Infof("aliPodInjectionPreSchedule not found global config map for %s", key)
+		glog.V(5).Infof("[newinjection]new aliPodInjectionPreSchedule not found global config map for %s", key)
 	} else if err != nil {
-		glog.Warningf("aliPodInjectionPreSchedule find app config map for %s failed: %v", key, err)
+		glog.Warningf("[newinjection]new aliPodInjectionPreSchedule find app config map for %s failed: %v", key, err)
 	}
+
+	//glog.V(3).Infof("[newinjection] global rules is  %+v", globalConfigMap)
+
 	var globalConfigMapData map[string]string
 	if globalConfigMap != nil {
 		globalConfigMapData = globalConfigMap.Data
 	}
 
-	// app配置
-	appConfigMap, err := c.configMapLister.ConfigMaps(pod.Namespace).Get(appConfigName)
-	if errors.IsNotFound(err) {
-		glog.V(5).Infof("aliPodInjectionPreSchedule not found app config map for %s", key)
-	} else if err != nil {
-		glog.Warningf("aliPodInjectionPreSchedule find global config map for %s failed: %v", key, err)
-	}
-	var appConfigMapData map[string]string
-	if appConfigMap != nil {
-		appConfigMapData = appConfigMap.Data
-	}
+
+	//glog.V(3).Infof("[newinjection] start load labelconfig")
 
 	// 标签映射配置
 	labelConfigMap, err := c.configMapLister.ConfigMaps("kube-system").Get(globalLabelMappingConfigName)
 	if errors.IsNotFound(err) {
-		glog.V(5).Infof("aliPodInjectionPreSchedule not found global label mapping config map for %s", key)
+		glog.V(5).Infof("[newinjection]new aliPodInjectionPreSchedule not found global label mapping config map for %s", key)
 	} else if err != nil {
-		glog.Warningf("aliPodInjectionPreSchedule find global label mapping config map for %s failed: %v", key, err)
+		glog.Warningf("[newinjection]new aliPodInjectionPreSchedule find global label mapping config map for %s failed: %v", key, err)
 	}
 
 	// 先做各种解析数据的事情
@@ -168,7 +176,7 @@ func (c *aliPodInjectionPreSchedule) Admit(a admission.Attributes) error {
 	var routeRules sigma2api.RouteRules
 	if data, ok := globalConfigMapData["route-rules"]; ok {
 		if err := json.Unmarshal([]byte(data), &routeRules); err != nil {
-			glog.Warningf("aliPodInjectionPreSchedule unmarshal route-rules failed: %v", err)
+			glog.Warningf("[newinjection]new aliPodInjectionPreSchedule unmarshal route-rules failed: %v", err)
 		}
 	}
 	var podRouteRule *sigma2api.RouteRuleDetail
@@ -182,28 +190,30 @@ func (c *aliPodInjectionPreSchedule) Admit(a admission.Attributes) error {
 	var appUnitStageConstraint appUnitStageConstraint
 	if data, ok := globalConfigMapData["app-unitstage-constraint"]; ok {
 		if err := json.Unmarshal([]byte(data), &appUnitStageConstraint); err != nil {
-			glog.Warningf("aliPodInjectionPreSchedule unmarshal app-unitstage-constraint failed: %v", err)
+			glog.Warningf("[newinjection]new aliPodInjectionPreSchedule unmarshal app-unitstage-constraint failed: %v", err)
 		}
 	}
 
-	resourcePoolMapping := make(map[string]string)
-	if data, ok := globalConfigMapData["resourcepool-mapping"]; ok {
-		if err := json.Unmarshal([]byte(data), &resourcePoolMapping); err != nil {
-			glog.Warningf("aliPodInjectionPreSchedule unmarshal resourcepool-mapping failed: %v", err)
-		}
-	}
+	//FIXME
+	//resourcePoolMapping := make(map[string]string)
+	//if data, ok := globalConfigMapData["resourcepool-mapping"]; ok {
+	//	if err := json.Unmarshal([]byte(data), &resourcePoolMapping); err != nil {
+	//		glog.Warningf("aliPodInjectionPreSchedule unmarshal resourcepool-mapping failed: %v", err)
+	//	}
+	//}
 
-	var dynamicStrategy dynamicStrategy
-	if data, ok := globalConfigMapData["dynamic-schedulerules"]; ok {
-		if err := json.Unmarshal([]byte(data), &dynamicStrategy); err != nil {
-			glog.Warningf("aliPodInjectionPreSchedule unmarshal dynamic-schedulerules failed: %v", err)
-		}
-	}
+	//remove since iplabel is removed from iplabel
+	//var dynamicStrategy dynamicStrategy
+	//if data, ok := globalConfigMapData["dynamic-schedulerules"]; ok {
+	//	if err := json.Unmarshal([]byte(data), &dynamicStrategy); err != nil {
+	//		glog.Warningf("aliPodInjectionPreSchedule unmarshal dynamic-schedulerules failed: %v", err)
+	//	}
+	//}
 
 	oldTaintLabels := make([]string, 0)
 	if data, ok := globalConfigMapData["taint-labels"]; ok {
 		if err := json.Unmarshal([]byte(data), &oldTaintLabels); err != nil {
-			glog.Warningf("aliPodInjectionPreSchedule unmarshal taint-labels failed: %v", err)
+			glog.Warningf("[newinjection]new aliPodInjectionPreSchedule unmarshal taint-labels failed: %v", err)
 		}
 	}
 	taintLabels := make([]string, 0)
@@ -214,24 +224,102 @@ func (c *aliPodInjectionPreSchedule) Admit(a admission.Attributes) error {
 	var globalScheduleRules sigma2api.GlobalRules
 	if data, ok := globalConfigMapData["global-schedulerules"]; ok {
 		if err := json.Unmarshal([]byte(data), &globalScheduleRules); err != nil {
-			glog.Warningf("aliPodInjectionPreSchedule unmarshal global-schedulerules failed: %v", err)
+			glog.Warningf("[newinjection]new aliPodInjectionPreSchedule unmarshal global-schedulerules failed: %v", err)
 		}
 	}
 
-	p0m0NodegroupMap := make(map[string]string)
-	if data, ok := globalConfigMapData["p0m0-nodegroup-map"]; ok {
-		if err := json.Unmarshal([]byte(data), &p0m0NodegroupMap); err != nil {
-			glog.Warningf("aliPodInjectionPreSchedule unmarshal p0m0-nodegroup-map failed: %v", err)
-		}
-	}
+	//p0m0NodegroupMap := make(map[string]string)
+	//if data, ok := globalConfigMapData["p0m0-nodegroup-map"]; ok {
+	//	if err := json.Unmarshal([]byte(data), &p0m0NodegroupMap); err != nil {
+	//		glog.Warningf("aliPodInjectionPreSchedule unmarshal p0m0-nodegroup-map failed: %v", err)
+	//	}
+	//}
 
 	labelsCompatible := make(map[string]string)
 	if data, ok := globalConfigMapData["label-compatible"]; ok {
 		if err := json.Unmarshal([]byte(data), &labelsCompatible); err != nil {
-			glog.Warningf("aliPodInjectionPreSchedule unmarshal label-compatible failed: %v", err)
+			glog.Warningf("[newinjection]new aliPodInjectionPreSchedule unmarshal label-compatible failed: %v", err)
 		}
 	}
 
+	// app配置
+    req1, _ := labels.NewRequirement("sigma.alibaba-inc.com/appconfig-beta1", selection.Equals, []string{"true"})
+	appConfigMapAll, err := c.configMapLister.ConfigMaps(pod.Namespace).List(labels.NewSelector().Add(*req1))
+	if errors.IsNotFound(err) {
+		glog.V(5).Infof("[newinjection]new aliPodInjectionPreSchedule not found app config map for %s", key)
+	} else if err != nil {
+		glog.Warningf("[newinjection]new aliPodInjectionPreSchedule find global config map for %s failed: %v", key, err)
+	}
+
+	//glog.V(3).Infof("[newinjection] app configmap is %+v", appConfigMapAll)
+
+	//match configmap according to tetrad
+	appConfigMap := matchConfigMapWithSelector(appConfigMapAll, pod)
+
+	//glog.V(3).Infof("[newinjection]new aliPodInjectionPreSchedule matched configmap %+v", appConfigMap)
+
+	var appConfigMapData map[string]string
+	if appConfigMap != nil {
+		appConfigMapData = appConfigMap.Data
+	}
+
+	var constraints constraints
+	if data, ok := appConfigMapData["constraints"]; ok {
+		if err := json.Unmarshal([]byte(data), &constraints); err !=nil {
+			glog.Warningf("[newinjection]new aliPodInjectionPreSchedule unmarshal constraints for %s failed: %v", key, err)
+		}
+	}
+
+	var spread spread
+	if data, ok := appConfigMapData["spread"]; ok {
+		if err := json.Unmarshal([]byte(data), &spread); err !=nil {
+			glog.Warningf("[newinjection]new aliPodInjectionPreSchedule unmarshal spread for %s failed: %v", key, err)
+		}
+	}
+
+	//var dependency dependency
+	//if data, ok := appConfigMapData["dependency"]; ok {
+	//	if err := json.Unmarshal([]byte(data), &dependency); err !=nil {
+	//		glog.Warningf("newaliPodInjectionPreSchedule unmarshal dependency for %s failed: %v", key, err)
+	//	}
+	//}
+
+	var allocSpec allocSpec
+	if data, ok := appConfigMapData["allocSpec"]; ok {
+		if err := json.Unmarshal([]byte(data), &allocSpec); err !=nil {
+			glog.Warningf("[newinjection]new aliPodInjectionPreSchedule unmarshal allocSpec for %s failed: %v", key, err)
+		}
+	}
+
+	var hostConfig hostConfig
+	if data, ok := appConfigMapData["hostConfig"]; ok {
+		if err := json.Unmarshal([]byte(data), &hostConfig); err !=nil {
+			glog.Warningf("[newinjection]new aliPodInjectionPreSchedule unmarshal hostconfig for %s failed: %v", key, err)
+		}
+	}
+
+	var extConfig extConfig
+	if data, ok := appConfigMapData["extConfig"]; ok {
+		if err := json.Unmarshal([]byte(data), &extConfig); err !=nil {
+			glog.Warningf("[newinjection]new aliPodInjectionPreSchedule unmarshal extConfig for %s failed: %v", key, err)
+		}
+	}
+
+	var prohibit prohibit
+	if data, ok := appConfigMapData["prohibit"]; ok {
+		if err := json.Unmarshal([]byte(data), &prohibit); err !=nil {
+			glog.Warningf("[newinjection]new aliPodInjectionPreSchedule unmarshal prohibit for %s failed: %v", key, err)
+		}
+	}
+
+	var monopolize monopolize
+	if data, ok := appConfigMapData["monopolize"]; ok {
+		if err := json.Unmarshal([]byte(data), &monopolize); err !=nil {
+			glog.Warningf("[newinjection]new aliPodInjectionPreSchedule unmarshal monopolize for %s failed: %v", key, err)
+		}
+	}
+
+	/*
 	var appMetaInfo appMetaInfo
 	if data, ok := appConfigMapData["metainfos"]; ok {
 		if err := json.Unmarshal([]byte(data), &appMetaInfo); err != nil {
@@ -269,11 +357,12 @@ func (c *aliPodInjectionPreSchedule) Admit(a admission.Attributes) error {
 			podNamingMockRule = &r
 		}
 	}
+	*/
 
 	var podAllocSpec sigmak8sapi.AllocSpec
 	if data, ok := pod.Annotations[sigmak8sapi.AnnotationPodAllocSpec]; ok {
 		if err := json.Unmarshal([]byte(data), &podAllocSpec); err != nil {
-			glog.Warningf("aliPodInjectionPreSchedule unmarshal exists pod alloc-spec for %s failed: %v", key, err)
+			glog.Warningf("[newinjection]new aliPodInjectionPreSchedule unmarshal exists pod alloc-spec for %s failed: %v", key, err)
 		}
 	}
 	defer func() {
@@ -283,19 +372,23 @@ func (c *aliPodInjectionPreSchedule) Admit(a admission.Attributes) error {
 	}()
 
 	// 集团3.1已经不用deploy-unit概念了，兼容蚂蚁
+	// 是否需要保留？
 	if pod.Labels[sigmak8sapi.LabelDeployUnit] == "" && pod.Labels[sigmak8sapi.LabelInstanceGroup] != "" {
 		pod.Labels[sigmak8sapi.LabelDeployUnit] = pod.Labels[sigmak8sapi.LabelInstanceGroup]
 	}
 
-	// 1. 动态规则，现在只算iplabel了
-	dynamicStrategyMap := loadDynamicStrategyMap(pod, &appMetaInfo, &dynamicStrategy)
+	//check EnableOverQuota
+	checkEnableOverQuota()
 
-	// 2. 确定IpLabel
-	glog.V(3).Infof("aliPodInjectionPreSchedule admitting %s, begin to setIpLabel", key)
-	setIpLabel(pod, podRouteRule, &staticStrategy, dynamicStrategyMap)
+	// 1. 动态规则，现在只算iplabel了,是否还需要? appMetaInfo?
+	// is to remove from sigma 3.1
+	//dynamicStrategyMap := loadDynamicStrategyMap(pod, &appMetaInfo, &dynamicStrategy)
 
-	// 3. 设置调度规则里的单元、用途
-	glog.V(3).Infof("aliPodInjectionPreSchedule admitting %s, begin to setAppStageUnit", key)
+	// 2. 确定IpLabel, extConfig
+	// dynamicStrategyMap is to remove from sigma 3.1 , will not need it
+	setIpLabel(pod, podRouteRule, &extConfig)
+
+	// 3. 设置调度规则里的单元、用途, check, 确认逻辑是否正确，与sigma2.0有出入
 	setAppStageUnit(pod, podRouteRule, &appUnitStageConstraint)
 
 	// 设置调度规则里的资源池，废弃
@@ -304,58 +397,96 @@ func (c *aliPodInjectionPreSchedule) Admit(a admission.Attributes) error {
 	// 4. 设置其他默认调度规则
 	setPodScheduleRulesCommon(pod)
 
-	// 5. 设置NetPriority
-	glog.V(3).Infof("aliPodInjectionPreSchedule admitting %s, begin to setNetPriority", key)
-	setNetPriority(pod, &staticStrategy)
+	// 5. 设置NetPriority,
+	setNetPriority(pod, &hostConfig)
 
 	// 6. 设置Binds
-	glog.V(3).Infof("aliPodInjectionPreSchedule admitting %s, begin to setBindsToVolumeAndMounts", key)
+	//FIXME 判断是都是sigma2.0 pod 迁移到sigma3.0，
+	// 部分规则以sigma2.0设置为主，不进行merge，需要确认哪些规则需要判断
 	if !isRebuildPod(pod) {
-		setBindsToVolumeAndMounts(pod, &staticStrategy)
+		setBindsToVolumeAndMounts(pod, &hostConfig)
 	}
 
 	// 7. 设置allocSpec里的HostConfigInfo
-	glog.V(3).Infof("aliPodInjectionPreSchedule admitting %s, begin to setHostConfigInfo", key)
-	setHostConfigInfo(pod, &podAllocSpec, &staticStrategy)
+	setHostConfigInfo(pod, &podAllocSpec, &hostConfig)
 
+	// FIXME why need isRebuild？
 	// 8. 设置其他一些staticStrategy规则，如调度标签，privileged，host网络
-	glog.V(3).Infof("aliPodInjectionPreSchedule admitting %s, begin to setOtherStaticStrategy", key)
 	if !isRebuildPod(pod) {
-		setOtherStaticStrategy(pod, labelConfigMap, &staticStrategy)
+		setPrivileged(pod, &hostConfig )
+		setNetworkMode(pod, &hostConfig, &extConfig)
+		setConstrains(pod, &constraints, taintLabels)
 	}
 
 	// 9. 设置应用互斥（包括同应用最大实例数）
-	glog.V(3).Infof("aliPodInjectionPreSchedule admitting %s, begin to setPodAllocSpecAntiAffinityRules", key)
-	setPodAllocSpecAntiAffinityRules(pod, &podAllocSpec, &staticStrategy, &globalScheduleRules, p0m0NodegroupMap)
+	setPodAllocSpecAntiAffinityRules(pod, &podAllocSpec, &prohibit, &globalScheduleRules)
 
 	// 10. cpu set/share相关配置
-	glog.V(3).Infof("aliPodInjectionPreSchedule admitting %s, begin to setPodCPUConfigs", key)
 	if !isRebuildPod(pod) {
-		setPodCPUConfigs(pod, &podAllocSpec, &cpuSetModeAdvConfig, &globalScheduleRules)
+		setPodCPUConfigs(pod, &podAllocSpec, &extConfig.CpuSetModeAdvConfig, &globalScheduleRules)
 	}
 
 	// 11. 为强制标加tolerate
-	glog.V(3).Infof("aliPodInjectionPreSchedule admitting %s, begin to setPodTolerateForMandatoryLabels", key)
 	setPodTolerateForMandatoryLabels(pod, taintLabels)
 
 	// 12. 一些环境变量
-	glog.V(3).Infof("aliPodInjectionPreSchedule admitting %s, begin to setPodEnvCommon", key)
 	setPodEnvCommon(pod)
 
 	// 13. 配一些挂载目录
-	glog.V(3).Infof("aliPodInjectionPreSchedule admitting %s, begin to setPodMountsCommon", key)
 	setPodMountsCommon(pod)
 
 	// 14. 兼容2.0一些label
-	glog.V(3).Infof("aliPodInjectionPreSchedule admitting %s, begin to updatePodLabelsCompatible", key)
 	updatePodLabelsCompatible(pod, labelsCompatible)
 
 	// 15. 一些mock规则，用于测试
-	setMockRules(pod, podNamingMockRule)
+	//setMockRules(pod, podNamingMockRule)
 
-	glog.V(3).Infof("aliPodInjectionPreSchedule finish to admit %s, operation: %v, pod: %v", key, a.GetOperation(), dumpJson(pod))
+	//16. 这是独占规则
+	setMonopolize(pod, &podAllocSpec, &monopolize)
+
+	//glog.V(3).Infof("[newinjection]new aliPodInjectionPreSchedule finish to admit %s, operation: %v, pod: %v", key, a.GetOperation(), dumpJson(pod))
 
 	return nil
+}
+
+func matchConfigMapWithSelector(appConfigMapAll []*api.ConfigMap, pod *api.Pod) *api.ConfigMap {
+	var target *api.ConfigMap = nil
+	var maxScore = -10000
+	//podLabel is the arr of tetrad, order is group, stage, unit, site
+	for _, appconfig := range appConfigMapAll {
+		if score := scoring(pod, appconfig); score > maxScore {
+			maxScore = score
+			target = appconfig
+		}
+	}
+	if target == nil {
+		glog.Errorf("[newinjection][matchConfigMapWithSelector] match tetrad error, the tetrad ")
+	}
+	return target
+}
+
+//this func is used to mark score for configmap
+//the default order is group, stage, unit, site
+//and corresponding weight is 1000, 100, 10, 1
+//socore =  punish or sum(element_n_is_matched  weight_n) for n =1,2,3,4
+func scoring(pod *api.Pod, configMap *api.ConfigMap) (score int) {
+	score = 0
+	//matchLabelKey is a map {(name of element in tetrad) : weight}
+	for key, weight := range matchLabelKey{
+		//here, we define that if an element in tetrad is unset,
+		// the label will not exit (rather than key:"")
+		if configMapLabel, ok := configMap.Labels[key]; ok {
+			//label matched add score
+			if 0 == strings.Compare(configMapLabel, pod.Labels[key]) {
+				score += weight
+			} else {
+				//match failed
+				return labelMatchPunish
+			}
+		}
+		//label not exit in configmap, go on
+	}
+	return score
 }
 
 func loadDynamicStrategyMap(pod *api.Pod, appMetaInfo *appMetaInfo, dynamicStrategy *dynamicStrategy) map[string]string {
@@ -423,36 +554,36 @@ func loadDynamicStrategyMap(pod *api.Pod, appMetaInfo *appMetaInfo, dynamicStrat
 		"IpLabel": ipLabelDynamic,
 		//"ResourcePool": resourcePoolDynamic,
 	}
-	glog.V(5).Infof("loadDynamicStrategyMap for %s/%s get %v", pod.Namespace, pod.Name, dynStrategyMap)
+	//glog.V(5).Infof("[newinjection]new loadDynamicStrategyMap for %s/%s get %v", pod.Namespace, pod.Name, dynStrategyMap)
 	return dynStrategyMap
 }
 
-func setIpLabel(pod *api.Pod, podRouteRule *sigma2api.RouteRuleDetail, staticStrategy *sigma2api.AdvancedStrategy, dynamicStrategyMap map[string]string) {
-	// IpLabel有4个来源，优先级从高往低是：
+//check, confirm how to get dynamicStrategyMap,
+//func setIpLabel(pod *api.Pod, podRouteRule *sigma2api.RouteRuleDetail, extConfig *extConfig, dynamicStrategyMap map[string]string) {
+func setIpLabel(pod *api.Pod, podRouteRule *sigma2api.RouteRuleDetail, extConfig *extConfig) {
+	// IpLabel有3个来源，优先级从高往低是：
 	// 1. pod labels里直接传入
-	// 2. 应用高级规则配置，app配置里的static-schedulerules
+	// 2. 应用应用规则配置，extconfig配置里的Iplabel
 	// 3. 中间件去标，global配置里的route-rules
-	// 4. 动态规则
 
 	if _, ok := pod.Labels[labelPodIpLabel]; ok {
 		return
 	}
 
-	if staticStrategy != nil && staticStrategy.ExtConfig != nil {
-		if iplabel, _ := staticStrategy.ExtConfig["IpLabel"]; iplabel != "" {
-			pod.Labels[labelPodIpLabel] = iplabel
-			return
-		}
+	if extConfig != nil && extConfig.IpLabel !=""{
+		pod.Labels[labelPodIpLabel] = extConfig.IpLabel
+		return
+
 	}
 
 	if podRouteRule != nil {
 		pod.Labels[labelPodIpLabel] = podRouteRule.IpLabel
 		return
 	}
-
-	if ipLabel, ok := dynamicStrategyMap["IpLabel"]; ok {
-		pod.Labels[labelPodIpLabel] = ipLabel
-	}
+	// removed from sigma 3.1
+	//if ipLabel, ok := dynamicStrategyMap["IpLabel"]; ok {
+	//	pod.Labels[labelPodIpLabel] = ipLabel
+	//}
 }
 
 func setAppStageUnit(pod *api.Pod, podRouteRule *sigma2api.RouteRuleDetail, appUnitStageConstraint *appUnitStageConstraint) {
@@ -461,11 +592,17 @@ func setAppStageUnit(pod *api.Pod, podRouteRule *sigma2api.RouteRuleDetail, appU
 	// 2. appUnitStageConstraint 配置的用途单元映射
 	// 3. label中的单元用途
 
+	// 3. label中的单元用途
 	podScheduleUnit := pod.Labels[labelAppUnit]
 	podScheduleStage := pod.Labels[labelAppStage]
+	// 1. podRouteRule 中间件去标规则中的物理机单元、用途
 	if podRouteRule != nil {
 		podScheduleStage = podRouteRule.PhyServerEnv
 		podScheduleUnit = podRouteRule.PhyServerIdentity
+
+	// 2. appUnitStageConstraint 配置的用途单元映射
+	// different from logic in sigma2.0,
+	// just a sub-set to run or may not need other rules
 	} else if appUnitStageConstraint != nil {
 		if podScheduleStage == "DAILY" && slice.ContainsString(appUnitStageConstraint.UnitToCenterForDaily, podScheduleUnit, nil) {
 			podScheduleUnit = "CENTER_UNIT.center"
@@ -526,7 +663,8 @@ func setPodScheduleRulesCommon(pod *api.Pod) {
 //	setAffinityRequiredNodeSelector(pod, affinityRequireNodeSelector)
 //}
 
-func setNetPriority(pod *api.Pod, staticStrategy *sigma2api.AdvancedStrategy) {
+//check, same to sigma2.0
+func setNetPriority(pod *api.Pod, hostConfig *hostConfig) {
 	if _, ok := pod.Annotations[sigmak8sapi.AnnotationNetPriority]; ok {
 		return
 	}
@@ -536,14 +674,17 @@ func setNetPriority(pod *api.Pod, staticStrategy *sigma2api.AdvancedStrategy) {
 	//netPriority的计算
 	// http://docs.alibaba-inc.com/pages/viewpage.action?pageId=479572415
 	// http://docs.alibaba-inc.com/pages/viewpage.action?pageId=671351156
-	if staticStrategy != nil && len(staticStrategy.AdvancedParserConfig.NetPriority) > 0 {
+	if hostConfig != nil && len(hostConfig.NetPriority) > 0 {
 		//网络金银铜 {"DEFAULT":"010010", "sigmabosshost":"010001" } 表示sigmabosshost分组用银牌，其它用金牌。
 		// 010010 (金牌3) 010001 (银牌5) 010000 (在线铜牌7) 010000 (离线铜牌)
 		netPriorityStr := ""
-		if appNetPriority, ok := staticStrategy.AdvancedParserConfig.NetPriority["DEFAULT"]; ok {
+		// first set NetPriority as default
+		if appNetPriority, ok := hostConfig.NetPriority["DEFAULT"]; ok {
 			netPriorityStr = appNetPriority
 		}
-		if appNetPriority, ok := staticStrategy.AdvancedParserConfig.NetPriority[pod.Labels[sigmak8sapi.LabelInstanceGroup]]; ok {
+		// if the NetPriority of LabelInstanceGroup is seted,
+		// set pod NetPriority according to LabelInstanceGroup
+		if appNetPriority, ok := hostConfig.NetPriority[pod.Labels[sigmak8sapi.LabelInstanceGroup]]; ok {
 			netPriorityStr = appNetPriority
 		}
 		//在线默认是铜牌
@@ -571,12 +712,12 @@ func setNetPriority(pod *api.Pod, staticStrategy *sigma2api.AdvancedStrategy) {
 	pod.Annotations[sigmak8sapi.AnnotationNetPriority] = netPriority
 }
 
-func setBindsToVolumeAndMounts(pod *api.Pod, staticStrategy *sigma2api.AdvancedStrategy) {
-	if staticStrategy == nil || len(staticStrategy.AdvancedParserConfig.Binds) == 0 {
+func setBindsToVolumeAndMounts(pod *api.Pod, hostConfig *hostConfig) {
+	if hostConfig == nil || len(hostConfig.Binds) == 0 {
 		return
 	}
 
-	for _, bind := range staticStrategy.AdvancedParserConfig.Binds {
+	for _, bind := range hostConfig.Binds {
 		words := strings.Split(bind, ":")
 		hostPath := words[0]
 		containerPath := words[1]
@@ -638,69 +779,56 @@ func findPathInContainerMounts(pod *api.Pod, path string) bool {
 	return false
 }
 
-func setHostConfigInfo(pod *api.Pod, allocSpec *sigmak8sapi.AllocSpec, staticStrategy *sigma2api.AdvancedStrategy) {
+func setHostConfigInfo(pod *api.Pod, allocSpec *sigmak8sapi.AllocSpec, hostConfig *hostConfig) {
 
 	mainContainer := getMainContainer(pod)
 	allocSpecContainer := getAllocSpecContainer(allocSpec, mainContainer.Name)
 	hostConfigInfo := &allocSpecContainer.HostConfig
 
-	if staticStrategy != nil {
-		advancedParserConfig := staticStrategy.AdvancedParserConfig
-
+	if hostConfig != nil {
 		// 混部场景下应用的memoryWaterMarkRation
-		if advancedParserConfig.MemoryWmarkRatio != 0 {
-			hostConfigInfo.MemoryWmarkRatio = advancedParserConfig.MemoryWmarkRatio
+		if hostConfig.MemoryWmarkRatio != 0 {
+			hostConfigInfo.MemoryWmarkRatio = hostConfig.MemoryWmarkRatio
 		}
+
+		//FIXME sigma3.1 hostConfigInfo do not have Runtime attribution
+		//// 容器runtime
+		//if hostConfig.Runtime != "" {
+		//	hostConfigInfo.Runtime = hostConfig.Runtime
+		//	glog.Infof("[mergeHostAndExtConfig] set container runtime to %v", hostConfig.Runtime)
+		//}
+
+		//FIXME set GpuSpec
+
 	}
 
 	// 加载intel三级缓存策略
 	hostConfigInfo.IntelRdtMba = ""
 	hostConfigInfo.IntelRdtGroup = "sigma"
 
+
+
 	setAllocSpecContainer(allocSpec, allocSpecContainer)
 }
 
-func setOtherStaticStrategy(pod *api.Pod, labelConfigMap *api.ConfigMap, staticStrategy *sigma2api.AdvancedStrategy) {
-	if staticStrategy == nil {
+//func setOtherStaticStrategy(pod *api.Pod, labelConfigMap *api.ConfigMap, staticStrategy *sigma2api.AdvancedStrategy) {
+func setPrivileged(pod *api.Pod,  hostConfig *hostConfig) {
+	if hostConfig == nil {
 		return
 	}
 
 	mainContainer := getMainContainer(pod)
 
-	advancedParserConfig := staticStrategy.AdvancedParserConfig
-	if advancedParserConfig.Privileged && mainContainer != nil {
+	//advancedParserConfig := staticStrategy.AdvancedParserConfig
+	if hostConfig != nil && hostConfig.Privileged== "true" && mainContainer != nil {
+		privileged := true
 		if mainContainer.SecurityContext == nil {
 			mainContainer.SecurityContext = &api.SecurityContext{
-				Privileged: &advancedParserConfig.Privileged,
+				Privileged: &privileged,
 			}
 		} else {
-			mainContainer.SecurityContext.Privileged = &advancedParserConfig.Privileged
+			mainContainer.SecurityContext.Privileged = &privileged
 		}
-	}
-
-	if advancedParserConfig.NetworkMode == "host" {
-		if pod.Spec.SecurityContext == nil {
-			pod.Spec.SecurityContext = &api.PodSecurityContext{HostNetwork: true}
-		} else {
-			pod.Spec.SecurityContext.HostNetwork = true
-		}
-	}
-	if isHost, ok := staticStrategy.ExtConfig["IsHost"]; ok && isHost == "true" {
-		addKVIntoNodeSelectorWithOverwrite(pod, "IsHost", "true")
-
-		if advancedParserConfig.NetworkMode != "container" {
-			if pod.Spec.SecurityContext == nil {
-				pod.Spec.SecurityContext = &api.PodSecurityContext{HostNetwork: true}
-			} else {
-				pod.Spec.SecurityContext.HostNetwork = true
-			}
-		}
-
-		// FIXME: 这个逻辑咋搞？
-		//if containerAsHost, ok := advancedstrategy.ExtConfig["ContainerAsHost"]; ok && containerAsHost == "true" {
-		//	log.Infof("[loadContainerAsHost] get containerAsHost, reqId: %s, containerAsHost: %s", appreq.RequirementId, containerAsHost)
-		//	config.Labels["ali.RegisterContainerAsHost"] = "true"
-		//}
 	}
 
 	// FIXME: 暂不支持UserDevices，目前似乎也没有应用配置这个规则
@@ -709,97 +837,121 @@ func setOtherStaticStrategy(pod *api.Pod, labelConfigMap *api.ConfigMap, staticS
 	//if len(advancedParserConfig.UserDevices) > 0 {
 	//
 	//}
+}
 
-	var candidatePlan *sigma2api.CandidatePlan
-	for _, cp := range staticStrategy.CandidatePlans {
-		if cp != nil {
-			candidatePlan = cp
-			break
+func setConstrains(pod *api.Pod,  constraints *constraints, taintLabels []string) {
+	if constraints != nil {
+		// mergeConstraintsPlan
+		for key, value := range *constraints {
+			addKVIntoNodeSelectorNoOverwrite(pod, sigma2ToSigma3Label(nil, key) ,value)
 		}
 	}
 
-	if candidatePlan != nil {
-		// mergeConstraintsPlan
-		namedLabels := candidatePlan.Constraints.NamedLabels
-		addKVIntoNodeSelectorNoOverwrite(pod, sigmak8sapi.LabelKernel, namedLabels.Kernel)
-		addKVIntoNodeSelectorNoOverwrite(pod, sigmak8sapi.LabelOS, namedLabels.OS)
-		addKVIntoNodeSelectorNoOverwrite(pod, sigmak8sapi.LabelEphemeralDiskType, namedLabels.DiskType)
-		addKVIntoNodeSelectorNoOverwrite(pod, sigmak8sapi.LabelNetArchVersion, namedLabels.NetArchVersion)
-		addKVIntoNodeSelectorNoOverwrite(pod, sigmak8sapi.LabelNetCardType, namedLabels.NetCardType)
-		addKVIntoNodeSelectorNoOverwrite(pod, sigmak8sapi.LabelMachineModel, namedLabels.MachineModel)
-		for k, v := range candidatePlan.Constraints.CustomLabels {
-			addKVIntoNodeSelectorNoOverwrite(pod, sigma2ToSigma3Label(labelConfigMap, k), v)
+}
+
+func setNetworkMode(pod *api.Pod,  hostConfig *hostConfig, extConfig *extConfig) {
+	if hostConfig == nil && extConfig == nil {
+		return
+	}
+
+	if hostConfig != nil && hostConfig.NetworkMode == "host" {
+		if pod.Spec.SecurityContext == nil {
+			pod.Spec.SecurityContext = &api.PodSecurityContext{HostNetwork: true}
+		} else {
+			pod.Spec.SecurityContext.HostNetwork = true
 		}
+	}
+	if extConfig != nil && extConfig.IsHost == "true" {
+		addKVIntoNodeSelectorWithOverwrite(pod, "IsHost", "true")
+
+		if hostConfig.NetworkMode != "container" {
+			if pod.Spec.SecurityContext == nil {
+				pod.Spec.SecurityContext = &api.PodSecurityContext{HostNetwork: true}
+			} else {
+				pod.Spec.SecurityContext.HostNetwork = true
+			}
+		}
+
+		//// FIXME: 这个逻辑咋搞？
+		//if extConfig.ContainerAsHost {
+		//	//glog.Infof("[loadContainerAsHost] get containerAsHost, reqId: %s, containerAsHost: %s", appreq.RequirementId, containerAsHost)
+		//	pod.Labels["ali.RegisterContainerAsHost"] = "true"
+		//}
 	}
 }
 
-func setPodAllocSpecAntiAffinityRules(pod *api.Pod, podAllocSpec *sigmak8sapi.AllocSpec, staticStrategy *sigma2api.AdvancedStrategy,
-	globalScheduleRules *sigma2api.GlobalRules, p0m0NodegroupMap map[string]string) {
+func setPodAllocSpecAntiAffinityRules(pod *api.Pod, podAllocSpec *sigmak8sapi.AllocSpec, prohibit *prohibit,
+	globalScheduleRules *sigma2api.GlobalRules,) {
 	podAntiAffinity := getAllocSpecPodAntiAffinity(podAllocSpec)
 	nodegroup := pod.Labels[sigmak8sapi.LabelInstanceGroup]
 
-	// P0M0
-	if nodeGroupType, ok := p0m0NodegroupMap[nodegroup]; ok {
-		nodeGroups, maxCount := getP0M0Limit(p0m0NodegroupMap, nodeGroupType)
-		addPodAppAntiAffinityMatchExpressions(podAntiAffinity, sigmak8sapi.LabelInstanceGroup, nodeGroups, "kubernetes.io/hostname", maxCount, true, 0)
-		addPodAppAntiAffinityMatchExpressions(podAntiAffinity, sigmak8sapi.LabelDeployUnit, nodeGroups, "kubernetes.io/hostname", maxCount, true, 0)
-		nodeGroups, maxCount = getP0M0Limit(p0m0NodegroupMap, "p0+m0")
-		addPodAppAntiAffinityMatchExpressions(podAntiAffinity, sigmak8sapi.LabelInstanceGroup, nodeGroups, "kubernetes.io/hostname", maxCount, true, 0)
-		addPodAppAntiAffinityMatchExpressions(podAntiAffinity, sigmak8sapi.LabelDeployUnit, nodeGroups, "kubernetes.io/hostname", maxCount, true, 0)
-	}
+	//// P0M0 后续不再支持
+	//if nodeGroupType, ok := p0m0NodegroupMap[nodegroup]; ok {
+	//	nodeGroups, maxCount := getP0M0Limit(p0m0NodegroupMap, nodeGroupType)
+	//	addPodAppAntiAffinityMatchExpressions(podAntiAffinity, sigmak8sapi.LabelInstanceGroup, nodeGroups, "kubernetes.io/hostname", maxCount, true, 0)
+	//	nodeGroups, maxCount = getP0M0Limit(p0m0NodegroupMap, "p0+m0")
+	//	addPodAppAntiAffinityMatchExpressions(podAntiAffinity, sigmak8sapi.LabelInstanceGroup, nodeGroups, "kubernetes.io/hostname", maxCount, true, 0)
+	//}
 
 	// 多个地方可能有最大单机实例数限制，取最小的值
 	var maxInstancePerHost, MaxInstancePerPhyHost = 0, 0
 
-	// 按照CandidatePlans的顺序，最后一个candidate作为required，其余的作为preferred，且Weight按CandidatePlans的顺序从大到小
-	for i := 0; i < len(staticStrategy.CandidatePlans); i++ {
-		cp := staticStrategy.CandidatePlans[i]
-		if cp == nil {
-			continue
-		}
+	//// 按照CandidatePlans的顺序，最后一个candidate作为required，其余的作为preferred，且Weight按CandidatePlans的顺序从大到小
+	//for i := 0; i < len(staticStrategy.CandidatePlans); i++ {
+	//	cp := staticStrategy.CandidatePlans[i]
+	//	if cp == nil {
+	//		continue
+	//	}
 
-		if i+1 == len(staticStrategy.CandidatePlans) {
+		//if i+1 == len(staticStrategy.CandidatePlans) {
 			// mergeProhibitPlan
 			// 最后一个作为required
-			for appName, maxCount := range cp.Prohibit.AppConstraints {
+			//FIXME 取消candidateplan后，constrains 只有一组， 设为required
+			for appName, maxCount := range prohibit.AppConstraints {
+				//addPodAppAntiAffinityMatchLabels(podAntiAffinity, sigmak8sapi.LabelAppName, appName, "kubernetes.io/hostname", maxCount, true, 0)
 				addPodAppAntiAffinityMatchLabels(podAntiAffinity, sigmak8sapi.LabelAppName, appName, "kubernetes.io/hostname", maxCount, true, 0)
 			}
 
 			// mergeSpreadPlan
 			// 如果请求已经带了分组最大单机实例数，以请求里的为准
-			if len(nodegroup) > 0 {
+			//if len(nodegroup) > 0 {
+			//	if spread.AliMaxInstancePerHost > 0 {
+			//		maxInstancePerHost = spread.AliMaxInstancePerHost
+			//	}
+			//	if spread.AliMaxInstancePerPhyHost > 0{
+			//		MaxInstancePerPhyHost = spread.AliMaxInstancePerPhyHost
+			//	}
 
-				maxInstancePerHost, MaxInstancePerPhyHost = cp.Spread.MaxInstancePerHost, cp.Spread.MaxInstancePerPhyHost
-				if v, ok := cp.Constraints.CustomLabels["ali.MaxAllocatePercent"]; ok {
-					tmpMax, err := strconv.Atoi(v)
-					if err == nil && tmpMax < maxInstancePerHost {
-						maxInstancePerHost = tmpMax
-					}
-				}
+				//maxInstancePerHost, MaxInstancePerPhyHost = spread.AliMaxInstancePerHost, spread.AliMaxInstancePerPhyHost
+				//if v, ok := cp.Constraints.CustomLabels["ali.MaxAllocatePercent"]; ok {
+				//	tmpMax, err := strconv.Atoi(v)
+				//	if err == nil && tmpMax < maxInstancePerHost {
+				//		maxInstancePerHost = tmpMax
+				//	}
+				//}
 
-				if cp.Spread.MaxInstancePerRack > 0 {
-					addPodAppAntiAffinityMatchLabels(podAntiAffinity, sigmak8sapi.LabelInstanceGroup, nodegroup, "sigma.ali/rack", cp.Spread.MaxInstancePerRack, true, 0)
-					addPodAppAntiAffinityMatchLabels(podAntiAffinity, sigmak8sapi.LabelDeployUnit, nodegroup, "sigma.ali/rack", cp.Spread.MaxInstancePerRack, true, 0)
-				}
-				if cp.Spread.MaxInstancePerAsw > 0 {
-					addPodAppAntiAffinityMatchLabels(podAntiAffinity, sigmak8sapi.LabelInstanceGroup, nodegroup, "sigma.ali/asw", cp.Spread.MaxInstancePerAsw, true, 0)
-					addPodAppAntiAffinityMatchLabels(podAntiAffinity, sigmak8sapi.LabelDeployUnit, nodegroup, "sigma.ali/asw", cp.Spread.MaxInstancePerAsw, true, 0)
-				}
+				//FIXME need MaxInstancePerRack, MaxInstancePerAsw ?
+				//if cp.Spread.MaxInstancePerRack > 0 {
+				//	addPodAppAntiAffinityMatchLabels(podAntiAffinity, sigmak8sapi.LabelInstanceGroup, nodegroup, "sigma.ali/rack", cp.Spread.MaxInstancePerRack, true, 0)
+				//}
+				//if cp.Spread.MaxInstancePerAsw > 0 {
+				//	addPodAppAntiAffinityMatchLabels(podAntiAffinity, sigmak8sapi.LabelInstanceGroup, nodegroup, "sigma.ali/asw", cp.Spread.MaxInstancePerAsw, true, 0)
+				//}
 				// FIXME: MaxInstancePerPhyHost and MaxInstancePerFrame
-			}
-		} else {
-
-			// 前面的都是preferred
-			for appName, maxCount := range cp.Prohibit.AppConstraints {
-				// 先YY一下，按照candidate顺序，从80递减至10
-				weight := 80 - i*10
-				if weight < 10 {
-					weight = 10
-				}
-				addPodAppAntiAffinityMatchLabels(podAntiAffinity, sigmak8sapi.LabelAppName, appName, "kubernetes.io/hostname", maxCount, false, weight)
-			}
-		}
-	}
+			//}
+		//} else {
+		//
+		//	// 前面的都是preferred
+		//	for appName, maxCount := range prohibit.AppConstraints {
+		//		// 先YY一下，按照candidate顺序，从80递减至10, 只有一个设为100
+		//		weight := 100
+		//		//if weight < 10 {
+		//		//	weight = 10
+		//		//}
+		//		addPodAppAntiAffinityMatchLabels(podAntiAffinity, sigmak8sapi.LabelAppName, appName, "kubernetes.io/hostname", maxCount, false, weight)
+		//	}
+		//}
+	//}
 
 	// 公网下沉机器默认单机最大实例数为5
 	if pubNetReq := findAffinityRequiredNodeSelectorRequirement(pod, sigmak8sapi.LabelIsPubNetServer); pubNetReq != nil && slice.ContainsString(pubNetReq.Values, "true", nil) {
@@ -824,14 +976,16 @@ func setPodAllocSpecAntiAffinityRules(pod *api.Pod, podAllocSpec *sigmak8sapi.Al
 			maxInstancePerHost = 2
 		}
 	}
-	if maxInstancePerHost > 0 {
-		addPodAppAntiAffinityMatchLabels(podAntiAffinity, sigmak8sapi.LabelInstanceGroup, nodegroup, "kubernetes.io/hostname", maxInstancePerHost, true, 0)
-		addPodAppAntiAffinityMatchLabels(podAntiAffinity, sigmak8sapi.LabelDeployUnit, nodegroup, "kubernetes.io/hostname", maxInstancePerHost, true, 0)
-	}
+
+    if maxInstancePerHost > 0 {
+        addPodAppAntiAffinityMatchLabels(podAntiAffinity, sigmak8sapi.LabelInstanceGroup, nodegroup, "kubernetes.io/hostname", maxInstancePerHost, true, 0)
+        addPodAppAntiAffinityMatchLabels(podAntiAffinity, sigmak8sapi.LabelDeployUnit, nodegroup, "kubernetes.io/hostname", maxInstancePerHost, true, 0)
+    }
 
 	setAllocSpecPodAntiAffinity(podAllocSpec, podAntiAffinity)
 }
 
+// FIXME : hard-coded
 func setPodCPUConfigs(pod *api.Pod, podAllocSpec *sigmak8sapi.AllocSpec, cpuSetModeAdvConfig *cpuSetModeAdvConfig, globalScheduleRules *sigma2api.GlobalRules) {
 
 	mainContainer := getMainContainer(pod)
@@ -1027,6 +1181,98 @@ func setMockRules(pod *api.Pod, appNamingMockRules *appNamingMockRuleDetail) {
 	}
 	if appNamingMockRules.NamingEnv != "" {
 		pod.Labels["mock.sigma.alibaba-inc.com/app-stage"] = appNamingMockRules.NamingEnv
+	}
+}
+
+//FIXME
+// this function is reserve for set EnableOverQuota
+//
+func checkEnableOverQuota(){
+	//check EnableOverQuota is set by normandy
+
+	//check EnableOverQuota is set by atom
+
+	//if not exist, forbid create pod
+
+}
+
+
+//FIXME implement later
+/*
+ * 加载亲和策略
+ * 亲和策略使用方式： 在sigmaBoss申请新标签： sigmaLabel.ScheduleAffinityLabelsConfigKey，类型是：
+ */
+//func setAffinityLabels(pod *api.Pod, podAllocSpec *sigmak8sapi.AllocSpec,  extConfig *extConfig) {
+//	if extConfig == nil {
+//		return
+//	}
+//	labelsStr := extConfig.AliAcheduleAffinity
+//	if labelsStr == "" {
+//		return
+//	}
+//	labels := make(map[string]string)
+//	if err := json.Unmarshal([]byte(labelsStr), &labels); err != nil {
+//		glog.Errorf("[loadAffinityLabels] the app affinity labels unmarshal error, labels is:%v, errorDetail : %v",
+//			labelsStr, err)
+//		return
+//	}
+//
+//	if requirement.Affinity.NodeLabels == nil {
+//		requirement.Affinity.NodeLabels = make(map[string]string)
+//	}
+//	for k, v := range labels {
+//		requirement.Affinity.NodeLabels[k] = v
+//	}
+//
+//}
+
+func setMonopolize(pod *api.Pod, podAllocSpec  *sigmak8sapi.AllocSpec, monopolize *monopolize){
+	if monopolize == nil {
+		return
+	}
+	value := []string{pod.Labels[sigmak8sapi.LabelAppName]}
+
+	cpuAntiAffinity := getAllocSpecCPUAntiAffinity(podAllocSpec)
+	podAppAntiAffinity := getAllocSpecPodAntiAffinity(podAllocSpec)
+
+	if monopolize.AppMonopolize == "true" {
+		podAppAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution = append(podAppAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution, sigmak8sapi.PodAffinityTerm{
+			PodAffinityTerm : v1.PodAffinityTerm{
+				LabelSelector: &metav1.LabelSelector{
+					MatchExpressions: []metav1.LabelSelectorRequirement{
+						{
+							Key:      sigmak8sapi.LabelAppName,
+							Operator: metav1.LabelSelectorOpNotIn,
+							Values:   value,
+						},
+					},
+				},
+				//Namespaces:  appNamesToNamespaces(globalScheduleRules.CpuSetMutex.AppConstraints),
+				TopologyKey: "kubernetes.io/hostname",
+			},
+		})
+		setAllocSpecPodAntiAffinity(podAllocSpec, podAppAntiAffinity)
+	}
+
+	if monopolize.CpuSetMonopolize == "true" {
+		cpuAntiAffinity.PreferredDuringSchedulingIgnoredDuringExecution = append(cpuAntiAffinity.PreferredDuringSchedulingIgnoredDuringExecution, v1.WeightedPodAffinityTerm{
+			Weight: 1,
+			PodAffinityTerm: v1.PodAffinityTerm{
+                // cpu anti need only TopologKey
+				//LabelSelector: &metav1.LabelSelector{
+				//	MatchExpressions: []metav1.LabelSelectorRequirement{
+				//		{
+				//			Key:      sigmak8sapi.LabelAppName,
+				//			Operator: metav1.LabelSelectorOpIn,
+				//			Values:   globalScheduleRules.CpuSetMutex.AppConstraints,
+				//		},
+				//	},
+				//},
+				//Namespaces:  appNamesToNamespaces(globalScheduleRules.CpuSetMutex.AppConstraints),
+				TopologyKey: "sigma.ali/logical-core",
+			},
+		})
+		setAllocSpecCPUAntiAffinity(podAllocSpec, cpuAntiAffinity)
 	}
 }
 

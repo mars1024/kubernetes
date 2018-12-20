@@ -1,0 +1,28 @@
+{
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+        "name": "pod-base",
+        "labels":{
+            "sigma.ali/app-name": "buy2",
+            "sigma.ali/container-model": "dockervm",
+            "sigma.ali/deploy-unit": "buy2host",
+            "sigma.ali/instance-group": "buy2host",
+            "sigma.ali/site": "su18",
+            "sigma.alibaba-inc.com/app-stage": "PUBLISH",
+            "sigma.alibaba-inc.com/app-unit": "CENTER_UNIT.unsz"
+
+        }
+    },
+    "spec": {
+        "containers": [
+            {
+                "image": "reg.docker.alibaba-inc.com/ali/os:7u2",
+                "imagePullPolicy": "IfNotPresent",
+                "name": "pod-base"
+            }
+        ],
+        "restartPolicy": "Always",
+        "schedulerName": "default-scheduler"
+    }
+}

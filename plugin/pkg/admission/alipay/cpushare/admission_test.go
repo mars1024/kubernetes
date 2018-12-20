@@ -42,7 +42,7 @@ func TestAdmit(t *testing.T) {
 
 	handler := newAlipayCPUShareAdmission()
 	pod := newPod()
-	attr := admission.NewAttributesRecord(pod, nil, core.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, core.Resource("pods").WithVersion("version"), "", admission.Create, nil)
+	attr := admission.NewAttributesRecord(pod, nil, core.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, core.Resource("pods").WithVersion("version"), "", admission.Create, false, nil)
 	err := handler.Admit(attr)
 	assert.Nil(err)
 
@@ -61,6 +61,7 @@ func TestAdmit(t *testing.T) {
 		assert.Equal(1, len(container.VolumeMounts))
 		assert.Equal(cpushareVolumeName, container.VolumeMounts[0].Name)
 		assert.Equal(cpusharePatchFile, container.VolumeMounts[0].MountPath)
+		assert.Equal(true, container.VolumeMounts[0].ReadOnly)
 	}
 }
 

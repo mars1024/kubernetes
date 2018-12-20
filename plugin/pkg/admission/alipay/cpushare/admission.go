@@ -109,6 +109,7 @@ func (a *AlipayCPUShareAdmission) injectCPUShare(pod *core.Pod) error {
 			pod.Spec.Containers[i].VolumeMounts = append(pod.Spec.Containers[i].VolumeMounts, core.VolumeMount{
 				Name:      cpushareVolumeName,
 				MountPath: cpusharePatchFile,
+				ReadOnly:  true,
 			})
 		}
 	}

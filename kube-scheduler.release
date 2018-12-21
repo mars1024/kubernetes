@@ -1,0 +1,12 @@
+# 1. 你可以直接编辑本文件的内容，或者通过工具来帮你校验合法性和自动生成，请点击：http=//aliwing.alibaba-inc.com/apprelease/home.htm
+# 2. 更多关于Release文件的规范和约定，请点击= http=//docs.alibaba-inc.com/pages/viewpage.action?pageId=252891532
+
+# 构建源码语言类型
+code.language=go
+
+# 构建使用的go语言版本
+build.tools.go=1.10.3
+
+# 构建使用的maven命令，当前支持maven命令，不写使用打包规范默命令认. 该项填写时，必须指定 build.output
+build.command=/default_build.sh
+

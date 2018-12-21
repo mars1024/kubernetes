@@ -160,7 +160,7 @@ func setDefaultHostConfig(pod *core.Pod) error {
 		allocSpec = &sigmak8sapi.AllocSpec{}
 	}
 	if allocSpec.Containers == nil {
-		allocSpec.Containers = make([]sigmak8sapi.Container, len(pod.Spec.Containers))
+		allocSpec.Containers = make([]sigmak8sapi.Container, 0, len(pod.Spec.Containers))
 	}
 
 next:
@@ -170,7 +170,7 @@ next:
 				continue next
 			}
 		}
-		allocSpec.Containers = append(allocSpec.Containers, sigmak8sapi.Container{})
+		allocSpec.Containers = append(allocSpec.Containers, newAllocSpecContainer(c.Name))
 	}
 
 	// 设置默认的cgroup 根节点名，这里比较tricky的是部分参数是根据设置的 cgroup parent来决定使用值.
@@ -241,6 +241,16 @@ func podAllocSpec(pod *core.Pod) (*sigmak8sapi.AllocSpec, error) {
 		return allocSpec, nil
 	}
 	return nil, nil
+}
+
+func newAllocSpecContainer(name string) sigmak8sapi.Container {
+	return sigmak8sapi.Container{
+		Name: name,
+		Resource: sigmak8sapi.ResourceRequirements{
+			// GPU.ShareMode is validated in admission controller 'sigmascheduling'
+			GPU: sigmak8sapi.GPUSpec{ShareMode: sigmak8sapi.GPUShareModeExclusive},
+		},
+	}
 }
 
 func podNetPriority(pod *core.Pod) int64 {

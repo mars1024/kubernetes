@@ -15,79 +15,117 @@ func TestResourceValidate(t *testing.T) {
 	assert := assert.New(t)
 
 	testcases := []struct {
-		cpuLimit      int64
-		cpuRequest    int64
-		memoryLimit   int64
-		memoryRequest int64
-		isValid       bool
+		cpuLimit       int64
+		cpuRequest     int64
+		memoryLimit    int64
+		memoryRequest  int64
+		storageLimit   int64
+		storageRequest int64
+		isValid        bool
 	}{
 		{
-			cpuLimit:      0,
-			cpuRequest:    0,
-			memoryLimit:   0,
-			memoryRequest: 0,
-			isValid:       false,
+			cpuLimit:       0,
+			cpuRequest:     0,
+			memoryLimit:    0,
+			memoryRequest:  0,
+			storageLimit:   0,
+			storageRequest: 0,
+			isValid:        false,
 		},
 		// request can equal to limit
 		{
-			cpuLimit:      1000,                   // 1core
-			cpuRequest:    1000,                   // 1core
-			memoryLimit:   1 * 1024 * 1024 * 1024, // 1G
-			memoryRequest: 1 * 1024 * 1024 * 1024, // 1G
-			isValid:       true,
+			cpuLimit:       1000,                    // 1core
+			cpuRequest:     1000,                    // 1core
+			memoryLimit:    1 * 1024 * 1024 * 1024,  // 1G
+			memoryRequest:  1 * 1024 * 1024 * 1024,  // 1G
+			storageLimit:   10 * 1024 * 1024 * 1024, // 10G
+			storageRequest: 10 * 1024 * 1024 * 1024, // 10G
+			isValid:        true,
 		},
 		// cpu request can smaller than limit
 		{
-			cpuLimit:      2000,                   // 2core
-			cpuRequest:    1000,                   // 1core
-			memoryLimit:   1 * 1024 * 1024 * 1024, // 1G
-			memoryRequest: 1 * 1024 * 1024 * 1024, // 1G
-			isValid:       true,
+			cpuLimit:       2000,                    // 2core
+			cpuRequest:     1000,                    // 1core
+			memoryLimit:    1 * 1024 * 1024 * 1024,  // 1G
+			memoryRequest:  1 * 1024 * 1024 * 1024,  // 1G
+			storageLimit:   10 * 1024 * 1024 * 1024, // 10G
+			storageRequest: 10 * 1024 * 1024 * 1024, // 10G
+			isValid:        true,
 		},
 		// memory request MUST equal to limit
 		{
-			cpuLimit:      2000,                   // 2core
-			cpuRequest:    1000,                   // 1core
-			memoryLimit:   2 * 1024 * 1024 * 1024, // 2G
-			memoryRequest: 1 * 1024 * 1024 * 1024, // 1G
-			isValid:       false,
+			cpuLimit:       2000,                    // 2core
+			cpuRequest:     1000,                    // 1core
+			memoryLimit:    2 * 1024 * 1024 * 1024,  // 2G
+			memoryRequest:  1 * 1024 * 1024 * 1024,  // 1G
+			storageLimit:   10 * 1024 * 1024 * 1024, // 10G
+			storageRequest: 10 * 1024 * 1024 * 1024, // 10G
+			isValid:        false,
 		},
 		// memory limit and request can NOT be zero
 		{
-			cpuLimit:      2000,                   // 2core
-			cpuRequest:    1000,                   // 1core
-			memoryLimit:   0 * 1024 * 1024 * 1024, // 0G
-			memoryRequest: 0 * 1024 * 1024 * 1024, // 0G
-			isValid:       false,
+			cpuLimit:       2000,                    // 2core
+			cpuRequest:     1000,                    // 1core
+			memoryLimit:    0 * 1024 * 1024 * 1024,  // 0G
+			memoryRequest:  0 * 1024 * 1024 * 1024,  // 0G
+			storageLimit:   10 * 1024 * 1024 * 1024, // 10G
+			storageRequest: 10 * 1024 * 1024 * 1024, // 10G
+			isValid:        false,
 		},
 		// memory request MUST greater than zero
 		{
-			cpuLimit:      2000,                   // 2core
-			cpuRequest:    1000,                   // 1core
-			memoryLimit:   1 * 1024 * 1024 * 1024, // 0G
-			memoryRequest: 0 * 1024 * 1024 * 1024, // 0G
-			isValid:       false,
+			cpuLimit:       2000,                    // 2core
+			cpuRequest:     1000,                    // 1core
+			memoryLimit:    1 * 1024 * 1024 * 1024,  // 0G
+			memoryRequest:  0 * 1024 * 1024 * 1024,  // 0G
+			storageLimit:   10 * 1024 * 1024 * 1024, // 10G
+			storageRequest: 10 * 1024 * 1024 * 1024, // 10G
+			isValid:        false,
 		},
 		// cpu limit can not be zero
 		{
-			cpuLimit:      0,
-			cpuRequest:    0,
-			memoryLimit:   1 * 1024 * 1024 * 1024, // 1G
-			memoryRequest: 1 * 1024 * 1024 * 1024, // 1G
-			isValid:       false,
+			cpuLimit:       0,
+			cpuRequest:     0,
+			memoryLimit:    1 * 1024 * 1024 * 1024,  // 1G
+			memoryRequest:  1 * 1024 * 1024 * 1024,  // 1G
+			storageLimit:   10 * 1024 * 1024 * 1024, // 10G
+			storageRequest: 10 * 1024 * 1024 * 1024, // 10G
+			isValid:        false,
 		},
 		// cpu request can be zero
 		{
-			cpuLimit:      1000,
-			cpuRequest:    0,
-			memoryLimit:   1 * 1024 * 1024 * 1024, // 1G
-			memoryRequest: 1 * 1024 * 1024 * 1024, // 1G
-			isValid:       true,
+			cpuLimit:       1000,
+			cpuRequest:     0,
+			memoryLimit:    1 * 1024 * 1024 * 1024,  // 1G
+			memoryRequest:  1 * 1024 * 1024 * 1024,  // 1G
+			storageLimit:   10 * 1024 * 1024 * 1024, // 10G
+			storageRequest: 10 * 1024 * 1024 * 1024, // 10G
+			isValid:        true,
+		},
+		// storage request can not be zero
+		{
+			cpuLimit:       1000,                   // 1core
+			cpuRequest:     1000,                   // 1core
+			memoryLimit:    1 * 1024 * 1024 * 1024, // 1G
+			memoryRequest:  1 * 1024 * 1024 * 1024, // 1G
+			storageLimit:   0,                      // 10G
+			storageRequest: 0,                      // 10G
+			isValid:        false,
+		},
+		// storage request must equal to limit
+		{
+			cpuLimit:       1000,                    // 1core
+			cpuRequest:     1000,                    // 1core
+			memoryLimit:    1 * 1024 * 1024 * 1024,  // 1G
+			memoryRequest:  1 * 1024 * 1024 * 1024,  // 1G
+			storageLimit:   10 * 1024 * 1024 * 1024, // 10G
+			storageRequest: 5 * 1024 * 1024 * 1024,  // 5G
+			isValid:        false,
 		},
 	}
 
 	for _, testcase := range testcases {
-		pod := newPodWithResource(testcase.cpuRequest, testcase.cpuLimit, testcase.memoryRequest, testcase.memoryLimit)
+		pod := newPodWithResource(testcase.cpuRequest, testcase.cpuLimit, testcase.memoryRequest, testcase.memoryLimit, testcase.storageRequest, testcase.storageLimit)
 		attr := admission.NewAttributesRecord(pod, nil, core.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, core.Resource("pods").WithVersion("version"), "", admission.Create, nil)
 		handler := newAlipayResourceAdmission()
 		err := handler.Validate(attr)
@@ -100,7 +138,7 @@ func TestResourceValidate(t *testing.T) {
 	}
 }
 
-func newPodWithResource(cpuRequest, cpuLimit, memoryRequest, memoryLimit int64) *core.Pod {
+func newPodWithResource(cpuRequest, cpuLimit, memoryRequest, memoryLimit, storageRequest, storageLimit int64) *core.Pod {
 	pod := newPod()
 
 	for i := range pod.Spec.Containers {
@@ -112,6 +150,9 @@ func newPodWithResource(cpuRequest, cpuLimit, memoryRequest, memoryLimit int64) 
 
 		pod.Spec.Containers[i].Resources.Limits[core.ResourceMemory] = *resource.NewQuantity(memoryLimit, resource.BinarySI)
 		pod.Spec.Containers[i].Resources.Requests[core.ResourceMemory] = *resource.NewQuantity(memoryRequest, resource.BinarySI)
+
+		pod.Spec.Containers[i].Resources.Limits[core.ResourceEphemeralStorage] = *resource.NewQuantity(storageLimit, resource.BinarySI)
+		pod.Spec.Containers[i].Resources.Requests[core.ResourceEphemeralStorage] = *resource.NewQuantity(storageRequest, resource.BinarySI)
 	}
 
 	return pod

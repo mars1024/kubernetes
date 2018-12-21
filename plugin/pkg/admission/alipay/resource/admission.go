@@ -76,6 +76,19 @@ func validatePodResource(pod *core.Pod) error {
 		if c.Resources.Limits.Memory().Cmp(*c.Resources.Requests.Memory()) != 0 {
 			return fmt.Errorf("container %s memory limit %s should equal to memory request %s", c.Name, c.Resources.Limits.Memory(), c.Resources.Requests.Memory())
 		}
+
+		// pod should have ephemeral storage resource, and request equal to limit.
+		if c.Resources.Limits.StorageEphemeral().IsZero() {
+			return fmt.Errorf("container %s should have ephemeral storage limit", c.Name)
+		}
+
+		if c.Resources.Requests.StorageEphemeral().IsZero() {
+			return fmt.Errorf("container %s should have ephemeral storage request", c.Name)
+		}
+
+		if c.Resources.Limits.StorageEphemeral().Cmp(*c.Resources.Requests.StorageEphemeral()) != 0 {
+			return fmt.Errorf("container %s ephemeral storage limit %s should equal to ephemeral storage request %s", c.Name, c.Resources.Limits.Memory(), c.Resources.Requests.Memory())
+		}
 	}
 	return nil
 }

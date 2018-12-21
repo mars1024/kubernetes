@@ -80,6 +80,10 @@ var (
 	// ErrFakePredicate is used for test only. The fake predicates returning false also returns error
 	// as ErrFakePredicate.
 	ErrFakePredicate = newPredicateFailureError("FakePredicateError", "Nodes failed the fake predicate")
+	// ErrMaxReplicasPerHostExceeded is used for MaxReplicasPerHostChecker predicate error.
+	ErrMaxReplicasPerHostExceeded = newPredicateFailureError("ErrMaxReplicasPerHostExceeded", "The number of replicas exceeds the max replica count per host for a pod")
+	// ErrParseMaxReplicasPerHost is used for ParseMaxReplicasPerHost error.
+	ErrParseMaxReplicasPerHost = newPredicateFailureError("ErrParseMaxReplicasPerHost", "Failed to parse max-replicas-per-host to a number")
 )
 
 // InsufficientResourceError is an error type that indicates what kind of resource limit is

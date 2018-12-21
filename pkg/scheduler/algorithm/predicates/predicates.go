@@ -28,6 +28,7 @@ import (
 	"k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
@@ -95,6 +96,8 @@ const (
 	CheckNodeDiskPressurePred = "CheckNodeDiskPressure"
 	// CheckNodePIDPressurePred defines the name of predicate CheckNodePIDPressure.
 	CheckNodePIDPressurePred = "CheckNodePIDPressure"
+	// CheckMaxReplicasPerHostPred defines the maximum number of replicas per host of predicate CheckMaxReplicasPressure.
+	CheckMaxReplicasPerHostPred = "CheckMaxReplicasPressure"
 
 	// DefaultMaxGCEPDVolumes defines the maximum number of PD Volumes for GCE
 	// GCE instances can have up to 16 PD volumes attached.
@@ -113,6 +116,9 @@ const (
 	GCEPDVolumeFilterType = "GCE"
 	// AzureDiskVolumeFilterType defines the filter name for AzureDiskVolumeFilter.
 	AzureDiskVolumeFilterType = "AzureDisk"
+
+	// MaxReplicasPerHost defines maximum replicas number on per host.
+	MaxReplicasPerHost = "pod.beta1.sigma.ali/max-replicas-per-host"
 )
 
 // IMPORTANT NOTE for predicate developers:
@@ -135,7 +141,7 @@ var (
 		PodToleratesNodeTaintsPred, PodToleratesNodeNoExecuteTaintsPred, CheckNodeLabelPresencePred,
 		CheckServiceAffinityPred, MaxEBSVolumeCountPred, MaxGCEPDVolumeCountPred, MaxCSIVolumeCountPred,
 		MaxAzureDiskVolumeCountPred, CheckVolumeBindingPred, NoVolumeZoneConflictPred,
-		CheckNodeMemoryPressurePred, CheckNodePIDPressurePred, CheckNodeDiskPressurePred, MatchInterPodAffinityPred}
+		CheckNodeMemoryPressurePred, CheckNodePIDPressurePred, CheckNodeDiskPressurePred, MatchInterPodAffinityPred, CheckMaxReplicasPerHostPred}
 )
 
 // NodeInfo interface represents anything that can get node object from node ID.
@@ -679,6 +685,106 @@ func (c *VolumeZoneChecker) predicate(pod *v1.Pod, meta algorithm.PredicateMetad
 	}
 
 	return true, nil, nil
+}
+
+// MaxReplicasPerHostChecker checks the maximum number of replicas for a pod on a host.
+type MaxReplicasPerHostChecker struct {
+}
+
+func NewMaxReplicasPerHostPredicate() algorithm.FitPredicate {
+	c := &MaxReplicasPerHostChecker{}
+	return c.predicate
+}
+
+func (c *MaxReplicasPerHostChecker) predicate(pod *v1.Pod, meta algorithm.PredicateMetadata, nodeInfo *schedulercache.NodeInfo) (bool, []algorithm.PredicateFailureReason, error) {
+	if pod.Annotations == nil {
+		return true, nil, nil
+	}
+
+	// check the limited number of replicas
+	if maxReplicasNumber, ok := pod.Annotations[MaxReplicasPerHost]; ok {
+		failReasons := []algorithm.PredicateFailureReason{}
+		maxReplicasNumberValue, err := strconv.Atoi(maxReplicasNumber)
+		if err != nil {
+			failReasons = append(failReasons, ErrParseMaxReplicasPerHost)
+			return false, failReasons, fmt.Errorf("failed to parse max-replicas-per-host [%s] to a number: %v", maxReplicasNumber, err)
+		}
+		podsOnNode := nodeInfo.Pods()
+		if len(podsOnNode) >= maxReplicasNumberValue {
+			val := getNumReplicasOnHost(pod, podsOnNode)
+			if val >= maxReplicasNumberValue {
+				failReasons = append(failReasons, ErrMaxReplicasPerHostExceeded)
+				glog.Infof("the number of replicas for pod %s exceeds max-replicas-per-host limit, current = %d, limit = %d", pod.Name, val, maxReplicasNumberValue)
+				return false, failReasons, nil
+			}
+		}
+	}
+
+	return true, nil, nil
+}
+
+// getNumReplicasOnHost returns the number of replicas  that share the same ownerReference.
+func getNumReplicasOnHost(pod *v1.Pod, pods []*v1.Pod) int {
+	count := 0
+	podMeta, err := meta.Accessor(pod)
+	if err != nil {
+		// if we don't have objectmeta, we don't have the object reference
+		glog.V(4).Infof("can not get pod objectmeta: %v.", err)
+		return 0
+	}
+	podOwnerReferences := podMeta.GetOwnerReferences()
+	if len(podOwnerReferences) == 0 {
+		glog.V(4).Infof("pod has no OwnerReferences.")
+		// this pod has no OwnerReferences, so ignore it.
+		return 0
+	}
+
+	podOwnerReferencesCount := len(podOwnerReferences)
+
+	for i := range pods {
+		podOnNodeMeta, err := meta.Accessor(pods[i])
+		if err != nil {
+			glog.V(4).Infof("failed to get pod metadata: %v", err)
+			continue
+		}
+
+		podOnNodeOwnerReferences := podOnNodeMeta.GetOwnerReferences()
+		podOnNodeOwnerReferencesCount := len(podOnNodeOwnerReferences)
+		if podOnNodeOwnerReferencesCount == 0 {
+			continue
+		}
+		if podOwnerReferencesCount != podOnNodeOwnerReferencesCount {
+			continue
+		}
+		// In most cases, OwnerReferences slice contains one element.
+		if podOwnerReferencesCount == 1 {
+			if podOwnerReferences[0].Name == podOnNodeOwnerReferences[0].Name && podOwnerReferences[0].Kind == podOnNodeOwnerReferences[0].Kind {
+				count++
+			}
+		} else {
+			if ownerReferencesEqual(podOwnerReferences, podOnNodeOwnerReferences) {
+				count++
+			}
+		}
+	}
+	return count
+}
+
+// ownerReferencesEqual checks  if the two slices have the same elements.
+func ownerReferencesEqual(list1 []metav1.OwnerReference, list2 []metav1.OwnerReference) bool {
+	m := map[metav1.OwnerReference]int{}
+	for _, val := range list1 {
+		m[val] = m[val] + 1
+	}
+	for _, val := range list2 {
+		m[val] = m[val] - 1
+	}
+	for _, v := range m {
+		if v != 0 {
+			return false
+		}
+	}
+	return true
 }
 
 // GetResourceRequest returns a *schedulercache.Resource that covers the largest

@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/golang/glog"
+
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -176,12 +178,26 @@ func findMatchingVolume(
 		}
 
 		nodeAffinityValid := true
+		// node is not nil in scheduler's path
 		if node != nil {
 			// Scheduler path, check that the PV NodeAffinity
 			// is satisfied by the node
 			err := volumeutil.CheckNodeAffinity(volume, node.Labels)
 			if err != nil {
 				nodeAffinityValid = false
+			}
+		} else {
+			// node is nil in controller's path, check the annSelectedNode specifically for local PV.
+			// local PV has annSelectedNode set in both PV and PVC
+			annoPV, annoInPV := volume.Annotations[annSelectedNode]
+			annoPVC, annoInPVC := claim.Annotations[annSelectedNode]
+			if annoInPV && annoInPVC {
+				if annoPV != annoPVC {
+					glog.V(4).Info("Skip the PV %s with (%s = %s) does not equal to that in PVC %s (%s)", volume.Name, annSelectedNode, annoPV, claim.Name, annoPVC)
+					continue
+				} else {
+					glog.V(4).Info("Found potential bound PV %s", volume.Name)
+				}
 			}
 		}
 
@@ -217,8 +233,20 @@ func findMatchingVolume(
 		// - volumes whose NodeAffinity does not match the node
 		if volume.Spec.ClaimRef != nil {
 			continue
-		} else if selector != nil && !selector.Matches(labels.Set(volume.Labels)) {
-			continue
+		}
+		if selector != nil {
+			// If selector exists but PV label doesn't match, skip the PV
+			if !selector.Matches(labels.Set(volume.Labels)) {
+				continue
+			}
+		} else {
+			// By default, if PVC selector doesn't exist, don't select PVs with labels.
+			// But this might not be always true, so added a flag to make it be able to select the PVs with labels in such cases.
+			if claim.Annotations["pv.kubernetes.io/consider-labeled-pv-without-selector"] == "" && len(volume.Labels) != 0 {
+				glog.V(5).Infof("Skip using PV %s with labels, because PVC's label selector is not specified."+
+					" set \"pv.kubernetes.io/consider-labeled-pv-without-selector=true\" in PVC annotation to select PV with labels if needed.", volume.Name)
+				continue
+			}
 		}
 		if v1helper.GetPersistentVolumeClass(volume) != requestedClass {
 			continue

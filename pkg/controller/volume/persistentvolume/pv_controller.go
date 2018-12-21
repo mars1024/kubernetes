@@ -164,6 +164,9 @@ const createProvisionedPVRetryCount = 5
 // Interval between retries when we create a PV object for a provisioned volume.
 const createProvisionedPVInterval = 10 * time.Second
 
+// releasedTimestamp marks the timestamp for released PV
+const releasedTimestamp = "pv.beta1.sigma.ali/releasedTimestamp"
+
 // PersistentVolumeController is a controller that synchronizes
 // PersistentVolumeClaims and PersistentVolumes. It starts two
 // cache.Controllers that watch PersistentVolume and PersistentVolumeClaim
@@ -507,6 +510,39 @@ func (ctrl *PersistentVolumeController) syncBoundClaim(claim *v1.PersistentVolum
 	}
 }
 
+// reuseVolumeOperation cleans ClaimRef and sets phase to Available.
+func (ctrl *PersistentVolumeController) reuseVolumeOperation(volume *v1.PersistentVolume) {
+	glog.V(4).Infof("reuseVolumeOperation [%s] started", volume.Name)
+	// Save the PV only when any modification is necessary.
+	volumeClone := volume.DeepCopy()
+	volumeClone.Spec.ClaimRef = nil
+
+	if volumeClone.Annotations == nil {
+		volumeClone.Annotations = make(map[string]string)
+	}
+
+	volumeClone.Annotations[releasedTimestamp] = time.Now().Format(time.RFC3339)
+
+	newVol, err := ctrl.kubeClient.CoreV1().PersistentVolumes().Update(volumeClone)
+	if err != nil {
+		glog.Errorf("updating PersistentVolume[%s]: clean ClaimRef failed: %v", volume.Name, err)
+		return
+	}
+	_, err = ctrl.storeVolumeUpdate(newVol)
+	if err != nil {
+		glog.Errorf("updating PersistentVolume[%s]: cannot update internal cache: %v", volume.Name, err)
+		return
+	}
+
+	// Update the status
+	_, err = ctrl.updateVolumePhase(newVol, v1.VolumeAvailable, "")
+	if err != nil {
+		glog.Errorf("updateVolumePhase failed: %v", err)
+		return
+	}
+	return
+}
+
 // syncVolume is the main controller method to decide what to do with a volume.
 // It's invoked by appropriate cache.Controller callbacks when a volume is
 // created, updated or periodically synced. We do not differentiate between
@@ -525,6 +561,11 @@ func (ctrl *PersistentVolumeController) syncVolume(volume *v1.PersistentVolume) 
 		}
 		return nil
 	} else /* pv.Spec.ClaimRef != nil */ {
+		// In the case that PV reclaimPolicy is 'Reuse', when PV is released, PV should be changed its phase to 'Available' and clean its claimRef for reusing later.
+		if volume.Status.Phase == v1.VolumeReleased && volume.Spec.PersistentVolumeReclaimPolicy == v1.PersistentVolumeReclaimReuse {
+			ctrl.reuseVolumeOperation(volume)
+			return nil
+		}
 		// Volume is bound to a claim.
 		if volume.Spec.ClaimRef.UID == "" {
 			// The PV is reserved for a PVC; that PVC has not yet been
@@ -1004,6 +1045,13 @@ func (ctrl *PersistentVolumeController) bind(volume *v1.PersistentVolume, claim 
 	}
 	volume = updatedVolume
 
+	// In the case that PV's reclaimPolicy is 'Reuse',
+	// when PV is rebound, we should delete releasedTimestamp.
+	if err := ctrl.deleteReleasedTimestamp(volume); err != nil {
+		glog.Errorf("volume %s delete releasedTimestamp failed: %v", volume.Name, err)
+		return err
+	}
+
 	if updatedClaim, err = ctrl.bindClaimToVolume(claim, volume); err != nil {
 		glog.V(3).Infof("error binding volume %q to claim %q: failed saving the claim: %v", volume.Name, claimToClaimKey(claim), err)
 		return err
@@ -1019,6 +1067,31 @@ func (ctrl *PersistentVolumeController) bind(volume *v1.PersistentVolume, claim 
 	glog.V(4).Infof("volume %q bound to claim %q", volume.Name, claimToClaimKey(claim))
 	glog.V(4).Infof("volume %q status after binding: %s", volume.Name, getVolumeStatusForLogging(volume))
 	glog.V(4).Infof("claim %q status after binding: %s", claimToClaimKey(claim), getClaimStatusForLogging(claim))
+	return nil
+}
+
+// deleteReleasedTimestamp deletes the releasedTimestamp when PV with 'Reuse' reclaimPolicy is rebound to PVC
+func (ctrl *PersistentVolumeController) deleteReleasedTimestamp(volume *v1.PersistentVolume) error {
+	if volume.Spec.PersistentVolumeReclaimPolicy != v1.PersistentVolumeReclaimReuse {
+		return nil
+	}
+
+	if _, ok := volume.Annotations[releasedTimestamp]; ok {
+		// Save the PV only when any modification is necessary.
+		volumeClone := volume.DeepCopy()
+		delete(volumeClone.Annotations, releasedTimestamp)
+		newVol, err := ctrl.kubeClient.CoreV1().PersistentVolumes().Update(volumeClone)
+		if err != nil {
+			glog.Errorf("volume %s clean releasedTimestamp failed when PV with 'Reuse' reclaimPolicy.", volume.Name)
+			return err
+		}
+		_, err = ctrl.storeVolumeUpdate(newVol)
+		if err != nil {
+			glog.V(4).Infof("updating PersistentVolume[%s]: cannot update internal cache: %v", volume.Name, err)
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -1071,7 +1144,8 @@ func (ctrl *PersistentVolumeController) reclaimVolume(volume *v1.PersistentVolum
 	switch volume.Spec.PersistentVolumeReclaimPolicy {
 	case v1.PersistentVolumeReclaimRetain:
 		glog.V(4).Infof("reclaimVolume[%s]: policy is Retain, nothing to do", volume.Name)
-
+	case v1.PersistentVolumeReclaimReuse:
+		glog.V(4).Infof("reclaimVolume[%s]: policy is Reuse, nothing to do", volume.Name)
 	case v1.PersistentVolumeReclaimRecycle:
 		glog.V(4).Infof("reclaimVolume[%s]: policy is Recycle", volume.Name)
 		opName := fmt.Sprintf("recycle-%s[%s]", volume.Name, string(volume.UID))

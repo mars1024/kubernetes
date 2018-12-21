@@ -327,6 +327,8 @@ const (
 	// PersistentVolumeReclaimRetain means the volume will be left in its current phase (Released) for manual reclamation by the administrator.
 	// The default policy is Retain.
 	PersistentVolumeReclaimRetain PersistentVolumeReclaimPolicy = "Retain"
+	// PersistentVolumeReclaimReuse means the volume will be changed to Available state when the corresponding bound PVC is deleted.
+	PersistentVolumeReclaimReuse PersistentVolumeReclaimPolicy = "Reuse"
 )
 
 // PersistentVolumeMode describes how a volume is intended to be consumed, either Block or Filesystem.

@@ -1,0 +1,14 @@
+FROM reg.docker.alibaba-inc.com/ajdk/8.alios5
+RUN mkdir -p /home/admin/kube-scheduler/log && \
+    mkdir -p /home/admin/log && \
+    yum install -y -b current t-staragent-agent2 && \
+    yum install -y ali-sls-ilogtail
+ENTRYPOINT ["/sbin/init"]
+VOLUME ["/home/admin/kube-scheduler/log","/home/admin/log/","/home/staragent/plugins"]
+COPY environment/alibaba/kube-scheduler/bin/logrotate /etc/cron.daily/
+COPY environment/alibaba/kube-scheduler/cfg/logrotate.conf /etc/logrotate.d/scheduler
+COPY environment/alibaba/kube-scheduler/cfg/scheduler-policy-config.json /home/admin/kube-scheduler/cfg/
+COPY environment/alibaba/kube-scheduler/bin/rc.local /etc/rc.local
+COPY environment/alibaba/kube-scheduler/bin/start-k8s-scheduler.sh /home/admin/kube-scheduler/bin/
+COPY environment/alibaba/kube-scheduler/bin/kube-scheduler /home/admin/kube-scheduler/bin/
+WORKDIR /home/admin/kube-scheduler

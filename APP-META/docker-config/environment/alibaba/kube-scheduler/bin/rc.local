@@ -1,0 +1,16 @@
+#!/bin/bash
+
+# called by sigma-keepalive plugin
+source /etc/bashrc
+
+#ip addr show docker0 && {
+#    service staragentctl stop
+#    service DragoonAgent stop
+#    chkconfig --level 3 DragoonAgent off
+#    chkconfig --level 3 staragentctl off
+#}
+
+chown -R admin:admin /home/admin
+
+workDir=/home/admin/kube-scheduler
+sudo -E -u admin bash $workDir/bin/start-k8s-scheduler.sh &> $workDir/log/start.log

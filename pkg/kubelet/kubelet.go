@@ -116,6 +116,7 @@ import (
 	"k8s.io/kubernetes/pkg/volume"
 	"k8s.io/kubernetes/pkg/volume/csi"
 	utilexec "k8s.io/utils/exec"
+	"k8s.io/kubernetes/pkg/kubelet/dockershim/network/cni"
 )
 
 const (
@@ -612,6 +613,9 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		PluginBinDirString: crOptions.CNIBinDir,
 		MTU:                int(crOptions.NetworkPluginMTU),
 	}
+
+	cniPlugins := cni.ProbeNetworkPlugins(crOptions.CNIConfDir,  cni.SplitDirs(crOptions.CNIBinDir))
+	cni.UpdateCNIServiceAddress(cniPlugins, crOptions.NetworkPluginName,kubeDeps.KubeClient)
 
 	klet.resourceAnalyzer = serverstats.NewResourceAnalyzer(klet, kubeCfg.VolumeStatsAggPeriod.Duration)
 

@@ -1,0 +1,1 @@
+This is an empty directory for test case. Some files will be created here when runs test and cleaned up after test.

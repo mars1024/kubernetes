@@ -17,76 +17,15 @@ limitations under the License.
 package sketch
 
 import (
-	"net/http"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
-	"k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	buildertest "k8s.io/kubernetes/pkg/kubelet/autonomy/sketch/builders/testing"
-	walletest "k8s.io/kubernetes/pkg/kubelet/autonomy/sketch/scrapers/walle/testing"
 )
 
-func TestSketchProvider(t *testing.T) {
-	controller := gomock.NewController(t)
-	defer controller.Finish()
-
-	provider := buildertest.NewMockStatsProvider(controller)
-	provider.EXPECT().GetNode().AnyTimes().Return(&v1.Node{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "test",
-		},
-	}, error(nil))
-
-	listener, clean := walletest.SetupPrometheusServer(t, "tcp4://127.0.0.1:0",
-		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Write([]byte(`
-		{
-			"status": "success",
-			"data": {
-				"resultType": "vector",
-				"result": [
-					{
-						"metric": {
-							"__name__": "node_cpu_usage"
-						},
-						"value": [
-							1533136816.73,
-							"1.2"
-						]
-					}
-				]
-			}
-		}`))
-		}))
-	defer clean()
-
-	options := NewOptions()
-	options.Resolution = 50 * time.Millisecond
-	options.ScrapeOffset = 0
-	options.Walle.Address = "http://" + listener.Addr().String()
-
-	sketchProvider, err := New(options, provider)
-	assert.NoError(t, err)
-	assert.NotNil(t, sketchProvider)
-
-	assert.NoError(t, sketchProvider.Start())
-	defer func() {
-		sketchProvider.Stop()
-		// waiting for sketch provider stopped
-		time.Sleep(100 * time.Millisecond)
-	}()
-
-	time.Sleep(110 * time.Millisecond)
-	nodeSketch, err := sketchProvider.GetSketch().GetNodeSketch()
-	assert.NoError(t, err)
-	assert.NotNil(t, nodeSketch)
-	assert.Equal(t, "test", nodeSketch.Name)
-	assert.Equal(t, float64(1.2), nodeSketch.CPU.Usage.Latest)
-}
 
 func TestSketchProviderWithOptions(t *testing.T) {
 	controller := gomock.NewController(t)

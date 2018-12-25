@@ -55,6 +55,7 @@ type cniNetworkPlugin struct {
 
 type cniNetwork struct {
 	name          string
+	confFileName  string
 	NetworkConfig *libcni.NetworkConfigList
 	CNIConfig     libcni.CNI
 }
@@ -163,6 +164,7 @@ func getDefaultCNINetwork(confDir string, binDirs []string) (*cniNetwork, error)
 		network := &cniNetwork{
 			name:          confList.Name,
 			NetworkConfig: confList,
+			confFileName:  confFile,
 			CNIConfig:     &libcni.CNIConfig{Path: binDirs},
 		}
 		return network, nil

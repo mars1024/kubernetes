@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
+	sigmautil "k8s.io/kubernetes/pkg/kubelet/sigma"
 	"k8s.io/kubernetes/pkg/kubelet/util/format"
 )
 
@@ -173,6 +174,7 @@ func (kl *Kubelet) updateStateStatus(pod *v1.Pod, result kubecontainer.PodSyncRe
 	if !updated {
 		return nil
 	}
+
 	// Generate patchData
 	updateAnnotationBytes, err := json.Marshal(latestStateStatus)
 	updateAnnotationValue := string(updateAnnotationBytes)
@@ -180,8 +182,42 @@ func (kl *Kubelet) updateStateStatus(pod *v1.Pod, result kubecontainer.PodSyncRe
 		glog.Errorf("Failed to marshal pod %s update status: %v", format.Pod(pod), updateAnnotationValue)
 		return err
 	}
-	patchData := fmt.Sprintf(
-		`{"metadata":{"annotations":{"%s":%q}}}`, sigmak8sapi.AnnotationPodUpdateStatus, updateAnnotationValue)
+
+	// Check whether this is a inplace update request.
+	isInplaceUpdateAction := false
+	inplaceUpdateState := ""
+	inplaceUpdateResult := true
+	if sigmautil.IsInplaceUpdateAccepted(pod) {
+		for _, stateStatus := range resultStateStatus.Statuses {
+			if stateStatus.Action == sigmak8sapi.UpdateContainerAction {
+				isInplaceUpdateAction = true
+				inplaceUpdateResult = inplaceUpdateResult && stateStatus.Success
+			}
+
+			// Return early.
+			if !inplaceUpdateResult {
+				break
+			}
+		}
+
+		if inplaceUpdateResult {
+			inplaceUpdateState = sigmak8sapi.InplaceUpdateStateSucceeded
+		} else {
+			inplaceUpdateState = sigmak8sapi.InplaceUpdateStateFailed
+		}
+	}
+
+	patchData := ""
+	if isInplaceUpdateAction {
+		patchData = fmt.Sprintf(
+			`{"metadata":{"annotations":{"%s":%q,"%s":"%s"}}}`,
+			sigmak8sapi.AnnotationPodUpdateStatus, updateAnnotationValue,
+			sigmak8sapi.AnnotationPodInplaceUpdateState, inplaceUpdateState)
+	} else {
+		patchData = fmt.Sprintf(
+			`{"metadata":{"annotations":{"%s":%q}}}`, sigmak8sapi.AnnotationPodUpdateStatus, updateAnnotationValue)
+	}
+
 	// Update pod's StateStatus annotation.
 	for i := 0; i < retry; i++ {
 		if i > triesBeforeBackOff {
@@ -189,10 +225,10 @@ func (kl *Kubelet) updateStateStatus(pod *v1.Pod, result kubecontainer.PodSyncRe
 		}
 		_, err = kl.kubeClient.CoreV1().Pods(pod.GetNamespace()).Patch(pod.GetName(), types.StrategicMergePatchType, []byte(patchData))
 		if err != nil && errors.IsConflict(err) {
-			glog.Warningf("pod annotation change ,update pod ：%s, conflict err", format.Pod(pod))
+			glog.Warningf("annotations of pod (%s) changed, update pod return conflict err", format.Pod(pod))
 			continue
 		}
-		glog.V(4).Infof("pod %s annotation changed, before syncPod value: %q, after syncPod value: %q",
+		glog.V(4).Infof("annotations of pod (%s) changed, value before syncPod: %q, value after syncPod: %q",
 			format.Pod(pod), podAnnotationValue, updateAnnotationValue)
 		break
 	}

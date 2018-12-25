@@ -1,13 +1,12 @@
 package kuberuntime
 
 import (
-	"testing"
-	"time"
-
 	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
+	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -511,10 +510,12 @@ func TestSyncPodExtensionWithUpdatedContainer(t *testing.T) {
 			Kind:       "Pod",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			UID:         "12345678",
-			Name:        "foo",
-			Namespace:   "new",
-			Annotations: make(map[string]string),
+			UID:       "12345678",
+			Name:      "foo",
+			Namespace: "new",
+			Annotations: map[string]string{
+				sigmak8sapi.AnnotationPodInplaceUpdateState: sigmak8sapi.InplaceUpdateStateAccepted,
+			},
 		},
 		Spec: v1.PodSpec{
 			Containers: []v1.Container{

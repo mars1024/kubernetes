@@ -119,6 +119,7 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 		}
 	}
 
+	// step 3: upgrade container which need to be upgraded.
 	for containerID, containerInfo := range changes.ContainersToUpgrade {
 		container := containerInfo.container
 		upgradeContainerResult := kubecontainer.NewSyncResult(kubecontainer.SyncAction("UpgradeContainer"), container.Name)
@@ -136,7 +137,7 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 		}
 
 		containerStatusFromCache := podStatus.FindContainerStatusByName(container.Name)
-		containerStatus := createContainerStatus(podStatus, sigmak8sapi.UpdateContainerAction, containerInfo.name, pod)
+		containerStatus := createContainerStatus(podStatus, sigmak8sapi.UpgradeContainerAction, containerInfo.name, pod)
 		containerUpgradeResult, msg, err := m.upgradeContainer(containerStatusFromCache, podSandboxID, podSandboxConfig, pod, podStatus, pullSecrets, podIP, container)
 		success := false
 		statusMsg := ""
@@ -162,7 +163,9 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 		m.updateContainerStateStatus(containerStatus, containerInfo.name, currentContainerID, result.StateStatus, success, statusMsg)
 	}
 
-	if len(changes.ContainersToUpdate) > 0 {
+	// step 4: update container which need to be updated.
+	// Ignore update request if inplace update state is not accepted.
+	if len(changes.ContainersToUpdate) > 0 && sigmautil.IsInplaceUpdateAccepted(pod) {
 		updatePodResult := kubecontainer.NewSyncResult(kubecontainer.UpdateContainer, format.Pod(pod))
 		currentPodCPUQuota := int64(0)
 		newPodCPUQuota := int64(0)
@@ -207,7 +210,7 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 				isInBackOff, msg, err := m.doBackOffExtension(pod, container, podStatus, backOff)
 				if isInBackOff {
 					updateContainerResult.Fail(err, msg)
-					glog.V(4).Infof("Backing Off updating container %+v in pod %v", container, format.Pod(pod))
+					glog.V(4).Infof("backing off updating container %+v in pod %v", container, format.Pod(pod))
 					return
 				}
 			}
@@ -229,6 +232,7 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 		}
 	}
 
+	// step 5: pause container if needed.
 	for containerID, containerInfo := range changes.ContainersToStartBecausePause {
 		container := containerInfo.container
 		pauseContainerResult := kubecontainer.NewSyncResult(kubecontainer.SyncAction("PauseContainer"), container.Name)

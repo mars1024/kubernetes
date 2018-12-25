@@ -623,7 +623,7 @@ func TestValidatePod(t *testing.T) {
 					},
 				},
 			},
-			err: "the count of cpuIDs is not match pod spec",
+			err: "the count of cpuIDs is not match pod spec and this pod is not in inplace update process",
 		},
 		{
 			name:   "pod update error",
@@ -853,8 +853,67 @@ func TestValidatePod(t *testing.T) {
 			},
 			err: "net-priority must be with range of 0-15",
 		},
+		{
+			name:   "wrong inplace update state",
+			action: admission.Create,
+			pod: api.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "123",
+					Namespace: namespace,
+					Annotations: map[string]string{
+						sigmaapi.AnnotationPodInplaceUpdateState: "wrong",
+					},
+				},
+			},
+			err: "[created, accepted, failed, succeeded]",
+		},
+		{
+			name:   "pod with mismatch cpuids count but in inplace update",
+			action: admission.Create,
+			pod: api.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "123",
+					Namespace: namespace,
+					Annotations: map[string]string{
+						sigmaapi.AnnotationPodInplaceUpdateState: sigmaapi.InplaceUpdateStateCreated,
+					},
+				},
+				Spec: api.PodSpec{
+					NodeName: "node",
+					Containers: []api.Container{
+						{
+							Name: "name1",
+							Resources: api.ResourceRequirements{
+								Requests: api.ResourceList{
+									api.ResourceCPU: resource.MustParse("3"),
+								},
+							},
+						},
+					},
+				},
+			},
+			alloc: sigmaapi.AllocSpec{
+				Containers: []sigmaapi.Container{
+					{
+						Name: "name1",
+						Resource: sigmaapi.ResourceRequirements{
+							CPU: sigmaapi.CPUSpec{
+								CPUSet: &sigmaapi.CPUSetSpec{
+									SpreadStrategy: sigmaapi.SpreadStrategySameCoreFirst,
+									CPUIDs:         []int{1, 2},
+								},
+							},
+							GPU: sigmaapi.GPUSpec{
+								ShareMode: sigmaapi.GPUShareModeExclusive,
+							},
+						},
+					},
+				},
+			},
+			err: "",
+		},
 	}
-	for _, tc := range tests {
+	for i, tc := range tests {
 		allocBytes, _ := json.Marshal(tc.alloc)
 		if tc.pod.Annotations != nil {
 			tc.pod.Annotations[sigmaapi.AnnotationPodAllocSpec] = string(allocBytes)
@@ -873,15 +932,15 @@ func TestValidatePod(t *testing.T) {
 		if tc.err != "" {
 			if err != nil {
 				if !strings.Contains(err.Error(), tc.err) {
-					t.Errorf("%s, Unexpected error: %s, expect: %s", tc.name, err, tc.err)
+					t.Errorf("Case[%d]: %s, Unexpected error: %s, expect: %s", i, tc.name, err, tc.err)
 				}
 			} else {
-				t.Errorf("%s, Missing error, expect: %s", tc.name, tc.err)
+				t.Errorf("Case[%d]: %s, Missing error, expect: %s", i, tc.name, tc.err)
 			}
 			continue
 		}
 		if err != nil {
-			t.Errorf("%s, Unexpected error: %s, expect: %s", tc.name, err, tc.err)
+			t.Errorf("Case[%d]: %s, Unexpected error: %s, expect: %s", i, tc.name, err, tc.err)
 		}
 	}
 }

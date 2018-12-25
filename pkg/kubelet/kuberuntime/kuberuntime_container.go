@@ -253,18 +253,19 @@ func (m *kubeGenericRuntimeManager) startContainer(podSandboxID string, podSandb
 
 func (m *kubeGenericRuntimeManager) updateContainer(containerID kubecontainer.ContainerID, container *v1.Container, pod *v1.Pod) (string, error) {
 	resources := m.generateLinuxContainerResources(container, pod)
+	glog.Infof("update container: %s with linux resource: %+v", container.Name, resources)
 	err := m.runtimeService.UpdateContainerResources(containerID.ID, resources)
 	if err != nil {
-		message := fmt.Sprintf("Failed to update container %q(id=%q) in pod %q: %v", container.Name, containerID.String(), format.Pod(pod), err)
+		message := fmt.Sprintf("failed to update container %q(id=%q) in pod %q: %v", container.Name, containerID.String(), format.Pod(pod), err)
 		m.recordContainerEvent(pod, container, containerID.ID, v1.EventTypeWarning, events.FailedToUpdateContainer, message)
-		return "Update Container Failed", err
+		return message, err
 	}
 	if err := m.internalLifecycle.PostResizeContainer(pod, container, containerID.ID); err != nil {
 		return "", err
 	}
-	message := fmt.Sprintf("Updated container %q(id=%q) in pod %q", container.Name, containerID.String(), format.Pod(pod))
+	message := fmt.Sprintf("updated container successfully %q(id=%q) in pod %q", container.Name, containerID.String(), format.Pod(pod))
 	m.recordContainerEvent(pod, container, containerID.ID, v1.EventTypeNormal, events.UpdatedContainer, message)
-	return "", nil
+	return message, nil
 }
 
 // generateContainerConfig generates container config for kubelet runtime v1.
@@ -659,8 +660,8 @@ func (m *kubeGenericRuntimeManager) restoreSpecsFromContainerLabels(containerID 
 		},
 	}
 	container = &v1.Container{
-		Name:                   l.ContainerName,
-		Ports:                  a.ContainerPorts,
+		Name:  l.ContainerName,
+		Ports: a.ContainerPorts,
 		TerminationMessagePath: a.TerminationMessagePath,
 	}
 	if a.PreStopHandler != nil {

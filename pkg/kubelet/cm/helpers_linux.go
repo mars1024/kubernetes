@@ -159,7 +159,9 @@ func ResourceConfigForPod(pod *v1.Pod, enforceCPULimits bool, cpuPeriod uint64) 
 
 	// build the result
 	result := &ResourceConfig{}
+	// Set pod's CpuQuota as unlimited in the case of QOSGuaranteed.
 	if qosClass == v1.PodQOSGuaranteed {
+		cpuQuota = int64(-1)
 		result.CpuShares = &cpuShares
 		result.CpuQuota = &cpuQuota
 		result.CpuPeriod = &cpuPeriod

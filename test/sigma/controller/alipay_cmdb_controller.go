@@ -2,7 +2,6 @@ package controller_test
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"os"
 	"strconv"
@@ -20,7 +19,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/kubernetes/test/e2e/framework"
 	sigmabvt "k8s.io/kubernetes/test/sigma/ant-sigma-bvt"
 	"k8s.io/kubernetes/test/sigma/util"
@@ -49,7 +47,7 @@ var _ = Describe("[ant][sigma-alipay-controller][cmdb]", func() {
 		Expect(err).To(BeNil(), "get node labels site failed.")
 		site = strings.ToLower(site)
 	})
-	It("[sigma-alipay-controller][cmdb][smoke] test pod cmdb lifecycle with zappinfo un-register, add/get/delete.", func() {
+	It("[sigma-alipay-controller][cmdb][smoke] test pod cmdb lifecycle, add/get/delete.", func() {
 		testPod := CreateCMDBPod(f, false, enableOverQuota)
 
 		defer util.DeletePod(f.ClientSet, testPod)
@@ -62,32 +60,7 @@ var _ = Describe("[ant][sigma-alipay-controller][cmdb]", func() {
 		Expect(getPod.Status.PodIP).NotTo(BeEmpty(), "status.PodIP should not be empty")
 
 		By("wait for cmdb controller reigister pod info in cmdb")
-		checkPodCMDBInfo(getPod, cmdbCli)
-		By("delete pod.")
-		err = util.DeletePod(f.ClientSet, testPod)
-		Expect(err).NotTo(HaveOccurred(), "delete pod should succeed")
-		// query cmdbInfo
-		sn, ok := getPod.Labels[k8sApi.LabelPodSn]
-		Expect(ok).To(BeTrue(), "pod sn need specified.")
-		err = WaitTimeoutForCMDBInfo(cmdbCli, sn, http.StatusNotFound, 1*time.Minute)
-		Expect(err).To(BeNil(), "cmdb Info should be removed.")
-	})
-
-	It("[sigma-alipay-controller][cmdb][smoke] test pod cmdb lifecycle with zappinfo registered, add/get/delete.", func() {
-		testPod := CreateCMDBPod(f, true, enableOverQuota)
-
-		defer util.DeletePod(f.ClientSet, testPod)
-		By("wait until pod running and have pod/host IP")
-		err := util.WaitTimeoutForPodStatus(f.ClientSet, testPod, corev1.PodRunning, 3*time.Minute)
-		Expect(err).NotTo(HaveOccurred(), "pod status is not running")
-		getPod, err := f.ClientSet.CoreV1().Pods(f.Namespace.Name).Get(testPod.Name, metav1.GetOptions{})
-		Expect(err).NotTo(HaveOccurred())
-		Expect(getPod.Status.HostIP).NotTo(BeEmpty(), "status.HostIP should not be empty")
-		Expect(getPod.Status.PodIP).NotTo(BeEmpty(), "status.PodIP should not be empty")
-
-		By("wait for cmdb controller reigister pod info in cmdb")
-		checkPodCMDBInfo(getPod, cmdbCli)
-
+		checkPodCMDBInfo(f, getPod, cmdbCli)
 		By("delete pod.")
 		err = util.DeletePod(f.ClientSet, testPod)
 		Expect(err).NotTo(HaveOccurred(), "delete pod should succeed")
@@ -100,7 +73,7 @@ var _ = Describe("[ant][sigma-alipay-controller][cmdb]", func() {
 })
 
 //checkPodCMDBInfo() check pod cmdbinfo and annotation/finalizer.
-func checkPodCMDBInfo(getPod *corev1.Pod, cmdbCli cmdbClient.Client) {
+func checkPodCMDBInfo(f *framework.Framework, getPod *corev1.Pod, cmdbCli cmdbClient.Client) {
 	sn, ok := getPod.Labels[k8sApi.LabelPodSn]
 	Expect(ok).To(BeTrue(), "pod sn need specified.")
 	Expect(sn).NotTo(BeEmpty(), "pod sn should not be empty.")
@@ -127,7 +100,10 @@ func checkPodCMDBInfo(getPod *corev1.Pod, cmdbCli cmdbClient.Client) {
 		"cmdb containerHostName should same as annotation hostname template.")
 	Expect(cmdbInfo.DeployUnit).To(Equal(getPod.Labels[k8sApi.LabelDeployUnit]), "cmdb deployunit should same as pod deployunit")
 	Expect(cmdbInfo.PoolSystem).To(Equal("sigma3_1"), "cmdb poolsystem should same as sigma3_1")
-
+	// nodeSN
+	nodeSN, err := getNodeSN(f, getPod.Spec.NodeName)
+	Expect(err).NotTo(HaveOccurred(), "get node sn failed.")
+	Expect(nodeSN).To(Equal(cmdbInfo.NodeSn), "Unexpect node sn in cmdbInfo.")
 	//resources
 	memory, disk, cpu := getResources(getPod.Spec.Containers)
 	Expect(cmdbInfo.MemorySize).To(Equal(memory), "cmdb memory should same sa pod memory.")
@@ -157,20 +133,6 @@ func CreateCMDBPod(f *framework.Framework, register bool, enableOverQuota string
 
 //newCMDBPod() Load zappinfo for pods.
 func newCMDBPod(pod *corev1.Pod, namespace string, registered bool) *corev1.Pod {
-	hostname := "dapanweb-" + string(uuid.NewUUID())
-	info := alipayapis.PodZappinfo{
-		Spec: &alipayapis.PodZappinfoSpec{
-			AppName:    "dapanweb",
-			Zone:       "RZ11A",
-			ServerType: "DOCKER_VM",
-			Fqdn:       fmt.Sprintf("%s.%s.alipay.net", hostname, pod.Labels[k8sApi.LabelSite]),
-		},
-		Status: &alipayapis.PodZappinfoStatus{
-			Registered: registered,
-		},
-	}
-	infoBytes, _ := json.Marshal(info)
-	pod.Annotations[alipayapis.AnnotationZappinfo] = string(infoBytes)
 	pod.Labels["ali.BizName"] = "cloudprovision"
 	pod.Labels[alipayapis.LabelZone] = "ant-sigma-test-zone"
 	pod.Namespace = namespace
@@ -273,4 +235,14 @@ func checkCMDBInfo(client cmdbClient.Client, sn string, code int) wait.Condition
 		framework.Logf("pod[%s] cmdbinfo is ok.", sn)
 		return true, nil
 	}
+}
+
+// getNodeSN() get node sn from node label
+func getNodeSN(f *framework.Framework, name string) (string, error) {
+	node, err := f.ClientSet.CoreV1().Nodes().Get(name, metav1.GetOptions{})
+	if err != nil {
+		framework.Logf("get node %v sn failed, err:%v", name, err)
+		return "", err
+	}
+	return node.Labels[k8sApi.LabelNodeSN], nil
 }

@@ -85,6 +85,11 @@ func checkPodCMDBInfo(f *framework.Framework, getPod *corev1.Pod, cmdbCli cmdbCl
 	Expect(err).NotTo(HaveOccurred(), "query cmdb Info should pass")
 	Expect(cmdbResp).NotTo(BeNil(), "cmdb info should not be empty")
 	Expect(cmdbResp.Code).To(Equal(http.StatusOK), "cmdb info should be ok.")
+	err = util.WaitTimeoutForPodFinalizer(f, getPod.Name, alipaymeta.CMDBFinalizer, 30*time.Second)
+	Expect(err).NotTo(HaveOccurred(), "cmdb finalizer should be patched.")
+
+	getPod, err = f.ClientSet.CoreV1().Pods(f.Namespace.Name).Get(getPod.Name, metav1.GetOptions{})
+	Expect(err).NotTo(HaveOccurred())
 	framework.Logf("cmdbInfo :%+v, PodInfo:%+v", cmdbResp.Data, *getPod)
 	cmdbInfo := cmdbResp.Data
 	Expect(cmdbInfo.BizName).To(Equal(getPod.Labels["ali.BizName"]), "cmdb BizName should same as pod label ali.BizName")

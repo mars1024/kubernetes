@@ -353,3 +353,25 @@ func containerRestart(c clientset.Interface, podName, namespace string, podStart
 		return true, nil
 	}
 }
+
+// WaitTimeoutForPodFinalizer check whether expect finalizer is patched into pod within the timeout.
+func WaitTimeoutForPodFinalizer(f *framework.Framework, podName, expectFinalizer string, timeout time.Duration) error {
+	return wait.PollImmediate(3*time.Second, timeout, checkExpectFinalizer(f, podName, expectFinalizer))
+}
+
+// checkExpectFinalizer() check Finalizer is existed.
+func checkExpectFinalizer(f *framework.Framework, podName string, expectFinalizer string) wait.ConditionFunc {
+	return func() (bool, error) {
+		getPod, err := f.ClientSet.CoreV1().Pods(f.Namespace.Name).Get(podName, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		for _, finalizer := range getPod.Finalizers {
+			if finalizer == expectFinalizer {
+				return true, nil
+			}
+		}
+		framework.Logf("Pod %v finalizer:%v", podName, getPod.Finalizers)
+		return false, nil
+	}
+}

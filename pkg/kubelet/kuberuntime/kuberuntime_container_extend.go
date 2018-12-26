@@ -171,3 +171,33 @@ func generateTopologyEnvs(node *v1.Node) []*runtimeapi.KeyValue {
 
 	return envs
 }
+
+// applyDiskQuota can set diskQuota in containerConfig.
+// Resources field of containerConfig should not be nil.
+func applyDiskQuota(pod *v1.Pod, container *v1.Container, containerConfig *runtimeapi.ContainerConfig) error {
+	// Set "/" quota as the size of ephemeral storage in requests.
+	requestEphemeralStorage, requestESExists := container.Resources.Requests[v1.ResourceEphemeralStorage]
+	if !requestESExists || requestEphemeralStorage.IsZero() {
+		glog.V(4).Infof("request requestEphemeralStorage is not defined in pod: %q, ignore to setup diskquota", format.Pod(pod))
+		return nil
+	}
+
+	// Ensure QuotaId exists in container.
+	if containerConfig.QuotaId == "" {
+		// Set QuotaId as -1 to generate a new quotaid.
+		containerConfig.QuotaId = "-1"
+	}
+
+	// Default diskQuotaMode is "DiskQuotaModeRootFsAndVolume"
+	diskQuotaMode := sigmak8sapi.DiskQuotaModeRootFsAndVolume
+	// Change diskQuotaMode if needed.
+	containerHostConfig := sigmautil.GetHostConfigFromAnnotation(pod, container.Name)
+	if containerHostConfig != nil && containerHostConfig.DiskQuotaMode == sigmak8sapi.DiskQuotaModeRootFsOnly {
+		diskQuotaMode = sigmak8sapi.DiskQuotaModeRootFsOnly
+	}
+	glog.V(4).Infof("Set RootFs DiskQuotaMode as %s for container %s in pod %s",
+		string(diskQuotaMode), container.Name, format.Pod(pod))
+	containerConfig.Linux.Resources.DiskQuota = map[string]string{string(diskQuotaMode): getDiskSize(requestEphemeralStorage.String())}
+
+	return nil
+}

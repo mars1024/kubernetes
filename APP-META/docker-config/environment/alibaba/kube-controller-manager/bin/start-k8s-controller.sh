@@ -12,5 +12,5 @@ $workDir/bin/kube-controller-manager \
     --service-account-private-key-file=$certDir/sa.key \
     --use-service-account-credentials=true \
     --secure-port 0 \
-    --v=5 >> $workDir/log/k8s-controller.log 2>&1 &
+    --v=4 >> $workDir/log/k8s-controller.log 2>&1 &
 }

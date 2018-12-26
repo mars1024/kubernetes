@@ -262,7 +262,10 @@ func validatePod(attributes admission.Attributes) error {
 			}
 
 			// validate cpuIDs count
-			if count, ok := pod.Spec.Containers[idx].Resources.Requests.Cpu().AsInt64(); ok {
+			milliValue := pod.Spec.Containers[idx].Resources.Requests.Cpu().MilliValue()
+			count := milliValue / 1000
+			fractionalValue := milliValue % 1000
+			if fractionalValue == 0 {
 				c := len(container.Resource.CPU.CPUSet.CPUIDs)
 				if c > 0 && c != int(count) && !isInInplaceUpdateProcess(pod) {
 					fld := containerField.Index(i).Child("resource").Child("cpu").Child("cpuset").Child("cpuIDs")

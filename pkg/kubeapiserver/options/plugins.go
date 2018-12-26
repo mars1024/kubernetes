@@ -113,6 +113,7 @@ var AllOrderedPlugins = []string{
 	deny.PluginName,                         // AlwaysDeny
 	namespacedelete.PluginName,              // NamespaceDelete
 
+	alipaymosnsidecar.PluginName,          // Alipay MOSN Sidecar
 	armory.PluginName,                     // Armory
 	containerstate.PluginName,             // ContainerState
 	networkstatus.PluginName,              // NetworkStatus
@@ -123,7 +124,6 @@ var AllOrderedPlugins = []string{
 	alipodinjectionpostschedule.PluginName, // AliPodInjectionPostSchedule
 	poddeletionflowcontrol.PluginName,      // PodDeletionFlowControl
 
-	alipaymosnsidecar.PluginName,   // Alipay MOSN Sidecar
 	alipaysetdefault.PluginName,    // Alipay SetDefault
 	alipaycmdb.PluginName,          // Alipay CMDB
 	alipayinclusterkube.PluginName, // Alipay in-cluster kubernetes service

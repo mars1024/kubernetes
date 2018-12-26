@@ -20,12 +20,22 @@ const (
 	defaultConfigMapTemplate = `
 containers:
 - name: mosn-sidecar-container
-  image: {{ annotation .ObjectMeta "mosn.sidecar.k8s.alipay.com/image" "reg.docker.alibaba-inc.com/alipay/mosn:v1" }}
+  image: {{ annotation .ObjectMeta "mosn.sidecar.k8s.alipay.com/image" "reg.docker.alibaba-inc.com/antmesh/mosn:1.0.2-5995f65" }}
+  imagePullPolicy: IfNotPresent
+  ports:
+  - containerPort: {{ annotation .ObjectMeta "mosn.sidecar.k8s.alipay.com/ingress-port" 12200 }}
+    protocol: TCP
+  - containerPort: {{ annotation .ObjectMeta "mosn.sidecar.k8s.alipay.com/egress-port" 12220 }}
+    protocol: TCP
+  - containerPort: {{ annotation .ObjectMeta "mosn.sidecar.k8s.alipay.com/registry-port" 13330 }}
+    protocol: TCP
   lifecycle:
     postStart:
       exec:
         command:
-        - {{ annotation .ObjectMeta "mosn.sidecar.k8s.alipay.com/post-start-command" "/path/to/post-start-command.sh" }}
+        - bash
+        - {{ annotation .ObjectMeta "mosn.sidecar.k8s.alipay.com/post-start-command" "/home/admin/mosn/bin/process_checker.sh" }}
+  terminationMessagePolicy: File
   resources:
     requests:
       {{ if isCPUSet .ObjectMeta }}
@@ -43,17 +53,25 @@ containers:
       {{ end }}
       memory: {{ convertMemoryBasedOnCPUCount .PodSpec "128Mi" }}
       ephemeral-storage: {{ annotation .ObjectMeta "mosn.sidecar.k8s.alipay.com/ephemeral-storage" "20G" }}
+  volumeMounts:
+  - name: mosn-conf
+    mountPath: /home/admin/mosn/conf
 volumes:
-- emptyDir:
-  name: mosn-volume
+- name: mosn-conf
+  emptyDir: {}
 appEnvs:
 - name: MOSN_ENABLE
   value: "true"
--
+- name: MOSN_EGRESS_PORT
+  value: {{ annotation .ObjectMeta "mosn.sidecar.k8s.alipay.com/egress-port" 12220 }}
+- name: MOSN_REGISTRY_PORT
+  value: {{ annotation .ObjectMeta "mosn.sidecar.k8s.alipay.com/registry-port" 13330 }}
+- name: RPC_TR_PORT
+  value: 12199
 `
 )
 
-func addDefaultConfigMap(sidecar *alipaySidecar) {
+func addDefaultConfigMap(sidecar *alipayMOSNSidecar) {
 	informerFactory := informers.NewSharedInformerFactory(nil, controller.NoResyncPeriodFunc())
 	sidecar.SetInternalKubeInformerFactory(informerFactory)
 	// First add the existing classes to the cache.
@@ -89,6 +107,12 @@ func TestAdmit(t *testing.T) {
 						Limits: api.ResourceList{
 							api.ResourceCPU:    *resource.NewQuantity(8, resource.DecimalSI),
 							api.ResourceMemory: *resource.NewQuantity(8*1024, resource.DecimalSI),
+						},
+					},
+					VolumeMounts: []api.VolumeMount{
+						{
+							Name:      "logs-volume",
+							MountPath: defaultLogsDir,
 						},
 					},
 				},
@@ -134,12 +158,21 @@ func TestAdmit(t *testing.T) {
 		},
 	}
 
+	allocSpecWithMOSN := allocSpec
+	allocSpecWithMOSN.Containers = append(allocSpecWithMOSN.Containers,
+		sigmak8sapi.Container{
+			Name: "mosn-sidecar-container",
+		})
+
 	podToBeInjectedWithCPUSet := podToBeInjected.DeepCopy()
 	allocSpecBytes, _ := json.Marshal(allocSpec)
 	podToBeInjectedWithCPUSet.Annotations[sigmak8sapi.AnnotationPodAllocSpec] =
 		string(allocSpecBytes)
 
 	podToBeInjectedWithCPUShare := podToBeInjected.DeepCopy()
+	allocSpecWithMOSNBytes, _ := json.Marshal(allocSpecWithMOSN)
+	podToBeInjectedWithCPUSet.Annotations[sigmak8sapi.AnnotationPodAllocSpec] =
+		string(allocSpecWithMOSNBytes)
 
 	podWithoutInjection := podToBeInjected.DeepCopy()
 	podWithoutInjection.Annotations[alipaysigmak8sapi.MOSNSidecarInject] =
@@ -183,7 +216,7 @@ func TestAdmit(t *testing.T) {
 
 	for i, testCase := range testCases {
 		glog.V(4).Infof("starting test case %q", testCase.name)
-		sidecar := newAlipaySidecarPlugin()
+		sidecar := newAlipayMOSNSidecarPlugin()
 
 		// Add default configmap.
 		addDefaultConfigMap(sidecar)
@@ -283,7 +316,7 @@ func TestValidate(t *testing.T) {
 
 	for i, testCase := range testCases {
 		glog.V(4).Infof("starting test case %q", testCase.name)
-		sidecar := newAlipaySidecarPlugin()
+		sidecar := newAlipayMOSNSidecarPlugin()
 
 		// Add default configmap.
 		addDefaultConfigMap(sidecar)

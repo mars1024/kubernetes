@@ -57,6 +57,8 @@ type HostConfigInfo struct {
 	// If the path is not absolute, the path is considered to be relative to the cgroups path of the init process.
 	// Cgroups are created if they do not already exist.
 	CgroupParent string `json:"cgroupParent"`
+	// Indicate how to set rootfs diskquota for a container.
+	DiskQuotaMode RootDiskQuotaMode `json:"diskQuotaMode"`
 	// Total memory limit (memory + swap); set -1 to enable unlimited swap.
 	// You must use this with memory and make the swap value larger than memory
 	MemorySwap int64 `json:"memorySwap,omitempty"`
@@ -112,6 +114,17 @@ type Ulimit struct {
 	// Soft limit of ulimit.
 	Soft int64
 }
+
+// DiskQuotaMode indicates how to set up container's rootfs diskquota.
+// https://github.com/alibaba/pouch/blob/master/docs/features/pouch_with_diskquota.md#parameter-details
+type RootDiskQuotaMode string
+
+const (
+	// DiskQuotaModeRootFsAndVolume is a DiskQuotaMode that indicates using ".*" to limit a container's rootfs.
+	DiskQuotaModeRootFsAndVolume RootDiskQuotaMode = ".*"
+	// DiskQuotaModeRootFsOnly is a DiskQuotaMode that indicates using "/" to limit a container's rootfs.
+	DiskQuotaModeRootFsOnly RootDiskQuotaMode = "/"
+)
 
 // SpreadStrategy means how to allocate cpuset of container in the CPU topology
 type SpreadStrategy string

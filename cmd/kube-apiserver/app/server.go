@@ -94,6 +94,8 @@ import (
 	_ "k8s.io/kubernetes/pkg/util/workqueue/prometheus" // for workqueue metric registration
 	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
 	multitenancyresolver "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/resolver"
+	multitenancyaggregator "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/kube-aggregator/pkg/apiserver"
+	multitenancycrdserver "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/apiextensions-apiserver/pkg/apiserver"
 )
 
 const etcdRetryLimit = 60
@@ -178,6 +180,32 @@ func CreateServerChain(completedOptions completedServerRunOptions, stopCh <-chan
 	if err != nil {
 		return nil, err
 	}
+
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		apiExtensionsServer, err := multitenancycrdserver.CreateAPIExtensionsServer(apiExtensionsConfig, genericapiserver.NewEmptyDelegate())
+		if err != nil {
+			return nil, err
+		}
+		kubeAPIServer, err := CreateKubeAPIServer(kubeAPIServerConfig, apiExtensionsServer.GenericAPIServer, admissionPostStartHook)
+		if err != nil {
+			return nil, err
+		}
+
+		kubeAPIServer.GenericAPIServer.PrepareRun()
+		apiExtensionsServer.GenericAPIServer.PrepareRun()
+
+		aggregatorConfig, err := createAggregatorConfig(*kubeAPIServerConfig.GenericConfig, completedOptions.ServerRunOptions, kubeAPIServerConfig.ExtraConfig.VersionedInformers, serviceResolver, proxyTransport, pluginInitializer)
+		if err != nil {
+			return nil, err
+		}
+
+		aggregatorServer, err := multitenancyaggregator.CreateAggregatorServer(aggregatorConfig, kubeAPIServer.GenericAPIServer, apiExtensionsServer.Informers)
+		if err != nil {
+			return nil, err
+		}
+		return aggregatorServer.GenericAPIServer, nil
+	}
+
 	apiExtensionsServer, err := createAPIExtensionsServer(apiExtensionsConfig, genericapiserver.NewEmptyDelegate())
 	if err != nil {
 		return nil, err

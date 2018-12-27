@@ -36,6 +36,8 @@ import (
 	schedulingapiv1beta1 "k8s.io/kubernetes/pkg/apis/scheduling/v1beta1"
 	schedulingclient "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/typed/scheduling/internalversion"
 	priorityclassstore "k8s.io/kubernetes/pkg/registry/scheduling/priorityclass/storage"
+	"k8s.io/apiserver/pkg/util/feature"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
 )
 
 const PostStartHookName = "scheduling/bootstrap-system-priority-classes"
@@ -71,6 +73,10 @@ func (p RESTStorageProvider) PostStartHook() (string, genericapiserver.PostStart
 
 func AddSystemPriorityClasses() genericapiserver.PostStartHookFunc {
 	return func(hookContext genericapiserver.PostStartHookContext) error {
+		if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+			// resource initializing migrated to minion cluster operator
+			return nil
+		}
 		// Adding system priority classes is important. If they fail to add, many critical system
 		// components may fail and cluster may break.
 		err := wait.Poll(1*time.Second, 30*time.Second, func() (done bool, err error) {

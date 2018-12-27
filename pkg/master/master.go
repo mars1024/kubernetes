@@ -98,6 +98,9 @@ import (
 	schedulingrest "k8s.io/kubernetes/pkg/registry/scheduling/rest"
 	settingsrest "k8s.io/kubernetes/pkg/registry/settings/rest"
 	storagerest "k8s.io/kubernetes/pkg/registry/storage/rest"
+
+	"k8s.io/apiserver/pkg/util/feature"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
 )
 
 const (
@@ -371,7 +374,9 @@ func (c completedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 		m.installTunneler(c.ExtraConfig.Tunneler, corev1client.NewForConfigOrDie(c.GenericConfig.LoopbackClientConfig).Nodes())
 	}
 
-	m.GenericAPIServer.AddPostStartHookOrDie("ca-registration", c.ExtraConfig.ClientCARegistrationHook.PostStartHook)
+	if !feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		m.GenericAPIServer.AddPostStartHookOrDie("ca-registration", c.ExtraConfig.ClientCARegistrationHook.PostStartHook)
+	}
 	m.GenericAPIServer.AddPostStartHookOrDie("start-kube-apiserver-informers", func(context genericapiserver.PostStartHookContext) error {
 		if c.ExtraConfig.InternalInformers != nil {
 			c.ExtraConfig.InternalInformers.Start(context.StopCh)
@@ -390,9 +395,13 @@ func (m *Master) InstallLegacyAPI(c *completedConfig, restOptionsGetter generic.
 
 	controllerName := "bootstrap-controller"
 	coreClient := coreclient.NewForConfigOrDie(c.GenericConfig.LoopbackClientConfig)
-	bootstrapController := c.NewBootstrapController(legacyRESTStorage, coreClient, coreClient, coreClient)
-	m.GenericAPIServer.AddPostStartHookOrDie(controllerName, bootstrapController.PostStartHook)
-	m.GenericAPIServer.AddPreShutdownHookOrDie(controllerName, bootstrapController.PreShutdownHook)
+
+	if !feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		// core controller is disabled b/c minion cluster operator will do its job
+		bootstrapController := c.NewBootstrapController(legacyRESTStorage, coreClient, coreClient, coreClient)
+		m.GenericAPIServer.AddPostStartHookOrDie(controllerName, bootstrapController.PostStartHook)
+		m.GenericAPIServer.AddPreShutdownHookOrDie(controllerName, bootstrapController.PreShutdownHook)
+	}
 
 	if err := m.GenericAPIServer.InstallLegacyAPIGroup(genericapiserver.DefaultLegacyAPIPrefix, &apiGroupInfo); err != nil {
 		glog.Fatalf("Error in registering group versions: %v", err)

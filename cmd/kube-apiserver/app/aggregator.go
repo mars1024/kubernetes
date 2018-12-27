@@ -50,6 +50,8 @@ import (
 	"k8s.io/kube-aggregator/pkg/controllers/autoregister"
 	"k8s.io/kubernetes/cmd/kube-apiserver/app/options"
 	"k8s.io/kubernetes/pkg/master/controller/crdregistration"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancycrdregistration "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/master/controller/crdregistration"
 )
 
 func createAggregatorConfig(
@@ -138,6 +140,23 @@ func createAggregatorServer(aggregatorConfig *aggregatorapiserver.Config, delega
 		autoRegistrationController)
 
 	aggregatorServer.GenericAPIServer.AddPostStartHook("kube-apiserver-autoregistration", func(context genericapiserver.PostStartHookContext) error {
+		if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+			crdRegistrationControllerWithMultiTenancy := multitenancycrdregistration.NewAutoRegistrationController(
+				apiExtensionInformers.Apiextensions().InternalVersion().CustomResourceDefinitions(),
+				autoRegistrationController,
+			)
+			go crdRegistrationControllerWithMultiTenancy.Run(5, context.StopCh)
+			go func() {
+				// let the CRD controller process the initial set of CRDs before starting the autoregistration controller.
+				// this prevents the autoregistration controller's initial sync from deleting APIServices for CRDs that still exist.
+				// we only need to do this if CRDs are enabled on this server.  We can't use discovery because we are the source for discovery.
+				if aggregatorConfig.GenericConfig.MergedResourceConfig.AnyVersionForGroupEnabled("apiextensions.k8s.io") {
+					crdRegistrationController.WaitForInitialSync()
+				}
+				autoRegistrationController.Run(5, context.StopCh)
+			}()
+			return nil
+		}
 		go crdRegistrationController.Run(5, context.StopCh)
 		go func() {
 			// let the CRD controller process the initial set of CRDs before starting the autoregistration controller.

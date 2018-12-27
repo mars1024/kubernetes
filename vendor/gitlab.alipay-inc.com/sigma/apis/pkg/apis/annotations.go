@@ -82,6 +82,12 @@ const (
 	MOSNSidecarInject           = MOSNSidecarAlipayPrefix + "/inject"
 	MOSNSidecarImage            = MOSNSidecarAlipayPrefix + "/image"
 	MOSNSidecarPostStartCommand = MOSNSidecarAlipayPrefix + "/post-start-command"
+	MOSNSidecarCPU              = MOSNSidecarAlipayPrefix + "/cpu"
+	MOSNSidecarMemory           = MOSNSidecarAlipayPrefix + "/memory"
+	MOSNSidecarEphemeralStorage = MOSNSidecarAlipayPrefix + "/ephemeral-storage"
+	MOSNSidecarIngressPort      = MOSNSidecarAlipayPrefix + "/ingress-port"
+	MOSNSidecarEgressPort       = MOSNSidecarAlipayPrefix + "/egress-port"
+	MOSNSidecarRegistryPort     = MOSNSidecarAlipayPrefix + "/registry-port"
 )
 
 // SidecarInjectionPolicy determines the policy for injecting the

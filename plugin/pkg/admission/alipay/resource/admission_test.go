@@ -126,7 +126,7 @@ func TestResourceValidate(t *testing.T) {
 
 	for _, testcase := range testcases {
 		pod := newPodWithResource(testcase.cpuRequest, testcase.cpuLimit, testcase.memoryRequest, testcase.memoryLimit, testcase.storageRequest, testcase.storageLimit)
-		attr := admission.NewAttributesRecord(pod, nil, core.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, core.Resource("pods").WithVersion("version"), "", admission.Create, nil)
+		attr := admission.NewAttributesRecord(pod, nil, core.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, core.Resource("pods").WithVersion("version"), "", admission.Create, false, nil)
 		handler := newAlipayResourceAdmission()
 		err := handler.Validate(attr)
 

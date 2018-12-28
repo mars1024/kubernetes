@@ -189,6 +189,18 @@ func NewUpgradePod(env []v1.EnvVar) *v1.Pod {
 	}
 }
 
+func NewUpdatePod(resource v1.ResourceRequirements) *v1.Pod {
+	return &v1.Pod{
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
+				{
+					Resources: resource,
+				},
+			},
+		},
+	}
+}
+
 var upgradeEnv = []v1.EnvVar{
 	{
 		Name:  "SIGMA3_UPGRADE_TEST",
@@ -200,6 +212,28 @@ var upgradeEnv2 = []v1.EnvVar{
 	{
 		Name:  "SIGMA3_UPGRADE_TEST2",
 		Value: "test2",
+	},
+}
+
+var updateResource1 = v1.ResourceRequirements{
+	Requests: api.ResourceList{
+		api.ResourceCPU:    *resource.NewQuantity(2, resource.DecimalSI),
+		api.ResourceMemory: *resource.NewQuantity(2*1024*1024, resource.DecimalSI),
+	},
+	Limits: api.ResourceList{
+		api.ResourceCPU:    *resource.NewQuantity(2, resource.DecimalSI),
+		api.ResourceMemory: *resource.NewQuantity(2*1024*1024, resource.DecimalSI),
+	},
+}
+
+var updateResource2 = v1.ResourceRequirements{
+	Requests: api.ResourceList{
+		api.ResourceCPU:    *resource.NewQuantity(1, resource.DecimalSI),
+		api.ResourceMemory: *resource.NewQuantity(1*1024*1024, resource.DecimalSI),
+	},
+	Limits: api.ResourceList{
+		api.ResourceCPU:    *resource.NewQuantity(1, resource.DecimalSI),
+		api.ResourceMemory: *resource.NewQuantity(1*1024*1024, resource.DecimalSI),
 	},
 }
 
@@ -234,6 +268,86 @@ func UpgradeSigmaPod(client clientset.Interface, pod *v1.Pod, upgradePod *v1.Pod
 		err = util.WaitTimeoutForContainerUpdateStatus(client, pod, pod.Spec.Containers[0].Name, 3*time.Minute, UpgradeSuccessStr, true)
 	}
 	return err
+}
+
+// UpdateSigmaPod() update container's resource, wait update and return true.
+func UpdateSigmaPod(client clientset.Interface, pod *v1.Pod, updatePod *v1.Pod, expectStatus k8sApi.ContainerState) error {
+	var err error
+	defer func() {
+		if err != nil {
+			framework.Logf("Update pod failed, pod: %#v, err: %#v", *pod, err)
+		}
+	}()
+	pod, err = client.CoreV1().Pods(pod.Namespace).Get(pod.Name, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+	containerState := k8sApi.ContainerStateSpec{
+		States: map[k8sApi.ContainerInfo]k8sApi.ContainerState{
+			k8sApi.ContainerInfo{pod.Spec.Containers[0].Name}: expectStatus,
+		},
+	}
+	stateSpecStr, _ := json.Marshal(containerState)
+	pod.Annotations[k8sApi.AnnotationContainerStateSpec] = string(stateSpecStr)
+	pod.Annotations[k8sApi.AnnotationPodInplaceUpdateState] = k8sApi.InplaceUpdateStateCreated
+	pod.Spec.Containers[0].Resources = updatePod.Spec.Containers[0].Resources
+	_, err = client.CoreV1().Pods(pod.Namespace).Update(pod)
+	if err != nil {
+		return err
+	}
+	time.Sleep(5 * time.Second)
+	err = wait.PollImmediate(5*time.Second, 5*time.Minute, CheckUpdatePodReady(client, pod))
+	return err
+}
+
+// CheckUpdatePodReady() check sigma pod update result, return true if pod status equals expect-status.
+func CheckUpdatePodReady(client clientset.Interface, pod *v1.Pod) wait.ConditionFunc {
+	return func() (bool, error) {
+		pod, err := client.CoreV1().Pods(pod.Namespace).Get(pod.Name, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		if pod.Status.PodIP == "" {
+			return false, nil
+		}
+
+		updateStatusStr, exist := pod.Annotations[k8sApi.AnnotationPodUpdateStatus]
+		if !exist {
+			return false, nil
+		}
+
+		inplaceUpdateState, exist := pod.Annotations[k8sApi.AnnotationPodInplaceUpdateState]
+		if !exist {
+			return false, nil
+		}
+
+		updateStatus := &k8sApi.ContainerStateStatus{}
+		err = json.Unmarshal([]byte(updateStatusStr), updateStatus)
+		if err != nil {
+			return false, err
+		}
+		// expectState & currentState must be specified, if not skip.
+		expectStateStr, exist := pod.Annotations[k8sApi.AnnotationContainerStateSpec]
+		if !exist {
+			return false, nil
+		}
+
+		// unmarshal struct.
+		expectState := &k8sApi.ContainerStateSpec{}
+		err = json.Unmarshal([]byte(expectStateStr), expectState)
+		if err != nil {
+			return false, err
+		}
+		for key, expect := range expectState.States {
+			if value, ok := updateStatus.Statuses[key]; ok {
+				if expect == value.CurrentState &&
+					inplaceUpdateState == k8sApi.InplaceUpdateStateSucceeded {
+					return true, nil
+				}
+			}
+		}
+		return false, nil
+	}
 }
 
 //CheckPodNameSpace() check namespace, if exist, skip else create a new one.

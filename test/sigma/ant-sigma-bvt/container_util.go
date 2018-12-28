@@ -60,6 +60,15 @@ func LoadBaseCreateFile(file string) (*dockerclient.ContainerConfig, error) {
 	return config, nil
 }
 
+// LoadUpdateConfig()
+func LoadUpdateConfig(cpu int, memory int64, disk string) *ContainerUpdate {
+	return &ContainerUpdate{
+		Memory:    memory,
+		CPUCount:  cpu,
+		DiskQuota: disk,
+	}
+}
+
 //GetPodLists() list pods use label selector.
 func GetPodLists(kubeClient clientset.Interface, key, value, ns string) ([]v1.Pod, error) {
 	listOptions := metav1.ListOptions{

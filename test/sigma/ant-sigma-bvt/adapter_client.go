@@ -377,9 +377,53 @@ func (s *AdapterServer) UpgradeContainer(name, requestId string, nostart bool, r
 	return upgradeResp, "", nil
 }
 
+type ContainerUpdate struct {
+	// Applicable to all platforms
+	Memory    int64                 // Memory limit (in bytes)
+	CPUCount  int `json:"CpuCount"` // 内部使用
+	DiskQuota string                // Disk limit (in bytes)
+}
+
+// MustUpdateContainer() update container, wait pod ready.
+func MustUpdateContainer(s *AdapterServer, name string, updateReq *ContainerUpdate, timeout time.Duration) error {
+	timer := time.NewTimer(timeout)
+	ch := make(chan int)
+	go func() {
+		defer GinkgoRecover()
+		reqInfo, err := json.Marshal(updateReq)
+		framework.Logf("Update pod %v, ReqInfo:%v", name, string(reqInfo))
+		Expect(err).NotTo(HaveOccurred(), "[AdapterLifeCycle]marshal upgrade ReqInfo failed.")
+
+		updateResp, message, err := s.UpdateContainer(name, reqInfo)
+		Expect(err).NotTo(HaveOccurred(), "[AdapterLifeCycle] update pod error.")
+		Expect(message).To(Equal(""), "[AdapterLifeCycle] update pod failed.")
+		Expect(updateResp).NotTo(BeNil(), "[AdapterLifeCycle] get update response failed.")
+		Expect(updateResp.Id).NotTo(BeEmpty(), "[AdapterLifeCycle] get updated pod sn failed.")
+		close(ch)
+	}()
+	for {
+		select {
+		case <-timer.C:
+			framework.Logf("update timeout")
+			return fmt.Errorf("timeout")
+		case n := <-ch:
+			if n == 0 {
+				framework.Logf("update succeed, return.")
+				return nil
+			}
+		}
+	}
+}
+
+// update container and check resource.
+func MustUpdate(s *AdapterServer, name string, updateReq *ContainerUpdate, timeout time.Duration) {
+	err := MustUpdateContainer(s, name, updateReq, timeout)
+	Expect(err).NotTo(HaveOccurred(), "update container failed.")
+}
+
 //UpdateContainer() update container.
 func (s *AdapterServer) UpdateContainer(name string, reqInfo []byte) (*CreateResp, string, error) {
-	url := fmt.Sprintf("https://%v:%v/containers/%s/update", s.AdapterAddress, name)
+	url := fmt.Sprintf("https://%v/containers/%s/update", s.AdapterAddress, name)
 	glog.V(2).Infof("Method:%v, URL:%v", http.MethodPost, url)
 	client, err := s.NewHttpClient()
 	if err != nil {

@@ -58,8 +58,12 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 		By("Start pod.")
 		MustOperatePod(s, f.ClientSet, result.ContainerSn, &pod, "start", v1.PodRunning)
 		By("check pod dnsPolicy")
-
 		checkDNSPolicy(f, &pod)
+		// update pod
+		By("Update Pod, increase resources.")
+		updateConfig := LoadUpdateConfig(2, 2147483648, "2G")
+		MustUpdate(s, pod.Name, updateConfig, 5*time.Minute)
+		CheckAdapterUpdatedResource(f, &pod, updateConfig)
 		//restart pod
 		By("Restart pod.")
 		MustOperatePod(s, f.ClientSet, result.ContainerSn, &pod, "restart", v1.PodRunning)
@@ -78,6 +82,12 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 		//start pod
 		By("Start pod.")
 		MustOperatePod(s, f.ClientSet, result.ContainerSn, &pod, "start", v1.PodRunning)
+
+		// update pod
+		By("Update Pod, decrease resources.")
+		updateConfig = LoadUpdateConfig(1, 1073741824, "1G")
+		MustUpdate(s, pod.Name, updateConfig, 5*time.Minute)
+		CheckAdapterUpdatedResource(f, &pod, updateConfig)
 
 		//restart pod
 		By("Restart pod.")

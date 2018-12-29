@@ -147,6 +147,14 @@ func (ds *dockerService) RunPodSandbox(ctx context.Context, r *runtimeapi.RunPod
 			return nil, fmt.Errorf("failed to inspect sandbox container for pod %q: %v", config.Metadata.Name, err)
 		}
 
+		if _, err := os.Stat(containerInfo.ResolvConfPath); err != nil && os.IsNotExist(err) {
+			file, err := os.Create(containerInfo.ResolvConfPath)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create %s", containerInfo.ResolvConfPath)
+			}
+			file.Close()
+		}
+
 		if err := rewriteResolvFile(containerInfo.ResolvConfPath, dnsConfig.Servers, dnsConfig.Searches, dnsConfig.Options); err != nil {
 			return nil, fmt.Errorf("rewrite resolv.conf failed for pod %q: %v", config.Metadata.Name, err)
 		}

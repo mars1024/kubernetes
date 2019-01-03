@@ -1,4 +1,4 @@
-// +build !multitenancy
+// +build multitenancy
 
 /*
 Copyright 2015 The Kubernetes Authors.
@@ -24,7 +24,6 @@ import (
 	"strings"
 
 	clientgenargs "k8s.io/code-generator/cmd/client-gen/args"
-	"k8s.io/code-generator/cmd/client-gen/generators/fake"
 	"k8s.io/code-generator/cmd/client-gen/generators/scheme"
 	"k8s.io/code-generator/cmd/client-gen/generators/util"
 	"k8s.io/code-generator/cmd/client-gen/path"
@@ -143,30 +142,9 @@ func packageForGroup(gv clientgentypes.GroupVersion, typeList []*types.Type, cli
 		// GeneratorFunc returns a list of generators. Each generator makes a
 		// single file.
 		GeneratorFunc: func(c *generator.Context) (generators []generator.Generator) {
-			generators = []generator.Generator{
-				// Always generate a "doc.go" file.
-				generator.DefaultGen{OptionalName: "doc"},
-			}
-			// Since we want a file per type that we generate a client for, we
-			// have to provide a function for this.
-			for _, t := range typeList {
-				generators = append(generators, &genClientForType{
-					DefaultGen: generator.DefaultGen{
-						OptionalName: strings.ToLower(c.Namers["private"].Name(t)),
-					},
-					outputPackage:    groupVersionClientPackage,
-					clientsetPackage: clientsetPackage,
-					group:            gv.Group.NonEmpty(),
-					version:          gv.Version.String(),
-					groupGoName:      groupGoName,
-					typeToMatch:      t,
-					imports:          generator.NewImportTracker(),
-				})
-			}
-
 			generators = append(generators, &genGroup{
 				DefaultGen: generator.DefaultGen{
-					OptionalName: groupPackageName + "_client",
+					OptionalName: groupPackageName + "_client_mt",
 				},
 				outputPackage:    groupVersionClientPackage,
 				inputPackage:     inputPackage,
@@ -178,16 +156,20 @@ func packageForGroup(gv clientgentypes.GroupVersion, typeList []*types.Type, cli
 				types:            typeList,
 				imports:          generator.NewImportTracker(),
 			})
-
-			expansionFileName := "generated_expansion"
-			generators = append(generators, &genExpansion{
-				groupPackagePath: filepath.Join(srcTreePath, groupVersionClientPackage),
-				DefaultGen: generator.DefaultGen{
-					OptionalName: expansionFileName,
-				},
-				types: typeList,
-			})
-
+			for _, t := range typeList {
+				generators = append(generators, &genClientForType{
+					DefaultGen: generator.DefaultGen{
+						OptionalName: strings.ToLower(c.Namers["private"].Name(t)) + "_mt",
+					},
+					outputPackage:    groupVersionClientPackage,
+					clientsetPackage: clientsetPackage,
+					group:            gv.Group.NonEmpty(),
+					version:          gv.Version.String(),
+					groupGoName:      groupGoName,
+					typeToMatch:      t,
+					imports:          generator.NewImportTracker(),
+				})
+			}
 			return generators
 		},
 		FilterFunc: func(c *generator.Context, t *types.Type) bool {
@@ -209,11 +191,11 @@ func packageForClientset(customArgs *clientgenargs.CustomArgs, clientsetPackage 
 		GeneratorFunc: func(c *generator.Context) (generators []generator.Generator) {
 			generators = []generator.Generator{
 				// Always generate a "doc.go" file.
-				generator.DefaultGen{OptionalName: "doc"},
+				// generator.DefaultGen{OptionalName: "doc"},
 
 				&genClientset{
 					DefaultGen: generator.DefaultGen{
-						OptionalName: "clientset",
+						OptionalName: "clientset_mt",
 					},
 					groups:           customArgs.Groups,
 					groupGoNames:     groupGoNames,
@@ -254,7 +236,8 @@ NextGroup:
 		GeneratorFunc: func(c *generator.Context) (generators []generator.Generator) {
 			generators = []generator.Generator{
 				// Always generate a "doc.go" file.
-				generator.DefaultGen{OptionalName: "doc"},
+				// NOTE(yue9944882): no we dont :)
+				// generator.DefaultGen{OptionalName: "doc"},
 
 				&scheme.GenScheme{
 					DefaultGen: generator.DefaultGen{
@@ -323,6 +306,10 @@ func Packages(context *generator.Context, arguments *args.GeneratorArgs) generat
 		glog.Fatalf("Failed loading boilerplate: %v", err)
 	}
 
+	boilerplate = append([]byte(`// +build multitenancy
+
+`), boilerplate...)
+
 	customArgs, ok := arguments.CustomArgs.(*clientgenargs.CustomArgs)
 	if !ok {
 		glog.Fatalf("cannot convert arguments.CustomArgs to clientgenargs.CustomArgs")
@@ -376,10 +363,10 @@ func Packages(context *generator.Context, arguments *args.GeneratorArgs) generat
 	clientsetPackage := filepath.Join(arguments.OutputPackagePath, customArgs.ClientsetName)
 
 	packageList = append(packageList, packageForClientset(customArgs, clientsetPackage, groupGoNames, boilerplate))
-	packageList = append(packageList, packageForScheme(customArgs, clientsetPackage, arguments.OutputBase, groupGoNames, boilerplate))
-	if customArgs.FakeClient {
-		packageList = append(packageList, fake.PackageForClientset(customArgs, clientsetPackage, groupGoNames, boilerplate))
-	}
+	// packageList = append(packageList, packageForScheme(customArgs, clientsetPackage, arguments.OutputBase, groupGoNames, boilerplate))
+	// if customArgs.FakeClient {
+	// 	packageList = append(packageList, fake.PackageForClientset(customArgs, clientsetPackage, groupGoNames, boilerplate))
+	// }
 
 	// If --clientset-only=true, we don't regenerate the individual typed clients.
 	if customArgs.ClientsetOnly {
@@ -394,9 +381,9 @@ func Packages(context *generator.Context, arguments *args.GeneratorArgs) generat
 			types := gvToTypes[gv]
 			inputPath := gvPackages[gv]
 			packageList = append(packageList, packageForGroup(gv, orderer.OrderTypes(types), clientsetPackage, group.PackageName, groupGoNames[gv], customArgs.ClientsetAPIPath, arguments.OutputBase, inputPath, boilerplate))
-			if customArgs.FakeClient {
-				packageList = append(packageList, fake.PackageForGroup(gv, orderer.OrderTypes(types), clientsetPackage, group.PackageName, groupGoNames[gv], inputPath, boilerplate))
-			}
+			// if customArgs.FakeClient {
+			// 	packageList = append(packageList, fake.PackageForGroup(gv, orderer.OrderTypes(types), clientsetPackage, group.PackageName, groupGoNames[gv], inputPath, boilerplate))
+			// }
 		}
 	}
 

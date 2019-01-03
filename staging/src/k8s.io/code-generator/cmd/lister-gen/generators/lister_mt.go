@@ -1,4 +1,4 @@
-// +build !multitenancy
+// +build multitenancy
 
 /*
 Copyright 2016 The Kubernetes Authors.
@@ -67,11 +67,6 @@ func DefaultNameSystem() string {
 // Packages makes the client package definition.
 func Packages(context *generator.Context, arguments *args.GeneratorArgs) generator.Packages {
 	boilerplate, err := arguments.LoadGoBoilerplate()
-
-	boilerplate = append([]byte(`// +build !multitenancy
-
-`), boilerplate...)
-
 	if err != nil {
 		glog.Fatalf("Failed loading boilerplate: %v", err)
 	}
@@ -129,7 +124,46 @@ func Packages(context *generator.Context, arguments *args.GeneratorArgs) generat
 		orderer := namer.Orderer{Namer: namer.NewPrivateNamer(0)}
 		typesToGenerate = orderer.OrderTypes(typesToGenerate)
 
+		boilerplateMultiTenancyTag := append([]byte(`// +build multitenancy
+
+`), boilerplate...)
+
 		packagePath := filepath.Join(arguments.OutputPackagePath, groupPackageName, strings.ToLower(gv.Version.NonEmpty()))
+
+		packageList = append(packageList, &generator.DefaultPackage{
+			PackageName: strings.ToLower(gv.Version.NonEmpty()),
+			PackagePath: packagePath,
+			HeaderText:  boilerplateMultiTenancyTag,
+			GeneratorFunc: func(c *generator.Context) (generators []generator.Generator) {
+				generators = append(generators, &expansionGenerator{
+					DefaultGen: generator.DefaultGen{
+						OptionalName: "expansion_generated",
+					},
+					packagePath: filepath.Join(arguments.OutputBase, packagePath),
+					types:       typesToGenerate,
+				})
+				for _, t := range typesToGenerate {
+					generators = append(generators, &listerGenerator{
+						DefaultGen: generator.DefaultGen{
+							OptionalName: strings.ToLower(t.Name.Name + "_mt"),
+						},
+						outputPackage:      arguments.OutputPackagePath,
+						groupVersion:       gv,
+						internalGVPkg:      internalGVPkg,
+						typeToGenerate:     t,
+						imports:            generator.NewImportTracker(),
+						objectMeta:         objectMeta,
+						enableMultitenancy: true,
+					})
+				}
+				return generators
+			},
+			FilterFunc: func(c *generator.Context, t *types.Type) bool {
+				tags := util.MustParseClientGenTags(append(t.SecondClosestCommentLines, t.CommentLines...))
+				return tags.GenerateClient && tags.HasVerb("list") && tags.HasVerb("get")
+			},
+		})
+
 		packageList = append(packageList, &generator.DefaultPackage{
 			PackageName: strings.ToLower(gv.Version.NonEmpty()),
 			PackagePath: packagePath,
@@ -142,20 +176,6 @@ func Packages(context *generator.Context, arguments *args.GeneratorArgs) generat
 					packagePath: filepath.Join(arguments.OutputBase, packagePath),
 					types:       typesToGenerate,
 				})
-
-				for _, t := range typesToGenerate {
-					generators = append(generators, &listerGenerator{
-						DefaultGen: generator.DefaultGen{
-							OptionalName: strings.ToLower(t.Name.Name),
-						},
-						outputPackage:  arguments.OutputPackagePath,
-						groupVersion:   gv,
-						internalGVPkg:  internalGVPkg,
-						typeToGenerate: t,
-						imports:        generator.NewImportTracker(),
-						objectMeta:     objectMeta,
-					})
-				}
 				return generators
 			},
 			FilterFunc: func(c *generator.Context, t *types.Type) bool {
@@ -163,6 +183,7 @@ func Packages(context *generator.Context, arguments *args.GeneratorArgs) generat
 				return tags.GenerateClient && tags.HasVerb("list") && tags.HasVerb("get")
 			},
 		})
+
 	}
 
 	return packageList
@@ -198,12 +219,13 @@ func isInternal(m types.Member) bool {
 // type.
 type listerGenerator struct {
 	generator.DefaultGen
-	outputPackage  string
-	groupVersion   clientgentypes.GroupVersion
-	internalGVPkg  string
-	typeToGenerate *types.Type
-	imports        namer.ImportTracker
-	objectMeta     *types.Type
+	outputPackage      string
+	groupVersion       clientgentypes.GroupVersion
+	internalGVPkg      string
+	typeToGenerate     *types.Type
+	imports            namer.ImportTracker
+	objectMeta         *types.Type
+	enableMultitenancy bool
 }
 
 var _ generator.Generator = &listerGenerator{}
@@ -222,6 +244,12 @@ func (g *listerGenerator) Imports(c *generator.Context) (imports []string) {
 	imports = append(imports, g.imports.ImportLines()...)
 	imports = append(imports, "k8s.io/apimachinery/pkg/api/errors")
 	imports = append(imports, "k8s.io/apimachinery/pkg/labels")
+	if g.enableMultitenancy {
+		imports = append(imports, "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy")
+		imports = append(imports, `multitenancycache "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/cache"`)
+		imports = append(imports, `multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"`)
+		// imports = append(imports, `multitenancymeta "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/meta"`)
+	}
 	// for Indexer
 	imports = append(imports, "k8s.io/client-go/tools/cache")
 	return
@@ -232,9 +260,10 @@ func (g *listerGenerator) GenerateType(c *generator.Context, t *types.Type, w io
 
 	glog.V(5).Infof("processing type %v", t)
 	m := map[string]interface{}{
-		"Resource":   c.Universe.Function(types.Name{Package: t.Name.Package, Name: "Resource"}),
-		"type":       t,
-		"objectMeta": g.objectMeta,
+		"Resource":           c.Universe.Function(types.Name{Package: t.Name.Package, Name: "Resource"}),
+		"type":               t,
+		"objectMeta":         g.objectMeta,
+		"enableMultitenancy": g.enableMultitenancy,
 	}
 
 	tags, err := util.ParseClientGenTags(append(t.SecondClosestCommentLines, t.CommentLines...))
@@ -266,6 +295,13 @@ func (g *listerGenerator) GenerateType(c *generator.Context, t *types.Type, w io
 	return sw.Error()
 }
 
+var typeListerConstructor = `
+// New$.type|public$Lister returns a new $.type|public$Lister.
+func New$.type|public$Lister(indexer cache.Indexer) $.type|public$Lister {
+	return &$.type|private$Lister{indexer: indexer}
+}
+`
+
 var typeListerInterface = `
 // $.type|public$Lister helps list $.type|publicPlural$.
 type $.type|public$Lister interface {
@@ -289,25 +325,30 @@ type $.type|public$Lister interface {
 `
 
 var typeListerStruct = `
-// $.type|private$Lister implements the $.type|public$Lister interface.
 type $.type|private$Lister struct {
 	indexer cache.Indexer
+	tenant multitenancy.TenantInfo
+}
+
+func (s *$.type|private$Lister) ShallowCopyWithTenant(tenant multitenancy.TenantInfo) interface{} {
+	return &$.type|private$Lister{
+		indexer: s.indexer,
+		tenant:  tenant,
+	}
 }
 `
-
-var typeListerConstructor = `
-// New$.type|public$Lister returns a new $.type|public$Lister.
-func New$.type|public$Lister(indexer cache.Indexer) $.type|public$Lister {
-	return &$.type|private$Lister{indexer: indexer}
-}
-`
-
 var typeLister_List = `
 // List lists all $.type|publicPlural$ in the indexer.
 func (s *$.type|private$Lister) List(selector labels.Selector) (ret []*$.type|raw$, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*$.type|raw$))
-	})
+	if s.tenant != nil {
+		err = multitenancycache.ListAllWithTenant(s.indexer, selector, s.tenant, func(m interface{}){
+			ret = append(ret, m.(*$.type|raw$))
+		})
+	} else {
+		err = cache.ListAll(s.indexer, selector, func(m interface{}){
+			ret = append(ret, m.(*$.type|raw$))
+		})
+	}
 	return ret, err
 }
 `
@@ -315,21 +356,27 @@ func (s *$.type|private$Lister) List(selector labels.Selector) (ret []*$.type|ra
 var typeLister_NamespaceLister = `
 // $.type|publicPlural$ returns an object that can list and get $.type|publicPlural$.
 func (s *$.type|private$Lister) $.type|publicPlural$(namespace string) $.type|public$NamespaceLister {
-	return $.type|private$NamespaceLister{indexer: s.indexer, namespace: namespace}
+	return $.type|private$NamespaceLister{indexer: s.indexer, namespace: namespace, tenant: s.tenant}
 }
 `
 
 var typeLister_NonNamespacedGet = `
 // Get retrieves the $.type|public$ from the index for a given name.
 func (s *$.type|private$Lister) Get(name string) (*$.type|raw$, error) {
-  obj, exists, err := s.indexer.GetByKey(name)
-  if err != nil {
-    return nil, err
-  }
-  if !exists {
-    return nil, errors.NewNotFound($.Resource|raw$("$.type|lowercaseSingular$"), name)
-  }
-  return obj.(*$.type|raw$), nil
+	if s.tenant == nil {
+		// fail hard so that we don't allow any cluster-scoped get w/o tenant
+		debug.PrintStack()
+		return nil, fmt.Errorf("cannot get $.type|lowercaseSingular$ w/o specifying tenant")
+	}
+
+	obj, exists, err := s.indexer.GetByKey(multitenancyutil.TransformTenantInfoToJointString(s.tenant, "/") + "/" + name)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, errors.NewNotFound($.Resource|raw$("$.type|lowercaseSingular$"), name)
+	}
+	return obj.(*$.type|raw$), nil
 }
 `
 
@@ -350,15 +397,22 @@ var namespaceListerStruct = `
 type $.type|private$NamespaceLister struct {
 	indexer cache.Indexer
 	namespace string
+	tenant multitenancy.TenantInfo
 }
 `
 
 var namespaceLister_List = `
 // List lists all $.type|publicPlural$ in the indexer for a given namespace.
 func (s $.type|private$NamespaceLister) List(selector labels.Selector) (ret []*$.type|raw$, err error) {
-	err = cache.ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
+	if s.tenant == nil {
+		debug.PrintStack()
+		// fail hard so that we don't allow any namespaced lister w/o tenant
+		return nil, fmt.Errorf("cannot namespaced list resources w/o specifying tenant")
+	}	
+	err = multitenancycache.ListAllByNamespaceWithTenant(s.indexer, s.namespace, selector, s.tenant, func(m interface{}) {
 		ret = append(ret, m.(*$.type|raw$))
 	})
+	
 	return ret, err
 }
 `
@@ -366,7 +420,12 @@ func (s $.type|private$NamespaceLister) List(selector labels.Selector) (ret []*$
 var namespaceLister_Get = `
 // Get retrieves the $.type|public$ from the indexer for a given namespace and name.
 func (s $.type|private$NamespaceLister) Get(name string) (*$.type|raw$, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
+	if s.tenant == nil {
+		debug.PrintStack()
+		// fail hard so that we don't allow any namespaced lister w/o tenant
+		return nil, fmt.Errorf("cannot namespaced get resources w/o specifying tenant")
+	}	
+	obj, exists, err := s.indexer.GetByKey(multitenancyutil.TransformTenantInfoToJointString(s.tenant, "/") + "/" + s.namespace + "/" + name)
 	if err != nil {
 		return nil, err
 	}

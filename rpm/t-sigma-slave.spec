@@ -16,7 +16,7 @@ AutoReqProv: none
 %define rhel %(/usr/lib/rpm/redhat/dist.sh --distnum)
 
 BuildArch:x86_64
-BuildRequires: t-db-golang
+BuildRequires: t-db-golang = 1.8.4-20180731153834
 
 
 %description
@@ -70,8 +70,6 @@ set +x
 systemctl daemon-reload
 systemctl enable sigma-slave
 systemctl restart sigma-slave
-
-
 
 
 %preun

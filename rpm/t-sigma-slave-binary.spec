@@ -14,7 +14,7 @@ AutoReqProv: none
 %define _prefix /usr/local
 
 BuildArch:x86_64
-BuildRequires: t-db-golang
+BuildRequires: t-db-golang = 1.8.4-20180731153834
 
 
 %description

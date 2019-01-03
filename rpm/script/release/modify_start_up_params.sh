@@ -6,7 +6,7 @@ if [ "$os"x != "7.2"x ]; then
   exit 0
 fi
 
-if [[ $# < 2 ]]; then
+if [[ $# -lt 2 ]]; then
   echo "should include two param, First Parameter : kubelet service path, Second Parameter : kubelet log cron file"
   exit 1
 fi
@@ -96,7 +96,7 @@ modify_start_conf_for_pai_in_et2(){
   sed -i "s/--cluster-domain=cluster.local/--cluster-dns=11.140.98.87 --system-reserved=memory=${reservedMemByG}Gi --cgroup-root=\/sigma-be/g" $kubelet_service_path
 }
 
-rpm -qa | grep "pouch"
+rpm -q pouch-container
 
 if [ $? -eq 0 ]; then
     echo "pouch daemon"

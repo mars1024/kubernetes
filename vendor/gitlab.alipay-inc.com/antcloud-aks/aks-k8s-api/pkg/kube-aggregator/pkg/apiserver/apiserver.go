@@ -36,6 +36,9 @@ import (
 	"k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	"k8s.io/kube-aggregator/pkg/apis/apiregistration/v1beta1"
 	"k8s.io/kube-aggregator/pkg/apiserver"
+	"k8s.io/kube-aggregator/pkg/apis/apiregistration"
+	"k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
+	"k8s.io/kube-aggregator/pkg/apis/apiregistration/v1beta1"
 	aggregatorscheme "k8s.io/kube-aggregator/pkg/apiserver/scheme"
 	"k8s.io/kube-aggregator/pkg/client/clientset_generated/internalclientset"
 	informers "k8s.io/kube-aggregator/pkg/client/informers/internalversion"
@@ -43,6 +46,15 @@ import (
 	apiservicerest "k8s.io/kube-aggregator/pkg/registry/apiservice/rest"
 	"os"
 	"sync/atomic"
+	openapicontroller "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/kube-aggregator/pkg/controllers/openapi"
+	statuscontrollers "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/kube-aggregator/pkg/controllers/status"
+	apiservicerest "k8s.io/kube-aggregator/pkg/registry/apiservice/rest"
+	"k8s.io/kube-aggregator/pkg/apiserver"
+	"k8s.io/apiserver/pkg/util/feature"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
+	"sync/atomic"
+	"os"
 )
 
 func init() {
@@ -165,14 +177,14 @@ func (c completedConfig) NewWithDelegate(delegationTarget genericapiserver.Deleg
 	)
 
 	s := &APIAggregator{
-		GenericAPIServer: genericServer,
-		delegateHandler:  delegationTarget.UnprotectedHandler(),
-		proxyClientCert:  c.ExtraConfig.ProxyClientCert,
-		proxyClientKey:   c.ExtraConfig.ProxyClientKey,
-		proxyTransport:   c.ExtraConfig.ProxyTransport,
-		proxyHandlers:    map[string]*proxyHandler{},
-		handledGroups:    sets.String{},
-		lister:           informerFactory.Apiregistration().InternalVersion().APIServices().Lister(),
+		GenericAPIServer:         genericServer,
+		delegateHandler:          delegationTarget.UnprotectedHandler(),
+		proxyClientCert:          c.ExtraConfig.ProxyClientCert,
+		proxyClientKey:           c.ExtraConfig.ProxyClientKey,
+		proxyTransport:           c.ExtraConfig.ProxyTransport,
+		proxyHandlers:            map[string]*proxyHandler{},
+		handledGroups:            sets.String{},
+		lister:                   informerFactory.Apiregistration().InternalVersion().APIServices().Lister(),
 		APIRegistrationInformers: informerFactory,
 		serviceResolver:          c.ExtraConfig.ServiceResolver,
 	}

@@ -1,4 +1,4 @@
-// +build !multitenancy
+// +build multitenancy
 
 /*
 Copyright 2016 The Kubernetes Authors.
@@ -202,9 +202,11 @@ func Packages(context *generator.Context, arguments *args.GeneratorArgs) generat
 		typesToGenerate = orderer.OrderTypes(typesToGenerate)
 
 		if internal {
-			packageList = append(packageList, versionPackage(internalVersionPackagePath, groupPackageName, gv, groupGoNames[groupPackageName], boilerplate, typesToGenerate, customArgs.InternalClientSetPackage, customArgs.ListersPackage))
+			packageList = append(packageList, versionPackage(internalVersionPackagePath, groupPackageName, gv, groupGoNames[groupPackageName], boilerplate, typesToGenerate, customArgs.InternalClientSetPackage, customArgs.ListersPackage, true))
+			packageList = append(packageList, versionPackage(internalVersionPackagePath, groupPackageName, gv, groupGoNames[groupPackageName], boilerplate, typesToGenerate, customArgs.InternalClientSetPackage, customArgs.ListersPackage, false))
 		} else {
-			packageList = append(packageList, versionPackage(externalVersionPackagePath, groupPackageName, gv, groupGoNames[groupPackageName], boilerplate, typesToGenerate, customArgs.VersionedClientSetPackage, customArgs.ListersPackage))
+			packageList = append(packageList, versionPackage(externalVersionPackagePath, groupPackageName, gv, groupGoNames[groupPackageName], boilerplate, typesToGenerate, customArgs.VersionedClientSetPackage, customArgs.ListersPackage, true))
+			packageList = append(packageList, versionPackage(externalVersionPackagePath, groupPackageName, gv, groupGoNames[groupPackageName], boilerplate, typesToGenerate, customArgs.VersionedClientSetPackage, customArgs.ListersPackage, false))
 		}
 	}
 
@@ -310,28 +312,32 @@ func groupPackage(basePackage string, groupVersions clientgentypes.GroupVersions
 	}
 }
 
-func versionPackage(basePackage string, groupPkgName string, gv clientgentypes.GroupVersion, groupGoName string, boilerplate []byte, typesToGenerate []*types.Type, clientSetPackage, listersPackage string) generator.Package {
+func versionPackage(basePackage string, groupPkgName string, gv clientgentypes.GroupVersion, groupGoName string, boilerplate []byte, typesToGenerate []*types.Type, clientSetPackage, listersPackage string, enableMultitenancy bool) generator.Package {
 	packagePath := filepath.Join(basePackage, groupPkgName, strings.ToLower(gv.Version.NonEmpty()))
+
+	if enableMultitenancy {
+		boilerplate = append([]byte(`// +build multitenancy
+
+`), boilerplate...)
+	} else {
+		boilerplate = append([]byte(`// +build !multitenancy
+
+`), boilerplate...)
+	}
 
 	return &generator.DefaultPackage{
 		PackageName: strings.ToLower(gv.Version.NonEmpty()),
 		PackagePath: packagePath,
 		HeaderText:  boilerplate,
 		GeneratorFunc: func(c *generator.Context) (generators []generator.Generator) {
-			generators = append(generators, &versionInterfaceGenerator{
-				DefaultGen: generator.DefaultGen{
-					OptionalName: "interface",
-				},
-				outputPackage: packagePath,
-				imports:       generator.NewImportTracker(),
-				types:         typesToGenerate,
-				internalInterfacesPackage: packageForInternalInterfaces(basePackage),
-			})
-
 			for _, t := range typesToGenerate {
+				name := strings.ToLower(t.Name.Name)
+				if enableMultitenancy {
+					name = name + "_mt"
+				}
 				generators = append(generators, &informerGenerator{
 					DefaultGen: generator.DefaultGen{
-						OptionalName: strings.ToLower(t.Name.Name),
+						OptionalName: name,
 					},
 					outputPackage:             packagePath,
 					groupPkgName:              groupPkgName,
@@ -342,6 +348,7 @@ func versionPackage(basePackage string, groupPkgName string, gv clientgentypes.G
 					clientSetPackage:          clientSetPackage,
 					listersPackage:            listersPackage,
 					internalInterfacesPackage: packageForInternalInterfaces(basePackage),
+					enableMultitenancy:        enableMultitenancy,
 				})
 			}
 			return generators

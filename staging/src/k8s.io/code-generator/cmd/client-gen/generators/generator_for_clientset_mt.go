@@ -1,4 +1,4 @@
-// +build !multitenancy
+// +build multitenancy
 
 /*
 Copyright 2016 The Kubernetes Authors.
@@ -58,6 +58,10 @@ func (g *genClientset) Filter(c *generator.Context, t *types.Type) bool {
 
 func (g *genClientset) Imports(c *generator.Context) (imports []string) {
 	imports = append(imports, g.imports.ImportLines()...)
+	imports = append(imports, "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy")
+	imports = append(imports, `gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/meta`)
+	imports = append(imports, "k8s.io/client-go/rest")
+	imports = append(imports, "k8s.io/client-go/discovery")
 	for _, group := range g.groups {
 		for _, version := range group.Versions {
 			typedClientPath := filepath.Join(g.clientsetPackage, "typed", group.PackageName, version.NonEmpty())
@@ -87,108 +91,18 @@ func (g *genClientset) GenerateType(c *generator.Context, t *types.Type, w io.Wr
 		"flowcontrolNewTokenBucketRateLimiter": c.Universe.Function(types.Name{Package: "k8s.io/client-go/util/flowcontrol", Name: "NewTokenBucketRateLimiter"}),
 	}
 	sw.Do(clientsetInterface, m)
-	sw.Do(clientsetTemplate, m)
-	for _, g := range allGroups {
-		sw.Do(clientsetInterfaceImplTemplate, g)
-		// don't generated the default method if generating internalversion clientset
-		if g.IsDefaultVersion && g.Version != "" {
-			sw.Do(clientsetInterfaceDefaultVersionImpl, g)
-		}
-	}
-	sw.Do(getDiscoveryTemplate, m)
-	sw.Do(newClientsetForConfigTemplate, m)
-	sw.Do(newClientsetForConfigOrDieTemplate, m)
-	sw.Do(newClientsetForRESTClientTemplate, m)
 
 	return sw.Error()
 }
 
 var clientsetInterface = `
-type Interface interface {
-	Discovery() $.DiscoveryInterface|raw$
-    $range .allGroups$$.GroupGoName$$.Version$() $.PackageAlias$.$.GroupGoName$$.Version$Interface
-	$if .IsDefaultVersion$// Deprecated: please explicitly pick a version if possible.
-	$.GroupGoName$() $.PackageAlias$.$.GroupGoName$$.Version$Interface
-	$end$$end$
-}
-`
+func (c *Clientset) ShallowCopyWithTenant(tenant multitenancy.TenantInfo) interface{} {
+	copied := *c
+	copied.DiscoveryClient = copied.DiscoveryClient.ShallowCopyWithTenant(tenant).(*discovery.DiscoveryClient)
 
-var clientsetTemplate = `
-// Clientset contains the clients for groups. Each group has exactly one
-// version included in a Clientset.
-type Clientset struct {
-	*$.DiscoveryClient|raw$
-    $range .allGroups$$.LowerCaseGroupGoName$$.Version$ *$.PackageAlias$.$.GroupGoName$$.Version$Client
-    $end$
-}
-`
-
-var clientsetInterfaceImplTemplate = `
-// $.GroupGoName$$.Version$ retrieves the $.GroupGoName$$.Version$Client
-func (c *Clientset) $.GroupGoName$$.Version$() $.PackageAlias$.$.GroupGoName$$.Version$Interface {
-	return c.$.LowerCaseGroupGoName$$.Version$
-}
-`
-
-var clientsetInterfaceDefaultVersionImpl = `
-// Deprecated: $.GroupGoName$ retrieves the default version of $.GroupGoName$Client.
-// Please explicitly pick a version.
-func (c *Clientset) $.GroupGoName$() $.PackageAlias$.$.GroupGoName$$.Version$Interface {
-	return c.$.LowerCaseGroupGoName$$.Version$
-}
-`
-
-var getDiscoveryTemplate = `
-// Discovery retrieves the DiscoveryClient
-func (c *Clientset) Discovery() $.DiscoveryInterface|raw$ {
-	if c == nil {
-		return nil
-	}
-	return c.DiscoveryClient
-}
-`
-
-var newClientsetForConfigTemplate = `
-// NewForConfig creates a new Clientset for the given config.
-func NewForConfig(c *$.Config|raw$) (*Clientset, error) {
-	configShallowCopy := *c
-	if configShallowCopy.RateLimiter == nil && configShallowCopy.QPS > 0 {
-		configShallowCopy.RateLimiter = $.flowcontrolNewTokenBucketRateLimiter|raw$(configShallowCopy.QPS, configShallowCopy.Burst)
-	}
-	var cs Clientset
-	var err error
-$range .allGroups$    cs.$.LowerCaseGroupGoName$$.Version$, err =$.PackageAlias$.NewForConfig(&configShallowCopy)
-	if err!=nil {
-		return nil, err
-	}
-$end$
-	cs.DiscoveryClient, err = $.NewDiscoveryClientForConfig|raw$(&configShallowCopy)
-	if err!=nil {
-		return nil, err
-	}
-	return &cs, nil
-}
-`
-
-var newClientsetForConfigOrDieTemplate = `
-// NewForConfigOrDie creates a new Clientset for the given config and
-// panics if there is an error in the config.
-func NewForConfigOrDie(c *$.Config|raw$) *Clientset {
-	var cs Clientset
-$range .allGroups$    cs.$.LowerCaseGroupGoName$$.Version$ =$.PackageAlias$.NewForConfigOrDie(c)
-$end$
-	cs.DiscoveryClient = $.NewDiscoveryClientForConfigOrDie|raw$(c)
-	return &cs
-}
-`
-
-var newClientsetForRESTClientTemplate = `
-// New creates a new Clientset for the given RESTClient.
-func New(c $.RESTClientInterface|raw$) *Clientset {
-	var cs Clientset
-$range .allGroups$    cs.$.LowerCaseGroupGoName$$.Version$ =$.PackageAlias$.New(c)
-$end$
-	cs.DiscoveryClient = $.NewDiscoveryClient|raw$(c)
-	return &cs
+	$range .allGroups$ 
+		copied.$.LowerCaseGroupGoName$$.Version$ = copied.$.LowerCaseGroupGoName$$.Version$.ShallowCopyWithTenant(tenant).(*$.PackageAlias$.$.GroupGoName$$.Version$Client)	
+	$end$
+	return &copied
 }
 `

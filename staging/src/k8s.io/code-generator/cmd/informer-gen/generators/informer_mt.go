@@ -1,4 +1,4 @@
-// +build !multitenancy
+// +build multitenancy
 
 /*
 Copyright 2016 The Kubernetes Authors.
@@ -46,6 +46,7 @@ type informerGenerator struct {
 	clientSetPackage          string
 	listersPackage            string
 	internalInterfacesPackage string
+	enableMultitenancy        bool
 }
 
 var _ generator.Generator = &informerGenerator{}
@@ -62,6 +63,10 @@ func (g *informerGenerator) Namers(c *generator.Context) namer.NameSystems {
 
 func (g *informerGenerator) Imports(c *generator.Context) (imports []string) {
 	imports = append(imports, g.imports.ImportLines()...)
+	if g.enableMultitenancy {
+		imports = append(imports, `multitenancycache "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/cache"`)
+		imports = append(imports, `gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy`)
+	}
 	return
 }
 
@@ -80,13 +85,13 @@ func (g *informerGenerator) GenerateType(c *generator.Context, t *types.Type, w 
 	}
 
 	m := map[string]interface{}{
-		"apiScheme":                       c.Universe.Type(apiScheme),
-		"cacheIndexers":                   c.Universe.Type(cacheIndexers),
-		"cacheListWatch":                  c.Universe.Type(cacheListWatch),
-		"cacheMetaNamespaceIndexFunc":     c.Universe.Function(cacheMetaNamespaceIndexFunc),
-		"cacheNamespaceIndex":             c.Universe.Variable(cacheNamespaceIndex),
+		"apiScheme":                   c.Universe.Type(apiScheme),
+		"cacheIndexers":               c.Universe.Type(cacheIndexers),
+		"cacheListWatch":              c.Universe.Type(cacheListWatch),
+		"cacheMetaNamespaceIndexFunc": c.Universe.Function(cacheMetaNamespaceIndexFunc),
+		"cacheNamespaceIndex":         c.Universe.Variable(cacheNamespaceIndex),
+		"cacheSharedIndexInformer":    c.Universe.Type(cacheSharedIndexInformer),
 		"cacheNewSharedIndexInformer":     c.Universe.Function(cacheNewSharedIndexInformer),
-		"cacheSharedIndexInformer":        c.Universe.Type(cacheSharedIndexInformer),
 		"clientSetInterface":              clientSetInterface,
 		"group":                           namer.IC(g.groupGoName),
 		"informerFor":                     informerFor,
@@ -103,6 +108,7 @@ func (g *informerGenerator) GenerateType(c *generator.Context, t *types.Type, w 
 		"v1ListOptions":                   c.Universe.Type(v1ListOptions),
 		"version":                         namer.IC(g.groupVersion.Version.String()),
 		"watchInterface":                  c.Universe.Type(watchInterface),
+		"enableMultitenancy":              g.enableMultitenancy,
 	}
 
 	sw.Do(typeInformerInterface, m)
@@ -171,7 +177,14 @@ func NewFiltered$.type|public$Informer(client $.clientSetInterface|raw$$if .name
 
 var typeInformerConstructor = `
 func (f *$.type|private$Informer) defaultInformer(client $.clientSetInterface|raw$, resyncPeriod $.timeDuration|raw$) $.cacheSharedIndexInformer|raw$ {
+$- if .enableMultitenancy -$
+	return NewFiltered$.type|public$Informer(client$if .namespaced$, f.namespace$end$, resyncPeriod, cache.Indexers{
+		multitenancycache.TenantIndex:          multitenancycache.MetaTenantIndexFunc,
+		multitenancycache.TenantNamespaceIndex: multitenancycache.MetaTenantNamespaceIndexFunc,
+	}, f.tweakListOptions)
+$- else -$
 	return NewFiltered$.type|public$Informer(client$if .namespaced$, f.namespace$end$, resyncPeriod, $.cacheIndexers|raw${$.cacheNamespaceIndex|raw$: $.cacheMetaNamespaceIndexFunc|raw$}, f.tweakListOptions)
+$- end -$
 }
 `
 

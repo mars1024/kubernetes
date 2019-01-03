@@ -41,6 +41,7 @@ import (
 	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/apiserver/pkg/storage/names"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	podutil "k8s.io/kubernetes/pkg/api/pod"
 	api "k8s.io/kubernetes/pkg/apis/core"
@@ -220,7 +221,36 @@ func MatchPod(label labels.Selector, field fields.Selector) storage.SelectionPre
 		Label:       label,
 		Field:       field,
 		GetAttrs:    GetAttrs,
+		IndexLabels: []string{"sigma.ali/sn"},
 		IndexFields: []string{"spec.nodeName"},
+	}
+}
+
+func NodeNameIndexFunc(obj interface{}) ([]string, error) {
+	pod, ok := obj.(*api.Pod)
+	if !ok {
+		return nil, fmt.Errorf("not a pod")
+	}
+	return []string{pod.Spec.NodeName}, nil
+}
+
+func PodLabelIndexFunc(key string) cache.IndexFunc {
+	return func(obj interface{}) ([]string, error) {
+		pod, ok := obj.(*api.Pod)
+		if !ok {
+			return nil, fmt.Errorf("not a pod")
+		}
+		if value, ok := pod.Labels[key]; ok {
+			return []string{value}, nil
+		}
+		return nil, nil
+	}
+}
+
+func PodIndexers() *cache.Indexers {
+	return &cache.Indexers{
+		"spec.nodeName": NodeNameIndexFunc,
+		"sigma.ali/sn":  PodLabelIndexFunc("sigma.ali/sn"),
 	}
 }
 

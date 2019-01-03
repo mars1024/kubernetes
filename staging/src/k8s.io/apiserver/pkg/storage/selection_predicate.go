@@ -75,6 +75,7 @@ type SelectionPredicate struct {
 	Field                fields.Selector
 	IncludeUninitialized bool
 	GetAttrs             AttrFunc
+	IndexLabels			 []string
 	IndexFields          []string
 	Limit                int64
 	Continue             string
@@ -141,6 +142,14 @@ func (s *SelectionPredicate) MatcherIndex() []MatchValue {
 			result = append(result, MatchValue{IndexName: field, Value: value})
 		}
 	}
+
+	// Add label after field to keep watcher triggered by fields
+	for _, label := range s.IndexLabels {
+		if value, ok := s.Label.RequiresExactMatch(label); ok {
+			result = append(result, MatchValue{IndexName: label, Value: value})
+		}
+	}
+
 	return result
 }
 

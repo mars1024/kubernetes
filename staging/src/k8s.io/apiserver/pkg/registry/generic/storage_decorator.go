@@ -22,6 +22,7 @@ import (
 	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/apiserver/pkg/storage/storagebackend"
 	"k8s.io/apiserver/pkg/storage/storagebackend/factory"
+	"k8s.io/client-go/tools/cache"
 )
 
 // StorageDecorator is a function signature for producing a storage.Interface
@@ -31,6 +32,7 @@ type StorageDecorator func(
 	objectType runtime.Object,
 	resourcePrefix string,
 	keyFunc func(obj runtime.Object) (string, error),
+	Indexers *cache.Indexers,
 	newListFunc func() runtime.Object,
 	getAttrsFunc storage.AttrFunc,
 	trigger storage.TriggerPublisherFunc) (storage.Interface, factory.DestroyFunc)
@@ -42,6 +44,7 @@ func UndecoratedStorage(
 	objectType runtime.Object,
 	resourcePrefix string,
 	keyFunc func(obj runtime.Object) (string, error),
+	Indexers *cache.Indexers,
 	newListFunc func() runtime.Object,
 	getAttrsFunc storage.AttrFunc,
 	trigger storage.TriggerPublisherFunc) (storage.Interface, factory.DestroyFunc) {

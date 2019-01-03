@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/validation/path"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/cache"
 )
 
 type SimpleUpdateFunc func(runtime.Object) (runtime.Object, error)
@@ -41,6 +42,10 @@ func EverythingFunc(runtime.Object) bool {
 
 func NoTriggerFunc() []MatchValue {
 	return nil
+}
+
+func NoIndexers() *cache.Indexers {
+	return &cache.Indexers{}
 }
 
 func NoTriggerPublisher(runtime.Object) []MatchValue {

@@ -1364,6 +1364,11 @@ func (e *Store) CompleteWithOptions(options *generic.StoreOptions) error {
 		triggerFunc = storage.NoTriggerPublisher
 	}
 
+	indexers := options.Indexers
+	if indexers == nil {
+		indexers = storage.NoIndexers()
+	}
+
 	if e.DeleteCollectionWorkers == 0 {
 		e.DeleteCollectionWorkers = opts.DeleteCollectionWorkers
 	}
@@ -1387,6 +1392,7 @@ func (e *Store) CompleteWithOptions(options *generic.StoreOptions) error {
 			e.NewFunc(),
 			prefix,
 			keyFunc,
+			indexers,
 			e.NewListFunc,
 			attrFunc,
 			triggerFunc,

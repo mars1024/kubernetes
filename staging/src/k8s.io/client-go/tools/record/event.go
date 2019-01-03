@@ -34,6 +34,9 @@ import (
 	"net/http"
 
 	"github.com/golang/glog"
+	"k8s.io/apiserver/pkg/util/feature"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	"k8s.io/apimachinery/pkg/api/meta"
 )
 
 const maxTriesPerEvent = 12
@@ -267,6 +270,18 @@ func (recorder *recorderImpl) generateEvent(object runtime.Object, annotations m
 
 	event := recorder.makeEvent(ref, annotations, eventtype, reason, message)
 	event.Source = recorder.source
+
+	if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		accessor, err := meta.Accessor(object)
+		if err != nil {
+			// TODO: Event referenced object might also be an objectReference, which might fail when we
+			// try to extract annotations from an unaccessable object
+			glog.V(5).Infof("dropped event: %v/%v/%v", event.Name, event.Type, event.Message)
+			// drop that event
+			return
+		}
+		event.Annotations = accessor.GetAnnotations()
+	}
 
 	go func() {
 		// NOTE: events should be a non-blocking operation

@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	ref "k8s.io/client-go/tools/reference"
+	"runtime/debug"
 )
 
 // The EventExpansion interface allows manually adding extra methods to the EventInterface.
@@ -159,6 +160,7 @@ func (e *EventSinkImpl) Create(event *v1.Event) (*v1.Event, error) {
 	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
 		tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(event.Annotations)
 		if err != nil {
+			debug.PrintStack()
 			return nil, err
 		}
 		return e.Interface.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(*events).CreateWithEventNamespace(event)
@@ -170,6 +172,7 @@ func (e *EventSinkImpl) Update(event *v1.Event) (*v1.Event, error) {
 	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
 		tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(event.Annotations)
 		if err != nil {
+			debug.PrintStack()
 			return nil, err
 		}
 		multitenancyutil.TransformTenantInfoToAnnotationsIncremental(tenant, &event.Annotations)
@@ -182,6 +185,7 @@ func (e *EventSinkImpl) Patch(event *v1.Event, data []byte) (*v1.Event, error) {
 	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
 		tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(event.Annotations)
 		if err != nil {
+			debug.PrintStack()
 			return nil, err
 		}
 		multitenancyutil.TransformTenantInfoToAnnotationsIncremental(tenant, &event.Annotations)

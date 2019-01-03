@@ -1,4 +1,4 @@
-// +build !multitenancy
+// +build multitenancy
 
 /*
 Copyright 2015 The Kubernetes Authors.
@@ -82,13 +82,13 @@ func NewSharedIndexInformer(lw ListerWatcher, objType runtime.Object, defaultEve
 	realClock := &clock.RealClock{}
 	sharedIndexInformer := &sharedIndexInformer{
 		processor:                       &sharedProcessor{clock: realClock},
-		indexer:                         NewIndexer(DeletionHandlingMetaNamespaceKeyFunc, indexers),
+		indexer:                         NewIndexer(MultiTenancyKeyFuncWrapper(DeletionHandlingMetaNamespaceKeyFunc), indexers),
 		listerWatcher:                   lw,
 		objectType:                      objType,
 		resyncCheckPeriod:               defaultEventHandlerResyncPeriod,
 		defaultEventHandlerResyncPeriod: defaultEventHandlerResyncPeriod,
 		cacheMutationDetector:           NewCacheMutationDetector(fmt.Sprintf("%T", objType)),
-		clock: realClock,
+		clock:                           realClock,
 	}
 	return sharedIndexInformer
 }
@@ -191,7 +191,7 @@ type deleteNotification struct {
 func (s *sharedIndexInformer) Run(stopCh <-chan struct{}) {
 	defer utilruntime.HandleCrash()
 
-	fifo := NewDeltaFIFO(MetaNamespaceKeyFunc, s.indexer)
+	fifo := NewDeltaFIFO(MultiTenancyKeyFuncWrapper(DeletionHandlingMetaNamespaceKeyFunc), s.indexer)
 
 	cfg := &Config{
 		Queue:            fifo,

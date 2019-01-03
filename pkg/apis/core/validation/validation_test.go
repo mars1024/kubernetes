@@ -7908,7 +7908,7 @@ func TestValidatePodUpdate(t *testing.T) {
 					},
 				},
 			},
-			"may not add or remove containers",
+			"may not remove containers",
 			"less containers",
 		},
 		{
@@ -7937,7 +7937,7 @@ func TestValidatePodUpdate(t *testing.T) {
 					},
 				},
 			},
-			"may not add or remove containers",
+			"",
 			"more containers",
 		},
 		{
@@ -7966,7 +7966,7 @@ func TestValidatePodUpdate(t *testing.T) {
 					},
 				},
 			},
-			"may not add or remove containers",
+			"may not remove containers",
 			"more init containers",
 		},
 		{

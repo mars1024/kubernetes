@@ -142,6 +142,13 @@ type TestContextType struct {
 		Scale                    int
 		MilliSecondsBetweenWaves int
 	}
+
+	// for sigma-mark use
+
+	// how many nodes will be used when executing sigma-mark test
+	SigmaMarkUseNodes     int
+	// how many pods will be created in one hollow-node when executing sigma-mark test
+	SigmaMarkPodPerNode   int
 }
 
 // NodeTestContextType is part of TestContextType, it is shared by all node e2e test.
@@ -234,6 +241,9 @@ func RegisterCommonFlags() {
 	flag.StringVar(&TestContext.ImageServiceEndpoint, "image-service-endpoint", "", "The image service endpoint of cluster VM instances.")
 	flag.StringVar(&TestContext.DockershimCheckpointDir, "dockershim-checkpoint-dir", "/var/lib/dockershim/sandbox", "The directory for dockershim to store sandbox checkpoints.")
 	flag.StringVar(&TestContext.KubernetesAnywherePath, "kubernetes-anywhere-path", "/workspace/k8s.io/kubernetes-anywhere", "Which directory kubernetes-anywhere is installed to.")
+
+	flag.IntVar(&TestContext.SigmaMarkUseNodes, "sigma-mark-use-nodes", 500, "how many nodes will be used when executing sigma-mark test.")
+	flag.IntVar(&TestContext.SigmaMarkPodPerNode, "sigma-mark-pods-per-node", 30, "how many pods will be created in one hollow-node when executing sigma-mark test.")
 }
 
 // Register flags specific to the cluster e2e test suite.

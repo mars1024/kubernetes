@@ -538,21 +538,21 @@ var _ = SIGDescribe("Density", func() {
 	densityTests := []Density{
 		// TODO: Expose runLatencyTest as ginkgo flag.
 		{podsPerNode: 3, runLatencyTest: false, kind: api.Kind("ReplicationController")},
-		{podsPerNode: framework.TestContext.SigmaMarkPodPerNode, runLatencyTest: true, kind: api.Kind("ReplicationController")},
+		{podsPerNode: 30, runLatencyTest: true, kind: api.Kind("ReplicationController")},
 		{podsPerNode: 50, runLatencyTest: false, kind: api.Kind("ReplicationController")},
 		{podsPerNode: 95, runLatencyTest: true, kind: api.Kind("ReplicationController")},
 		{podsPerNode: 100, runLatencyTest: false, kind: api.Kind("ReplicationController")},
 		// Tests for other resource types:
-		{podsPerNode: framework.TestContext.SigmaMarkPodPerNode, runLatencyTest: true, kind: extensions.Kind("Deployment")},
-		{podsPerNode: framework.TestContext.SigmaMarkPodPerNode, runLatencyTest: true, kind: batch.Kind("Job")},
+		{podsPerNode: 30, runLatencyTest: true, kind: extensions.Kind("Deployment")},
+		{podsPerNode: 30, runLatencyTest: true, kind: batch.Kind("Job")},
 		// Test scheduling when daemons are preset
-		{podsPerNode: framework.TestContext.SigmaMarkPodPerNode, runLatencyTest: true, kind: api.Kind("ReplicationController"), daemonsPerNode: 2},
+		{podsPerNode: 30, runLatencyTest: true, kind: api.Kind("ReplicationController"), daemonsPerNode: 2},
 		// Test with secrets
-		{podsPerNode: framework.TestContext.SigmaMarkPodPerNode, runLatencyTest: true, kind: extensions.Kind("Deployment"), secretsPerPod: 2},
+		{podsPerNode: 30, runLatencyTest: true, kind: extensions.Kind("Deployment"), secretsPerPod: 2},
 		// Test with configmaps
-		{podsPerNode: framework.TestContext.SigmaMarkPodPerNode, runLatencyTest: true, kind: extensions.Kind("Deployment"), configMapsPerPod: 2},
+		{podsPerNode: 30, runLatencyTest: true, kind: extensions.Kind("Deployment"), configMapsPerPod: 2},
 		// Test with quotas
-		{podsPerNode: framework.TestContext.SigmaMarkPodPerNode, runLatencyTest: true, kind: api.Kind("ReplicationController"), quotas: true},
+		{podsPerNode: 30, runLatencyTest: true, kind: api.Kind("ReplicationController"), quotas: true},
 	}
 
 	isCanonical := func(test *Density) bool {
@@ -562,7 +562,7 @@ var _ = SIGDescribe("Density", func() {
 	for _, testArg := range densityTests {
 		feature := "ManualPerformance"
 		switch testArg.podsPerNode {
-		case framework.TestContext.SigmaMarkPodPerNode:
+		case 30:
 			if isCanonical(&testArg) {
 				feature = "Performance"
 			}
@@ -593,7 +593,7 @@ var _ = SIGDescribe("Density", func() {
 			defer nodePreparer.CleanupNodes()
 
 			podsPerNode := itArg.podsPerNode
-			if podsPerNode == framework.TestContext.SigmaMarkPodPerNode {
+			if podsPerNode == 30 {
 				f.AddonResourceConstraints = func() map[string]framework.ResourceConstraint { return density30AddonResourceVerifier(nodeCount) }()
 			}
 			totalPods = (podsPerNode - itArg.daemonsPerNode) * nodeCount
@@ -811,7 +811,7 @@ var _ = SIGDescribe("Density", func() {
 					// more evenly between nodes.
 					cpuRequest := *resource.NewMilliQuantity(nodeCpuCapacity/5, resource.DecimalSI)
 					memRequest := *resource.NewQuantity(nodeMemCapacity/5, resource.DecimalSI)
-					if podsPerNode > framework.TestContext.SigmaMarkPodPerNode {
+					if podsPerNode > 30 {
 						// This is to make them schedulable on high-density tests
 						// (e.g. 100 pods/node kubemark).
 						cpuRequest = *resource.NewMilliQuantity(0, resource.DecimalSI)

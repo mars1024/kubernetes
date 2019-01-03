@@ -1,4 +1,4 @@
-// +build !multitenancy
+// +build multitenancy
 
 /*
 Copyright 2015 The Kubernetes Authors.
@@ -256,7 +256,7 @@ func (r FilteringResourceEventHandler) OnDelete(obj interface{}) {
 // DeletionHandlingMetaNamespaceKeyFunc checks for
 // DeletedFinalStateUnknown objects before calling
 // MetaNamespaceKeyFunc.
-func DeletionHandlingMetaNamespaceKeyFunc(obj interface{}) (string, error) {
+var DeletionHandlingMetaNamespaceKeyFunc KeyFunc = func(obj interface{}) (string, error) {
 	if d, ok := obj.(DeletedFinalStateUnknown); ok {
 		return d.Key, nil
 	}
@@ -285,12 +285,12 @@ func NewInformer(
 	h ResourceEventHandler,
 ) (Store, Controller) {
 	// This will hold the client state, as we know it.
-	clientState := NewStore(DeletionHandlingMetaNamespaceKeyFunc)
+	clientState := NewStore(MultiTenancyKeyFuncWrapper(DeletionHandlingMetaNamespaceKeyFunc))
 
 	// This will hold incoming changes. Note how we pass clientState in as a
 	// KeyLister, that way resync operations will result in the correct set
 	// of update/delete deltas.
-	fifo := NewDeltaFIFO(MetaNamespaceKeyFunc, clientState)
+	fifo := NewDeltaFIFO(MultiTenancyKeyFuncWrapper(MetaNamespaceKeyFunc), clientState)
 
 	cfg := &Config{
 		Queue:            fifo,
@@ -352,12 +352,12 @@ func NewIndexerInformer(
 	indexers Indexers,
 ) (Indexer, Controller) {
 	// This will hold the client state, as we know it.
-	clientState := NewIndexer(DeletionHandlingMetaNamespaceKeyFunc, indexers)
+	clientState := NewIndexer(MultiTenancyKeyFuncWrapper(DeletionHandlingMetaNamespaceKeyFunc), indexers)
 
 	// This will hold incoming changes. Note how we pass clientState in as a
 	// KeyLister, that way resync operations will result in the correct set
 	// of update/delete deltas.
-	fifo := NewDeltaFIFO(MetaNamespaceKeyFunc, clientState)
+	fifo := NewDeltaFIFO(MultiTenancyKeyFuncWrapper(MetaNamespaceKeyFunc), clientState)
 
 	cfg := &Config{
 		Queue:            fifo,

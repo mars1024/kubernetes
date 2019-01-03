@@ -80,6 +80,12 @@ const (
 	// validation, merging, mutation can be tested without
 	// committing.
 	DryRun utilfeature.Feature = "DryRun"
+
+	// owner: @fansong.cfs
+	// alpha: v1.12
+	//
+	// Allow index labels in apiserver, so that list operations get accelerated.
+	LabelSelectorIndex utilfeature.Feature = "LabelSelectorIndex"
 )
 
 func init() {
@@ -97,4 +103,5 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	Initializers:            {Default: false, PreRelease: utilfeature.Alpha},
 	APIListChunking:         {Default: true, PreRelease: utilfeature.Beta},
 	DryRun:                  {Default: false, PreRelease: utilfeature.Alpha},
+	LabelSelectorIndex:      {Default: false, PreRelease: utilfeature.Alpha},
 }

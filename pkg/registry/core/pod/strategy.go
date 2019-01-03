@@ -248,10 +248,13 @@ func PodLabelIndexFunc(key string) cache.IndexFunc {
 }
 
 func PodIndexers() *cache.Indexers {
-	return &cache.Indexers{
-		"spec.nodeName": NodeNameIndexFunc,
-		"sigma.ali/sn":  PodLabelIndexFunc("sigma.ali/sn"),
+	if utilfeature.DefaultFeatureGate.Enabled(features.LabelSelectorIndex) {
+		return &cache.Indexers{
+			"spec.nodeName": NodeNameIndexFunc,
+			"sigma.ali/sn":  PodLabelIndexFunc("sigma.ali/sn"),
+		}
 	}
+	return nil
 }
 
 func NodeNameTriggerFunc(obj runtime.Object) []storage.MatchValue {

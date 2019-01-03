@@ -80,6 +80,35 @@ func storeElementKey(obj interface{}) (string, error) {
 	return elem.Key, nil
 }
 
+func storeElementObject(obj interface{}) (runtime.Object, error) {
+	elem, ok := obj.(*storeElement)
+	if !ok {
+		return nil, fmt.Errorf("not a storeElement: %v", obj)
+	}
+	return elem.Object, nil
+}
+
+func storeElementIndexFunc(objIndexFunc cache.IndexFunc) cache.IndexFunc {
+	return func(obj interface{}) (strings []string, e error) {
+		seo, err := storeElementObject(obj)
+		if err != nil {
+			return nil, err
+		}
+		return objIndexFunc(seo)
+	}
+}
+
+func storeElementIndexers(indexers *cache.Indexers) cache.Indexers {
+	if indexers == nil {
+		return cache.Indexers{}
+	}
+	ret := cache.Indexers{}
+	for indexName, indexFunc := range *indexers {
+		ret[indexName] = storeElementIndexFunc(indexFunc)
+	}
+	return ret
+}
+
 // watchCacheElement is a single "watch event" stored in a cache.
 // It contains the resource version of the object and the object
 // itself.
@@ -148,7 +177,7 @@ type watchCache struct {
 func newWatchCache(
 	capacity int,
 	keyFunc func(runtime.Object) (string, error),
-	Indexers *cache.Indexers,
+	indexers *cache.Indexers,
 	getAttrsFunc func(runtime.Object) (labels.Set, fields.Set, bool, error),
 	versioner storage.Versioner) *watchCache {
 	wc := &watchCache{
@@ -158,7 +187,7 @@ func newWatchCache(
 		cache:               make([]watchCacheElement, capacity),
 		startIndex:          0,
 		endIndex:            0,
-		store:               cache.NewIndexer(storeElementKey, *Indexers),
+		store:               cache.NewIndexer(storeElementKey, 	storeElementIndexers(indexers)),
 		resourceVersion:     0,
 		listResourceVersion: 0,
 		clock:               clock.RealClock{},

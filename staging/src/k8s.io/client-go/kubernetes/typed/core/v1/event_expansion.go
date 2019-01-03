@@ -19,11 +19,15 @@ package v1
 import (
 	"fmt"
 
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancymeta "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/meta"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	ref "k8s.io/client-go/tools/reference"
 )
 
@@ -152,13 +156,36 @@ type EventSinkImpl struct {
 }
 
 func (e *EventSinkImpl) Create(event *v1.Event) (*v1.Event, error) {
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(event.Annotations)
+		if err != nil {
+			return nil, err
+		}
+		return e.Interface.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(*events).CreateWithEventNamespace(event)
+	}
 	return e.Interface.CreateWithEventNamespace(event)
 }
 
 func (e *EventSinkImpl) Update(event *v1.Event) (*v1.Event, error) {
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(event.Annotations)
+		if err != nil {
+			return nil, err
+		}
+		multitenancyutil.TransformTenantInfoToAnnotationsIncremental(tenant, &event.Annotations)
+		return e.Interface.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(*events).UpdateWithEventNamespace(event)
+	}
 	return e.Interface.UpdateWithEventNamespace(event)
 }
 
 func (e *EventSinkImpl) Patch(event *v1.Event, data []byte) (*v1.Event, error) {
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(event.Annotations)
+		if err != nil {
+			return nil, err
+		}
+		multitenancyutil.TransformTenantInfoToAnnotationsIncremental(tenant, &event.Annotations)
+		return e.Interface.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(*events).PatchWithEventNamespace(event, data)
+	}
 	return e.Interface.PatchWithEventNamespace(event, data)
 }

@@ -1,3 +1,5 @@
+// +build !multitenancy
+
 /*
 Copyright The Kubernetes Authors.
 

@@ -17,6 +17,9 @@ const (
 	// pod container name
 	LabelPodContainerName = MetaAlipayPrefix + "/container-name"
 
+	// pod hostname
+	LabelPodContainerHostName = MetaAlipayPrefix + "/hostname"
+
 	// application AppDeployUnit
 	LabelAppDeployUnit = MetaAlipayPrefix + "/app-deploy-unit"
 

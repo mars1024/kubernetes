@@ -21,7 +21,7 @@ $workDir/bin/kube-apiserver \
     --admission-control=Initializers,NamespaceLifecycle,ServiceAccount,LimitRanger,DefaultStorageClass,DefaultTolerationSeconds,ResourceQuota,PodPreset,AliPodLifeTimeHook,PodDeletionFlowControl,AliPodInjectionPreSchedule,AliPodInjectionPostSchedule,ContainerState \
     --advertise-address=$(hostname -i) \
     --allow-privileged=true \
-    --audit-policy-file=$workDir/cfg/audit.yaml --audit-log-path=$workDir/log/k8s-audit.log --audit-log-format=json --audit-log-maxage=7 \
+    --audit-policy-file=$workDir/cfg/audit.yaml --audit-log-path=$workDir/log/k8s-audit.log --audit-log-format=json --audit-log-maxsize=10240 --audit-log-maxbackup=1 \
     --authorization-mode=Node,RBAC \
     --bind-address=0.0.0.0 --secure-port=6443 \
     --client-ca-file=$certDir/ca.crt \

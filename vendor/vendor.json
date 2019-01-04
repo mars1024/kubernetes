@@ -251,6 +251,12 @@
 			"revisionTime": "2018-11-29T17:17:00Z"
 		},
 		{
+			"checksumSHA1": "VGRKStBBaWO0EIv3BwknNX3aKok=",
+			"path": "gitlab.alipay-inc.com/sigma/apis/pkg/apis",
+			"revision": "ac0daeec33125843fa5544c127b9e5292eb3447f",
+			"revisionTime": "2019-01-04T06:41:56Z"
+		},
+		{
 			"checksumSHA1": "o48HV7RTuWgAA//aJsiXBdceHSM=",
 			"path": "gopkg.in/fsnotify/fsnotify.v1",
 			"revision": "c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9",

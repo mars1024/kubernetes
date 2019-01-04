@@ -13,6 +13,9 @@ const (
 	LabelUplinkIP       = MetaAlipayPrefix + "/uplink-ip"
 	LabelUplinkSN       = MetaAlipayPrefix + "/uplink-sn"
 	LabelModel          = MetaAlipayPrefix + "/model"
+
+	// LabelIDCManagerState indicates node state in armory. e.g. IdcManagerState=READY 
+	LabelIDCManagerState = MetaAlipayPrefix + "/idc-manager-state"
 )
 
 //NodeCondition. Too many vendor files if v1.NodeCondition is used, so we use string instead.

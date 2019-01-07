@@ -92,6 +92,8 @@ import (
 	utilflag "k8s.io/kubernetes/pkg/util/flag"
 	_ "k8s.io/kubernetes/pkg/util/reflector/prometheus" // for reflector metric registration
 	_ "k8s.io/kubernetes/pkg/util/workqueue/prometheus" // for workqueue metric registration
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancyresolver "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/resolver"
 )
 
 const etcdRetryLimit = 60
@@ -523,6 +525,10 @@ func buildGenericConfig(
 		return
 	}
 	serviceResolver = aggregatorapiserver.NewLoopbackServiceResolver(serviceResolver, localHost)
+
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		serviceResolver = multitenancyresolver.NewLoadBalancerServiceResolver(versionedInformers.Core().V1().Services().Lister())
+	}
 
 	genericConfig.Authentication.Authenticator, genericConfig.OpenAPIConfig.SecurityDefinitions, err = BuildAuthenticator(s, clientgoExternalClient, sharedInformers)
 	if err != nil {

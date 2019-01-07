@@ -49,6 +49,11 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/golang/glog"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
+	multitenancyregistry "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/registry"
+	"k8s.io/apiserver/pkg/util/feature"
+	"k8s.io/apiserver/pkg/authentication/user"
 )
 
 // ObjectFunc is a function to act on a given object. An error may be returned
@@ -1330,18 +1335,36 @@ func (e *Store) CompleteWithOptions(options *generic.StoreOptions) error {
 	// Set the default behavior for storage key generation
 	if e.KeyRootFunc == nil && e.KeyFunc == nil {
 		if isNamespaced {
-			e.KeyRootFunc = func(ctx context.Context) string {
-				return NamespaceKeyRootFunc(ctx, prefix)
-			}
-			e.KeyFunc = func(ctx context.Context, name string) (string, error) {
-				return NamespaceKeyFunc(ctx, prefix, name)
+			if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+				e.KeyRootFunc = func(ctx context.Context) string {
+					return multitenancyregistry.MultiTenancyKeyRootFuncForNamespaced(ctx, prefix)
+				}
+				e.KeyFunc = func(ctx context.Context, name string) (string, error) {
+					return multitenancyregistry.MultiTenancyKeyFuncForNamespaced(ctx, prefix, name)
+				}
+			} else {
+				e.KeyRootFunc = func(ctx context.Context) string {
+					return NamespaceKeyRootFunc(ctx, prefix)
+				}
+				e.KeyFunc = func(ctx context.Context, name string) (string, error) {
+					return NamespaceKeyFunc(ctx, prefix, name)
+				}
 			}
 		} else {
-			e.KeyRootFunc = func(ctx context.Context) string {
-				return prefix
-			}
-			e.KeyFunc = func(ctx context.Context, name string) (string, error) {
-				return NoNamespaceKeyFunc(ctx, prefix, name)
+			if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+				e.KeyRootFunc = func(ctx context.Context) string {
+					return multitenancyregistry.MultiTenancyKeyRootFuncForNonNamespaced(ctx, prefix)
+				}
+				e.KeyFunc = func(ctx context.Context, name string) (string, error) {
+					return multitenancyregistry.MultiTenancyKeyFuncForNonNamespaced(ctx, prefix, name)
+				}
+			} else {
+				e.KeyRootFunc = func(ctx context.Context) string {
+					return prefix
+				}
+				e.KeyFunc = func(ctx context.Context, name string) (string, error) {
+					return NoNamespaceKeyFunc(ctx, prefix, name)
+				}
 			}
 		}
 	}
@@ -1355,9 +1378,28 @@ func (e *Store) CompleteWithOptions(options *generic.StoreOptions) error {
 		}
 
 		if isNamespaced {
+			if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+				tenantInfo, err := multitenancyutil.TransformTenantInfoFromAnnotations(accessor.GetAnnotations())
+				if err != nil {
+					return "", err
+				}
+				user := &user.DefaultInfo{Extra: make(map[string][]string)}
+				multitenancyutil.TransformTenantInfoToUser(tenantInfo, user)
+				context := genericapirequest.WithNamespace(genericapirequest.NewContext(), accessor.GetNamespace())
+				return e.KeyFunc(genericapirequest.WithUser(context, user), accessor.GetName())
+			}
 			return e.KeyFunc(genericapirequest.WithNamespace(genericapirequest.NewContext(), accessor.GetNamespace()), accessor.GetName())
 		}
 
+		if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+			tenantInfo, err := multitenancyutil.TransformTenantInfoFromAnnotations(accessor.GetAnnotations())
+			if err != nil {
+				return "", err
+			}
+			user := &user.DefaultInfo{Extra: make(map[string][]string)}
+			multitenancyutil.TransformTenantInfoToUser(tenantInfo, user)
+			return e.KeyFunc(genericapirequest.WithUser(genericapirequest.NewContext(), user), accessor.GetName())
+		}
 		return e.KeyFunc(genericapirequest.NewContext(), accessor.GetName())
 	}
 

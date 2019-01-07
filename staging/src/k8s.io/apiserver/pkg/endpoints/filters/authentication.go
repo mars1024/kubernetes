@@ -18,18 +18,23 @@ package filters
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancyfilter "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/filter"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/authentication/authenticator"
 	"k8s.io/apiserver/pkg/endpoints/handlers/responsewriters"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
+	"k8s.io/apiserver/pkg/util/feature"
+	apiserveruser "k8s.io/apiserver/pkg/authentication/user"
 )
 
 var (
@@ -63,6 +68,24 @@ func WithAuthentication(handler http.Handler, auth authenticator.Request, failed
 			}
 			failed.ServeHTTP(w, req)
 			return
+		}
+
+		if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+			deepCopyUser := &apiserveruser.DefaultInfo{
+				Name:   user.GetName(),
+				Groups: user.GetGroups(),
+				Extra:  make(map[string][]string),
+			}
+			for k, v := range user.GetExtra() {
+				deepCopyUser.Extra[k] = v
+			}
+			if overrided, err := multitenancyfilter.OverrideTenantInfoForLegacyAdmin(req.Header, deepCopyUser); err != nil {
+				responsewriters.InternalError(w, req, fmt.Errorf("multitenancy: fail to override user info via header %v", err))
+				return
+			} else if overrided {
+				user = deepCopyUser
+			}
+			glog.V(5).Infof("multitenancy: user %v requesting...", user)
 		}
 
 		// authorization header is not required anymore in case of a successful authentication.
@@ -106,10 +129,10 @@ func compressUsername(username string) string {
 		username == "kubelet" ||
 		username == "system:serviceaccount:kube-system:default":
 		return username
-	// Probably an email address.
+		// Probably an email address.
 	case strings.Contains(username, "@"):
 		return "email_id"
-	// Anything else (custom service accounts, custom external identities, etc.)
+		// Anything else (custom service accounts, custom external identities, etc.)
 	default:
 		return "other"
 	}

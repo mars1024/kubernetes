@@ -18,7 +18,8 @@
     "ali.MemoryPredict": "1073741824",
     "ali.DiskSize": "1G",
     "DiskQuota": "1g",
-    "ali.Async": "true"
+    "ali.Async": "true",
+    "ali.host.dns": "true"
   },
   "Env": [
     "SigmaTest=bvt"

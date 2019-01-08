@@ -113,7 +113,7 @@ func GetCreateResultWithTimeOut(client clientset.Interface, requestId string, ti
 		if task.State == "finish" {
 			framework.Logf("finish to query sigma 2.0 request id[%s]", requestId)
 			for _, ac := range task.Actions {
-				framework.Logf("Actions:%#v", *ac)
+				framework.Logf("Actions:%#v", DumpJson(ac))
 				if ac.State != "success" {
 					continue
 				}

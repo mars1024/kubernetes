@@ -1,6 +1,7 @@
 package ant_sigma_bvt
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,10 +10,10 @@ import (
 	k8sApi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	"k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
-	"k8s.io/kubernetes/staging/src/k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/sigma/util"
 )
@@ -216,24 +217,28 @@ var upgradeEnv2 = []v1.EnvVar{
 }
 
 var updateResource1 = v1.ResourceRequirements{
-	Requests: api.ResourceList{
-		api.ResourceCPU:    *resource.NewQuantity(2, resource.DecimalSI),
-		api.ResourceMemory: *resource.NewQuantity(2*1024*1024, resource.DecimalSI),
+	Requests: v1.ResourceList{
+		v1.ResourceCPU:              *resource.NewQuantity(2, resource.DecimalSI),
+		v1.ResourceMemory:           *resource.NewQuantity(2*1024*1024*1024, resource.DecimalSI),
+		v1.ResourceEphemeralStorage: *resource.NewQuantity(2*1024*1024*1024, resource.DecimalSI),
 	},
-	Limits: api.ResourceList{
-		api.ResourceCPU:    *resource.NewQuantity(2, resource.DecimalSI),
-		api.ResourceMemory: *resource.NewQuantity(2*1024*1024, resource.DecimalSI),
+	Limits: v1.ResourceList{
+		v1.ResourceCPU:              *resource.NewQuantity(2, resource.DecimalSI),
+		v1.ResourceMemory:           *resource.NewQuantity(2*1024*1024*1024, resource.DecimalSI),
+		v1.ResourceEphemeralStorage: *resource.NewQuantity(2*1024*1024*1024, resource.DecimalSI),
 	},
 }
 
 var updateResource2 = v1.ResourceRequirements{
-	Requests: api.ResourceList{
-		api.ResourceCPU:    *resource.NewQuantity(1, resource.DecimalSI),
-		api.ResourceMemory: *resource.NewQuantity(1*1024*1024, resource.DecimalSI),
+	Requests: v1.ResourceList{
+		v1.ResourceCPU:              *resource.NewQuantity(1, resource.DecimalSI),
+		v1.ResourceMemory:           *resource.NewQuantity(1*1024*1024*1024, resource.DecimalSI),
+		v1.ResourceEphemeralStorage: *resource.NewQuantity(1*1024*1024*1024, resource.DecimalSI),
 	},
-	Limits: api.ResourceList{
-		api.ResourceCPU:    *resource.NewQuantity(1, resource.DecimalSI),
-		api.ResourceMemory: *resource.NewQuantity(1*1024*1024, resource.DecimalSI),
+	Limits: v1.ResourceList{
+		v1.ResourceCPU:              *resource.NewQuantity(1, resource.DecimalSI),
+		v1.ResourceMemory:           *resource.NewQuantity(1*1024*1024*1024, resource.DecimalSI),
+		v1.ResourceEphemeralStorage: *resource.NewQuantity(1*1024*1024*1024, resource.DecimalSI),
 	},
 }
 
@@ -275,7 +280,7 @@ func UpdateSigmaPod(client clientset.Interface, pod *v1.Pod, updatePod *v1.Pod, 
 	var err error
 	defer func() {
 		if err != nil {
-			framework.Logf("Update pod failed, pod: %#v, err: %#v", *pod, err)
+			framework.Logf("Update pod failed, pod: %#v, err: %#v", DumpJson(pod), err)
 		}
 	}()
 	pod, err = client.CoreV1().Pods(pod.Namespace).Get(pod.Name, metav1.GetOptions{})

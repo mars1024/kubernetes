@@ -59,11 +59,13 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 		MustOperatePod(s, f.ClientSet, result.ContainerSn, &pod, "start", v1.PodRunning)
 		By("check pod dnsPolicy")
 		checkDNSPolicy(f, &pod)
+
 		// update pod
 		By("Update Pod, increase resources.")
 		updateConfig := LoadUpdateConfig(2, 2147483648, "2G")
-		MustUpdate(s, pod.Name, updateConfig, 5*time.Minute)
+		MustUpdate(s, f.ClientSet, &pod, updateConfig, 5*time.Minute)
 		CheckAdapterUpdatedResource(f, &pod, updateConfig)
+
 		//restart pod
 		By("Restart pod.")
 		MustOperatePod(s, f.ClientSet, result.ContainerSn, &pod, "restart", v1.PodRunning)
@@ -86,7 +88,7 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 		// update pod
 		By("Update Pod, decrease resources.")
 		updateConfig = LoadUpdateConfig(1, 1073741824, "1G")
-		MustUpdate(s, pod.Name, updateConfig, 5*time.Minute)
+		MustUpdate(s, f.ClientSet, &pod, updateConfig, 5*time.Minute)
 		CheckAdapterUpdatedResource(f, &pod, updateConfig)
 
 		//restart pod
@@ -153,11 +155,13 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 		By("Upgrade sigma3.1 pod, expect exited.")
 		err = UpgradeSigmaPod(f.ClientSet, newPod, NewUpgradePod(upgradeEnv), k8sApi.ContainerStateExited)
 		Expect(err).To(BeNil(), "[Sigma3.1LifeCycle] Upgrade created sigma3.1 pod failed.")
+
 		//start pod
 		By("start upgraded sigma3.1 pod.")
 		err = StopOrStartSigmaPod(f.ClientSet, newPod, k8sApi.ContainerStateRunning)
 		Expect(err).To(BeNil(), "[Sigma3.1LifeCycle] Start sigma3.1 pod failed after upgrade.")
 		CheckSigmaUpgradeResource(f, newPod, NewUpgradePod(upgradeEnv))
+
 		//upgrade pod.
 		By("Upgrade sigma3.1 pod, expect running.")
 		err = UpgradeSigmaPod(f.ClientSet, newPod, NewUpgradePod(upgradeEnv2), k8sApi.ContainerStateRunning)
@@ -166,20 +170,23 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 		checkDNSPolicy(f, newPod)
 
 		// update pod.
-		By("Update sigma 3.1 pod, expect running.")
+		By("Update sigma 3.1 pod,  increase resource, expect running.")
 		err = UpdateSigmaPod(f.ClientSet, newPod, NewUpdatePod(updateResource1), k8sApi.ContainerStateRunning)
 		Expect(err).To(BeNil(), "[Sigma3.1LifeCycle] increase resource sigma 3.1 expect running pod failed.")
+
 		// check resource increase.
 		newPod, err = f.ClientSet.CoreV1().Pods(pod.Namespace).Get(pod.Name, metav1.GetOptions{})
 		Expect(err).To(BeNil(), "[Sigma3.1LifeCycle] get updated sigma 3.1 pod failed.")
 		Expect(newPod).NotTo(BeNil(), "[Sigma3.1LifeCycle] get updated sigma 3.1 pod nil.")
 		CheckSigmaCreateResource(f, newPod)
+
 		// restart pod
 		By("restart sigma 3.1 pod.")
 		err = StopOrStartSigmaPod(f.ClientSet, newPod, k8sApi.ContainerStateRunning)
 		Expect(err).To(BeNil(), "[Sigma3.1LifeCycle] Start sigma 3.1 pod failed after update.")
 		CheckSigmaCreateResource(f, newPod)
 		// decrease resource.
+		By("Update sigma 3.1 pod, decrease resource, expect running.")
 		err = UpdateSigmaPod(f.ClientSet, newPod, NewUpdatePod(updateResource2), k8sApi.ContainerStateRunning)
 		Expect(err).To(BeNil(), "[Sigma3.1LifeCycle] decrease resource sigma 3.1 expect running pod failed.")
 		// check resource decrease.

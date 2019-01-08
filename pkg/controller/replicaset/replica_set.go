@@ -36,6 +36,10 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancycache "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/cache"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
+
 	apps "k8s.io/api/apps/v1"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -44,6 +48,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	appsinformers "k8s.io/client-go/informers/apps/v1"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
@@ -262,6 +267,11 @@ func (rsc *ReplicaSetController) addPod(obj interface{}) {
 		return
 	}
 
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+		rsc = rsc.ShallowCopyWithTenant(tenantInfo).(*ReplicaSetController)
+	}
+
 	// If it has a ControllerRef, that's all that matters.
 	if controllerRef := metav1.GetControllerOf(pod); controllerRef != nil {
 		rs := rsc.resolveControllerRef(pod.Namespace, controllerRef)
@@ -302,6 +312,11 @@ func (rsc *ReplicaSetController) updatePod(old, cur interface{}) {
 		// Periodic resync will send update events for all known pods.
 		// Two different versions of the same pod will always have different RVs.
 		return
+	}
+
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(curPod.Annotations)
+		rsc = rsc.ShallowCopyWithTenant(tenantInfo).(*ReplicaSetController)
 	}
 
 	labelChanged := !reflect.DeepEqual(curPod.Labels, oldPod.Labels)
@@ -387,6 +402,11 @@ func (rsc *ReplicaSetController) deletePod(obj interface{}) {
 			utilruntime.HandleError(fmt.Errorf("tombstone contained object that is not a pod %#v", obj))
 			return
 		}
+	}
+
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+		rsc = rsc.ShallowCopyWithTenant(tenantInfo).(*ReplicaSetController)
 	}
 
 	controllerRef := metav1.GetControllerOf(pod)
@@ -575,9 +595,12 @@ func (rsc *ReplicaSetController) syncReplicaSet(key string) error {
 		glog.V(4).Infof("Finished syncing %v %q (%v)", rsc.Kind, key, time.Since(startTime))
 	}()
 
-	namespace, name, err := cache.SplitMetaNamespaceKey(key)
+	tenant, namespace, name, err := multitenancycache.MultiTenancySplitKeyWrapper(cache.SplitMetaNamespaceKey)(key)
 	if err != nil {
 		return err
+	}
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		rsc = rsc.ShallowCopyWithTenant(tenant).(*ReplicaSetController)
 	}
 	rs, err := rsc.rsLister.ReplicaSets(namespace).Get(name)
 	if errors.IsNotFound(err) {

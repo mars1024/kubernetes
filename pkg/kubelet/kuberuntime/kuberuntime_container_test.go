@@ -113,6 +113,13 @@ func TestToKubeContainerStatus(t *testing.T) {
 	cid := &kubecontainer.ContainerID{Type: "testRuntime", ID: "dummyid"}
 	meta := &runtimeapi.ContainerMetadata{Name: "cname", Attempt: 3}
 	imageSpec := &runtimeapi.ImageSpec{Image: "fimage"}
+	resource := &runtimeapi.LinuxContainerResources{
+		CpuPeriod:          100000,
+		CpuQuota:           200000,
+		CpuShares:          2048,
+		MemoryLimitInBytes: 524288000,
+	}
+
 	var (
 		createdAt  int64 = 327
 		startedAt  int64 = 999
@@ -129,12 +136,14 @@ func TestToKubeContainerStatus(t *testing.T) {
 				Metadata:  meta,
 				Image:     imageSpec,
 				State:     runtimeapi.ContainerState_CONTAINER_CREATED,
+				Resources: resource,
 				CreatedAt: createdAt,
 			},
 			expected: &kubecontainer.ContainerStatus{
 				ID:        *cid,
 				Image:     imageSpec.Image,
 				State:     kubecontainer.ContainerStateCreated,
+				Resources: resource,
 				CreatedAt: time.Unix(0, createdAt),
 			},
 		},
@@ -144,6 +153,7 @@ func TestToKubeContainerStatus(t *testing.T) {
 				Metadata:  meta,
 				Image:     imageSpec,
 				State:     runtimeapi.ContainerState_CONTAINER_RUNNING,
+				Resources: resource,
 				CreatedAt: createdAt,
 				StartedAt: startedAt,
 			},
@@ -151,6 +161,7 @@ func TestToKubeContainerStatus(t *testing.T) {
 				ID:        *cid,
 				Image:     imageSpec.Image,
 				State:     kubecontainer.ContainerStateRunning,
+				Resources: resource,
 				CreatedAt: time.Unix(0, createdAt),
 				StartedAt: time.Unix(0, startedAt),
 			},
@@ -161,6 +172,7 @@ func TestToKubeContainerStatus(t *testing.T) {
 				Metadata:   meta,
 				Image:      imageSpec,
 				State:      runtimeapi.ContainerState_CONTAINER_EXITED,
+				Resources:  resource,
 				CreatedAt:  createdAt,
 				StartedAt:  startedAt,
 				FinishedAt: finishedAt,
@@ -172,6 +184,7 @@ func TestToKubeContainerStatus(t *testing.T) {
 				ID:         *cid,
 				Image:      imageSpec.Image,
 				State:      kubecontainer.ContainerStateExited,
+				Resources:  resource,
 				CreatedAt:  time.Unix(0, createdAt),
 				StartedAt:  time.Unix(0, startedAt),
 				FinishedAt: time.Unix(0, finishedAt),
@@ -186,6 +199,7 @@ func TestToKubeContainerStatus(t *testing.T) {
 				Metadata:  meta,
 				Image:     imageSpec,
 				State:     runtimeapi.ContainerState_CONTAINER_UNKNOWN,
+				Resources: resource,
 				CreatedAt: createdAt,
 				StartedAt: startedAt,
 			},
@@ -193,6 +207,7 @@ func TestToKubeContainerStatus(t *testing.T) {
 				ID:        *cid,
 				Image:     imageSpec.Image,
 				State:     kubecontainer.ContainerStateUnknown,
+				Resources: resource,
 				CreatedAt: time.Unix(0, createdAt),
 				StartedAt: time.Unix(0, startedAt),
 			},

@@ -432,3 +432,306 @@ func TestGetTimeoutSecondsFromPodAnnotation(t *testing.T) {
 
 	}
 }
+
+func TestGetHostConfigFromAnnotation(t *testing.T) {
+	// container1
+	containerName1 := "test1"
+	hostConfig1 := sigmak8sapi.HostConfigInfo{
+		CgroupParent:     "/kubepods",
+		MemorySwap:       12345678,
+		MemorySwappiness: 20,
+		PidsLimit:        100,
+		CPUBvtWarpNs:     2,
+		MemoryWmarkRatio: 0.2,
+	}
+
+	// container2
+	containerName2 := "test2"
+	hostConfig2 := sigmak8sapi.HostConfigInfo{
+		CgroupParent:     "/kubepods/kubepods",
+		MemorySwap:       123456789,
+		MemorySwappiness: 200,
+		PidsLimit:        1000,
+		CPUBvtWarpNs:     20,
+		MemoryWmarkRatio: 0.222,
+	}
+
+	// cotnainer not exists
+	containerName3 := "test3"
+
+	allocSpec := &sigmak8sapi.AllocSpec{
+		Containers: []sigmak8sapi.Container{
+			sigmak8sapi.Container{
+				Name:       containerName1,
+				HostConfig: hostConfig1,
+			},
+			sigmak8sapi.Container{
+				Name:       containerName2,
+				HostConfig: hostConfig2,
+			},
+		},
+	}
+	allocSpecBytes, err := json.Marshal(allocSpec)
+	if err != nil {
+		t.Fatalf("Failed to marshal allocSpec: %v, error: %v", allocSpec, err)
+	}
+	tests := []struct {
+		message          string
+		pod              *v1.Pod
+		containerName    string
+		expectHostConfig *sigmak8sapi.HostConfigInfo
+	}{
+		{
+			message: "get hostconfig from pod for container1",
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "test",
+					Namespace:   "foo",
+					Annotations: map[string]string{sigmak8sapi.AnnotationPodAllocSpec: string(allocSpecBytes)},
+				},
+			},
+			containerName:    containerName1,
+			expectHostConfig: &hostConfig1,
+		},
+		{
+			message: "get another hostconfig from pod for container2",
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "test",
+					Namespace:   "foo",
+					Annotations: map[string]string{sigmak8sapi.AnnotationPodAllocSpec: string(allocSpecBytes)},
+				},
+			},
+			containerName:    containerName2,
+			expectHostConfig: &hostConfig2,
+		},
+		{
+			message: "get another hostconfig from pod for unexisted container",
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "test",
+					Namespace:   "foo",
+					Annotations: map[string]string{sigmak8sapi.AnnotationPodAllocSpec: string(allocSpecBytes)},
+				},
+			},
+			containerName:    containerName3,
+			expectHostConfig: nil,
+		},
+	}
+
+	for _, test := range tests {
+		t.Logf("start to test case: %s", test.message)
+		hostConfig := GetHostConfigFromAnnotation(test.pod, test.containerName)
+		assert.Equal(t, test.expectHostConfig, hostConfig)
+	}
+}
+
+func TestGetAllocResourceFromAnnotation(t *testing.T) {
+	// container1
+	containerName1 := "test1"
+
+	allocResource1 := sigmak8sapi.ResourceRequirements{
+		CPU: sigmak8sapi.CPUSpec{
+			BindingStrategy: sigmak8sapi.CPUBindStrategyAllCPUs,
+			CPUSet: &sigmak8sapi.CPUSetSpec{
+				SpreadStrategy: sigmak8sapi.SpreadStrategySpread,
+				CPUIDs:         []int{1, 2},
+			},
+		},
+	}
+
+	// container2
+	containerName2 := "test2"
+	allocResource2 := sigmak8sapi.ResourceRequirements{}
+
+	allocSpec := &sigmak8sapi.AllocSpec{
+		Containers: []sigmak8sapi.Container{
+			sigmak8sapi.Container{
+				Name:     containerName1,
+				Resource: allocResource1,
+			},
+			sigmak8sapi.Container{
+				Name:     containerName2,
+				Resource: allocResource2,
+			},
+		},
+	}
+	allocSpecBytes, err := json.Marshal(allocSpec)
+	if err != nil {
+		t.Fatalf("Failed to marshal allocSpec: %v, error: %v", allocSpec, err)
+	}
+
+	tests := []struct {
+		message             string
+		pod                 *v1.Pod
+		containerName       string
+		expectAllocResource *sigmak8sapi.ResourceRequirements
+	}{
+		{
+			message: "get alloc resource from pod for container1: resource is defined",
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "test",
+					Namespace:   "foo",
+					Annotations: map[string]string{sigmak8sapi.AnnotationPodAllocSpec: string(allocSpecBytes)},
+				},
+			},
+			containerName:       containerName1,
+			expectAllocResource: &allocResource1,
+		},
+		{
+			message: "get alloc resource from pod for container2: resource is nil",
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "test",
+					Namespace:   "foo",
+					Annotations: map[string]string{sigmak8sapi.AnnotationPodAllocSpec: string(allocSpecBytes)},
+				},
+			},
+			containerName:       containerName2,
+			expectAllocResource: &allocResource2,
+		},
+		{
+			message: "get another hostconfig from pod for unexisted container",
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "test",
+					Namespace:   "foo",
+					Annotations: map[string]string{sigmak8sapi.AnnotationPodAllocSpec: string(allocSpecBytes)},
+				},
+			},
+			containerName:       "ContainerNotExists",
+			expectAllocResource: nil,
+		},
+		{
+			message: "alloc spec is not defined",
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "foo",
+				},
+			},
+			containerName:       "containerName2",
+			expectAllocResource: nil,
+		},
+	}
+
+	for _, test := range tests {
+		t.Logf("start to test case: %s", test.message)
+		allocResource := GetAllocResourceFromAnnotation(test.pod, test.containerName)
+		assert.Equal(t, test.expectAllocResource, allocResource)
+	}
+}
+
+func TestGetDanglingPodsFromNodeAnnotation(t *testing.T) {
+	danglingPods := []sigmak8sapi.DanglingPod{
+		sigmak8sapi.DanglingPod{
+			Name:      "pod1",
+			Namespace: "namespace1",
+		},
+		sigmak8sapi.DanglingPod{
+			Name:      "pod2",
+			Namespace: "namespace2",
+		},
+		sigmak8sapi.DanglingPod{
+			Name:      "pod2",
+			Namespace: "namespace2",
+		},
+	}
+
+	danglingPodsBytes, err := json.Marshal(danglingPods)
+	if err != nil {
+		t.Errorf("Failed to marshal danglingPods: %v, error: %v", danglingPods, err)
+	}
+
+	for caseName, testCase := range map[string]struct {
+		node                 *v1.Node
+		expectErrorOccurs    bool
+		expectedDanglingPods []sigmak8sapi.DanglingPod
+	}{
+		"node is nil": {
+			node:                 nil,
+			expectErrorOccurs:    true,
+			expectedDanglingPods: []sigmak8sapi.DanglingPod{},
+		},
+		"node has empty annotation": {
+			node: &v1.Node{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "v1",
+					Kind:       "Node",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					UID:         "12345678",
+					Name:        "foo",
+					Namespace:   "new",
+					Annotations: map[string]string{},
+				},
+			},
+			expectErrorOccurs:    false,
+			expectedDanglingPods: []sigmak8sapi.DanglingPod{},
+		},
+		"node has valid annotation": {
+			node: &v1.Node{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "v1",
+					Kind:       "Node",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					UID:       "12345678",
+					Name:      "foo",
+					Namespace: "new",
+					Annotations: map[string]string{
+						sigmak8sapi.AnnotationDanglingPods: string(danglingPodsBytes),
+					},
+				},
+			},
+			expectErrorOccurs:    false,
+			expectedDanglingPods: danglingPods,
+		},
+		"node has invalid annotation": {
+			node: &v1.Node{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "v1",
+					Kind:       "Node",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					UID:       "12345678",
+					Name:      "foo",
+					Namespace: "new",
+					Annotations: map[string]string{
+						sigmak8sapi.AnnotationDanglingPods: "invalid string",
+					},
+				},
+			},
+			expectErrorOccurs:    true,
+			expectedDanglingPods: []sigmak8sapi.DanglingPod{},
+		},
+		"node has other annotation": {
+			node: &v1.Node{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "v1",
+					Kind:       "Node",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					UID:       "12345678",
+					Name:      "foo",
+					Namespace: "new",
+					Annotations: map[string]string{
+						"otherAnnotation": "value",
+					},
+				},
+			},
+			expectErrorOccurs:    false,
+			expectedDanglingPods: []sigmak8sapi.DanglingPod{},
+		},
+	} {
+		actualDanglingPods, err := GetDanglingPodsFromNodeAnnotation(testCase.node)
+		if testCase.expectErrorOccurs && err == nil {
+			t.Errorf("Case %s: expect error occurs but not", caseName)
+		}
+		if !reflect.DeepEqual(actualDanglingPods, testCase.expectedDanglingPods) {
+			t.Errorf("Case %s: expect danglingPods %v bug got %v", caseName, testCase.expectedDanglingPods, actualDanglingPods)
+		}
+
+	}
+}

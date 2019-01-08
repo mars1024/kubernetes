@@ -1,0 +1,13 @@
+{
+    "kind": "Policy",
+    "apiVersion": "v1",
+    "extenders": [
+        {
+            "urlPrefix": "http://sigma-power-scheduler-et2.alibaba-inc.com",
+            "filterVerb": "predicates",
+            "enableHttps": false,
+            "httpTimeout": 3000000000,
+            "nodeCacheCapable": true
+        }
+    ]
+}

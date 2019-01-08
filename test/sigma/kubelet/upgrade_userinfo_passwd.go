@@ -57,7 +57,7 @@ func doUpgradeUserInfoTestCase(f *framework.Framework, testCase *UpgradeUserInfo
 
 	// Step5: Wait for upgrade action finished.
 	By("wait until pod is upgraded")
-	err = util.WaitTimeoutForContainerUpdateStatus(f.ClientSet, upgradedPod, containerName, 3*time.Minute, testCase.upgradeSuccessStr)
+	err = util.WaitTimeoutForContainerUpdateStatus(f.ClientSet, upgradedPod, containerName, 3*time.Minute, testCase.upgradeSuccessStr, true)
 	Expect(err).NotTo(HaveOccurred(), "upgrade container err")
 
 	// Step6: Wait for start action finished if necessary.

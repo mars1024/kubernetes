@@ -178,7 +178,8 @@ func checkPodContainerStatusReady(client clientset.Interface, podName, namespace
 }
 
 // WaitTimeoutForContainerUpdateStatus check pod's updateStatus to wait the action such as start, stop, update, upgrade is finished.
-func WaitTimeoutForContainerUpdateStatus(client clientset.Interface, pod *v1.Pod, containerName string, timeout time.Duration, keyWord string) error {
+func WaitTimeoutForContainerUpdateStatus(client clientset.Interface, pod *v1.Pod, containerName string,
+	timeout time.Duration, keyWord string, expectedSuccess bool) error {
 	options := metav1.SingleObject(metav1.ObjectMeta{Name: pod.Name})
 	w, err := client.CoreV1().Pods(pod.Namespace).Watch(options)
 	if err != nil {
@@ -200,8 +201,9 @@ func WaitTimeoutForContainerUpdateStatus(client clientset.Interface, pod *v1.Pod
 			}
 			for containerInfo, containerStatus := range containerStatus.Statuses {
 				if containerInfo.Name == containerName {
-					if containerStatus.Success && strings.Contains(containerStatus.Message, keyWord) {
-						framework.Logf("[WaitTimeoutForContainerUpdateStatus] container's updateStatus is updated successfully")
+					if containerStatus.Success == expectedSuccess &&
+						strings.Contains(containerStatus.Message, keyWord) {
+						framework.Logf("[WaitTimeoutForContainerUpdateStatus] container's updateStatus is matched expected status")
 						return true, nil
 					}
 				}
@@ -233,47 +235,6 @@ func GetInplaceSetNameFromPod(pod *v1.Pod) string {
 		}
 	}
 	return ""
-}
-
-// WaitTimeoutForContainerUpdateMessage check pod's update status message to wait the action failed.
-func WaitTimeoutForContainerUpdateMessage(client clientset.Interface, pod *v1.Pod, containerName string, timeout time.Duration, keyWord string) error {
-	options := metav1.SingleObject(metav1.ObjectMeta{Name: pod.Name})
-	w, err := client.CoreV1().Pods(pod.Namespace).Watch(options)
-	if err != nil {
-		return err
-	}
-	_, err = watch.Until(timeout, w, func(event watch.Event) (bool, error) {
-		switch pod := event.Object.(type) {
-		case *v1.Pod:
-			updateStatusStr, exists := pod.Annotations[sigmak8sapi.AnnotationPodUpdateStatus]
-			if !exists {
-				framework.Logf("[WaitTimeoutForContainerUpdateStatus] update status doesn't exist")
-				return false, nil
-			}
-			framework.Logf("[WaitTimeoutForContainerUpdateStatus] updateStatusStr: %v", updateStatusStr)
-			containerStatus := sigmak8sapi.ContainerStateStatus{}
-			if err := json.Unmarshal([]byte(updateStatusStr), &containerStatus); err != nil {
-				framework.Logf("[WaitTimeoutForContainerUpdateStatus] unmarshal failed")
-				return false, nil
-			}
-			for containerInfo, containerStatus := range containerStatus.Statuses {
-				if containerInfo.Name == containerName {
-					if strings.Contains(containerStatus.Message, keyWord) {
-						framework.Logf("[WaitTimeoutForContainerUpdateStatus] container's updateStatus is updated successfully")
-						return true, nil
-					}
-				}
-			}
-			return false, nil
-
-		}
-		return false, nil
-	})
-	if err != nil {
-		return fmt.Errorf("[WaitTimeoutForContainerUpdateStatus] timeout")
-	}
-
-	return nil
 }
 
 func GenerateStatePatchData(containerStateSpec sigmak8sapi.ContainerStateSpec) (string, error) {
@@ -310,7 +271,7 @@ func PauseContainer(client clientset.Interface, pod *v1.Pod, namespace string, c
 		return err
 	}
 
-	err = WaitTimeoutForContainerUpdateStatus(client, pod, containerName, 3*time.Minute, pauseSuccessStr)
+	err = WaitTimeoutForContainerUpdateStatus(client, pod, containerName, 3*time.Minute, pauseSuccessStr, true)
 	if err != nil {
 		return err
 	}
@@ -331,7 +292,7 @@ func StartContainer(client clientset.Interface, pod *v1.Pod, namespace string, c
 		return err
 	}
 
-	err = WaitTimeoutForContainerUpdateStatus(client, pod, containerName, 3*time.Minute, startSuccessStr)
+	err = WaitTimeoutForContainerUpdateStatus(client, pod, containerName, 3*time.Minute, startSuccessStr, true)
 	if err != nil {
 		return err
 	}
@@ -352,7 +313,7 @@ func StopContainer(client clientset.Interface, pod *v1.Pod, namespace string, co
 		return err
 	}
 
-	err = WaitTimeoutForContainerUpdateStatus(client, pod, containerName, 3*time.Minute, stopSuccessStr)
+	err = WaitTimeoutForContainerUpdateStatus(client, pod, containerName, 3*time.Minute, stopSuccessStr, true)
 	if err != nil {
 		return err
 	}
@@ -390,5 +351,27 @@ func containerRestart(c clientset.Interface, podName, namespace string, podStart
 			}
 		}
 		return true, nil
+	}
+}
+
+// WaitTimeoutForPodFinalizer check whether expect finalizer is patched into pod within the timeout.
+func WaitTimeoutForPodFinalizer(f *framework.Framework, podName, expectFinalizer string, timeout time.Duration) error {
+	return wait.PollImmediate(3*time.Second, timeout, checkExpectFinalizer(f, podName, expectFinalizer))
+}
+
+// checkExpectFinalizer() check Finalizer is existed.
+func checkExpectFinalizer(f *framework.Framework, podName string, expectFinalizer string) wait.ConditionFunc {
+	return func() (bool, error) {
+		getPod, err := f.ClientSet.CoreV1().Pods(f.Namespace.Name).Get(podName, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		for _, finalizer := range getPod.Finalizers {
+			if finalizer == expectFinalizer {
+				return true, nil
+			}
+		}
+		framework.Logf("Pod %v finalizer:%v", podName, getPod.Finalizers)
+		return false, nil
 	}
 }

@@ -15,8 +15,9 @@ AutoReqProv: none
 %define _systemd /etc/systemd/system
 %define rhel %(/usr/lib/rpm/redhat/dist.sh --distnum)
 
+
 BuildArch:x86_64
-BuildRequires: t-db-golang
+BuildRequires: t-db-golang = 1.8.4-20180731153834
 
 
 %description
@@ -28,7 +29,7 @@ alibaba kubelet for k8s and sigma
     echo "sigma-slave only build for 7u alios."
     exit 1
 %endif
-#%setup -q
+
 
 %build
 
@@ -38,13 +39,15 @@ BASE=$OLDPWD/..
 cd $BASE
 
 rm -fr $RPM_BUILD_ROOT
-mkdir -p $RPM_BUILD_ROOT/{usr/local/bin,/etc/systemd/system,/etc/systemd/system/sigma-slave.service.d,/etc/kubernetes}
+mkdir -p $RPM_BUILD_ROOT/{usr/local/bin,/etc/systemd/system,/etc/systemd/system/sigma-slave.service.d,/etc/kubernetes,/etc/kubernetes/check}
 
 install -p -D -m 0755 rpm/sigma-slave $RPM_BUILD_ROOT/usr/local/bin/sigma-slave
 install -p -D -m 0755 rpm/systemd/sigma-slave.service  $RPM_BUILD_ROOT/etc/systemd/system/
 install -p -D -m 0755 rpm/systemd/sigma-slave.service.d/sigma-slave-start.conf  $RPM_BUILD_ROOT/etc/systemd/system/sigma-slave.service.d/
 install -p -D -m 0755 rpm/script/release/*  $RPM_BUILD_ROOT/etc/kubernetes/
 install -p -D -m 0755 rpm/script/userinfo/*  $RPM_BUILD_ROOT/etc/kubernetes/
+install -p -D -m 0755 rpm/script/checklist/*.sh  $RPM_BUILD_ROOT/etc/kubernetes/
+install -p -D -m 0755 rpm/script/checklist/check/*  $RPM_BUILD_ROOT/etc/kubernetes/check/
 install -p -D -m 0755 rpm/certificate/*  $RPM_BUILD_ROOT/etc/kubernetes/
 install -p -D -m 0644 rpm/conf/sigma-slave-clean-log.cron $RPM_BUILD_ROOT/etc/cron.d/sigma-slave-clean-log
 
@@ -58,28 +61,46 @@ install -p -D -m 0644 rpm/conf/sigma-slave-clean-log.cron $RPM_BUILD_ROOT/etc/cr
 /etc/systemd/system/sigma-slave.service.d
 /etc/cron.d/sigma-slave-clean-log
 /etc/kubernetes/*
+/etc/kubernetes/check/*
 
 
 %pre
 
 %post
-set -x
-/etc/kubernetes/clean-certificate.sh /etc/kubernetes > /tmp/sigma-slave-error.log 2>&1
-/etc/kubernetes/modify_start_up_params.sh /etc/systemd/system/sigma-slave.service.d/sigma-slave-start.conf /etc/cron.d/sigma-slave-clean-log > /tmp/sigma-slave-error.log  2>&1
-set +x
-systemctl daemon-reload
-systemctl enable sigma-slave
-systemctl restart sigma-slave
+    cd /etc/kubernetes
+    sh -x /etc/kubernetes/check/check-host-env.sh > /tmp/sigma-slave-error.log 2>&1
+    if [[ $? -ne 0 ]]; then
+        exit 1
+    fi
 
+    sh -x /etc/kubernetes/pre-rpm-upgrade.sh >> /tmp/sigma-slave-error.log 2>&1
+    if [[ $? -ne 0 ]]; then
+        exit 1
+    fi
 
+    sh -x /etc/kubernetes/check/host-slave-keep.sh start >> /tmp/sigma-slave-error.log 2>&1
+    if [[ $? -ne 0 ]]; then
+        exit 1
+    fi
 
+    sh -x /etc/kubernetes/clean-certificate.sh /etc/kubernetes >> /tmp/sigma-slave-error.log 2>&1
+    sh -x /etc/kubernetes/modify_start_up_params.sh /etc/systemd/system/sigma-slave.service.d/sigma-slave-start.conf /etc/cron.d/sigma-slave-clean-log >> /tmp/sigma-slave-error.log  2>&1
+
+    systemctl daemon-reload
+    systemctl enable sigma-slave
+    systemctl restart sigma-slave
+
+    sleep 3
+    sh -x /etc/kubernetes/check.sh start >> /tmp/sigma-slave-error.log 2>&1
 
 %preun
 
 %postun
 
 %changelog
-* Wed Jul 25 2018 yaopwei.cyw
+* Thu Dec 27 2018 yaowei.cyw
+- add check list
+* Wed Jul 25 2018 yaowei.cyw
 - build RPM in packaging host
 * Wed Apr 4 2018 yaowei.cyw
 - add spec of t-sigma-slave

@@ -161,6 +161,7 @@ func validatePod(attributes admission.Attributes) error {
 	if pod.Annotations == nil {
 		return nil
 	}
+
 	allocSpecString, ok := pod.Annotations[sigmaapi.AnnotationPodAllocSpec]
 	if !ok {
 		return nil
@@ -173,6 +174,21 @@ func validatePod(attributes admission.Attributes) error {
 
 	// start to validate
 	allErrs := field.ErrorList{}
+
+	// Validate inplace update annotation.
+	if isInInplaceUpdateProcess(pod) {
+		state, _ := pod.Annotations[sigmaapi.AnnotationPodInplaceUpdateState]
+		switch state {
+		case sigmaapi.InplaceUpdateStateCreated, sigmaapi.InplaceUpdateStateAccepted:
+		case sigmaapi.InplaceUpdateStateFailed, sigmaapi.InplaceUpdateStateSucceeded:
+		default:
+			fld := field.NewPath("annotations").Child("inplace-update-state")
+			expectValues := fmt.Sprintf("[%s, %s, %s, %s]", sigmaapi.InplaceUpdateStateCreated, sigmaapi.InplaceUpdateStateAccepted,
+				sigmaapi.InplaceUpdateStateFailed, sigmaapi.InplaceUpdateStateSucceeded)
+			allErrs = append(allErrs, field.Invalid(fld, sigmaapi.AnnotationPodInplaceUpdateState, expectValues))
+		}
+	}
+
 	if af := allocSpec.Affinity; af != nil {
 		if af.PodAntiAffinity != nil {
 			fldPath := field.NewPath("allocSpec").Child("affinity").Child("podAntiAffinity")
@@ -239,19 +255,22 @@ func validatePod(attributes admission.Attributes) error {
 			}
 
 			// validate cpuIDs is not duplicated
-			if ids := findDuplicatedCpuIDs(container.Resource.CPU.CPUSet); len(ids) > 0 {
+			if ids := findDuplicatedCPUIDs(container.Resource.CPU.CPUSet); len(ids) > 0 {
 				fld := containerField.Index(i).Child("resource").Child("cpu").Child("cpuset").Child("cpuIDs")
 				allErrs = append(allErrs, field.Invalid(fld, fmt.Sprintf("%v", container.Resource.CPU.CPUSet.CPUIDs),
 					fmt.Sprintf("duplicity cpuIDs `%s`", strings.Join(ids, ", "))))
 			}
 
 			// validate cpuIDs count
-			if count, ok := pod.Spec.Containers[idx].Resources.Requests.Cpu().AsInt64(); ok {
+			milliValue := pod.Spec.Containers[idx].Resources.Requests.Cpu().MilliValue()
+			count := milliValue / 1000
+			fractionalValue := milliValue % 1000
+			if fractionalValue == 0 {
 				c := len(container.Resource.CPU.CPUSet.CPUIDs)
-				if c > 0 && c != int(count) {
+				if c > 0 && c != int(count) && !isInInplaceUpdateProcess(pod) {
 					fld := containerField.Index(i).Child("resource").Child("cpu").Child("cpuset").Child("cpuIDs")
 					allErrs = append(allErrs, field.Invalid(fld, fmt.Sprintf("%v", container.Resource.CPU.CPUSet.CPUIDs),
-						fmt.Sprintf("the count of cpuIDs is not match pod spec")))
+						fmt.Sprintf("the count of cpuIDs is not match pod spec and this pod is not in inplace update process")))
 				}
 			} else {
 				fld := field.NewPath("spec").Child("containers").Index(i).Child("resources").Child("requests").Child("cpu")
@@ -324,7 +343,7 @@ func validatePod(attributes admission.Attributes) error {
 	return nil
 }
 
-func findDuplicatedCpuIDs(cpusets *sigmaapi.CPUSetSpec) []string {
+func findDuplicatedCPUIDs(cpusets *sigmaapi.CPUSetSpec) []string {
 	var ids []string
 	tmp := make(map[int]struct{})
 	for _, v := range cpusets.CPUIDs {
@@ -357,6 +376,11 @@ func validateNodeLabels(node *api.Node) []error {
 		}
 	}
 	return errs
+}
+
+func isInInplaceUpdateProcess(pod *api.Pod) bool {
+	_, ok := pod.Annotations[sigmaapi.AnnotationPodInplaceUpdateState]
+	return ok
 }
 
 func validateNode(attributes admission.Attributes) error {

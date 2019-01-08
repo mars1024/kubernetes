@@ -1056,7 +1056,14 @@ func (kl *Kubelet) HandlePodCleanups() error {
 		return err
 	}
 	for _, pod := range runningPods {
+		// Do not delete running pod if it isn't in podManager.
+		apiPod, exists := kl.podManager.GetPodByName(pod.Namespace, pod.Name)
+		if !exists || apiPod.DeletionTimestamp == nil {
+			continue
+		}
+
 		if _, found := desiredPods[pod.ID]; !found {
+			glog.V(0).Infof("Remove undesired pod %s", format.Pod(apiPod))
 			kl.podKillingCh <- &kubecontainer.PodPair{APIPod: nil, RunningPod: pod}
 		}
 	}
@@ -1090,7 +1097,7 @@ func (kl *Kubelet) HandlePodCleanups() error {
 	// Remove any cgroups in the hierarchy for pods that are no longer running.
 	if kl.cgroupsPerQOS {
 		shouldPreservePod := kl.filterCgroupShouldPreservePods(allPods)
-		kl.cleanupOrphanedPodCgroups(cgroupPods, shouldPreservePod)
+		kl.cleanupOrphanedPodCgroups(cgroupPods, shouldPreservePod, runningPods)
 	}
 
 	kl.backOff.GC()
@@ -1712,11 +1719,14 @@ func (kl *Kubelet) GetPortForward(podName, podNamespace string, podUID types.UID
 
 // cleanupOrphanedPodCgroups removes cgroups that should no longer exist.
 // it reconciles the cached state of cgroupPods with the specified list of runningPods
-func (kl *Kubelet) cleanupOrphanedPodCgroups(cgroupPods map[types.UID]cm.CgroupName, activePods []*v1.Pod) {
+func (kl *Kubelet) cleanupOrphanedPodCgroups(cgroupPods map[types.UID]cm.CgroupName, activePods []*v1.Pod, runningPods []*kubecontainer.Pod) {
 	// Add all running pods to the set that we want to preserve
 	podSet := sets.NewString()
 	for _, pod := range activePods {
 		podSet.Insert(string(pod.UID))
+	}
+	for _, pod := range runningPods {
+		podSet.Insert(string(pod.ID))
 	}
 	pcm := kl.containerManager.NewPodContainerManager()
 

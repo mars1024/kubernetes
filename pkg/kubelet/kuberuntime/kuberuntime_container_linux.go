@@ -47,17 +47,12 @@ func (m *kubeGenericRuntimeManager) generateLinuxContainerConfig(container *v1.C
 	memoryLimit := container.Resources.Limits.Memory().Value()
 	oomScoreAdj := int64(qos.GetContainerOOMScoreAdjust(pod, container,
 		int64(m.machineInfo.MemoryCapacity)))
-	// If request is not specified, but limit is, we want request to default to limit.
-	// API server does this for new containers, but we repeat this logic in Kubelet
-	// for containers running on existing Kubernetes clusters.
-	if cpuRequest.IsZero() && !cpuLimit.IsZero() {
-		cpuShares = milliCPUToShares(cpuLimit.MilliValue())
-	} else {
-		// if cpuRequest.Amount is nil, then milliCPUToShares will return the minimal number
-		// of CPU shares.
-		cpuShares = milliCPUToShares(cpuRequest.MilliValue())
-	}
+
+	// if cpuRequest.Amount is nil, then milliCPUToShares will return the minimal number
+	// of CPU shares.
+	cpuShares = milliCPUToShares(cpuRequest.MilliValue())
 	lc.Resources.CpuShares = cpuShares
+
 	if memoryLimit != 0 {
 		lc.Resources.MemoryLimitInBytes = memoryLimit
 	}
@@ -66,13 +61,19 @@ func (m *kubeGenericRuntimeManager) generateLinuxContainerConfig(container *v1.C
 	lc.Resources.OomScoreAdj = oomScoreAdj
 
 	if m.cpuCFSQuota {
-		// if cpuLimit.Amount is nil, then the appropriate default value is returned
-		// to allow full usage of cpu resource.
-		cpuPeriod := int64(m.cpuCFSQuotaPeriod.Duration / time.Microsecond)
-		cpuQuota := milliCPUToQuota(cpuLimit.MilliValue(), cpuPeriod)
-		lc.Resources.CpuQuota = cpuQuota
-		lc.Resources.CpuPeriod = cpuPeriod
-		AdjustResourcesByAnnotation(pod, container.Name, lc.Resources, cpuLimit.MilliValue())
+		allocSpecResource := sigmautil.GetAllocResourceFromAnnotation(pod, container.Name)
+		// Set CpuQuota as -1 if container's mode is "CpuSet".
+		if allocSpecResource != nil && allocSpecResource.CPU.CPUSet != nil {
+			lc.Resources.CpuQuota = -1
+		} else {
+			// if cpuLimit.Amount is nil, then the appropriate default value is returned
+			// to allow full usage of cpu resource.
+			cpuPeriod := int64(m.cpuCFSQuotaPeriod.Duration / time.Microsecond)
+			cpuQuota := milliCPUToQuota(cpuLimit.MilliValue(), cpuPeriod)
+			lc.Resources.CpuQuota = cpuQuota
+			lc.Resources.CpuPeriod = cpuPeriod
+			AdjustResourcesByAnnotation(pod, container.Name, lc.Resources, cpuLimit.MilliValue())
+		}
 	}
 
 	ulimits := sigmautil.GetUlimitsFromAnnotation(container, pod)

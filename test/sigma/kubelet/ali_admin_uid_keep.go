@@ -118,7 +118,7 @@ var _ = Describe("[sigma-kubelet] Keep ali admin UID", func() {
 
 		// Step4: Wait for upgrade action finished.
 		By("Waiting until pod upgrade")
-		err = util.WaitTimeoutForContainerUpdateStatus(f.ClientSet, testPod, containerName, 3*time.Minute, successStr)
+		err = util.WaitTimeoutForContainerUpdateStatus(f.ClientSet, testPod, containerName, 3*time.Minute, successStr, true)
 		Expect(err).NotTo(HaveOccurred(), "upgrade pod err")
 
 		By("Get ali admin uid env by exec cmd")

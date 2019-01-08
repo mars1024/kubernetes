@@ -36,6 +36,7 @@ const (
 	AnnotationXvipQpsLimit        = ServiceAlipayPrefix + "/xvip-qps-limit"
 	AnnotationXvipOrderId         = ServiceAlipayPrefix + "/xvip-order-id"
 	AnnotationXvipLbName          = ServiceAlipayPrefix + "/xvip-lb-name"
+	AnnotationXvipAllocatedVip    = ServiceAlipayPrefix + "/xvip-allocated-vip"
 )
 
 // ServiceProvisionerType is the set of provisioners can be used for ServiceProvisioner
@@ -72,4 +73,38 @@ type ServiceAntVIPTypeEnum string
 const (
 	// ServiceAntVIPTypeStandard is the default type of AntVIP Service
 	ServiceAntVIPTypeStandard ServiceAntVIPTypeEnum = "standard"
+)
+
+const (
+	// SidecarAlipayPrefix is special sub-domain for sidecar.
+	SidecarAlipayPrefix         = "sidecar." + AlipayGroupName
+	MOSNSidecarAlipayPrefix     = "mosn." + SidecarAlipayPrefix
+	MOSNSidecarInject           = MOSNSidecarAlipayPrefix + "/inject"
+	MOSNSidecarImage            = MOSNSidecarAlipayPrefix + "/image"
+	MOSNSidecarPostStartCommand = MOSNSidecarAlipayPrefix + "/post-start-command"
+	MOSNSidecarCPU              = MOSNSidecarAlipayPrefix + "/cpu"
+	MOSNSidecarMemory           = MOSNSidecarAlipayPrefix + "/memory"
+	MOSNSidecarEphemeralStorage = MOSNSidecarAlipayPrefix + "/ephemeral-storage"
+	MOSNSidecarIngressPort      = MOSNSidecarAlipayPrefix + "/ingress-port"
+	MOSNSidecarEgressPort       = MOSNSidecarAlipayPrefix + "/egress-port"
+	MOSNSidecarRegistryPort     = MOSNSidecarAlipayPrefix + "/registry-port"
+)
+
+// SidecarInjectionPolicy determines the policy for injecting the
+// sidecar container into the pod.
+type SidecarInjectionPolicy string
+
+const (
+	// SidecarInjectionPolicyDisabled specifies that the sidecar injector
+	// in admission control will not inject the sidecar container into the spec of pod.
+	// Pod can enable injection using the "mosn.sidecar.k8s.alipay.com/inject"
+	// annotation with value of "enabled".
+	SidecarInjectionPolicyDisabled SidecarInjectionPolicy = "disabled"
+
+	// SidecarInjectionPolicyEnabled specifies that the sidecar injector
+	// in admission control will inject the sidecar container into the spec of pod.
+	// Pod can disable injection using the "mosn.sidecar.k8s.alipay.com/inject"
+	// annotation with value of "disabled".
+	// This annotation must be submitted with "mosn.sidecar.k8s.alipay.com/image" together.
+	SidecarInjectionPolicyEnabled SidecarInjectionPolicy = "enabled"
 )

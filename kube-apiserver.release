@@ -4,7 +4,7 @@
 # 构建源码语言类型
 code.language=go
 # go version
-build.tools.go = 1.10.3
+build.tools.go = 1.10.7
 # path to output
 build.output=APP-META/docker-config/
 build.command=script/build-kube-apiserver.sh

@@ -213,3 +213,79 @@ func GetCpuPeriodFromAnnotation(pod *v1.Pod, containerName string) int64 {
 	}
 	return newCpuPeriod
 }
+
+// GetAllocSpecFromAnnotation can get alloc-spec infomation from pod annotation.
+// AnnotationPodAllocSpec = "pod.beta1.sigma.ali/alloc-spec"
+func GetAllocSpecFromAnnotation(pod *v1.Pod) *sigmak8sapi.AllocSpec {
+	if pod == nil || pod.Annotations == nil {
+		return nil
+	}
+
+	allocSpecStr, exists := pod.Annotations[sigmak8sapi.AnnotationPodAllocSpec]
+	if !exists {
+		glog.V(4).Infof("No alloc-spec found in pod: %s", format.Pod(pod))
+		return nil
+	}
+	allocSpec := &sigmak8sapi.AllocSpec{}
+	err := json.Unmarshal([]byte(allocSpecStr), allocSpec)
+	if err != nil {
+		glog.V(4).Infof("Failed to unmarshal %s from pod %s into AllocSpec: %v", allocSpecStr, format.Pod(pod), err)
+		return nil
+	}
+	return allocSpec
+}
+
+// GetHostConfigFromAnnotation can get host config infomation from pod annotation.
+func GetHostConfigFromAnnotation(pod *v1.Pod, containerName string) *sigmak8sapi.HostConfigInfo {
+	allocSpec := GetAllocSpecFromAnnotation(pod)
+	if allocSpec == nil {
+		return nil
+	}
+
+	for _, container := range allocSpec.Containers {
+		if container.Name == containerName {
+			return &container.HostConfig
+		}
+	}
+
+	glog.V(4).Infof("No HostConfig found in pod %s for container %s", format.Pod(pod), containerName)
+	return nil
+}
+
+// GetAllocResourceFromAnnotation can get alloc spec resource field from pod annotation.
+func GetAllocResourceFromAnnotation(pod *v1.Pod, containerName string) *sigmak8sapi.ResourceRequirements {
+	allocSpec := GetAllocSpecFromAnnotation(pod)
+	if allocSpec == nil {
+		return nil
+	}
+
+	for _, container := range allocSpec.Containers {
+		if container.Name == containerName {
+			return &container.Resource
+		}
+	}
+
+	glog.V(4).Infof("No Resource found in pod %s for container %s", format.Pod(pod), containerName)
+	return nil
+}
+
+// GetDanglingPodsFromNodeAnnotation can get danglingPod information from node's annotation.
+func GetDanglingPodsFromNodeAnnotation(node *v1.Node) ([]sigmak8sapi.DanglingPod, error) {
+	if node == nil {
+		return []sigmak8sapi.DanglingPod{}, fmt.Errorf("invalid node: %v", node)
+	}
+	if len(node.Annotations) == 0 {
+		return []sigmak8sapi.DanglingPod{}, nil
+	}
+
+	danglingPodsStr, exists := node.Annotations[sigmak8sapi.AnnotationDanglingPods]
+	if !exists {
+		return []sigmak8sapi.DanglingPod{}, nil
+	}
+	var danglingPods []sigmak8sapi.DanglingPod
+	if err := json.Unmarshal([]byte(danglingPodsStr), &danglingPods); err != nil {
+		glog.Errorf("[DanglingPod] Failed to unmarshal dangling pods: %s", danglingPodsStr)
+		return []sigmak8sapi.DanglingPod{}, err
+	}
+	return danglingPods, nil
+}

@@ -42,7 +42,7 @@ var _ = Describe("[sigma-kubelet]", func() {
 
 		// Step5: Wait for upgrade action finished.
 		By("wait until pod is upgraded")
-		err = util.WaitTimeoutForContainerUpdateStatus(f.ClientSet, upgradedPod, containerName, 3*time.Minute, upgradeSuccessStr)
+		err = util.WaitTimeoutForContainerUpdateStatus(f.ClientSet, upgradedPod, containerName, 3*time.Minute, upgradeSuccessStr, true)
 		Expect(err).NotTo(HaveOccurred(), "upgrade pod err")
 
 		// Step6: Get latest pod to check pod status

@@ -35,7 +35,7 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 		Expect(err).To(BeNil(), "get node labels site failed.")
 		site = strings.ToLower(site)
 	})
-	It("[ant][sigma-alipay-bvt][adapter] test pod lifecycle use adapter.", func() {
+	It("[ant][sigma-alipay-bvt][smoke][adapter] test pod lifecycle use adapter.", func() {
 		configFile := filepath.Join(util.TestDataDir, "alipay-adapter-create-container.json")
 		framework.Logf("TestDir:%v", util.TestDataDir)
 		createConfig, err := LoadBaseCreateFile(configFile)
@@ -109,7 +109,7 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 		Expect(err).To(BeNil(), "[AdapterLifeCycle] Delete container failed.")
 	})
 
-	It("[ant][sigma-alipay-bvt][sigma3.1] test sigma3.1 pod lifecycle use sigma3.1.", func() {
+	It("[ant][sigma-alipay-bvt][smoke][sigma3.1] test sigma3.1 pod lifecycle use sigma3.1.", func() {
 		framework.Logf("TestDir:%v", util.TestDataDir)
 		name := "simga-bvt-test-" + time.Now().Format("20160607123450")
 		pod, err := LoadAlipayBasePod(name, k8sApi.ContainerStateRunning, enableOverQuota)

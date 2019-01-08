@@ -1,0 +1,1 @@
+FROM reg.docker.alibaba-inc.com/ajdk/8.alios5

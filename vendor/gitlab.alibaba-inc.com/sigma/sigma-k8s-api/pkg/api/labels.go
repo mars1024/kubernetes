@@ -20,6 +20,9 @@ const (
 	// serial tag of pod, should be unique globally
 	LabelPodSn = "sigma.ali/sn"
 
+	// ip allocated for pod
+	LabelPodIp = "sigma.ali/ip"
+
 	// application name
 	LabelAppName = "sigma.ali/app-name"
 

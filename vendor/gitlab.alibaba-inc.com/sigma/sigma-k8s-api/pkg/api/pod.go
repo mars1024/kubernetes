@@ -2,6 +2,7 @@ package api
 
 import (
 	"k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -56,6 +57,8 @@ type HostConfigInfo struct {
 	// If the path is not absolute, the path is considered to be relative to the cgroups path of the init process.
 	// Cgroups are created if they do not already exist.
 	CgroupParent string `json:"cgroupParent"`
+	// Indicate how to set rootfs diskquota for a container.
+	DiskQuotaMode RootDiskQuotaMode `json:"diskQuotaMode"`
 	// Total memory limit (memory + swap); set -1 to enable unlimited swap.
 	// You must use this with memory and make the swap value larger than memory
 	MemorySwap int64 `json:"memorySwap,omitempty"`
@@ -111,6 +114,17 @@ type Ulimit struct {
 	// Soft limit of ulimit.
 	Soft int64
 }
+
+// DiskQuotaMode indicates how to set up container's rootfs diskquota.
+// https://github.com/alibaba/pouch/blob/master/docs/features/pouch_with_diskquota.md#parameter-details
+type RootDiskQuotaMode string
+
+const (
+	// DiskQuotaModeRootFsAndVolume is a DiskQuotaMode that indicates using ".*" to limit a container's rootfs.
+	DiskQuotaModeRootFsAndVolume RootDiskQuotaMode = ".*"
+	// DiskQuotaModeRootFsOnly is a DiskQuotaMode that indicates using "/" to limit a container's rootfs.
+	DiskQuotaModeRootFsOnly RootDiskQuotaMode = "/"
+)
 
 // SpreadStrategy means how to allocate cpuset of container in the CPU topology
 type SpreadStrategy string
@@ -272,4 +286,35 @@ type NetworkStatus struct {
 	SandboxId string `json:"sandboxId"`
 	// Ip, e.g. 11.172.32.180
 	Ip string `json:"ip"`
+	// Ip allocate time
+	AllocationTimestamp *metav1.Time `json:"allocationTimestamp,omitempty"`
+	// Ip release time
+	ReleaseTimestamp *metav1.Time `json:"releaseTimestamp,omitempty"`
+	// Ip security domain
+	SecurityDomain string `json:"securityDomain,omitempty"`
+}
+
+// DanglingPod is a kind of pod that is removed from apiserver but still running on node.
+// DanglingPod's infomation is stored in node's annotation.
+type DanglingPod struct {
+	// Name of the DanglingPod, recorded in container's label
+	Name string `json:"name"`
+	// Namespace of the DanglingPod, recorded in container's label
+	Namespace string `json:"namespace"`
+	// UID of the DanglingPod, recorded in container's label
+	UID string `json:"uid"`
+	// SN is used to register peripheral system such as armory
+	// +optional
+	SN string `json:"sn, omitempty"`
+	// The time pod is created
+	// +optional
+	CreationTimestamp metav1.Time `json:"creationTimestamp, omitempty"`
+	// Ip address of DanglingPod
+	// +optional
+	PodIP string `json:"podIP, omitempty"`
+	// The Phase of DanglingPod
+	// +optional
+	Phase v1.PodPhase `json:"phase, omitempty"`
+	// If SafeToRemove is true, Sigmalet will delete dangling pod
+	SafeToRemove bool `json:"safeToRemove"`
 }

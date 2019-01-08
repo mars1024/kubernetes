@@ -2,10 +2,13 @@ package kubelet
 
 import (
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
+
 	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/sigma/util"
@@ -49,7 +52,7 @@ func checkResult(checkMethod string, result string, keywords []string) {
 			}
 		}
 	default:
-		framework.Failf("Unkown check method type")
+		framework.Failf("Unknown check method type")
 	}
 }
 
@@ -61,7 +64,7 @@ func generatePodCommon() *v1.Pod {
 		framework.Failf("Failed to load pod from file")
 	}
 	// name should be unique
-	pod.Name = "createpodtest" + string(uuid.NewUUID())
+	pod.Name = "pod-test-" + string(uuid.NewUUID())
 	return pod
 }
 
@@ -100,7 +103,7 @@ func generateRunningPodWithEnv(envs map[string]string) *v1.Pod {
 	pod.Spec.Containers[0].Image = "reg.docker.alibaba-inc.com/sigma-x/mysql:test-v1"
 	pod.Annotations = map[string]string{}
 	pod.Annotations[sigmak8sapi.AnnotationContainerStateSpec] = `{"states":{"pod-base":"running"}}`
-	// set extra infomation to pod
+	// set extra information to pod.
 	targetENVs := []v1.EnvVar{}
 	for k, v := range envs {
 		env := v1.EnvVar{
@@ -153,5 +156,57 @@ func generateRunningPodWithPostStartHook(command []string) *v1.Pod {
 	pod.Spec.Containers[0].Lifecycle = lifecycle
 	pod.Annotations = map[string]string{}
 	pod.Annotations[sigmak8sapi.AnnotationContainerStateSpec] = `{"states":{"pod-base":"running"}}`
+	return pod
+}
+
+func getCPUPeriod(pod *v1.Pod) int64 {
+	if len(pod.Status.ContainerStatuses) == 0 {
+		framework.Logf("Failed to get ContainerStatuses from pod: %s", pod.Name)
+		return 0
+	}
+	segs := strings.Split(pod.Status.ContainerStatuses[0].ContainerID, "//")
+	if len(segs) != 2 {
+		framework.Logf("Failed to get ContainerID from pod: %s", pod.Name)
+		return 0
+	}
+	containerID := segs[1]
+
+	// Get CPUPeriod.
+	format := "{{.HostConfig.CPUPeriod}}"
+	cpuPeriodStr, err := util.GetContainerInspectField(pod.Status.HostIP, containerID, format)
+	if err != nil {
+		framework.Logf("Failed to get cpu period from pod: %s", pod.Name)
+		return 0
+	}
+	cpuPeriod, err := strconv.ParseInt(strings.TrimSuffix(cpuPeriodStr, "\n"), 10, 64)
+	if err != nil {
+		framework.Logf("Failed to parse cpu period %s from pod: %s", cpuPeriodStr, pod.Name)
+		return 0
+	}
+	return cpuPeriod
+}
+
+func getResourceRequirements(requests, limits v1.ResourceList) v1.ResourceRequirements {
+	res := v1.ResourceRequirements{}
+	res.Requests = requests
+	res.Limits = limits
+	return res
+}
+
+func getResourceList(cpu, memory string) v1.ResourceList {
+	res := v1.ResourceList{}
+	if cpu != "" {
+		res[v1.ResourceCPU] = resource.MustParse(cpu)
+	}
+	if memory != "" {
+		res[v1.ResourceMemory] = resource.MustParse(memory)
+	}
+	return res
+}
+
+func generateRunningPodWithInitResource(resources v1.ResourceRequirements) *v1.Pod {
+	pod := generatePodCommon()
+	pod.Spec.Containers[0].Image = "reg.docker.alibaba-inc.com/ali/os:7u2"
+	pod.Spec.Containers[0].Resources = resources
 	return pod
 }

@@ -71,6 +71,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/configmap"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	"k8s.io/kubernetes/pkg/kubelet/dockershim"
+	"k8s.io/kubernetes/pkg/kubelet/dockershim/network/cni"
 	dockerremote "k8s.io/kubernetes/pkg/kubelet/dockershim/remote"
 	"k8s.io/kubernetes/pkg/kubelet/events"
 	"k8s.io/kubernetes/pkg/kubelet/eviction"
@@ -613,6 +614,9 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		MTU:                int(crOptions.NetworkPluginMTU),
 	}
 
+	cniPlugins := cni.ProbeNetworkPlugins(crOptions.CNIConfDir, cni.SplitDirs(crOptions.CNIBinDir))
+	cni.UpdateCNIServiceAddress(cniPlugins, crOptions.NetworkPluginName, kubeDeps.KubeClient)
+
 	klet.resourceAnalyzer = serverstats.NewResourceAnalyzer(klet, kubeCfg.VolumeStatsAggPeriod.Duration)
 
 	if containerRuntime == "rkt" {
@@ -693,6 +697,8 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		klet.runtimeClassManager,
 		kubeCfg.UserinfoScriptPath,
 		klet.podManager,
+		klet.kubeClient,
+		string(klet.nodeName),
 	)
 	if err != nil {
 		return nil, err
@@ -1458,6 +1464,9 @@ func (kl *Kubelet) Run(updates <-chan kubetypes.PodUpdate) {
 	// handled by pod workers).
 	go wait.Until(kl.podKiller, 1*time.Second, wait.NeverStop)
 
+	// Deal with dangling pod
+	go wait.Until(kl.SyncDanglingPods, 10*time.Second, wait.NeverStop)
+
 	// Start component sync loops.
 	kl.statusManager.Start()
 	kl.probeManager.Start()
@@ -2082,6 +2091,15 @@ func (kl *Kubelet) HandlePodAdditions(pods []*v1.Pod) {
 	start := kl.clock.Now()
 	sort.Sort(sliceutils.PodsByCreationTime(pods))
 	for _, pod := range pods {
+		// If new pod gets a dangling pod with same name and namespace, print the log to trace.
+		if isPodFromAPIServerSource(pod) {
+			if cachedPod, exists := kl.podManager.GetPodByName(pod.Namespace, pod.Name); exists && cachedPod.UID != pod.UID {
+				glog.Warningf("Pod %s already exists in podManager.", format.Pod(pod))
+			} else if runningPod := kl.getRunningPodByName(pod.Name, pod.Namespace); runningPod != nil && runningPod.ID != pod.UID {
+				glog.Warningf("Pod %s is confilict with dangling pod.", format.Pod(pod))
+			}
+		}
+
 		// Responsible for checking limits in resolv.conf
 		if kl.dnsConfigurer != nil && kl.dnsConfigurer.ResolverConfig != "" {
 			kl.dnsConfigurer.CheckLimitsForResolvConf()
@@ -2145,6 +2163,11 @@ func (kl *Kubelet) HandlePodUpdates(pods []*v1.Pod) {
 func (kl *Kubelet) HandlePodRemoves(pods []*v1.Pod) {
 	start := kl.clock.Now()
 	for _, pod := range pods {
+		// Pod from apiserver shouldn't be removed.
+		if isPodFromAPIServerSource(pod) && pod.DeletionTimestamp == nil {
+			continue
+		}
+
 		kl.podManager.DeletePod(pod)
 		if kubepod.IsMirrorPod(pod) {
 			kl.handleMirrorPod(pod, start)

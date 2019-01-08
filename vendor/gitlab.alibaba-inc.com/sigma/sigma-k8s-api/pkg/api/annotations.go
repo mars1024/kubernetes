@@ -27,11 +27,18 @@ const (
 	// Update result should be stored in this annotation
 	AnnotationPodUpdateStatus = "pod.beta1.sigma.ali/update-status"
 
+	// PodInplaceUpdateState is used to store inplace update state.
+	// The state should be one of "created"/"accepted"/"failed".
+	// https://yuque.antfin-inc.com/sys/sigma3.x/inplace-update-design-doc
+	AnnotationPodInplaceUpdateState = "pod.beta1.sigma.ali/inplace-update-state"
+
 	AnnotationLocalInfo = "node.beta1.sigma.ali/local-info"
 
 	AnnotationPodAllocSpec = "pod.beta1.sigma.ali/alloc-spec"
 
 	AnnotationPodNetworkStats = "pod.beta1.sigma.ali/network-status"
+
+	AnnotationPodNetworkStatsHistory = "pod.beta1.sigma.ali/network-status-history"
 
 	// numeric number of network priority
 	// http://docs.alibaba-inc.com/pages/viewpage.action?pageId=479572415
@@ -45,9 +52,9 @@ const (
 	// AnnotationAutopilot is the prefix of autopilot service in node annotation
 	AnnotationAutopilot = "node.beta1.sigma.ali/autopilot"
 
-	// AnnotationWildPods records the wild pods
+	// AnnotationDanglingPods records the wild pods
 	// Please refer to: https://lark.alipay.com/sys/sigma3.x/iqymrh
-	AnnotationWildPods = "node.beta1.sigma.ali/wild-pods"
+	AnnotationDanglingPods = "node.beta1.sigma.ali/dangling-pods"
 
 	// AnnotationRebuildContainerInfo is container info which from sigma 2.0 container
 	AnnotationRebuildContainerInfo = "pod.beta1.sigma.ali/rebuild-container-info"

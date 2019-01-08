@@ -73,18 +73,18 @@ func gatherSigmaProfile(componentName, profileBaseName, profileKind string) erro
 		return fmt.Errorf("failed to execute curl command on master : %v", err)
 	}
 
-	// Create a graph from the data and write it to a pdf file.
+	// Create a graph from the data and write it to a svg file.
 	var cmd *exec.Cmd
 	switch {
 	// TODO: Support other profile kinds if needed (e.g inuse_space, alloc_objects, mutex, etc)
 	case profileKind == "heap":
-		cmd = exec.Command("go", "tool", "pprof", "-pdf", "-symbolize=none", "--alloc_space", rawProfilePath)
+		cmd = exec.Command("go", "tool", "pprof", "-svg", "-symbolize=none", "--alloc_space", rawProfilePath)
 	case strings.HasPrefix(profileKind, "profile"):
-		cmd = exec.Command("go", "tool", "pprof", "-pdf", "-symbolize=none", rawProfilePath)
+		cmd = exec.Command("go", "tool", "pprof", "-svg", "-symbolize=none", rawProfilePath)
 	default:
 		return fmt.Errorf("Unknown profile kind provided: %s", profileKind)
 	}
-	outfilePath := path.Join(getProfilesDirectoryPath(), profilePrefix+profileBaseName+".pdf")
+	outfilePath := path.Join(getProfilesDirectoryPath(), profilePrefix+profileBaseName+".svg")
 	outfile, err := os.Create(outfilePath)
 	if err != nil {
 		return fmt.Errorf("failed to create file for the profile graph: %v", err)

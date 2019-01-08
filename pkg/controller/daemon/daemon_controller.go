@@ -24,6 +24,9 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancycache "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/cache"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 
 	apps "k8s.io/api/apps/v1"
 	"k8s.io/api/core/v1"
@@ -134,7 +137,7 @@ type DaemonSetsController struct {
 
 	// The DaemonSet that has suspended pods on nodes; the key is node name, the value
 	// is DaemonSet set that want to run pods but can't schedule in latest syncup cycle.
-	suspendedDaemonPodsMutex sync.Mutex
+	suspendedDaemonPodsMutex *sync.Mutex	// using pointer to keep it singleton when shallow copying
 	suspendedDaemonPods      map[string]sets.String
 
 	failedPodsBackoff *flowcontrol.Backoff
@@ -226,6 +229,8 @@ func NewDaemonSetsController(
 	dsc.syncHandler = dsc.syncDaemonSet
 	dsc.enqueueDaemonSet = dsc.enqueue
 	dsc.enqueueDaemonSetRateLimited = dsc.enqueueRateLimited
+
+	dsc.suspendedDaemonPodsMutex = &sync.Mutex{}
 
 	dsc.failedPodsBackoff = failedPodsBackoff
 
@@ -381,6 +386,11 @@ func (dsc *DaemonSetsController) addHistory(obj interface{}) {
 		return
 	}
 
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(history.Annotations)
+		dsc = dsc.ShallowCopyWithTenant(tenantInfo).(*DaemonSetsController)
+	}
+
 	// If it has a ControllerRef, that's all that matters.
 	if controllerRef := metav1.GetControllerOf(history); controllerRef != nil {
 		ds := dsc.resolveControllerRef(history.Namespace, controllerRef)
@@ -412,6 +422,11 @@ func (dsc *DaemonSetsController) updateHistory(old, cur interface{}) {
 	if curHistory.ResourceVersion == oldHistory.ResourceVersion {
 		// Periodic resync will send update events for all known ControllerRevisions.
 		return
+	}
+
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(curHistory.Annotations)
+		dsc = dsc.ShallowCopyWithTenant(tenantInfo).(*DaemonSetsController)
 	}
 
 	curControllerRef := metav1.GetControllerOf(curHistory)
@@ -473,6 +488,11 @@ func (dsc *DaemonSetsController) deleteHistory(obj interface{}) {
 		}
 	}
 
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(history.Annotations)
+		dsc = dsc.ShallowCopyWithTenant(tenantInfo).(*DaemonSetsController)
+	}
+
 	controllerRef := metav1.GetControllerOf(history)
 	if controllerRef == nil {
 		// No controller should care about orphans being deleted.
@@ -494,6 +514,11 @@ func (dsc *DaemonSetsController) addPod(obj interface{}) {
 		// is already pending deletion. Prevent the pod from being a creation observation.
 		dsc.deletePod(pod)
 		return
+	}
+
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+		dsc = dsc.ShallowCopyWithTenant(tenantInfo).(*DaemonSetsController)
 	}
 
 	// If it has a ControllerRef, that's all that matters.
@@ -545,6 +570,11 @@ func (dsc *DaemonSetsController) updatePod(old, cur interface{}) {
 		// until the kubelet actually deletes the pod.
 		dsc.deletePod(curPod)
 		return
+	}
+
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(curPod.Annotations)
+		dsc = dsc.ShallowCopyWithTenant(tenantInfo).(*DaemonSetsController)
 	}
 
 	curControllerRef := metav1.GetControllerOf(curPod)
@@ -671,6 +701,11 @@ func (dsc *DaemonSetsController) deletePod(obj interface{}) {
 		}
 	}
 
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+		dsc = dsc.ShallowCopyWithTenant(tenantInfo).(*DaemonSetsController)
+	}
+
 	controllerRef := metav1.GetControllerOf(pod)
 	if controllerRef == nil {
 		// No controller should care about orphans being deleted.
@@ -698,13 +733,19 @@ func (dsc *DaemonSetsController) deletePod(obj interface{}) {
 }
 
 func (dsc *DaemonSetsController) addNode(obj interface{}) {
+	node := obj.(*v1.Node)
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(node.Annotations)
+		dsc = dsc.ShallowCopyWithTenant(tenantInfo).(*DaemonSetsController)
+	}
+
 	// TODO: it'd be nice to pass a hint with these enqueues, so that each ds would only examine the added node (unless it has other work to do, too).
 	dsList, err := dsc.dsLister.List(labels.Everything())
 	if err != nil {
 		glog.V(4).Infof("Error enqueueing daemon sets: %v", err)
 		return
 	}
-	node := obj.(*v1.Node)
+
 	for _, ds := range dsList {
 		_, shouldSchedule, _, err := dsc.nodeShouldRunDaemonPod(node, ds)
 		if err != nil {
@@ -757,6 +798,12 @@ func shouldIgnoreNodeUpdate(oldNode, curNode v1.Node) bool {
 func (dsc *DaemonSetsController) updateNode(old, cur interface{}) {
 	oldNode := old.(*v1.Node)
 	curNode := cur.(*v1.Node)
+
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(curNode.Annotations)
+		dsc = dsc.ShallowCopyWithTenant(tenantInfo).(*DaemonSetsController)
+	}
+
 	if shouldIgnoreNodeUpdate(*oldNode, *curNode) {
 		return
 	}
@@ -1236,10 +1283,14 @@ func (dsc *DaemonSetsController) syncDaemonSet(key string) error {
 		glog.V(4).Infof("Finished syncing daemon set %q (%v)", key, time.Since(startTime))
 	}()
 
-	namespace, name, err := cache.SplitMetaNamespaceKey(key)
+	tenant, namespace, name, err := multitenancycache.MultiTenancySplitKeyWrapper(cache.SplitMetaNamespaceKey)(key)
 	if err != nil {
 		return err
 	}
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		dsc = dsc.ShallowCopyWithTenant(tenant).(*DaemonSetsController)
+	}
+
 	ds, err := dsc.dsLister.DaemonSets(namespace).Get(name)
 	if errors.IsNotFound(err) {
 		glog.V(3).Infof("daemon set has been deleted %v", key)

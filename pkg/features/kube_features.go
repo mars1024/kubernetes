@@ -20,6 +20,7 @@ import (
 	apiextensionsfeatures "k8s.io/apiextensions-apiserver/pkg/features"
 	genericfeatures "k8s.io/apiserver/pkg/features"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
 )
 
 const (
@@ -508,6 +509,8 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	EvictPodByPolicy:                            {Default: true, PreRelease: utilfeature.Alpha},
 	DisableChangePodStatusByNodeReadyCondition:  {Default: true, PreRelease: utilfeature.Beta},
 	DefaultHashVersionTo110:                     {Default: false, PreRelease: utilfeature.Alpha},
+
+	multitenancy.FeatureName:                    {Default: false, PreRelease: utilfeature.Alpha},
 
 	// inherited features from generic apiserver, relisted here to get a conflict if it is changed
 	// unintentionally on either side:

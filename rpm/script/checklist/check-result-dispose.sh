@@ -25,8 +25,10 @@ message_notify() {
     # replace '"' in message, to avoid message truncation
     info=$(echo $* | sed 's/"//g')
 
+    operator=$(yum history info t-sigma-slave | grep User  |awk 'NR==1' | awk '{print $3}' | egrep -o '[a-zA-Z|.]+')
+
     # join together all message
-    ct="host: [${ip}](https://sa.alibaba-inc.com/ops/terminal.html?source=sigma&ip=${ip}) upgrade sigmalet to version :  ${sigma_slave_version} error \n: ${info} "
+    ct=" host: [${ip}](https://n.alibaba-inc.com/ops/info/host?host=${ip}) upgrade sigmalet to version :  ${sigma_slave_version} error \n: ${info} "
     # send message by dingTalk
     curl 'https://oapi.dingtalk.com/robot/send?access_token=1a7310b61c973a4129b203231c998654177cdc183c94db5f53f12d1242fd31db' \
             -H 'Content-Type: application/json' \
@@ -34,14 +36,14 @@ message_notify() {
                     "msgtype": "markdown",
                     "markdown": {
                         "title": "sigmalet check",
-                        "text": "'"$ct"' \n @'${message_receiver}' \n "
+                        "text": " operator: '"${operator}"' \n '"$ct"' \n @'${message_receiver}' \n "
                         },
-                     "at": {
+                    "at": {
                              "atMobiles": [
                                  "'${message_receiver}'"
                              ],
                              "isAtAll": false
-                         }
+                    }
                 }'
 }
 

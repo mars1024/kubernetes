@@ -149,6 +149,12 @@ type TestContextType struct {
 	SigmaMarkUseNodes     int
 	// how many pods will be created in one hollow-node when executing sigma-mark test
 	SigmaMarkPodPerNode   int
+	// sigma api server pprof address
+	SigmaApiServerPProfAddress string
+	// sigma controller manager pprof address
+	SigmaControllerPProfAddress string
+	// sigma scheduler pprof address
+	SigmaSchedulerPProfAddress string
 }
 
 // NodeTestContextType is part of TestContextType, it is shared by all node e2e test.
@@ -244,6 +250,9 @@ func RegisterCommonFlags() {
 
 	flag.IntVar(&TestContext.SigmaMarkUseNodes, "sigma-mark-use-nodes", 500, "how many nodes will be used when executing sigma-mark test.")
 	flag.IntVar(&TestContext.SigmaMarkPodPerNode, "sigma-mark-pods-per-node", 30, "how many pods will be created in one hollow-node when executing sigma-mark test.")
+	flag.StringVar(&TestContext.SigmaApiServerPProfAddress, "sigma-apiserver-pprof-addr", "localhost:8080", "sigma api server pprof address.")
+	flag.StringVar(&TestContext.SigmaControllerPProfAddress, "sigma-controller-pprof-addr", "localhost:10252", "sigma controller manager pprof address.")
+	flag.StringVar(&TestContext.SigmaSchedulerPProfAddress, "sigma-scheduler-pprof-addr", "localhost:14457", "sigma scheduler pprof address.")
 }
 
 // Register flags specific to the cluster e2e test suite.

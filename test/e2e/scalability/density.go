@@ -397,6 +397,18 @@ var _ = SIGDescribe("Density", func() {
 	var profileGathererStopCh chan struct{}
 	var etcdMetricsCollector *framework.EtcdMetricsCollector
 
+	readConfig := func() (int) {
+		// Read in configuration settings, reasonable defaults.
+		cnrStr := os.Getenv("SIGMA_PERF_POD_PER_NODE")
+		cnt, err := strconv.Atoi(cnrStr)
+		if err == nil {
+			return cnt
+		} else {
+			return 30
+		}
+	}
+	podsPerNode := readConfig()
+
 	// Gathers data prior to framework namespace teardown
 	AfterEach(func() {
 		// Stop apiserver CPU profile gatherer and gather memory allocations profile.
@@ -538,21 +550,21 @@ var _ = SIGDescribe("Density", func() {
 	densityTests := []Density{
 		// TODO: Expose runLatencyTest as ginkgo flag.
 		{podsPerNode: 3, runLatencyTest: false, kind: api.Kind("ReplicationController")},
-		{podsPerNode: 30, runLatencyTest: true, kind: api.Kind("ReplicationController")},
+		{podsPerNode: podsPerNode, runLatencyTest: true, kind: api.Kind("ReplicationController")},
 		{podsPerNode: 50, runLatencyTest: false, kind: api.Kind("ReplicationController")},
 		{podsPerNode: 95, runLatencyTest: true, kind: api.Kind("ReplicationController")},
 		{podsPerNode: 100, runLatencyTest: false, kind: api.Kind("ReplicationController")},
 		// Tests for other resource types:
-		{podsPerNode: 30, runLatencyTest: true, kind: extensions.Kind("Deployment")},
-		{podsPerNode: 30, runLatencyTest: true, kind: batch.Kind("Job")},
+		{podsPerNode: podsPerNode, runLatencyTest: true, kind: extensions.Kind("Deployment")},
+		{podsPerNode: podsPerNode, runLatencyTest: true, kind: batch.Kind("Job")},
 		// Test scheduling when daemons are preset
-		{podsPerNode: 30, runLatencyTest: true, kind: api.Kind("ReplicationController"), daemonsPerNode: 2},
+		{podsPerNode: podsPerNode, runLatencyTest: true, kind: api.Kind("ReplicationController"), daemonsPerNode: 2},
 		// Test with secrets
-		{podsPerNode: 30, runLatencyTest: true, kind: extensions.Kind("Deployment"), secretsPerPod: 2},
+		{podsPerNode: podsPerNode, runLatencyTest: true, kind: extensions.Kind("Deployment"), secretsPerPod: 2},
 		// Test with configmaps
-		{podsPerNode: 30, runLatencyTest: true, kind: extensions.Kind("Deployment"), configMapsPerPod: 2},
+		{podsPerNode: podsPerNode, runLatencyTest: true, kind: extensions.Kind("Deployment"), configMapsPerPod: 2},
 		// Test with quotas
-		{podsPerNode: 30, runLatencyTest: true, kind: api.Kind("ReplicationController"), quotas: true},
+		{podsPerNode: podsPerNode, runLatencyTest: true, kind: api.Kind("ReplicationController"), quotas: true},
 	}
 
 	isCanonical := func(test *Density) bool {
@@ -562,7 +574,7 @@ var _ = SIGDescribe("Density", func() {
 	for _, testArg := range densityTests {
 		feature := "ManualPerformance"
 		switch testArg.podsPerNode {
-		case 30:
+		case podsPerNode:
 			if isCanonical(&testArg) {
 				feature = "Performance"
 			}
@@ -593,7 +605,7 @@ var _ = SIGDescribe("Density", func() {
 			defer nodePreparer.CleanupNodes()
 
 			podsPerNode := itArg.podsPerNode
-			if podsPerNode == 30 {
+			if podsPerNode == podsPerNode {
 				f.AddonResourceConstraints = func() map[string]framework.ResourceConstraint { return density30AddonResourceVerifier(nodeCount) }()
 			}
 			totalPods = (podsPerNode - itArg.daemonsPerNode) * nodeCount
@@ -811,7 +823,7 @@ var _ = SIGDescribe("Density", func() {
 					// more evenly between nodes.
 					cpuRequest := *resource.NewMilliQuantity(nodeCpuCapacity/5, resource.DecimalSI)
 					memRequest := *resource.NewQuantity(nodeMemCapacity/5, resource.DecimalSI)
-					if podsPerNode > 30 {
+					if podsPerNode > podsPerNode {
 						// This is to make them schedulable on high-density tests
 						// (e.g. 100 pods/node kubemark).
 						cpuRequest = *resource.NewMilliQuantity(0, resource.DecimalSI)

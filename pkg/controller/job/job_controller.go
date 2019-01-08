@@ -24,6 +24,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golang/glog"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancycache "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/cache"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
+
 	batch "k8s.io/api/batch/v1"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -31,6 +36,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	batchinformers "k8s.io/client-go/informers/batch/v1"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
@@ -44,8 +50,6 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/util/metrics"
-
-	"github.com/golang/glog"
 )
 
 const statusUpdateRetries = 3
@@ -203,6 +207,11 @@ func (jm *JobController) addPod(obj interface{}) {
 		return
 	}
 
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+		jm = jm.ShallowCopyWithTenant(tenantInfo).(*JobController)
+	}
+
 	// If it has a ControllerRef, that's all that matters.
 	if controllerRef := metav1.GetControllerOf(pod); controllerRef != nil {
 		job := jm.resolveControllerRef(pod.Namespace, controllerRef)
@@ -245,6 +254,11 @@ func (jm *JobController) updatePod(old, cur interface{}) {
 		// until the kubelet actually deletes the pod.
 		jm.deletePod(curPod)
 		return
+	}
+
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(curPod.Annotations)
+		jm = jm.ShallowCopyWithTenant(tenantInfo).(*JobController)
 	}
 
 	// the only time we want the backoff to kick-in, is when the pod failed
@@ -300,6 +314,11 @@ func (jm *JobController) deletePod(obj interface{}) {
 			utilruntime.HandleError(fmt.Errorf("tombstone contained object that is not a pod %+v", obj))
 			return
 		}
+	}
+
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+		jm = jm.ShallowCopyWithTenant(tenantInfo).(*JobController)
 	}
 
 	controllerRef := metav1.GetControllerOf(pod)
@@ -439,10 +458,14 @@ func (jm *JobController) syncJob(key string) (bool, error) {
 		glog.V(4).Infof("Finished syncing job %q (%v)", key, time.Since(startTime))
 	}()
 
-	ns, name, err := cache.SplitMetaNamespaceKey(key)
+	tenant, ns, name, err := multitenancycache.MultiTenancySplitKeyWrapper(cache.SplitMetaNamespaceKey)(key)
 	if err != nil {
 		return false, err
 	}
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		jm = jm.ShallowCopyWithTenant(tenant).(*JobController)
+	}
+
 	if len(ns) == 0 || len(name) == 0 {
 		return false, fmt.Errorf("invalid job key %q: either namespace or name is missing", key)
 	}
@@ -819,6 +842,11 @@ func (jm *JobController) manageJob(activePods []*v1.Pod, succeeded int32, job *b
 }
 
 func (jm *JobController) updateJobStatus(job *batch.Job) error {
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(job.Annotations)
+		jm = jm.ShallowCopyWithTenant(tenantInfo).(*JobController)
+	}
+
 	jobClient := jm.kubeClient.BatchV1().Jobs(job.Namespace)
 	var err error
 	for i := 0; i <= statusUpdateRetries; i = i + 1 {

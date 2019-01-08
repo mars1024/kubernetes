@@ -4,3 +4,6 @@ t-sigma-slave:
 t-sigma-slave-binary:
   pkgpara:
     DOCKER: 1
+t-kubectl:
+  pkgpara:
+    DOCKER: 1

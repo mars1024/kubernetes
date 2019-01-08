@@ -18,8 +18,12 @@ package disruption
 
 import (
 	"fmt"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
 	"reflect"
 	"time"
+
+	multitenancycache "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/cache"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 
 	apps "k8s.io/api/apps/v1beta1"
 	"k8s.io/api/core/v1"
@@ -31,6 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	appsinformers "k8s.io/client-go/informers/apps/v1beta1"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	extensionsinformers "k8s.io/client-go/informers/extensions/v1beta1"
@@ -183,6 +188,10 @@ var (
 
 // getPodReplicaSet finds a replicaset which has no matching deployments.
 func (dc *DisruptionController) getPodReplicaSet(pod *v1.Pod) (*controllerAndScale, error) {
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+		dc = dc.ShallowCopyWithTenant(tenantInfo).(*DisruptionController)
+	}
 	controllerRef := metav1.GetControllerOf(pod)
 	if controllerRef == nil {
 		return nil, nil
@@ -208,6 +217,10 @@ func (dc *DisruptionController) getPodReplicaSet(pod *v1.Pod) (*controllerAndSca
 
 // getPodStatefulSet returns the statefulset managing the given pod.
 func (dc *DisruptionController) getPodStatefulSet(pod *v1.Pod) (*controllerAndScale, error) {
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+		dc = dc.ShallowCopyWithTenant(tenantInfo).(*DisruptionController)
+	}
 	controllerRef := metav1.GetControllerOf(pod)
 	if controllerRef == nil {
 		return nil, nil
@@ -229,6 +242,10 @@ func (dc *DisruptionController) getPodStatefulSet(pod *v1.Pod) (*controllerAndSc
 
 // getPodDeployments finds deployments for any replicasets which are being managed by deployments.
 func (dc *DisruptionController) getPodDeployment(pod *v1.Pod) (*controllerAndScale, error) {
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+		dc = dc.ShallowCopyWithTenant(tenantInfo).(*DisruptionController)
+	}
 	controllerRef := metav1.GetControllerOf(pod)
 	if controllerRef == nil {
 		return nil, nil
@@ -263,6 +280,10 @@ func (dc *DisruptionController) getPodDeployment(pod *v1.Pod) (*controllerAndSca
 }
 
 func (dc *DisruptionController) getPodReplicationController(pod *v1.Pod) (*controllerAndScale, error) {
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+		dc = dc.ShallowCopyWithTenant(tenantInfo).(*DisruptionController)
+	}
 	controllerRef := metav1.GetControllerOf(pod)
 	if controllerRef == nil {
 		return nil, nil
@@ -395,6 +416,10 @@ func (dc *DisruptionController) enqueuePdbForRecheck(pdb *policy.PodDisruptionBu
 }
 
 func (dc *DisruptionController) getPdbForPod(pod *v1.Pod) *policy.PodDisruptionBudget {
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+		dc = dc.ShallowCopyWithTenant(tenantInfo).(*DisruptionController)
+	}
 	// GetPodPodDisruptionBudgets returns an error only if no
 	// PodDisruptionBudgets are found.  We don't return that as an error to the
 	// caller.
@@ -474,9 +499,12 @@ func (dc *DisruptionController) sync(key string) error {
 		glog.V(4).Infof("Finished syncing PodDisruptionBudget %q (%v)", key, time.Since(startTime))
 	}()
 
-	namespace, name, err := cache.SplitMetaNamespaceKey(key)
+	tenant, namespace, name, err := multitenancycache.MultiTenancySplitKeyWrapper(cache.SplitMetaNamespaceKey)(key)
 	if err != nil {
 		return err
+	}
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		dc = dc.ShallowCopyWithTenant(tenant).(*DisruptionController)
 	}
 	pdb, err := dc.pdbLister.PodDisruptionBudgets(namespace).Get(name)
 	if errors.IsNotFound(err) {
@@ -728,6 +756,10 @@ func refresh(pdbClient policyclientset.PodDisruptionBudgetInterface, pdb *policy
 }
 
 func (dc *DisruptionController) writePdbStatus(pdb *policy.PodDisruptionBudget) error {
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pdb.Annotations)
+		dc = dc.ShallowCopyWithTenant(tenantInfo).(*DisruptionController)
+	}
 	pdbClient := dc.kubeClient.PolicyV1beta1().PodDisruptionBudgets(pdb.Namespace)
 	st := pdb.Status
 

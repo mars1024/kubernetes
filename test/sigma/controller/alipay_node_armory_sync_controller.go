@@ -12,6 +12,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/kubernetes/test/e2e/framework"
+	alipayapis "gitlab.alipay-inc.com/sigma/apis/pkg/apis"
+
 )
 
 /*
@@ -106,6 +108,9 @@ func InitNode(node *corev1.Node) {
 	delete(node.Labels, k8sapi.LabelDSWCluster)
 	delete(node.Labels, k8sapi.LabelSecurityDomain)
 	delete(node.Labels, k8sapi.LabelSite)
+	delete(node.Labels, k8sapi.LabelNetArchVersion)
+	delete(node.Labels, alipayapis.LabelModel)
+	delete(node.Labels, alipayapis.LabelIDCManagerState)
 }
 
 //CheckLabelExist() check lable is exist.
@@ -140,6 +145,9 @@ func CheckNodeLabelsAndAnnotation(f *framework.Framework, name, currentTime stri
 	Expect(CheckLabelExist(getNode.Labels, k8sapi.LabelLogicPOD)).To(matcher, "[GetNode] Unexpected Label  logicpod.")
 	Expect(CheckLabelExist(getNode.Labels, k8sapi.LabelSecurityDomain)).To(matcher, "[GetNode] Unexpected Label  security domain.")
 	Expect(CheckLabelExist(getNode.Labels, k8sapi.LabelSite)).To(matcher, "[GetNode] Unexpected Label site.")
+	Expect(CheckLabelExist(getNode.Labels, k8sapi.LabelNetArchVersion)).To(matcher, "[GetNode] Unexpected label netArchVersion")
+	Expect(CheckLabelExist(getNode.Labels, alipayapis.LabelIDCManagerState)).To(matcher, "[GetNode] Unexpected label idcManagerState")
+	Expect(CheckLabelExist(getNode.Labels, alipayapis.LabelModel)).To(matcher, "[GetNode] Unexpected label Model")
 	lastArmorySync, ok := getNode.Annotations[AnnotationNodeArmorySync]
 	Expect(ok).To(BeTrue(), "[GetNode] Annotation last-armory-sync doesn't patch.")
 	if isUpdate {

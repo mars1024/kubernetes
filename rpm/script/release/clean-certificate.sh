@@ -24,7 +24,7 @@ sigma_slave_certificate_dir=$1
 
 cd  $sigma_slave_certificate_dir
 
-target_files=$(ls ${sigma_slave_certificate_dir}|grep sigma-slave-certificate.conf)
+target_files=$(ls ${sigma_slave_certificate_dir}|grep \\-sigma-slave-certificate.conf)
 condition="^${site}-sigma-slave-certificate.conf"
 
 for f in ${target_files[@]}

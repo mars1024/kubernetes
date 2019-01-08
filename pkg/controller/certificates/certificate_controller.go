@@ -20,15 +20,18 @@ package certificates
 
 import (
 	"fmt"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
 	"time"
 
 	"github.com/golang/glog"
+	multitenancycache "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/cache"
 	"golang.org/x/time/rate"
 
 	certificates "k8s.io/api/certificates/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	certificatesinformers "k8s.io/client-go/informers/certificates/v1beta1"
 	clientset "k8s.io/client-go/kubernetes"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -171,6 +174,13 @@ func (cc *CertificateController) syncFunc(key string) error {
 	defer func() {
 		glog.V(4).Infof("Finished syncing certificate request %q (%v)", key, time.Since(startTime))
 	}()
+	tenant, _, key, err := multitenancycache.MultiTenancySplitKeyWrapper(cache.SplitMetaNamespaceKey)(key)
+	if err != nil {
+		return err
+	}
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		cc = cc.ShallowCopyWithTenant(tenant).(*CertificateController)
+	}
 	csr, err := cc.csrLister.Get(key)
 	if errors.IsNotFound(err) {
 		glog.V(3).Infof("csr has been deleted: %v", key)

@@ -25,7 +25,11 @@ import (
 	"os"
 	"time"
 
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
+
 	capi "k8s.io/api/certificates/v1beta1"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	certificatesinformers "k8s.io/client-go/informers/certificates/v1beta1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/pkg/controller/certificates"
@@ -103,6 +107,12 @@ func (s *cfsslSigner) handle(csr *capi.CertificateSigningRequest) error {
 	if err != nil {
 		return fmt.Errorf("error auto signing csr: %v", err)
 	}
+
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(csr.Annotations)
+		s = s.ShallowCopyWithTenant(tenantInfo).(*cfsslSigner)
+	}
+
 	_, err = s.client.CertificatesV1beta1().CertificateSigningRequests().UpdateStatus(csr)
 	if err != nil {
 		return fmt.Errorf("error updating signature for csr: %v", err)

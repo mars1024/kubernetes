@@ -23,6 +23,9 @@ import (
 	"reflect"
 	"strings"
 
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
+
 	authorization "k8s.io/api/authorization/v1beta1"
 	capi "k8s.io/api/certificates/v1beta1"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
@@ -92,6 +95,11 @@ func (a *sarApprover) handle(csr *capi.CertificateSigningRequest) error {
 	}
 
 	tried := []string{}
+
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(csr.Annotations)
+		a = a.ShallowCopyWithTenant(tenantInfo).(*sarApprover)
+	}
 
 	for _, r := range a.recognizers {
 		if !r.recognize(csr, x509cr) {

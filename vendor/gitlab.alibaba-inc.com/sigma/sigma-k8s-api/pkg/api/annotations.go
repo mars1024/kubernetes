@@ -52,9 +52,9 @@ const (
 	// AnnotationAutopilot is the prefix of autopilot service in node annotation
 	AnnotationAutopilot = "node.beta1.sigma.ali/autopilot"
 
-	// AnnotationWildPods records the wild pods
+	// AnnotationDanglingPods records the wild pods
 	// Please refer to: https://lark.alipay.com/sys/sigma3.x/iqymrh
-	AnnotationWildPods = "node.beta1.sigma.ali/wild-pods"
+	AnnotationDanglingPods = "node.beta1.sigma.ali/dangling-pods"
 
 	// AnnotationRebuildContainerInfo is container info which from sigma 2.0 container
 	AnnotationRebuildContainerInfo = "pod.beta1.sigma.ali/rebuild-container-info"

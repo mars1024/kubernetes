@@ -12,8 +12,6 @@ Group: alibaba/application
 License: Commercial
 AutoReqProv: none
 %define _prefix /usr/local
-%define _systemd /etc/systemd/system
-%define rhel %(/usr/lib/rpm/redhat/dist.sh --distnum)
 
 
 BuildArch:x86_64
@@ -25,11 +23,6 @@ BuildRequires: t-db-golang = 1.8.4-20180731153834
 alibaba kubectl for k8s and sigma
 
 %prep
-%if %{rhel} < 7
-    echo "kubectl only build for 7u alios."
-    exit 1
-%endif
-
 
 %build
 
@@ -61,5 +54,5 @@ install -p -D -m 0755 rpm/kubectl $RPM_BUILD_ROOT/usr/local/bin/kubectl
 %postun
 
 %changelog
-* Wed Jan 8 2019 zhongyuan.zxy
+* Tue Jan 8 2019 zhongyuan.zxy
 - add spec of t-kubectl

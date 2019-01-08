@@ -27,12 +27,15 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 
 	capi "k8s.io/api/certificates/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	certificatesinformers "k8s.io/client-go/informers/certificates/v1beta1"
 	csrclient "k8s.io/client-go/kubernetes/typed/certificates/v1beta1"
 	certificateslisters "k8s.io/client-go/listers/certificates/v1beta1"
@@ -108,6 +111,10 @@ func (ccc *CSRCleanerController) handle(csr *capi.CertificateSigningRequest) err
 		return err
 	}
 	if isIssuedPastDeadline(csr) || isDeniedPastDeadline(csr) || isPendingPastDeadline(csr) || isIssuedExpired {
+		if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+			tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(csr.Annotations)
+			ccc = ccc.ShallowCopyWithTenant(tenantInfo).(*CSRCleanerController)
+		}
 		if err := ccc.csrClient.Delete(csr.Name, nil); err != nil {
 			return fmt.Errorf("unable to delete CSR %q: %v", csr.Name, err)
 		}

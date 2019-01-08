@@ -2,7 +2,7 @@
 # http://baike.corp.taobao.com/index.php/%E6%B7%98%E5%AE%9Drpm%E6%89%93%E5%8C%85%E8%A7%84%E8%8C%83 #
 # http://www.rpm.org/max-rpm/ch-rpm-inside.html              #
 ##############################################################
-Name: t-sigma-slave
+Name: t-kubectl
 Version:1.0.21
 Release: %(echo $RELEASE)
 # if you want use the parameter of rpm_create on build time,
@@ -62,4 +62,4 @@ install -p -D -m 0755 rpm/kubectl $RPM_BUILD_ROOT/usr/local/bin/kubectl
 
 %changelog
 * Wed Jan 8 2019 zhongyuan.zxy
-- add spec of t-sigma-slave
+- add spec of t-kubectl

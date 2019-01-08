@@ -22,6 +22,11 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/golang/glog"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancycache "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/cache"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
+
 	"k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -30,6 +35,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	corelisters "k8s.io/client-go/listers/core/v1"
@@ -41,8 +47,6 @@ import (
 	api "k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/util/metrics"
-
-	"github.com/golang/glog"
 )
 
 const (
@@ -201,6 +205,11 @@ func (e *EndpointController) addPod(obj interface{}) {
 
 	defer logPodEventCost(fmt.Sprintf("%s/%s", pod.Namespace, pod.Name), time.Millisecond*100, "ADD")()
 
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+		e = e.ShallowCopyWithTenant(tenantInfo).(*EndpointController)
+	}
+
 	services, err := e.getPodServiceMemberships(pod)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("Unable to get pod %s/%s's service memberships: %v", pod.Namespace, pod.Name, err))
@@ -293,6 +302,11 @@ func (e *EndpointController) updatePod(old, cur interface{}) {
 	// If both the pod and labels are unchanged, no update is needed
 	if !podChangedFlag && !labelsChanged {
 		return
+	}
+
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(newPod.Annotations)
+		e = e.ShallowCopyWithTenant(tenantInfo).(*EndpointController)
 	}
 
 	services, err := e.getPodServiceMemberships(newPod)
@@ -405,10 +419,14 @@ func (e *EndpointController) syncService(key string) error {
 		glog.V(4).Infof("Finished syncing service %q endpoints. (%v)", key, time.Since(startTime))
 	}()
 
-	namespace, name, err := cache.SplitMetaNamespaceKey(key)
+	tenant, namespace, name, err := multitenancycache.MultiTenancySplitKeyWrapper(cache.SplitMetaNamespaceKey)(key)
 	if err != nil {
 		return err
 	}
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		e = e.ShallowCopyWithTenant(tenant).(*EndpointController)
+	}
+
 	service, err := e.serviceLister.Services(namespace).Get(name)
 	if err != nil {
 		// Delete the corresponding endpoint, as the service has been deleted.

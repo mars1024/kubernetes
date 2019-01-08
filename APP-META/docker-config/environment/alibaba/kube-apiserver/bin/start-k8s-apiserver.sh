@@ -18,17 +18,17 @@ fi
 
 pidof kube-apiserver || {
 $workDir/bin/kube-apiserver \
-    --admission-control=Initializers,NamespaceLifecycle,ServiceAccount,LimitRanger,DefaultStorageClass,DefaultTolerationSeconds,ResourceQuota,PodPreset,AliPodLifeTimeHook,PodDeletionFlowControl,AliPodInjectionPreSchedule,AliPodInjectionPostSchedule,ContainerState \
+    --enable-admission-plugins=Initializers,NamespaceLifecycle,ServiceAccount,LimitRanger,DefaultStorageClass,DefaultTolerationSeconds,PodPreset,ResourceQuota,ValidatingAdmissionWebhook,MutatingAdmissionWebhook,AliPodLifeTimeHook,PodDeletionFlowControl,AliPodInjectionPreSchedule,AliPodInjectionPostSchedule,ContainerState \
     --advertise-address=$(hostname -i) \
     --allow-privileged=true \
-    --audit-policy-file=$workDir/cfg/audit.yaml --audit-log-path=$workDir/log/k8s-audit.log --audit-log-format=json --audit-log-maxage=7 \
+    --audit-policy-file=$workDir/cfg/audit.yaml --audit-log-path=$workDir/log/k8s-audit.log --audit-log-format=json --audit-log-maxsize=10240 --audit-log-maxbackup=1 \
     --authorization-mode=Node,RBAC \
     --bind-address=0.0.0.0 --secure-port=6443 \
     --client-ca-file=$certDir/ca.crt \
     --etcd-servers=$CLUSTER_ETCD --storage-backend=etcd3 \
     $etcdTlsOpts \
     --external-hostname=localhost \
-    --feature-gates=AllAlpha=false \
+    --feature-gates=AllAlpha=false,CSINodeInfo=true,CSIDriverRegistry=true \
     --insecure-bind-address=0.0.0.0 --insecure-port=8080 \
     --max-requests-inflight=3000 --max-mutating-requests-inflight=1000 \
     --request-timeout=300s \

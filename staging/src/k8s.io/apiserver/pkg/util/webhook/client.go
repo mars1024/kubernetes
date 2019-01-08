@@ -135,6 +135,8 @@ func (cm *ClientManager) HookClient(cc ClientConfig) (*rest.RESTClient, error) {
 
 		cfg.ContentConfig.NegotiatedSerializer = cm.negotiatedSerializer
 		cfg.ContentConfig.ContentType = runtime.ContentTypeJSON
+
+
 		client, err := rest.UnversionedRESTClientFor(cfg)
 		if err == nil {
 			cm.cache.Add(string(cacheKey), client)

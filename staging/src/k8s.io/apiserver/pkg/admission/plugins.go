@@ -27,6 +27,9 @@ import (
 	"sync"
 
 	"github.com/golang/glog"
+	"k8s.io/apiserver/pkg/util/feature"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/meta"
 )
 
 // Factory is a function that returns an Interface for admission decisions.
@@ -176,6 +179,12 @@ func (ps *Plugins) InitPlugin(name string, config io.Reader, pluginInitializer P
 	}
 	if !found {
 		return nil, fmt.Errorf("unknown admission plugin: %s", name)
+	}
+
+	if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		if _, ok := plugin.(meta.TenantWise); !ok {
+			return nil, fmt.Errorf("enabled admission controller %s doesn't support multitenancy", name)
+		}
 	}
 
 	pluginInitializer.Initialize(plugin)

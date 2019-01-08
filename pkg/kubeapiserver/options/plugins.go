@@ -87,6 +87,8 @@ import (
 	alipaysetdefaulthostconfig "k8s.io/kubernetes/plugin/pkg/admission/alipay/setdefaulthostconfig"
 	alipaysidecar "k8s.io/kubernetes/plugin/pkg/admission/alipay/sidecar"
 	alipayzappinfo "k8s.io/kubernetes/plugin/pkg/admission/alipay/zappinfo"
+
+	akspodpostschedule "k8s.io/kubernetes/plugin/pkg/admission/podpostschedule"
 )
 
 // AllOrderedPlugins is the list of all the plugins in order.
@@ -150,8 +152,13 @@ var AllOrderedPlugins = []string{
 	alipayimagepullsecret.PluginName,      // Alipay image pull secret injection admission
 	alipaysetdefaulthostconfig.PluginName, // Alipay SetDefaultHostConfig
 	alipayresourcemutationbe.PluginName,   // Alipay resource mutation admission for best effort
+<<<<<<< HEAD
 	alipayrouter.PluginName,               // Alipay router mutation admission for container router configuration.
 	alipayreadinessgate.PluginName,        // Alipay readiness fate mutation admission for pod condition.
+=======
+
+	akspodpostschedule.PluginName,           // Alipay AntCloud PodPostSchedule
+>>>>>>> [admission][apiserver] initial webhook admission controllers multitenancy support
 }
 
 // RegisterAllAdmissionPlugins registers all admission plugins and
@@ -213,6 +220,8 @@ func RegisterAllAdmissionPlugins(plugins *admission.Plugins) {
 	alipayresourcemutationbe.Register(plugins)
 	alipayrouter.Register(plugins)
 	alipayreadinessgate.Register(plugins)
+
+	akspodpostschedule.Register(plugins)
 }
 
 // DefaultOffAdmissionPlugins get admission plugins off by default for kube-apiserver.

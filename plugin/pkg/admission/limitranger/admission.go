@@ -37,6 +37,9 @@ import (
 	informers "k8s.io/kubernetes/pkg/client/informers/informers_generated/internalversion"
 	corelisters "k8s.io/kubernetes/pkg/client/listers/core/internalversion"
 	kubeapiserveradmission "k8s.io/kubernetes/pkg/kubeapiserver/admission"
+	"k8s.io/apiserver/pkg/util/feature"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 )
 
 const (
@@ -106,6 +109,14 @@ func (l *LimitRanger) runLimitFunc(a admission.Attributes, limitFn func(limitRan
 		return nil
 	}
 
+	if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenant, err := multitenancyutil.TransformTenantInfoFromUser(a.GetUserInfo())
+		if err != nil {
+			return err
+		}
+		l = l.ShallowCopyWithTenant(tenant).(*LimitRanger)
+	}
+
 	obj := a.GetObject()
 	name := "Unknown"
 	if obj != nil {
@@ -156,7 +167,7 @@ func (l *LimitRanger) GetLimitRanges(a admission.Attributes) ([]*api.LimitRange,
 
 	// if there are no items held in our indexer, check our live-lookup LRU, if that misses, do the live lookup to prime it.
 	if len(items) == 0 {
-		lruItemObj, ok := l.liveLookupCache.Get(a.GetNamespace())
+		lruItemObj, ok := l.liveLookupCache.Get(namespaceGetterMultiTenancyWrapper(a))
 		if !ok || lruItemObj.(liveLookupEntry).expiry.Before(time.Now()) {
 			// TODO: If there are multiple operations at the same time and cache has just expired,
 			// this may cause multiple List operations being issued at the same time.
@@ -171,7 +182,7 @@ func (l *LimitRanger) GetLimitRanges(a admission.Attributes) ([]*api.LimitRange,
 			for i := range liveList.Items {
 				newEntry.items = append(newEntry.items, &liveList.Items[i])
 			}
-			l.liveLookupCache.Add(a.GetNamespace(), newEntry)
+			l.liveLookupCache.Add(namespaceGetterMultiTenancyWrapper(a), newEntry)
 			lruItemObj = newEntry
 		}
 		lruEntry := lruItemObj.(liveLookupEntry)

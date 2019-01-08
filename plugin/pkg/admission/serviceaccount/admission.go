@@ -39,6 +39,9 @@ import (
 	api "k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/kubeapiserver/admission/util"
 	"k8s.io/kubernetes/pkg/serviceaccount"
+	"k8s.io/apiserver/pkg/util/feature"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 )
 
 // DefaultServiceAccountName is the name of the default service account to set on pods which do not specify a service account
@@ -135,6 +138,13 @@ func (a *serviceAccount) ValidateInitialization() error {
 }
 
 func (s *serviceAccount) Admit(a admission.Attributes) (err error) {
+	if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenant, err := multitenancyutil.TransformTenantInfoFromUser(a.GetUserInfo())
+		if err != nil {
+			return err
+		}
+		s = s.ShallowCopyWithTenant(tenant).(*serviceAccount)
+	}
 	if shouldIgnore(a) {
 		return nil
 	}
@@ -184,6 +194,13 @@ func (s *serviceAccount) Admit(a admission.Attributes) (err error) {
 }
 
 func (s *serviceAccount) Validate(a admission.Attributes) (err error) {
+	if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenant, err := multitenancyutil.TransformTenantInfoFromUser(a.GetUserInfo())
+		if err != nil {
+			return err
+		}
+		s = s.ShallowCopyWithTenant(tenant).(*serviceAccount)
+	}
 	if shouldIgnore(a) {
 		return nil
 	}

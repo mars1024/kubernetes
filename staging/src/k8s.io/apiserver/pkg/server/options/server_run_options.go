@@ -40,6 +40,7 @@ type ServerRunOptions struct {
 	ExternalHost                string
 	MaxRequestsInFlight         int
 	MaxMutatingRequestsInFlight int
+	MaxWatchRequestsInFlight    int
 	RequestTimeout              time.Duration
 	MinRequestTimeout           int
 	TargetRAMMB                 int
@@ -50,6 +51,7 @@ func NewServerRunOptions() *ServerRunOptions {
 	return &ServerRunOptions{
 		MaxRequestsInFlight:         defaults.MaxRequestsInFlight,
 		MaxMutatingRequestsInFlight: defaults.MaxMutatingRequestsInFlight,
+		MaxWatchRequestsInFlight:    defaults.MaxWatchRequestsInFlight,
 		RequestTimeout:              defaults.RequestTimeout,
 		MinRequestTimeout:           defaults.MinRequestTimeout,
 	}
@@ -61,6 +63,7 @@ func (s *ServerRunOptions) ApplyTo(c *server.Config) error {
 	c.ExternalAddress = s.ExternalHost
 	c.MaxRequestsInFlight = s.MaxRequestsInFlight
 	c.MaxMutatingRequestsInFlight = s.MaxMutatingRequestsInFlight
+	c.MaxWatchRequestsInFlight = s.MaxWatchRequestsInFlight
 	c.RequestTimeout = s.RequestTimeout
 	c.MinRequestTimeout = s.MinRequestTimeout
 	c.PublicAddress = s.AdvertiseAddress
@@ -97,6 +100,10 @@ func (s *ServerRunOptions) Validate() []error {
 	}
 	if s.MaxMutatingRequestsInFlight < 0 {
 		errors = append(errors, fmt.Errorf("--max-mutating-requests-inflight can not be negative value"))
+	}
+
+	if s.MaxWatchRequestsInFlight < 0 {
+		errors = append(errors, fmt.Errorf("--max-watch-requests-inflight can not be negative value"))
 	}
 
 	if s.RequestTimeout.Nanoseconds() < 0 {
@@ -141,6 +148,10 @@ func (s *ServerRunOptions) AddUniversalFlags(fs *pflag.FlagSet) {
 
 	fs.IntVar(&s.MaxMutatingRequestsInFlight, "max-mutating-requests-inflight", s.MaxMutatingRequestsInFlight, ""+
 		"The maximum number of mutating requests in flight at a given time. When the server exceeds this, "+
+		"it rejects requests. Zero for no limit.")
+
+	fs.IntVar(&s.MaxWatchRequestsInFlight, "max-watch-requests-inflight", s.MaxWatchRequestsInFlight, ""+
+		"The maximum number of watch requests in flight at a given time. When the server exceeds this, "+
 		"it rejects requests. Zero for no limit.")
 
 	fs.DurationVar(&s.RequestTimeout, "request-timeout", s.RequestTimeout, ""+

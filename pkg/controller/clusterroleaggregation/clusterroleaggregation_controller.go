@@ -22,6 +22,8 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancycache "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/cache"
 
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -30,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	rbacinformers "k8s.io/client-go/informers/rbac/v1"
 	rbacclient "k8s.io/client-go/kubernetes/typed/rbac/v1"
 	rbaclisters "k8s.io/client-go/listers/rbac/v1"
@@ -74,9 +77,12 @@ func NewClusterRoleAggregation(clusterRoleInformer rbacinformers.ClusterRoleInfo
 }
 
 func (c *ClusterRoleAggregationController) syncClusterRole(key string) error {
-	_, name, err := cache.SplitMetaNamespaceKey(key)
+	tenant, _, name, err := multitenancycache.MultiTenancySplitKeyWrapper(cache.SplitMetaNamespaceKey)(key)
 	if err != nil {
 		return err
+	}
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		c = c.ShallowCopyWithTenant(tenant).(*ClusterRoleAggregationController)
 	}
 	sharedClusterRole, err := c.clusterRoleLister.Get(name)
 	if errors.IsNotFound(err) {

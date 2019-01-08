@@ -36,7 +36,7 @@ message_notify() {
                     "msgtype": "markdown",
                     "markdown": {
                         "title": "sigmalet check",
-                        "text": " operator: '"${operator}"' \n '"$ct"' \n @'${message_receiver}' \n "
+                        "text": " operator: '"${operator}"'  '"$ct"' \n @'${message_receiver}'  "
                         },
                     "at": {
                              "atMobiles": [

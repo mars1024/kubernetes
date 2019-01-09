@@ -61,6 +61,8 @@ import (
 	"k8s.io/kubernetes/pkg/quota/generic"
 	quotainstall "k8s.io/kubernetes/pkg/quota/install"
 	"k8s.io/kubernetes/pkg/util/metrics"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancygarbagecollector "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/controller/garbagecollector"
 )
 
 func startServiceController(ctx ControllerContext) (http.Handler, bool, error) {
@@ -377,6 +379,29 @@ func startGarbageCollectorController(ctx ControllerContext) (http.Handler, bool,
 	for _, r := range ctx.ComponentConfig.GarbageCollectorController.GCIgnoredResources {
 		ignoredResources[schema.GroupResource{Group: r.Group, Resource: r.Resource}] = struct{}{}
 	}
+
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		garbageCollector, err := multitenancygarbagecollector.NewGarbageCollector(
+			dynamicClient,
+			ctx.RESTMapper,
+			deletableResources,
+			ignoredResources,
+			ctx.InformerFactory,
+			ctx.InformersStarted,
+		)
+		if err != nil {
+			return nil, true, fmt.Errorf("Failed to start the generic garbage collector: %v", err)
+		}
+		workers := int(ctx.ComponentConfig.GarbageCollectorController.ConcurrentGCSyncs)
+		go garbageCollector.Run(workers, ctx.Stop)
+
+		// Periodically refresh the RESTMapper with new discovery information and sync
+		// the garbage collector.
+		go garbageCollector.Sync(gcClientset.Discovery(), 30*time.Second, ctx.Stop)
+
+		return multitenancygarbagecollector.NewDebugHandler(garbageCollector), true, nil
+	}
+
 	garbageCollector, err := garbagecollector.NewGarbageCollector(
 		dynamicClient,
 		ctx.RESTMapper,

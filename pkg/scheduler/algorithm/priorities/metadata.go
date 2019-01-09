@@ -21,7 +21,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/kubernetes/pkg/scheduler/algorithm"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	schedulercache "k8s.io/kubernetes/pkg/scheduler/cache"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 )
 
 // PriorityMetadataFactory is a factory to produce PriorityMetadata.
@@ -59,6 +62,10 @@ func (pmf *PriorityMetadataFactory) PriorityMetadata(pod *v1.Pod, nodeNameToInfo
 	// If we cannot compute metadata, just return nil
 	if pod == nil {
 		return nil
+	}
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+		pmf = pmf.ShallowCopyWithTenant(tenantInfo).(*PriorityMetadataFactory)
 	}
 	return &priorityMetadata{
 		nonZeroRequest:          getNonZeroRequests(pod),

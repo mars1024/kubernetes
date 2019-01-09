@@ -25,6 +25,10 @@ import (
 	schedulerapi "k8s.io/kubernetes/pkg/scheduler/api"
 	schedulercache "k8s.io/kubernetes/pkg/scheduler/cache"
 	utilnode "k8s.io/kubernetes/pkg/util/node"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
+
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 
 	"github.com/golang/glog"
 )
@@ -70,6 +74,10 @@ func (s *SelectorSpread) CalculateSpreadPriorityMap(pod *v1.Pod, meta interface{
 		return schedulerapi.HostPriority{}, fmt.Errorf("node not found")
 	}
 
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+		s = s.ShallowCopyWithTenant(tenantInfo).(*SelectorSpread)
+	}
 	priorityMeta, ok := meta.(*priorityMetadata)
 	if ok {
 		selectors = priorityMeta.podSelectors
@@ -224,6 +232,10 @@ func (s *ServiceAntiAffinity) CalculateAntiAffinityPriorityMap(pod *v1.Pod, meta
 	node := nodeInfo.Node()
 	if node == nil {
 		return schedulerapi.HostPriority{}, fmt.Errorf("node not found")
+	}
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+		s = s.ShallowCopyWithTenant(tenantInfo).(*ServiceAntiAffinity)
 	}
 	priorityMeta, ok := meta.(*priorityMetadata)
 	if ok {

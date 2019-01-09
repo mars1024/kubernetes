@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -48,6 +49,9 @@ import (
 	"k8s.io/kubernetes/pkg/scheduler/metrics"
 	"k8s.io/kubernetes/pkg/scheduler/util"
 	"k8s.io/kubernetes/pkg/scheduler/volumebinder"
+
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 )
 
 const (
@@ -148,6 +152,8 @@ func (g *genericScheduler) Schedule(pod *v1.Pod, nodeLister algorithm.NodeLister
 	}
 
 	// Used for all fit and priority funcs.
+	// To keep cachedNodeInfoMap keep consistent with scheduler cache nodes info
+	// TODO: should group by tenant
 	err = g.cache.UpdateNodeNameToInfoMap(g.cachedNodeInfoMap)
 	if err != nil {
 		return "", err
@@ -181,6 +187,7 @@ func (g *genericScheduler) Schedule(pod *v1.Pod, nodeLister algorithm.NodeLister
 		return filteredNodes[0].Name, nil
 	}
 
+	// cachedNodeInfoMap contains all nodes from scheduler cache
 	metaPrioritiesInterface := g.priorityMetaProducer(pod, g.cachedNodeInfoMap)
 	priorityList, err := PrioritizeNodes(pod, g.cachedNodeInfoMap, metaPrioritiesInterface, g.prioritizers, filteredNodes, g.extenders)
 	if err != nil {
@@ -451,6 +458,21 @@ func (g *genericScheduler) findNodesThatFit(pod *v1.Pod, nodes []*v1.Node) ([]*v
 			if g.equivalenceCache != nil {
 				nodeCache, _ = g.equivalenceCache.GetNodeCache(nodeName)
 			}
+			nodeInfo := g.cachedNodeInfoMap[nodeName]
+			if nodeInfo.Node() == nil {
+				// TODO: this could break the scheduler behavior
+				return
+			}
+			if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+				// filter out nodes with different tenant info
+				tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+				if node := nodeInfo.Node(); node != nil {
+					nodeTenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(node.Annotations)
+					if !reflect.DeepEqual(tenantInfo, nodeTenantInfo) {
+						return
+					}
+				}
+			}
 			fits, failedPredicates, err := podFitsOnNode(
 				pod,
 				meta,
@@ -493,6 +515,7 @@ func (g *genericScheduler) findNodesThatFit(pod *v1.Pod, nodes []*v1.Node) ([]*v
 		}
 	}
 
+	// no extenders when use default provider
 	if len(filtered) > 0 && len(g.extenders) != 0 {
 		for _, extender := range g.extenders {
 			if !extender.IsInterested(pod) {

@@ -21,12 +21,16 @@ import (
 	"sync"
 	"time"
 
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
+
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	corelisters "k8s.io/client-go/listers/core/v1"
@@ -128,13 +132,26 @@ func (gcc *PodGCController) gcTerminated(pods []*v1.Pod) {
 	var wait sync.WaitGroup
 	for i := 0; i < deleteCount; i++ {
 		wait.Add(1)
-		go func(namespace string, name string) {
-			defer wait.Done()
-			if err := gcc.deletePod(namespace, name); err != nil {
-				// ignore not founds
-				defer utilruntime.HandleError(err)
-			}
-		}(terminatedPods[i].Namespace, terminatedPods[i].Name)
+		if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+			tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(terminatedPods[i].Annotations)
+			// a new gcc variable to resolve following goroutine concurrency issue
+			gcc := gcc.ShallowCopyWithTenant(tenantInfo).(*PodGCController)
+			go func(namespace string, name string) {
+				defer wait.Done()
+				if err := gcc.deletePod(namespace, name); err != nil {
+					// ignore not founds
+					defer utilruntime.HandleError(err)
+				}
+			}(terminatedPods[i].Namespace, terminatedPods[i].Name)
+		} else {
+			go func(namespace string, name string) {
+				defer wait.Done()
+				if err := gcc.deletePod(namespace, name); err != nil {
+					// ignore not founds
+					defer utilruntime.HandleError(err)
+				}
+			}(terminatedPods[i].Namespace, terminatedPods[i].Name)
+		}
 	}
 	wait.Wait()
 }
@@ -156,8 +173,23 @@ func (gcc *PodGCController) gcOrphaned(pods []*v1.Pod) {
 		if pod.Spec.NodeName == "" {
 			continue
 		}
+
 		if nodeNames.Has(pod.Spec.NodeName) {
 			continue
+		}
+
+		if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+			tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+			gcc := gcc.ShallowCopyWithTenant(tenantInfo).(*PodGCController)
+			glog.V(2).Infof("Found orphaned Pod %s/%s/%s/%v/%v assigned to the Node %v. Deleting.", tenantInfo.GetTenantID(), tenantInfo.GetWorkspaceID(),
+				tenantInfo.GetClusterID(), pod.Namespace, pod.Name, pod.Spec.NodeName)
+			if err := gcc.deletePod(pod.Namespace, pod.Name); err != nil {
+				utilruntime.HandleError(err)
+			} else {
+				glog.V(0).Infof("Forced deletion of orphaned Pod  %s/%s/%s/%v/%v succeeded", tenantInfo.GetTenantID(), tenantInfo.GetWorkspaceID(),
+					tenantInfo.GetClusterID(), pod.Namespace, pod.Name)
+			}
+			return
 		}
 		glog.V(2).Infof("Found orphaned Pod %v/%v assigned to the Node %v. Deleting.", pod.Namespace, pod.Name, pod.Spec.NodeName)
 		if err := gcc.deletePod(pod.Namespace, pod.Name); err != nil {
@@ -175,6 +207,11 @@ func (gcc *PodGCController) gcUnscheduledTerminating(pods []*v1.Pod) {
 	for _, pod := range pods {
 		if pod.DeletionTimestamp == nil || len(pod.Spec.NodeName) > 0 {
 			continue
+		}
+
+		if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+			tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+			gcc = gcc.ShallowCopyWithTenant(tenantInfo).(*PodGCController)
 		}
 
 		glog.V(2).Infof("Found unscheduled terminating Pod %v/%v not assigned to any Node. Deleting.", pod.Namespace, pod.Name)

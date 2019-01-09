@@ -36,11 +36,14 @@ import (
 
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/client-go/tools/cache"
 	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
 	"k8s.io/kubernetes/pkg/scheduler/algorithm/predicates"
 	priorityutil "k8s.io/kubernetes/pkg/scheduler/algorithm/priorities/util"
 	"k8s.io/kubernetes/pkg/scheduler/util"
+	multitenancycache "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/cache"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
 )
 
 // SchedulingQueue is an interface for a queue to store pods waiting to be scheduled.
@@ -146,6 +149,9 @@ func (f *FIFO) WaitingPodsForNode(nodeName string) []*v1.Pod {
 
 // NewFIFO creates a FIFO object.
 func NewFIFO() *FIFO {
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		return &FIFO{FIFO: cache.NewFIFO(multitenancycache.MultiTenancyKeyFuncWrapper(cache.MetaNamespaceKeyFunc))}
+	}
 	return &FIFO{FIFO: cache.NewFIFO(cache.MetaNamespaceKeyFunc)}
 }
 
@@ -192,6 +198,9 @@ func NewPriorityQueue() *PriorityQueue {
 		nominatedPods:  map[string][]*v1.Pod{},
 	}
 	pq.cond.L = &pq.lock
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		pq.activeQ = newHeap(MultiTenancyKeyFuncWrapper(cache.MetaNamespaceKeyFunc), util.HigherPriorityPod)
+	}
 	return pq
 }
 

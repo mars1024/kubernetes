@@ -49,6 +49,8 @@ import (
 	volumeutil "k8s.io/kubernetes/pkg/volume/util"
 
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 )
 
 const (
@@ -1129,6 +1131,10 @@ func NewServiceAffinityPredicate(podLister algorithm.PodLister, serviceLister al
 // WARNING: This Predicate is NOT guaranteed to work if some of the predicateMetadata data isn't precomputed...
 // For that reason it is not exported, i.e. it is highly coupled to the implementation of the FitPredicate construction.
 func (s *ServiceAffinity) checkServiceAffinity(pod *v1.Pod, meta algorithm.PredicateMetadata, nodeInfo *schedulercache.NodeInfo) (bool, []algorithm.PredicateFailureReason, error) {
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+		s = s.ShallowCopyWithTenant(tenantInfo).(*ServiceAffinity)
+	}
 	var services []*v1.Service
 	var pods []*v1.Pod
 	if pm, ok := meta.(*predicateMetadata); ok && (pm.serviceAffinityMatchingPodList != nil || pm.serviceAffinityMatchingPodServices != nil) {
@@ -1296,6 +1302,10 @@ func (c *PodAffinityChecker) InterPodAffinityMatches(pod *v1.Pod, meta algorithm
 	if node == nil {
 		return false, nil, fmt.Errorf("node not found")
 	}
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+		c = c.ShallowCopyWithTenant(tenantInfo).(*PodAffinityChecker)
+	}
 	if failedPredicates, error := c.satisfiesExistingPodsAntiAffinity(pod, meta, nodeInfo); failedPredicates != nil {
 		failedPredicates := append([]algorithm.PredicateFailureReason{ErrPodAffinityNotMatch}, failedPredicates)
 		return false, failedPredicates, error
@@ -1413,7 +1423,7 @@ func (c *PodAffinityChecker) getMatchingAntiAffinityTopologyPairsOfPods(pod *v1.
 		existingPodNode, err := c.info.GetNodeInfo(existingPod.Spec.NodeName)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				glog.Errorf("Node not found, %v", existingPod.Spec.NodeName)
+				glog.Errorf("Node not found when check pod %v %v", pod.Name, existingPod.Spec.NodeName)
 				continue
 			}
 			return nil, err
@@ -1766,6 +1776,10 @@ func (c *VolumeBindingChecker) predicate(pod *v1.Pod, meta algorithm.PredicateMe
 		return false, nil, fmt.Errorf("node not found")
 	}
 
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+		c = c.ShallowCopyWithTenant(tenantInfo).(*VolumeBindingChecker)
+	}
 	unboundSatisfied, boundSatisfied, err := c.binder.Binder.FindPodVolumes(pod, node)
 	if err != nil {
 		return false, nil, err

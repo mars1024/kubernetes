@@ -63,6 +63,9 @@ import (
 	"k8s.io/kubernetes/pkg/scheduler/core/equivalence"
 	"k8s.io/kubernetes/pkg/scheduler/util"
 	"k8s.io/kubernetes/pkg/scheduler/volumebinder"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancymeta "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/meta"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 )
 
 const (
@@ -314,6 +317,11 @@ func NewConfigFactory(args *ConfigFactoryArgs) scheduler.Configurator {
 				DeleteFunc: c.onStorageClassDelete,
 			},
 		)
+	}
+
+	// multi tenancy pod lister
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		c.podLister = getPodListerAdapter(schedulerCache)
 	}
 
 	// Setup cache comparer
@@ -1130,6 +1138,24 @@ func (c *configFactory) CreateFromConfig(policy schedulerapi.Policy) (*scheduler
 	return c.CreateFromKeys(predicateKeys, priorityKeys, extenders)
 }
 
+func getPodListerAdapter(cache schedulercache.Cache) algorithm.PodLister {
+	return &podListerAdapter{
+		filteredListFunc: cache.FilteredList,
+	}
+}
+
+type podListerAdapter struct {
+	filteredListFunc func(podFilter schedulercache.PodFilter, selector labels.Selector) ([]*v1.Pod, error)
+}
+
+func (p *podListerAdapter) List(selector labels.Selector) ([]*v1.Pod, error) {
+	return p.filteredListFunc(func(pod *v1.Pod) bool { return true }, selector)
+}
+
+func (p *podListerAdapter) FilteredList(podFilter schedulercache.PodFilter, selector labels.Selector) ([]*v1.Pod, error) {
+	return p.filteredListFunc(podFilter, selector)
+}
+
 // getBinderFunc returns an func which returns an extender that supports bind or a default binder based on the given pod.
 func (c *configFactory) getBinderFunc(extenders []algorithm.SchedulerExtender) func(pod *v1.Pod) scheduler.Binder {
 	var extenderBinder algorithm.SchedulerExtender
@@ -1401,6 +1427,17 @@ func NewPodInformer(client clientset.Interface, resyncPeriod time.Duration) core
 
 func (c *configFactory) MakeDefaultErrorFunc(backoff *util.PodBackoff, podQueue core.SchedulingQueue) func(pod *v1.Pod, err error) {
 	return func(pod *v1.Pod, err error) {
+		kubeClient := c.client
+		if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+			tenantClient := kubeClient.(multitenancymeta.TenantWise)
+			tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+			kubeClient = tenantClient.ShallowCopyWithTenant(tenantInfo).(clientset.Interface)
+		}
+		volumeBinder := c.volumeBinder
+		if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) && volumeBinder != nil {
+			tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+			volumeBinder = volumeBinder.ShallowCopyWithTenant(tenantInfo).(*volumebinder.VolumeBinder)
+		}
 		if err == core.ErrNoNodesAvailable {
 			glog.V(4).Infof("Unable to schedule %v/%v: no nodes are registered to the cluster; waiting", pod.Namespace, pod.Name)
 		} else {
@@ -1411,7 +1448,7 @@ func (c *configFactory) MakeDefaultErrorFunc(backoff *util.PodBackoff, podQueue 
 					nodeName := errStatus.Status().Details.Name
 					// when node is not found, We do not remove the node right away. Trying again to get
 					// the node and if the node is still not found, then remove it from the scheduler cache.
-					_, err := c.client.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
+					_, err := kubeClient.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
 					if err != nil && errors.IsNotFound(err) {
 						node := v1.Node{ObjectMeta: metav1.ObjectMeta{Name: nodeName}}
 						// NOTE: Because the scheduler uses snapshots of schedulerCache and the live
@@ -1454,14 +1491,14 @@ func (c *configFactory) MakeDefaultErrorFunc(backoff *util.PodBackoff, podQueue 
 			// Get the pod again; it may have changed/been scheduled already.
 			getBackoff := initialGetBackoff
 			for {
-				pod, err := c.client.CoreV1().Pods(podID.Namespace).Get(podID.Name, metav1.GetOptions{})
+				pod, err := kubeClient.CoreV1().Pods(podID.Namespace).Get(podID.Name, metav1.GetOptions{})
 				if err == nil {
 					if len(pod.Spec.NodeName) == 0 {
 						podQueue.AddUnschedulableIfNotPresent(pod)
 					} else {
-						if c.volumeBinder != nil {
+						if volumeBinder != nil {
 							// Volume binder only wants to keep unassigned pods
-							c.volumeBinder.DeletePodBindings(pod)
+							volumeBinder.DeletePodBindings(pod)
 						}
 					}
 					break
@@ -1469,9 +1506,9 @@ func (c *configFactory) MakeDefaultErrorFunc(backoff *util.PodBackoff, podQueue 
 				if errors.IsNotFound(err) {
 					glog.Warningf("A pod %v no longer exists", podID)
 
-					if c.volumeBinder != nil {
+					if volumeBinder != nil {
 						// Volume binder only wants to keep unassigned pods
-						c.volumeBinder.DeletePodBindings(origPod)
+						volumeBinder.DeletePodBindings(origPod)
 					}
 					return
 				}

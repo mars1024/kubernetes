@@ -24,9 +24,24 @@ import (
 	_ "k8s.io/kubernetes/pkg/cloudprovider/providers"
 
 	// Admission policies
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apiserver/pkg/admission"
+	"k8s.io/apiserver/pkg/admission/plugin/initialization"
+	"k8s.io/apiserver/pkg/admission/plugin/namespace/lifecycle"
+	mutatingwebhook "k8s.io/apiserver/pkg/admission/plugin/webhook/mutating"
+	validatingwebhook "k8s.io/apiserver/pkg/admission/plugin/webhook/validating"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/plugin/pkg/admission/admit"
+	"k8s.io/kubernetes/plugin/pkg/admission/alipodinjectionpostschedule"
+	"k8s.io/kubernetes/plugin/pkg/admission/alipodinjectionpreschedule"
+	"k8s.io/kubernetes/plugin/pkg/admission/alipodlifecyclehook"
 	"k8s.io/kubernetes/plugin/pkg/admission/alwayspullimages"
 	"k8s.io/kubernetes/plugin/pkg/admission/antiaffinity"
+	"k8s.io/kubernetes/plugin/pkg/admission/armory"
+	"k8s.io/kubernetes/plugin/pkg/admission/ase"
+	"k8s.io/kubernetes/plugin/pkg/admission/auditdelete"
+	"k8s.io/kubernetes/plugin/pkg/admission/containerstate"
 	"k8s.io/kubernetes/plugin/pkg/admission/defaulttolerationseconds"
 	"k8s.io/kubernetes/plugin/pkg/admission/deny"
 	"k8s.io/kubernetes/plugin/pkg/admission/eventratelimit"
@@ -37,8 +52,11 @@ import (
 	"k8s.io/kubernetes/plugin/pkg/admission/limitranger"
 	"k8s.io/kubernetes/plugin/pkg/admission/namespace/autoprovision"
 	"k8s.io/kubernetes/plugin/pkg/admission/namespace/exists"
+	"k8s.io/kubernetes/plugin/pkg/admission/networkstatus"
+	"k8s.io/kubernetes/plugin/pkg/admission/newalipodinjectionpreschedule"
 	"k8s.io/kubernetes/plugin/pkg/admission/noderestriction"
 	"k8s.io/kubernetes/plugin/pkg/admission/nodetaint"
+	"k8s.io/kubernetes/plugin/pkg/admission/poddeletionflowcontrol"
 	"k8s.io/kubernetes/plugin/pkg/admission/podnodeselector"
 	"k8s.io/kubernetes/plugin/pkg/admission/podpreset"
 	"k8s.io/kubernetes/plugin/pkg/admission/podtolerationrestriction"
@@ -47,29 +65,11 @@ import (
 	"k8s.io/kubernetes/plugin/pkg/admission/security/podsecuritypolicy"
 	"k8s.io/kubernetes/plugin/pkg/admission/securitycontext/scdeny"
 	"k8s.io/kubernetes/plugin/pkg/admission/serviceaccount"
+	"k8s.io/kubernetes/plugin/pkg/admission/sigmascheduling"
 	"k8s.io/kubernetes/plugin/pkg/admission/storage/persistentvolume/label"
 	"k8s.io/kubernetes/plugin/pkg/admission/storage/persistentvolume/resize"
 	"k8s.io/kubernetes/plugin/pkg/admission/storage/storageclass/setdefault"
 	"k8s.io/kubernetes/plugin/pkg/admission/storage/storageobjectinuseprotection"
-
-	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/apiserver/pkg/admission"
-	"k8s.io/apiserver/pkg/admission/plugin/initialization"
-	"k8s.io/apiserver/pkg/admission/plugin/namespace/lifecycle"
-	mutatingwebhook "k8s.io/apiserver/pkg/admission/plugin/webhook/mutating"
-	validatingwebhook "k8s.io/apiserver/pkg/admission/plugin/webhook/validating"
-	utilfeature "k8s.io/apiserver/pkg/util/feature"
-	"k8s.io/kubernetes/pkg/features"
-	"k8s.io/kubernetes/plugin/pkg/admission/alipodinjectionpostschedule"
-	"k8s.io/kubernetes/plugin/pkg/admission/alipodinjectionpreschedule"
-	"k8s.io/kubernetes/plugin/pkg/admission/alipodlifecyclehook"
-	"k8s.io/kubernetes/plugin/pkg/admission/armory"
-	"k8s.io/kubernetes/plugin/pkg/admission/auditdelete"
-	"k8s.io/kubernetes/plugin/pkg/admission/containerstate"
-	"k8s.io/kubernetes/plugin/pkg/admission/networkstatus"
-	"k8s.io/kubernetes/plugin/pkg/admission/newalipodinjectionpreschedule"
-	"k8s.io/kubernetes/plugin/pkg/admission/poddeletionflowcontrol"
-	"k8s.io/kubernetes/plugin/pkg/admission/sigmascheduling"
 
 	alipayappcert "k8s.io/kubernetes/plugin/pkg/admission/alipay/appcert"
 	alipaycmdb "k8s.io/kubernetes/plugin/pkg/admission/alipay/cmdb"
@@ -152,13 +152,11 @@ var AllOrderedPlugins = []string{
 	alipayimagepullsecret.PluginName,      // Alipay image pull secret injection admission
 	alipaysetdefaulthostconfig.PluginName, // Alipay SetDefaultHostConfig
 	alipayresourcemutationbe.PluginName,   // Alipay resource mutation admission for best effort
-<<<<<<< HEAD
 	alipayrouter.PluginName,               // Alipay router mutation admission for container router configuration.
 	alipayreadinessgate.PluginName,        // Alipay readiness fate mutation admission for pod condition.
-=======
 
-	akspodpostschedule.PluginName,           // Alipay AntCloud PodPostSchedule
->>>>>>> [admission][apiserver] initial webhook admission controllers multitenancy support
+	akspodpostschedule.PluginName, // Alipay AntCloud PodPostSchedule
+	ase.PluginName,                // ASE
 }
 
 // RegisterAllAdmissionPlugins registers all admission plugins and
@@ -222,6 +220,7 @@ func RegisterAllAdmissionPlugins(plugins *admission.Plugins) {
 	alipayreadinessgate.Register(plugins)
 
 	akspodpostschedule.Register(plugins)
+	ase.Register(plugins)
 }
 
 // DefaultOffAdmissionPlugins get admission plugins off by default for kube-apiserver.

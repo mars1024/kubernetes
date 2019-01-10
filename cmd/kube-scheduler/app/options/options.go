@@ -49,6 +49,9 @@ import (
 	kubeschedulerscheme "k8s.io/kubernetes/pkg/scheduler/apis/config/scheme"
 	"k8s.io/kubernetes/pkg/scheduler/apis/config/validation"
 	"k8s.io/kubernetes/pkg/scheduler/factory"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancymeta "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/meta"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 )
 
 // Options has all the params needed to run a Scheduler
@@ -245,10 +248,14 @@ func makeLeaderElectionConfig(config kubeschedulerconfig.KubeSchedulerLeaderElec
 	// add a uniquifier so that two processes on the same host don't accidentally both become active
 	id := hostname + "_" + string(uuid.NewUUID())
 
+	coreV1Client := client.CoreV1()
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		coreV1Client = coreV1Client.(multitenancymeta.TenantWise).ShallowCopyWithTenant(multitenancy.AKSAdminTenant).(corev1client.CoreV1Interface)
+	}
 	rl, err := resourcelock.New(config.ResourceLock,
 		config.LockObjectNamespace,
 		config.LockObjectName,
-		client.CoreV1(),
+		coreV1Client,
 		resourcelock.ResourceLockConfig{
 			Identity:      id,
 			EventRecorder: recorder,

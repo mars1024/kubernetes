@@ -70,6 +70,7 @@ import (
 	"k8s.io/kubernetes/plugin/pkg/admission/sigmascheduling"
 
 	alipaycmdb "k8s.io/kubernetes/plugin/pkg/admission/alipay/cmdb"
+	alipayimagepullsecret "k8s.io/kubernetes/plugin/pkg/admission/alipay/imagepullsecret"
 	alipayinclusterkube "k8s.io/kubernetes/plugin/pkg/admission/alipay/inclusterkube"
 	alipaymosnsidecar "k8s.io/kubernetes/plugin/pkg/admission/alipay/mosnsidecar"
 	alipaypodlocation "k8s.io/kubernetes/plugin/pkg/admission/alipay/podlocation"
@@ -124,12 +125,13 @@ var AllOrderedPlugins = []string{
 	alipodinjectionpostschedule.PluginName, // AliPodInjectionPostSchedule
 	poddeletionflowcontrol.PluginName,      // PodDeletionFlowControl
 
-	alipaysetdefault.PluginName,    // Alipay SetDefault
-	alipaycmdb.PluginName,          // Alipay CMDB
-	alipayinclusterkube.PluginName, // Alipay in-cluster kubernetes service
-	alipaypodlocation.PluginName,   // Alipay PodLocation
-	alipaypodpreset.PluginName,     // Alipay PodPreset
-	alipayzappinfo.PluginName,      // Alipay ZAppInfo
+	alipaysetdefault.PluginName,      // Alipay SetDefault
+	alipaycmdb.PluginName,            // Alipay CMDB
+	alipayinclusterkube.PluginName,   // Alipay in-cluster kubernetes service
+	alipaypodlocation.PluginName,     // Alipay PodLocation
+	alipaypodpreset.PluginName,       // Alipay PodPreset
+	alipayzappinfo.PluginName,        // Alipay ZAppInfo
+	alipayimagepullsecret.PluginName, // Alipay image pull secret injection admission
 }
 
 // RegisterAllAdmissionPlugins registers all admission plugins and
@@ -180,6 +182,7 @@ func RegisterAllAdmissionPlugins(plugins *admission.Plugins) {
 	alipaypodlocation.Register(plugins)
 	alipaypodpreset.Register(plugins)
 	alipayzappinfo.Register(plugins)
+	alipayimagepullsecret.Register(plugins)
 }
 
 // DefaultOffAdmissionPlugins get admission plugins off by default for kube-apiserver.

@@ -289,3 +289,16 @@ func GetDanglingPodsFromNodeAnnotation(node *v1.Node) ([]sigmak8sapi.DanglingPod
 	}
 	return danglingPods, nil
 }
+
+// GetPodAnnotationByName get annotation value by annotation name
+func GetPodAnnotationByName(pod *v1.Pod, annotationName string) string {
+	if pod == nil {
+		glog.V(4).Info("invalid pod, pod is nil")
+		return ""
+	}
+	if len(pod.Annotations) == 0 {
+		glog.V(4).Infof("pod %s, annotation is nil", format.Pod(pod))
+		return ""
+	}
+	return pod.Annotations[annotationName]
+}

@@ -231,3 +231,34 @@ func TestGetAnnotationValue(t *testing.T) {
 		})
 	}
 }
+
+func TestSkipPodBecausePending(t *testing.T) {
+	tests := []struct {
+		name string
+		pod  *v1.Pod
+		skip bool
+	}{
+		{
+			name: "pod is nil,should not skip and kill",
+			pod:  nil,
+			skip: false,
+		},
+		{
+			name: "time out is zero,should skip and not kill",
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						sigmak8sapi.AnnotationPodPendingTimeSeconds: "0",
+					},
+				},
+			},
+			skip: true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			skip := skipPodBecausePending(test.pod)
+			assert.Equal(t, skip, test.skip)
+		})
+	}
+}

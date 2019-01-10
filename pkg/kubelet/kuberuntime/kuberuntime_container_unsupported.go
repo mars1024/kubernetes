@@ -27,3 +27,8 @@ import (
 func (m *kubeGenericRuntimeManager) applyPlatformSpecificContainerConfig(config *runtimeapi.ContainerConfig, container *v1.Container, pod *v1.Pod, uid *int64, username string) error {
 	return nil
 }
+
+// generateLinuxContainerConfig generates linux container config for kubelet runtime v1.
+func (m *kubeGenericRuntimeManager) generateLinuxContainerConfig(container *v1.Container, pod *v1.Pod, uid *int64, username string) *runtimeapi.LinuxContainerConfig {
+	return &runtimeapi.LinuxContainerConfig{}
+}

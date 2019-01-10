@@ -465,6 +465,7 @@ func (m *kubeGenericRuntimeManager) upgradeContainerCommon(containerStatus *kube
 		switch {
 		case err == images.ErrImagePullBackOff:
 			glog.V(3).Infof("container start failed: %v: %s", err, msg)
+			return nil, err.Error() + ":" + msg, err
 		default:
 			utilruntime.HandleError(fmt.Errorf("container start failed: %v: %s", err, msg))
 		}

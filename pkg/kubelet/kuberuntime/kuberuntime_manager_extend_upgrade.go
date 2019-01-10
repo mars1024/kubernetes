@@ -264,16 +264,8 @@ func (m *kubeGenericRuntimeManager) createContainerExtension(podSandboxID string
 			containerConfig.QuotaId = parentContainerStatus.QuotaId
 			containerConfig.Linux.Resources.DiskQuota = parentContainerStatus.Resources.DiskQuota
 		} else {
-			limitEphemeralStorage, limitESExists := container.Resources.Limits[v1.ResourceEphemeralStorage]
-			requestEphemeralStorage, requestESExists := container.Resources.Requests[v1.ResourceEphemeralStorage]
-			if limitESExists && requestESExists && !limitEphemeralStorage.IsZero() && limitEphemeralStorage.Cmp(requestEphemeralStorage) == 0 {
-				// 2.0 container to 3.1 container, quota id not empty
-				if containerConfig.QuotaId == "" {
-					// Set QuotaId as -1 to generate a new quotaid.
-					containerConfig.QuotaId = "-1"
-				}
-				containerConfig.Linux.Resources.DiskQuota = map[string]string{".*": getDiskSize(limitEphemeralStorage.String())}
-			}
+			// Set "/" quota as the size of ephemeral storage.
+			applyDiskQuota(pod, container, containerConfig)
 		}
 	}
 

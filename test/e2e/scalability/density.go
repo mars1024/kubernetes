@@ -395,7 +395,7 @@ var _ = SIGDescribe("Density", func() {
 	missingMeasurements := 0
 	var testPhaseDurations *timer.TestPhaseTimer
 	var profileGathererStopCh chan struct{}
-	var etcdMetricsCollector *framework.EtcdMetricsCollector
+	//var etcdMetricsCollector *framework.EtcdMetricsCollector
 
 	readConfig := func() (int) {
 		// Read in configuration settings, reasonable defaults.
@@ -440,28 +440,28 @@ var _ = SIGDescribe("Density", func() {
 		}
 
 		// Summarize scheduler metrics.
-		latency, err := framework.VerifySchedulerLatency(c)
+		//latency, err := framework.VerifySchedulerLatency(c)
 		//framework.ExpectNoError(err)
-		if err == nil {
-			// Compute avg and quantiles of throughput (excluding last element, that's usually an outlier).
-			sampleSize := len(scheduleThroughputs)
-			if sampleSize > 1 {
-				scheduleThroughputs = scheduleThroughputs[:sampleSize-1]
-				sort.Float64s(scheduleThroughputs)
-				latency.ThroughputAverage = computeAverage(scheduleThroughputs)
-				latency.ThroughputPerc50 = computeQuantile(scheduleThroughputs, 0.5)
-				latency.ThroughputPerc90 = computeQuantile(scheduleThroughputs, 0.9)
-				latency.ThroughputPerc99 = computeQuantile(scheduleThroughputs, 0.99)
-			}
-			summaries = append(summaries, latency)
-		}
+		//if err == nil {
+		//	// Compute avg and quantiles of throughput (excluding last element, that's usually an outlier).
+		//	sampleSize := len(scheduleThroughputs)
+		//	if sampleSize > 1 {
+		//		scheduleThroughputs = scheduleThroughputs[:sampleSize-1]
+		//		sort.Float64s(scheduleThroughputs)
+		//		latency.ThroughputAverage = computeAverage(scheduleThroughputs)
+		//		latency.ThroughputPerc50 = computeQuantile(scheduleThroughputs, 0.5)
+		//		latency.ThroughputPerc90 = computeQuantile(scheduleThroughputs, 0.9)
+		//		latency.ThroughputPerc99 = computeQuantile(scheduleThroughputs, 0.99)
+		//	}
+		//	summaries = append(summaries, latency)
+		//}
 
 		// Summarize etcd metrics.
-		err = etcdMetricsCollector.StopAndSummarize()
+		//err = etcdMetricsCollector.StopAndSummarize()
 		//framework.ExpectNoError(err)
-		if err == nil {
-			summaries = append(summaries, etcdMetricsCollector.GetMetrics())
-		}
+		//if err == nil {
+		//	summaries = append(summaries, etcdMetricsCollector.GetMetrics())
+		//}
 
 		summaries = append(summaries, testPhaseDurations)
 
@@ -529,8 +529,8 @@ var _ = SIGDescribe("Density", func() {
 		profileGathererStopCh = framework.StartCPUProfileGatherer("kube-apiserver", "density", profileGatheringDelay)
 
 		// Start etcs metrics collection.
-		etcdMetricsCollector = framework.NewEtcdMetricsCollector()
-		etcdMetricsCollector.StartCollecting(time.Minute)
+		//etcdMetricsCollector = framework.NewEtcdMetricsCollector()
+		//etcdMetricsCollector.StartCollecting(time.Minute)
 	})
 
 	type Density struct {

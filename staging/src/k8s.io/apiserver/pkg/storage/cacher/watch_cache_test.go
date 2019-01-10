@@ -436,7 +436,7 @@ func TestReflectorForWatchCache(t *testing.T) {
 	}
 }
 
-func TestWaitUntilFreshAndList2(t *testing.T) {
+func TestWaitUntilFreshAndListWithIndex(t *testing.T) {
 	store := newTestWatchCache(3, &cache.Indexers{
 		"label": pod.PodLabelIndexFunc("label"),
 		"spec.nodeName": pod.NodeNameIndexFunc,
@@ -453,7 +453,7 @@ func TestWaitUntilFreshAndList2(t *testing.T) {
 		{IndexName: "label", Value: "value1"},
 		{IndexName: "spec.nodeName", Value: "node2"},
 	}
-	list, resourceVersion, err := store.WaitUntilFreshAndList2(5, matchValues, nil)
+	list, resourceVersion, err := store.WaitUntilFreshAndListWithIndex(5, matchValues, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -468,7 +468,7 @@ func TestWaitUntilFreshAndList2(t *testing.T) {
 		{IndexName: "not-exist-label", Value: "whatever"},
 		{IndexName: "spec.nodeName", Value: "node2"},
 	}
-	list, resourceVersion, err = store.WaitUntilFreshAndList2(5, matchValues, nil)
+	list, resourceVersion, err = store.WaitUntilFreshAndListWithIndex(5, matchValues, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -483,7 +483,7 @@ func TestWaitUntilFreshAndList2(t *testing.T) {
 	matchValues = []storage.MatchValue{
 		{IndexName: "not-exist-label", Value: "whatever"},
 	}
-	list, resourceVersion, err = store.WaitUntilFreshAndList2(5, matchValues, nil)
+	list, resourceVersion, err = store.WaitUntilFreshAndListWithIndex(5, matchValues, nil)
 	if resourceVersion != 5 {
 		t.Errorf("unexpected resourceVersion: %v, expected: 5", resourceVersion)
 	}

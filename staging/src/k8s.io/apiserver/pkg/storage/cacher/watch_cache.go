@@ -353,7 +353,7 @@ func (w *watchCache) WaitUntilFreshAndList(resourceVersion uint64, trace *utiltr
 }
 
 // Don't change the WaitUntilFreshAndList for upstream compatibility.
-func (w *watchCache) WaitUntilFreshAndList2(resourceVersion uint64, matchValues []storage.MatchValue, trace *utiltrace.Trace) ([]interface{}, uint64, error) {
+func (w *watchCache) WaitUntilFreshAndListWithIndex(resourceVersion uint64, matchValues []storage.MatchValue, trace *utiltrace.Trace) ([]interface{}, uint64, error) {
 	err := w.waitUntilFreshAndBlock(resourceVersion, trace)
 	defer w.RUnlock()
 	if err != nil {

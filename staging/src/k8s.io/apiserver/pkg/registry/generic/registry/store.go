@@ -46,6 +46,7 @@ import (
 	storeerr "k8s.io/apiserver/pkg/storage/errors"
 	"k8s.io/apiserver/pkg/storage/etcd/metrics"
 	"k8s.io/apiserver/pkg/util/dryrun"
+	"k8s.io/client-go/tools/cache"
 
 	"github.com/golang/glog"
 )
@@ -1366,7 +1367,7 @@ func (e *Store) CompleteWithOptions(options *generic.StoreOptions) error {
 
 	indexers := options.Indexers
 	if indexers == nil {
-		indexers = storage.NoIndexers()
+		indexers = &cache.Indexers{}
 	}
 
 	if e.DeleteCollectionWorkers == 0 {

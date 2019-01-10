@@ -134,7 +134,6 @@ func (s *SelectionPredicate) MatchesSingle() (string, bool) {
 // For any index defined by IndexFields, if a matcher can match only (a subset)
 // of objects that return <value> for a given index, a pair (<index name>, <value>)
 // wil be returned.
-// TODO: Consider supporting also labels.
 func (s *SelectionPredicate) MatcherIndex() []MatchValue {
 	var result []MatchValue
 	for _, field := range s.IndexFields {

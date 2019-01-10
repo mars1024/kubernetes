@@ -84,8 +84,8 @@ const (
 	// owner: @fansong.cfs
 	// alpha: v1.12
 	//
-	// Allow index labels in apiserver, so that list operations get accelerated.
-	LabelSelectorIndex utilfeature.Feature = "LabelSelectorIndex"
+	// Allow index labels and fields in apiserver, so that list operations get accelerated.
+	SelectorIndex utilfeature.Feature = "SelectorIndex"
 )
 
 func init() {
@@ -103,5 +103,5 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	Initializers:            {Default: false, PreRelease: utilfeature.Alpha},
 	APIListChunking:         {Default: true, PreRelease: utilfeature.Beta},
 	DryRun:                  {Default: false, PreRelease: utilfeature.Alpha},
-	LabelSelectorIndex:      {Default: false, PreRelease: utilfeature.Alpha},
+	SelectorIndex:           {Default: false, PreRelease: utilfeature.Alpha},
 }

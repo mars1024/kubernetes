@@ -515,7 +515,7 @@ func (c *Cacher) List(ctx context.Context, key string, resourceVersion string, p
 	}
 	filter := filterWithAttrsFunction(key, pred)
 
-	objs, readResourceVersion, err := c.watchCache.WaitUntilFreshAndList2(listRV, pred.MatcherIndex(), trace)
+	objs, readResourceVersion, err := c.watchCache.WaitUntilFreshAndListWithIndex(listRV, pred.MatcherIndex(), trace)
 	if err != nil {
 		return err
 	}

@@ -25,6 +25,8 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/fake"
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	containertest "k8s.io/kubernetes/pkg/kubelet/container/testing"
@@ -182,6 +184,15 @@ func TestSandboxGC(t *testing.T) {
 func TestContainerGC(t *testing.T) {
 	fakeRuntime, _, m, err := createTestRuntimeManager()
 	assert.NoError(t, err)
+	m.containerGC.kubeClient = fake.NewSimpleClientset()
+	m.containerGC.nodeName = "host"
+	node := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "host",
+		},
+	}
+	_, err = m.containerGC.kubeClient.CoreV1().Nodes().Create(node)
+	assert.Equal(t, err, nil)
 
 	podStateProvider := m.containerGC.podStateProvider.(*fakePodStateProvider)
 	makeGCContainer := func(podName, containerName string, attempt int, createdAt int64, state runtimeapi.ContainerState) containerTemplate {

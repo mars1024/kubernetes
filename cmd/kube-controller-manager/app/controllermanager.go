@@ -33,6 +33,7 @@ import (
 	"github.com/spf13/cobra"
 	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
 	multitenancycache "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/cache"
+	multitenancymeta "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/meta"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -49,6 +50,7 @@ import (
 	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	certutil "k8s.io/client-go/util/cert"
 	genericcontrollermanager "k8s.io/kubernetes/cmd/controller-manager/app"
 	"k8s.io/kubernetes/cmd/kube-controller-manager/app/config"
@@ -223,12 +225,16 @@ func Run(c *config.CompletedConfig, stopCh <-chan struct{}) error {
 		return err
 	}
 
+	coreV1Client := c.LeaderElectionClient.CoreV1()
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		coreV1Client = coreV1Client.(multitenancymeta.TenantWise).ShallowCopyWithTenant(multitenancy.AKSAdminTenant).(corev1client.CoreV1Interface)
+	}
 	// add a uniquifier so that two processes on the same host don't accidentally both become active
 	id = id + "_" + string(uuid.NewUUID())
 	rl, err := resourcelock.New(c.ComponentConfig.Generic.LeaderElection.ResourceLock,
 		"kube-system",
 		"kube-controller-manager",
-		c.LeaderElectionClient.CoreV1(),
+		coreV1Client,
 		resourcelock.ResourceLockConfig{
 			Identity:      id,
 			EventRecorder: c.EventRecorder,

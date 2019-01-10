@@ -165,10 +165,14 @@ func GeneratePodStatus(container *v1.Container) *kubecontainer.PodStatus {
 }
 
 func TestUpgradeRunningContainer(t *testing.T) {
-	fakeRuntime, _, m, _ := createTestRuntimeManager()
+	fakeRuntime, fakeImageService, m, _ := createTestRuntimeManager()
 	testPod := GenerateTestPod()
 	userinfoBackup := GenerateTestUserinfoBackup()
 	m.userinfoBackup = userinfoBackup
+	image := testPod.Spec.Containers[0].Image
+	fakeImageService.Images = map[string]*runtimeapi.Image{
+		image: {Id: "123", Size_: ext4MaxFileNameLen},
+	}
 
 	// Fake all the things you need before trying to create a container
 	fakeSandBox, _ := makeAndSetFakePod(t, m, fakeRuntime, testPod)
@@ -176,7 +180,7 @@ func TestUpgradeRunningContainer(t *testing.T) {
 	testContainer := &testPod.Spec.Containers[0]
 	fakePodStatus := GeneratePodStatus(testContainer)
 	// Try to create a container
-	createResult, _, err := m.createContainerExtension(fakeSandBox.Id, fakeSandBoxConfig, testContainer, testPod, fakePodStatus, nil, nil, "", kubecontainer.ContainerTypeRegular, nil)
+	createResult, _, err := m.createContainerExtension(fakeSandBox.Id, fakeSandBoxConfig, testContainer, testPod, fakePodStatus, nil, "", "", kubecontainer.ContainerTypeRegular, nil)
 	if err != nil {
 		t.Errorf("createContainer error =%v", err)
 	}
@@ -198,18 +202,21 @@ func TestUpgradeRunningContainer(t *testing.T) {
 }
 
 func TestUpgradeContainerCaseRunning(t *testing.T) {
-	fakeRuntime, _, m, _ := createTestRuntimeManager()
+	fakeRuntime, fakeImageService, m, _ := createTestRuntimeManager()
 	testPod := GenerateTestPod()
 	userinfoBackup := GenerateTestUserinfoBackup()
 	m.userinfoBackup = userinfoBackup
-
+	image := testPod.Spec.Containers[0].Image
+	fakeImageService.Images = map[string]*runtimeapi.Image{
+		image: {Id: "123", Size_: ext4MaxFileNameLen},
+	}
 	// Fake all the things you need before trying to create a container
 	fakeSandBox, _ := makeAndSetFakePod(t, m, fakeRuntime, testPod)
 	fakeSandBoxConfig, _ := m.generatePodSandboxConfig(testPod, 0)
 	testContainer := &testPod.Spec.Containers[0]
 	fakePodStatus := GeneratePodStatus(testContainer)
 	// Try to create a container
-	createResult, _, err := m.createContainerExtension(fakeSandBox.Id, fakeSandBoxConfig, testContainer, testPod, fakePodStatus, nil, nil, "", kubecontainer.ContainerTypeRegular, nil)
+	createResult, _, err := m.createContainerExtension(fakeSandBox.Id, fakeSandBoxConfig, testContainer, testPod, fakePodStatus, nil, "", "", kubecontainer.ContainerTypeRegular, nil)
 	if err != nil {
 		t.Errorf("createContainer error =%v", err)
 	}
@@ -231,18 +238,21 @@ func TestUpgradeContainerCaseRunning(t *testing.T) {
 }
 
 func TestUpgradeContainerCaseExited(t *testing.T) {
-	fakeRuntime, _, m, _ := createTestRuntimeManager()
+	fakeRuntime, fakeImageService, m, _ := createTestRuntimeManager()
 	testPod := GenerateTestPod()
 	userinfoBackup := GenerateTestUserinfoBackup()
 	m.userinfoBackup = userinfoBackup
-
+	image := testPod.Spec.Containers[0].Image
+	fakeImageService.Images = map[string]*runtimeapi.Image{
+		image: {Id: "123", Size_: ext4MaxFileNameLen},
+	}
 	// Fake all the things you need before trying to create a container
 	fakeSandBox, _ := makeAndSetFakePod(t, m, fakeRuntime, testPod)
 	fakeSandBoxConfig, _ := m.generatePodSandboxConfig(testPod, 0)
 	testContainer := &testPod.Spec.Containers[0]
 	fakePodStatus := GeneratePodStatus(testContainer)
 	// Try to create a container
-	createResult, _, err := m.createContainerExtension(fakeSandBox.Id, fakeSandBoxConfig, testContainer, testPod, fakePodStatus, nil, nil, "", kubecontainer.ContainerTypeRegular, nil)
+	createResult, _, err := m.createContainerExtension(fakeSandBox.Id, fakeSandBoxConfig, testContainer, testPod, fakePodStatus, nil, "", "", kubecontainer.ContainerTypeRegular, nil)
 	if err != nil {
 		t.Errorf("createContainer error =%v", err)
 	}

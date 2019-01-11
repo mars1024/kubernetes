@@ -735,3 +735,41 @@ func TestGetDanglingPodsFromNodeAnnotation(t *testing.T) {
 
 	}
 }
+
+func TestGetNetPriorityFromAnnotation(t *testing.T) {
+	netPriority := 2
+	tests := []struct {
+		message           string
+		pod               *v1.Pod
+		expectNetPriority int
+	}{
+		{
+			message: "get NetPriority from pod with net priority definition",
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "test",
+					Namespace:   "foo",
+					Annotations: map[string]string{sigmak8sapi.AnnotationNetPriority: strconv.Itoa(netPriority)},
+				},
+			},
+			expectNetPriority: netPriority,
+		},
+		{
+			message: "get NetPriority from pod without net priority definition",
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "test",
+					Namespace:   "foo",
+					Annotations: map[string]string{},
+				},
+			},
+			expectNetPriority: 0,
+		},
+	}
+
+	for _, test := range tests {
+		t.Logf("start to test case: %s", test.message)
+		netPriority := GetNetPriorityFromAnnotation(test.pod)
+		assert.Equal(t, test.expectNetPriority, netPriority)
+	}
+}

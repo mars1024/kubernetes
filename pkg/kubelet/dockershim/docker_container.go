@@ -158,6 +158,10 @@ func (ds *dockerService) CreateContainer(_ context.Context, r *runtimeapi.Create
 	if err != nil {
 		return nil, fmt.Errorf("failed to update container create config: %v", err)
 	}
+
+	// Complete createConfig.
+	updateCreateConfigExtend(&createConfig, config)
+
 	// Set devices for container.
 	devices := make([]dockercontainer.DeviceMapping, len(config.Devices))
 	for i, device := range config.Devices {

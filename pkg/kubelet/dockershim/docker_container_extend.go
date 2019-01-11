@@ -10,6 +10,8 @@ import (
 	"time"
 
 	dockertypes "github.com/docker/docker/api/types"
+	"github.com/golang/glog"
+	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 )
 
 const (
@@ -271,4 +273,31 @@ func getPodValidHosts(podHostsPath, hostname string) (string, error) {
 		}
 	}
 	return buffer.String(), nil
+}
+
+// updateCreateConfigExtend can update docker container config with extended fields of CRI config.
+func updateCreateConfigExtend(config *dockertypes.ContainerCreateConfig, runtimeConfig *runtimeapi.ContainerConfig) {
+	if runtimeConfig == nil {
+		glog.Warning("Ignore to update extend hostconfig field because runtimeConfig is nil")
+		return
+	}
+
+	// Set NetPriority field.
+	config.Config.NetPriority = int(runtimeConfig.NetPriority)
+
+	if runtimeConfig.Linux == nil || runtimeConfig.Linux.Resources == nil {
+		glog.Warningf("Ignore to update extend hostconfig field because of invalid ContainerConfig: %v", runtimeConfig)
+		return
+	}
+
+	// Set Swappiness field.
+	if runtimeConfig.Linux.Resources.MemorySwappiness != nil {
+		config.HostConfig.Resources.MemorySwappiness = &runtimeConfig.Linux.Resources.MemorySwappiness.Value
+	}
+	// Set MemorySwap field.
+	config.HostConfig.Resources.MemorySwap = runtimeConfig.Linux.Resources.MemorySwap
+	// Set CPUBvtWarpNs field.
+	config.HostConfig.Resources.CPUBvtWarpNs = runtimeConfig.Linux.Resources.CpuBvtWarpNs
+	// Set PidsLimit field.
+	config.HostConfig.Resources.PidsLimit = runtimeConfig.Linux.Resources.PidsLimit
 }

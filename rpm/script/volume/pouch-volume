@@ -63,7 +63,7 @@ domount() {
 				exit 1
 			fi
 			if [ -d $CTHOME$IMAGEPATH ]; then
-				cp -r $CTHOME$IMAGEPATH $MNTPATH
+				cp -rp $CTHOME$IMAGEPATH $MNTPATH
 			fi
 		else
 			err "{ \"status\": \"Failure\", \"message\": \"Pouch doesn't support copy content from image\"}"
@@ -85,6 +85,7 @@ unmount() {
 
 	# We need to remove the content in the MNTPATH, so kubelet can delete the pod successfully.
 	rm -rf $MNTPATH/* &> /dev/null
+	rm -rf $MNTPATH/.* &> /dev/null
 
 	log '{"status": "Success"}'
 	exit 0

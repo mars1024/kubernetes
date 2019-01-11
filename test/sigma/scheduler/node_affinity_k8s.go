@@ -61,6 +61,8 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][node-affinity]", func() {
 
 	It("[smoke][p0][bvt] node_affinity_k8s_001 A pod with node IP label should be scheduled to the specified node.", func() {
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		nodeIP := ""
 
 		for _, v := range nodeList.Items {
@@ -213,6 +215,8 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][node-affinity]", func() {
 
 	It("node_affinity_k8s_004 A pod specified with multi IPs, will be scheduled to good IPs only.", func() {
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		nodeIP := ""
 
 		for _, v := range nodeList.Items {
@@ -299,6 +303,8 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][node-affinity]", func() {
 		"even if the node has taints.", func() {
 		By("Get one node to schedule.")
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		nodeIP := ""
 
 		for _, v := range nodeList.Items {
@@ -363,6 +369,8 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][node-affinity]", func() {
 	It("node_affinity_k8s_006 A pod specified with a node IP, will not be scheduled to the node, if the node has mandatory labels.", func() {
 		By("Get one node to schedule.")
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		nodeIP := ""
 
 		for _, v := range nodeList.Items {
@@ -409,6 +417,8 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][node-affinity]", func() {
 
 	It("node_affinity_k8s_007 A pod specified with predefined labels, will be scheduled to the nodes that have the labels.", func() {
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		nodeNames := []string{}
 
 		nodes := map[string]v1.Node{}
@@ -444,6 +454,7 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][node-affinity]", func() {
 
 	It("node_affinity_k8s_008 A pod specified with user defined labels, will be scheduled to the nodes that have the labels.", func() {
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
 
 		customLabelKey := "custom.k8s.alipay.com/a"
 		customLabelValue := "b"
@@ -591,6 +602,8 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][node-affinity]", func() {
 	It("node_affinity_k8s_013 A pod specified with NotIn and In labels, will be failed to schedule; with NotIn or In labels, will be successfully scheduled.", func() {
 		By("Get one node to schedule.")
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		nodeIP := ""
 
 		for _, v := range nodeList.Items {
@@ -699,6 +712,7 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][node-affinity]", func() {
 
 	It("node_affinity_k8s_016 A pod specified with mandatory labels, will be scheduled to the nodes that have the mandatory labels.", func() {
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
 
 		mandatoryLabelKey := "mandatory.k8s.alipay.com/appEnv"
 		mandatoryLabelValue := "prepub"
@@ -877,6 +891,8 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][node-affinity]", func() {
 		}
 
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		nodeIP := ""
 
 		for _, v := range nodeList.Items {

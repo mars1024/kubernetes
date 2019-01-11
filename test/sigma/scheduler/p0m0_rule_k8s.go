@@ -57,6 +57,8 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][p0m0][p2]", func() {
 
 	It("[p2] Pod should success or fail to be scheduled according to p0 constraint. ", func() {
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		// add /node/logicinfo/SmName
 		swarm.CreateOrUpdateNodeLogicInfoSmName(nodeName, "A7")
 
@@ -108,6 +110,8 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][p0m0][p2]", func() {
 
 	It("[p2] Pod should success or fail to be scheduled according to m0 constraint. ", func() {
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		// add /node/logicinfo/SmName
 		swarm.CreateOrUpdateNodeLogicInfoSmName(nodeName, "A7")
 
@@ -146,6 +150,8 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][p0m0][p2]", func() {
 
 	It("[p2][ali] Pod should success or fail to be scheduled according to p0+m0 constraint. ", func() {
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		// add /node/logicinfo/SmName
 		swarm.CreateOrUpdateNodeLogicInfoSmName(nodeName, "A7")
 

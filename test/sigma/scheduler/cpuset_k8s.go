@@ -102,6 +102,8 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][cpuset][cpu]", func() {
 
 	It("[smoke][p0][bvt] cpuset_k8s_case000 A pod with cpuset request should match the strategy, otherwise should down grade.", func() {
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		framework.Logf("get one node to schedule, nodeName: %s", nodeName)
 
 		// Apply node affinity label to each node
@@ -292,6 +294,8 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][cpuset][cpu]", func() {
 	// 3. 每个容器的cpu的物理核*2=逻辑和
 	It("cpusetK8s001: Pod with SameCoreFirst strategy, cpuset not overlap", func() {
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		framework.Logf("get one node to schedule, nodeName: %s", nodeName)
 		framework.WaitForStableCluster(cs, masterNodes)
 		// Apply kubernetes node label to each node
@@ -370,6 +374,8 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][cpuset][cpu]", func() {
 	// 3. 每个容器的cpu的物理核不重叠
 	It("cpusetK8s002: Pod with Spread strategy, cpuset not overlap, physical core not overlap", func() {
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		framework.Logf("get one node to schedule, nodeName: %s", nodeName)
 		framework.WaitForStableCluster(cs, masterNodes)
 		// Apply kubernetes node label to each node
@@ -451,6 +457,8 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][cpuset][cpu]", func() {
 	// 5. 所有容器的逻辑和不重叠
 	It("cpusetK8s003: Pod of appcontraints apps, cpu should not overlap", func() {
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		framework.Logf("get one node to schedule, nodeName: %s", nodeName)
 		framework.WaitForStableCluster(cs, masterNodes)
 

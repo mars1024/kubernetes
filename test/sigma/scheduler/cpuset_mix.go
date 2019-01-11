@@ -81,6 +81,8 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][smoke][cpuset]", func() {
 		framework.WaitForStableCluster(cs, masterNodes)
 
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		framework.Logf("get one node to schedule, nodeName: %s", nodeName)
 
 		AllocatableCPU := nodeToAllocatableMapCPU[nodeName]
@@ -188,6 +190,8 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][smoke][cpuset]", func() {
 		framework.WaitForStableCluster(cs, masterNodes)
 
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		framework.Logf("get one node to schedule, nodeName: %s", nodeName)
 
 		AllocatableCPU := nodeToAllocatableMapCPU[nodeName]
@@ -279,6 +283,8 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][smoke][cpuset]", func() {
 		framework.WaitForStableCluster(cs, masterNodes)
 
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		framework.Logf("get one node to schedule, nodeName: %s", nodeName)
 
 		AllocatableCPU := nodeToAllocatableMapCPU[nodeName]
@@ -378,6 +384,8 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][smoke][cpuset]", func() {
 		framework.WaitForStableCluster(cs, masterNodes)
 
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		framework.Logf("get one node to schedule, nodeName: %s", nodeName)
 
 		AllocatableCPU := nodeToAllocatableMapCPU[nodeName]
@@ -466,6 +474,8 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][smoke][cpuset]", func() {
 		framework.WaitForStableCluster(cs, masterNodes)
 
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		framework.Logf("get one node to schedule, nodeName: %s", nodeName)
 
 		AllocatableCPU := nodeToAllocatableMapCPU[nodeName]
@@ -559,6 +569,8 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][smoke][cpuset]", func() {
 		framework.WaitForStableCluster(cs, masterNodes)
 
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		framework.Logf("get one node to schedule, nodeName: %s", nodeName)
 
 		AllocatableCPU := nodeToAllocatableMapCPU[nodeName]
@@ -671,6 +683,8 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][smoke][cpuset]", func() {
 		framework.WaitForStableCluster(cs, masterNodes)
 
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		framework.Logf("get one node to schedule, nodeName: %s", nodeName)
 
 		AllocatableCPU := nodeToAllocatableMapCPU[nodeName]
@@ -765,6 +779,8 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][smoke][cpuset]", func() {
 		framework.WaitForStableCluster(cs, masterNodes)
 
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		framework.Logf("get one node to schedule, nodeName: %s", nodeName)
 
 		AllocatableCPU := nodeToAllocatableMapCPU[nodeName]
@@ -856,6 +872,8 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][smoke][cpuset]", func() {
 		framework.WaitForStableCluster(cs, masterNodes)
 
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		framework.Logf("get one node to schedule, nodeName: %s", nodeName)
 
 		AllocatableCPU := nodeToAllocatableMapCPU[nodeName]
@@ -949,6 +967,8 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][smoke][cpuset]", func() {
 		framework.WaitForStableCluster(cs, masterNodes)
 
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		framework.Logf("get one node to schedule, nodeName: %s", nodeName)
 
 		AllocatableMemory := nodeToAllocatableMapMem[nodeName]

@@ -74,6 +74,7 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][cpuset][cpu]", func() {
 		framework.WaitForStableCluster(cs, masterNodes)
 
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
 
 		By(fmt.Sprintf("apply a label on the found node %s", nodeName))
 
@@ -169,6 +170,8 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][cpuset][cpu]", func() {
 		Skip("not implemented")
 
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		framework.Logf("get one node to schedule, nodeName: %s", nodeName)
 		framework.WaitForStableCluster(cs, masterNodes)
 

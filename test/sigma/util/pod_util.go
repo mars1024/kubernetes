@@ -375,3 +375,25 @@ func checkExpectFinalizer(f *framework.Framework, podName string, expectFinalize
 		return false, nil
 	}
 }
+
+// Get container's update status from pod.
+func GetContainerUpdateStatus(pod *v1.Pod, containerName string) *sigmak8sapi.ContainerStatus {
+	updateStatusStr, exists := pod.Annotations[sigmak8sapi.AnnotationPodUpdateStatus]
+	if !exists {
+		framework.Logf("[GetContainerUpdateStatus] update status doesn't exist")
+		return nil
+	}
+	framework.Logf("[GetContainerUpdateStatus] updateStatusStr: %v", updateStatusStr)
+	containerStatus := sigmak8sapi.ContainerStateStatus{}
+	if err := json.Unmarshal([]byte(updateStatusStr), &containerStatus); err != nil {
+		framework.Logf("[GetContainerUpdateStatus] unmarshal failed")
+		return nil
+	}
+	for containerInfo, containerStatus := range containerStatus.Statuses {
+		if containerInfo.Name == containerName {
+			return &containerStatus
+		}
+	}
+	framework.Logf("[GetContainerUpdateStatus] No update status found for container: %s", containerName)
+	return nil
+}

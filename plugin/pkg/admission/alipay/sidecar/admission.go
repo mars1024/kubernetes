@@ -6,8 +6,11 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 	"text/template"
 
+	"github.com/ghodss/yaml"
+	"github.com/golang/glog"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apiserver/pkg/admission"
@@ -17,22 +20,30 @@ import (
 	corelisters "k8s.io/kubernetes/pkg/client/listers/core/internalversion"
 	kubeapiserveradmission "k8s.io/kubernetes/pkg/kubeapiserver/admission"
 
-	"github.com/ghodss/yaml"
-	"github.com/golang/glog"
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	alipaysigmak8sapi "gitlab.alipay-inc.com/sigma/apis/pkg/apis"
 )
 
 const (
-	PluginName                             = "AlipayMOSNSidecar"
-	defaultMOSNSidecarTemplateConfigMapKey = "mosn-system/default-template"
-	MOSNSidecarTemplateKey                 = "template"
-	cpuConvertRatio                        = 4000
-	memConvertScale                        = 128
-	defaultIngressPort                     = "12200"
-	defaultEgressPort                      = "12220"
-	defaultRegistryPort                    = "13330"
-	defaultLogsDir                         = "/home/admin/logs"
+	// PluginName AlipaySidecar, injector for common sidecars.
+	PluginName = "AlipaySidecar"
+)
+
+const (
+	// Describe supported sidecars' names, which are also ConfigMaps of injection template
+	supportedSidecars = metav1.NamespaceSystem + "/sidecars"
+	// Key of sidecars' names in supportedSidecars
+	supportedSidecarKey = "names"
+	// Key of each sidecar template in Template ConfigMap
+	sidecarTemplateKey = "template"
+)
+
+const (
+	// Resource convert ratio compared to biz container
+	cpuConvertRatio = 4000
+	memConvertScale = 128
+	// Gathered all the logs of sidecars and biz container in the same path.
+	defaultLogsDir = "/home/admin/logs"
 )
 
 // sidecarInjectionSpec collects all container infos and volumes for
@@ -50,51 +61,51 @@ type sidecarTemplateData struct {
 	PodSpec    *api.PodSpec
 }
 
-// alipayMOSNSidecar is an implementation of admission.Interface.
-type alipayMOSNSidecar struct {
+// alipaySidecar is an implementation of admission.Interface.
+type alipaySidecar struct {
 	*admission.Handler
 	configMapLister corelisters.ConfigMapLister
 }
 
 var (
-	_ admission.ValidationInterface                           = &alipayMOSNSidecar{}
-	_ admission.MutationInterface                             = &alipayMOSNSidecar{}
-	_ admission.InitializationValidator                       = &alipayMOSNSidecar{}
-	_ kubeapiserveradmission.WantsInternalKubeInformerFactory = &alipayMOSNSidecar{}
+	_ admission.ValidationInterface                           = &alipaySidecar{}
+	_ admission.MutationInterface                             = &alipaySidecar{}
+	_ admission.InitializationValidator                       = &alipaySidecar{}
+	_ kubeapiserveradmission.WantsInternalKubeInformerFactory = &alipaySidecar{}
 )
 
 // Register registers a admission plugin.
 func Register(plugins *admission.Plugins) {
 	plugins.Register(PluginName, func(config io.Reader) (admission.Interface, error) {
-		return newAlipayMOSNSidecarPlugin(), nil
+		return newAlipaySidecarPlugin(), nil
 	})
 }
 
 // newalipayMOSNSidecarPlugin create a new admission plugin.
-func newAlipayMOSNSidecarPlugin() *alipayMOSNSidecar {
-	return &alipayMOSNSidecar{Handler: admission.NewHandler(admission.Create)}
+func newAlipaySidecarPlugin() *alipaySidecar {
+	return &alipaySidecar{Handler: admission.NewHandler(admission.Create, admission.Update)}
 }
 
-func (s *alipayMOSNSidecar) SetInternalKubeInformerFactory(f informers.SharedInformerFactory) {
+func (s *alipaySidecar) SetInternalKubeInformerFactory(f informers.SharedInformerFactory) {
 	s.configMapLister = f.Core().InternalVersion().ConfigMaps().Lister()
 	s.SetReadyFunc(f.Core().InternalVersion().ConfigMaps().Informer().HasSynced)
 }
 
-func (s *alipayMOSNSidecar) ValidateInitialization() error {
+func (s *alipaySidecar) ValidateInitialization() error {
 	if s.configMapLister == nil {
 		return fmt.Errorf("missing configMapLister")
 	}
 	return nil
 }
 
-func (s *alipayMOSNSidecar) Validate(a admission.Attributes) (err error) {
+func (s *alipaySidecar) Validate(a admission.Attributes) (err error) {
 	if shouldIgnore(a) {
 		return nil
 	}
 
 	op := a.GetOperation()
 	if op != admission.Create && op != admission.Update {
-		glog.Infof("mosn sidecar admission.validate only handles create and update event, this operations is: %+v", op)
+		glog.Infof("sidecar admission.validate only handles create and update event, this operations is: %+v", op)
 		return nil
 	}
 
@@ -105,37 +116,43 @@ func (s *alipayMOSNSidecar) Validate(a admission.Attributes) (err error) {
 			return apierrors.NewBadRequest("Resource was marked with kind Pod but was unable to be converted")
 		}
 
-		return s.validatePod(pod)
+		names, err := s.getSupportSidecarNames()
+		if err != nil {
+			return admission.NewForbidden(a, fmt.Errorf("ConfigMap %s get failed: %v", supportedSidecars, err))
+		}
+		for _, name := range names {
+			if err = s.validatePod(pod, name); err != nil {
+				return admission.NewForbidden(a, err)
+			}
+		}
 	}
 
 	return nil
 }
 
-func (s *alipayMOSNSidecar) validatePod(pod *api.Pod) error {
-	// Check mosn sidecar injection annotation.
-	v, ok := pod.Annotations[alipaysigmak8sapi.MOSNSidecarInject]
-	if !ok {
-		glog.Infof("no need to do injection, return")
-		return nil
-	}
+func (s *alipaySidecar) validatePod(pod *api.Pod, name string) error {
+	// Check sidecar injection annotation.
+	v := getPodSidecarInjectionPolicy(pod, name)
 
-	if v != string(alipaysigmak8sapi.SidecarInjectionPolicyEnabled) &&
-		v != string(alipaysigmak8sapi.SidecarInjectionPolicyDisabled) {
-		return apierrors.NewBadRequest("Value of mosn sidecar injection error, must be \"disabled\" or \"enabled\"")
+	if v != alipaysigmak8sapi.SidecarInjectionPolicyEnabled &&
+		v != alipaysigmak8sapi.SidecarInjectionPolicyDisabled {
+		return apierrors.NewBadRequest(
+			fmt.Sprintf("Value of %s sidecar injection error, must be \"disabled\" or \"enabled\"", name),
+		)
 	}
 
 	return nil
 }
 
 // Admit makes an admission decision based on the request attributes.
-func (s *alipayMOSNSidecar) Admit(a admission.Attributes) (err error) {
+func (s *alipaySidecar) Admit(a admission.Attributes) (err error) {
 	if shouldIgnore(a) {
 		return nil
 	}
 
 	op := a.GetOperation()
 	if op != admission.Create && op != admission.Update {
-		glog.Infof("mosn sidecar admission.admit only handles create and update event, this operation is: %+v", op)
+		glog.Infof("sidecar admission.admit only handles create and update event, this operation is: %+v", op)
 		return nil
 	}
 
@@ -149,15 +166,9 @@ func (s *alipayMOSNSidecar) Admit(a admission.Attributes) (err error) {
 		return apierrors.NewBadRequest("Resource was marked with kind Pod but was unable to be converted")
 	}
 
-	v, ok := pod.Annotations[alipaysigmak8sapi.MOSNSidecarInject]
-	if !ok {
-		glog.Infof("pod (%s/%s) no need to do injection, return", pod.Namespace, pod.Name)
-		return nil
-	}
-
-	if v != string(alipaysigmak8sapi.SidecarInjectionPolicyEnabled) {
-		glog.Infof("pod (%s/%s) mosn sidecar injection not enabled, return", pod.Namespace, pod.Name)
-		return nil
+	names, err := s.getSupportSidecarNames()
+	if err != nil {
+		return admission.NewForbidden(a, fmt.Errorf("ConfigMap %s get failed: %v", supportedSidecars, err))
 	}
 
 	// Ignore if this is inplace update request.
@@ -167,19 +178,33 @@ func (s *alipayMOSNSidecar) Admit(a admission.Attributes) (err error) {
 		return nil
 	}
 
-	if op == admission.Create {
-		return s.admitPodCreation(pod)
-	}
+	// 因为sidecar container每次都是插入到 pod.spec.containers 的第一个，
+	// 所以为了保证sidecar container按照SupportedSidecarNames的顺序注入必须要反序
+	for i := len(names) - 1; i >= 0; i-- {
+		name := names[i]
 
-	if op == admission.Update {
-		return s.admitPodUpdate(pod)
+		v := getPodSidecarInjectionPolicy(pod, name)
+		if v != alipaysigmak8sapi.SidecarInjectionPolicyEnabled {
+			glog.Infof("pod (%s/%s) %s sidecar injection not enabled, return", pod.Namespace, pod.Name, name)
+			continue
+		}
+
+		if op == admission.Create {
+			err = s.admitPodCreation(pod, name)
+		}
+		if op == admission.Update {
+			err = s.admitPodUpdate(pod, name)
+		}
+		if err != nil {
+			return admission.NewForbidden(a, err)
+		}
 	}
 
 	return nil
 }
 
-func (s *alipayMOSNSidecar) admitPodCreation(pod *api.Pod) error {
-	sidecarSpec, err := s.constructSidecarInjectionSpecFromConfigMap(pod)
+func (s *alipaySidecar) admitPodCreation(pod *api.Pod, sidecarName string) error {
+	sidecarSpec, err := s.constructSidecarInjectionSpecFromConfigMap(pod, getSidecarTemplateName(sidecarName))
 	if err != nil {
 		errMsg := fmt.Sprintf("failed to construct sidecar injection spec due to err: %+v", err)
 		glog.Errorf(errMsg)
@@ -194,7 +219,7 @@ func (s *alipayMOSNSidecar) admitPodCreation(pod *api.Pod) error {
 
 	err = setDiskQuotaModeIfNeeded(pod, sidecarSpec.Containers[0].Name)
 	if err != nil {
-		errMsg := fmt.Sprintf("failed to set disk quota model of mosn container due to err: %+v", err)
+		errMsg := fmt.Sprintf("failed to set disk quota model of %s container due to err: %+v", sidecarName, err)
 		glog.Errorf(errMsg)
 		return fmt.Errorf(errMsg)
 	}
@@ -209,21 +234,38 @@ func (s *alipayMOSNSidecar) admitPodCreation(pod *api.Pod) error {
 	}
 
 	if logsVolumeMount, found := findLogsVolumeFromAppContainer(appContainers); found {
-		// Inject logs volume mount into mosn container.
+		// Inject logs volume mount into sidecar container.
 		for i, _ := range sidecarSpec.Containers {
 			sidecarSpec.Containers[i].VolumeMounts = append(sidecarSpec.Containers[i].VolumeMounts, logsVolumeMount)
 		}
 	}
 
-	// Inject mosn container.
+	// Inject sidecar container.
 	pod.Spec.Containers = []api.Container{}
 	pod.Spec.Containers = append(pod.Spec.Containers, sidecarSpec.Containers...)
 	pod.Spec.Containers = append(pod.Spec.Containers, appContainers...)
 
-	// Inject mosn volumes.
+	// Inject sidecar volumes.
 	pod.Spec.Volumes = append(pod.Spec.Volumes, sidecarSpec.Volumes...)
 
 	return nil
+}
+
+func (s *alipaySidecar) getSupportSidecarNames() ([]string, error) {
+	namespace, name, _ := cache.SplitMetaNamespaceKey(supportedSidecars)
+	cm, err := s.configMapLister.ConfigMaps(namespace).Get(name)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	var names []string
+	if err := yaml.Unmarshal([]byte(cm.Data[supportedSidecarKey]), &names); err != nil {
+		return nil, err
+	}
+	return names, nil
 }
 
 func findLogsVolumeFromAppContainer(containers []api.Container) (api.VolumeMount, bool) {
@@ -242,7 +284,7 @@ func setDiskQuotaModeIfNeeded(pod *api.Pod, containerName string) error {
 	var allocSpec sigmak8sapi.AllocSpec
 	if allocSpecString, ok := pod.Annotations[sigmak8sapi.AnnotationPodAllocSpec]; ok {
 		if err := json.Unmarshal([]byte(allocSpecString), &allocSpec); err != nil {
-			return fmt.Errorf("alipay mosn sidecar unmarshal alloc spec string error: %+v", err)
+			return fmt.Errorf("alipay sidecar unmarshal alloc spec string error: %+v", err)
 		}
 	}
 
@@ -254,28 +296,28 @@ func setDiskQuotaModeIfNeeded(pod *api.Pod, containerName string) error {
 		}
 	}
 
-	mosnContainer := sigmak8sapi.Container{
+	sidecarContainer := sigmak8sapi.Container{
 		Name:       containerName,
 		HostConfig: appContainer.HostConfig,
 		Resource:   appContainer.Resource,
 	}
-	mosnContainer.HostConfig.DiskQuotaMode = sigmak8sapi.DiskQuotaModeRootFsOnly
+	sidecarContainer.HostConfig.DiskQuotaMode = sigmak8sapi.DiskQuotaModeRootFsOnly
 
-	mosnContainerFound := false
+	sidecarContainerFound := false
 	for i, c := range allocSpec.Containers {
 		if c.Name == containerName {
-			mosnContainerFound = true
-			allocSpec.Containers[i] = mosnContainer
+			sidecarContainerFound = true
+			allocSpec.Containers[i] = sidecarContainer
 		}
 	}
 
-	if !mosnContainerFound {
-		allocSpec.Containers = append(allocSpec.Containers, mosnContainer)
+	if !sidecarContainerFound {
+		allocSpec.Containers = append(allocSpec.Containers, sidecarContainer)
 	}
 
 	allocSpecBytes, err := json.Marshal(allocSpec)
 	if err != nil {
-		return fmt.Errorf("alipay mosn sidecar marshal alloc spec error: %+v", err)
+		return fmt.Errorf("alipay sidecar marshal alloc spec error: %+v", err)
 	}
 
 	if pod.Annotations == nil {
@@ -286,51 +328,46 @@ func setDiskQuotaModeIfNeeded(pod *api.Pod, containerName string) error {
 	return nil
 }
 
-func (s *alipayMOSNSidecar) admitPodUpdate(pod *api.Pod) error {
-	image, ok := pod.Annotations[alipaysigmak8sapi.MOSNSidecarImage]
-	if !ok {
-		glog.Infof("no mosn sidecar image specified on update event, return")
-		return nil
-	}
-
+func (s *alipaySidecar) admitPodUpdate(pod *api.Pod, sidecarName string) error {
 	if len(pod.Spec.Containers) < 2 {
-		glog.Infof("no mosn sidecar container in pod spec, return")
+		glog.Infof("no sidecar container in pod spec, return")
 		return nil
 	}
 
-	sidecarSpec, err := s.constructSidecarInjectionSpecFromConfigMap(pod)
+	sidecarSpec, err := s.constructSidecarInjectionSpecFromConfigMap(pod, getSidecarTemplateName(sidecarName))
 	if err != nil {
 		glog.Errorf("failed to construct sidecar injection spec due to err: %+v", err)
 		return err
 	}
 
-	if pod.Spec.Containers[0].Name != sidecarSpec.Containers[0].Name {
-		glog.Errorf("mosn sidecar container name not matched, return")
-		return err
+	for i := range pod.Spec.Containers {
+		if pod.Spec.Containers[i].Name == sidecarSpec.Containers[0].Name { // FIXME 默认sidecar就一个容器
+			// Reset container image.
+			pod.Spec.Containers[i].Image = sidecarSpec.Containers[0].Image
+			return nil
+		}
 	}
 
-	// Reset container image.
-	pod.Spec.Containers[0].Image = image
-
-	return nil
+	glog.Errorf("%s sidecar container name not matched, return", sidecarName)
+	return err
 }
 
-func (s *alipayMOSNSidecar) constructSidecarInjectionSpecFromConfigMap(pod *api.Pod) (*sidecarInjectionSpec, error) {
-	namespace, name, _ := cache.SplitMetaNamespaceKey(defaultMOSNSidecarTemplateConfigMapKey)
+func (s *alipaySidecar) constructSidecarInjectionSpecFromConfigMap(pod *api.Pod, cmKey string) (*sidecarInjectionSpec, error) {
+	namespace, name, _ := cache.SplitMetaNamespaceKey(cmKey)
 	cm, err := s.configMapLister.ConfigMaps(namespace).Get(name)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			return nil, fmt.Errorf("config map (%s) not found", defaultMOSNSidecarTemplateConfigMapKey)
+			return nil, fmt.Errorf("config map (%s) not found", cmKey)
 		}
 		return nil, err
 	}
 	if len(cm.Data) == 0 {
-		return nil, fmt.Errorf("no data in config map (%s)", defaultMOSNSidecarTemplateConfigMapKey)
+		return nil, fmt.Errorf("no data in config map (%s)", cmKey)
 	}
 
-	template, ok := cm.Data[MOSNSidecarTemplateKey]
+	template, ok := cm.Data[sidecarTemplateKey]
 	if !ok {
-		return nil, fmt.Errorf("template not exists in data of mosn sidecar config map error")
+		return nil, fmt.Errorf("template not exists in data of %s sidecar config map error", cmKey)
 	}
 
 	sidecarTemplateData := &sidecarTemplateData{
@@ -376,12 +413,14 @@ func shouldIgnore(a admission.Attributes) bool {
 func executeTemplate(w io.Writer, templateText string, data interface{}) error {
 	t := template.New("sidecar-injection")
 	t.Funcs(template.FuncMap{
-		"annotation":                   annotation,
+		"valueOfMap":                   valueOfMap,
 		"isSet":                        isSet,
 		"isCPUSet":                     isCPUSet,
 		"CPUSetToInt64":                CPUSetToInt64,
 		"CPUShareToInt64":              CPUShareToInt64,
 		"convertMemoryBasedOnCPUCount": convertMemoryBasedOnCPUCount,
+		"ToUpper":                      strings.ToUpper,
+		"ToLower":                      strings.ToLower,
 	})
 	template.Must(t.Parse(templateText))
 	return t.Execute(w, data)
@@ -394,8 +433,8 @@ func executeTemplateToString(templateText string, data interface{}) (string, err
 	return b.String(), err
 }
 
-func annotation(meta metav1.ObjectMeta, name string, defaultValue interface{}) string {
-	value, ok := meta.Annotations[name]
+func valueOfMap(m map[string]string, key string, defaultValue interface{}) string {
+	value, ok := m[key]
 	if !ok {
 		value = fmt.Sprint(defaultValue)
 	}
@@ -479,4 +518,16 @@ func convertMemoryBasedOnCPUCount(podSpec *api.PodSpec, defaultValue interface{}
 		sidecarCPULimit = 1
 	}
 	return strconv.FormatInt(sidecarCPULimit*memConvertScale, 10) + "Mi"
+}
+
+func getPodSidecarInjectionPolicy(pod *api.Pod, name string) alipaysigmak8sapi.SidecarInjectionPolicy {
+	v, exists := pod.Annotations[name+"."+alipaysigmak8sapi.SidecarAlipayPrefix+"/inject"]
+	if !exists {
+		return alipaysigmak8sapi.SidecarInjectionPolicyDisabled
+	}
+	return alipaysigmak8sapi.SidecarInjectionPolicy(v)
+}
+
+func getSidecarTemplateName(name string) string {
+	return name + "-system/default-template"
 }

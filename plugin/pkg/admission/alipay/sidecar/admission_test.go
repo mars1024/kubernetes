@@ -17,24 +17,24 @@ import (
 )
 
 const (
-	defaultConfigMapTemplate = `
+	defaultMOSNConfigMapTemplate = `
 containers:
 - name: mosn-sidecar-container
-  image: {{ annotation .ObjectMeta "mosn.sidecar.k8s.alipay.com/image" "reg.docker.alibaba-inc.com/antmesh/mosn:1.0.2-5995f65" }}
+  image: {{ valueOfMap .ObjectMeta.Annotations "mosn.sidecar.k8s.alipay.com/image" "reg.docker.alibaba-inc.com/antmesh/mosn:1.0.2-5995f65" }}
   imagePullPolicy: IfNotPresent
   ports:
-  - containerPort: {{ annotation .ObjectMeta "mosn.sidecar.k8s.alipay.com/ingress-port" 12200 }}
+  - containerPort: {{ valueOfMap .ObjectMeta.Annotations "mosn.sidecar.k8s.alipay.com/ingress-port" 12200 }}
     protocol: TCP
-  - containerPort: {{ annotation .ObjectMeta "mosn.sidecar.k8s.alipay.com/egress-port" 12220 }}
+  - containerPort: {{ valueOfMap .ObjectMeta.Annotations "mosn.sidecar.k8s.alipay.com/egress-port" 12220 }}
     protocol: TCP
-  - containerPort: {{ annotation .ObjectMeta "mosn.sidecar.k8s.alipay.com/registry-port" 13330 }}
+  - containerPort: {{ valueOfMap .ObjectMeta.Annotations "mosn.sidecar.k8s.alipay.com/registry-port" 13330 }}
     protocol: TCP
   lifecycle:
     postStart:
       exec:
         command:
         - bash
-        - {{ annotation .ObjectMeta "mosn.sidecar.k8s.alipay.com/post-start-command" "/home/admin/mosn/bin/process_checker.sh" }}
+        - {{ valueOfMap .ObjectMeta.Annotations "mosn.sidecar.k8s.alipay.com/post-start-command" "/home/admin/mosn/bin/process_checker.sh" }}
   terminationMessagePolicy: File
   resources:
     requests:
@@ -44,7 +44,7 @@ containers:
       cpu: 0
       {{ end }}
       memory: {{ convertMemoryBasedOnCPUCount .PodSpec "128Mi" }}
-      ephemeral-storage: {{ annotation .ObjectMeta "mosn.sidecar.k8s.alipay.com/ephemeral-storage" "20G" }}
+      ephemeral-storage: {{ valueOfMap .ObjectMeta.Annotations "mosn.sidecar.k8s.alipay.com/ephemeral-storage" "20G" }}
     limits:
       {{ if isCPUSet .ObjectMeta }}
       cpu: {{ CPUSetToInt64 .PodSpec "1000m" }}
@@ -52,26 +52,80 @@ containers:
       cpu: {{ CPUShareToInt64 .PodSpec "1000m" }}
       {{ end }}
       memory: {{ convertMemoryBasedOnCPUCount .PodSpec "128Mi" }}
-      ephemeral-storage: {{ annotation .ObjectMeta "mosn.sidecar.k8s.alipay.com/ephemeral-storage" "20G" }}
+      ephemeral-storage: {{ valueOfMap .ObjectMeta.Annotations "mosn.sidecar.k8s.alipay.com/ephemeral-storage" "20G" }}
+  env:
+  - name: ALIPAY_APP_ZONE
+    value: {{ valueOfMap .ObjectMeta.Labels "meta.k8s.alipay.com/zone" "" | ToUpper }}
+  - name: DBMODE
+    value: prod
+  - name: CONFREGURL
+    value: confreg-pool.{{ valueOfMap .ObjectMeta.Labels "meta.k8s.alipay.com/zone" "" | ToLower }}.alipay.com
+  - name: DOMAINNAME
+    value: {{ valueOfMap .ObjectMeta.Labels "meta.k8s.alipay.com/zone" "" | ToLower }}.alipay.com
   volumeMounts:
   - name: mosn-conf
     mountPath: /home/admin/mosn/conf
 volumes:
-- name: mosn-conf
-  emptyDir: {}
+- flexVolume:
+    driver: alipay/pouch-volume
+    options:
+      image: {{ valueOfMap .ObjectMeta.Annotations "mosn.sidecar.k8s.alipay.com/image" "reg.docker.alibaba-inc.com/antmesh/mosn:1.1.0-b9ea686" }}
+      imagePath: /home/admin/mosn/conf/.
+  name: mosn-conf
 appEnvs:
 - name: MOSN_ENABLE
   value: "true"
 - name: MOSN_EGRESS_PORT
-  value: {{ annotation .ObjectMeta "mosn.sidecar.k8s.alipay.com/egress-port" 12220 }}
+  value: {{ valueOfMap .ObjectMeta.Annotations "mosn.sidecar.k8s.alipay.com/egress-port" 12220 }}
 - name: MOSN_REGISTRY_PORT
-  value: {{ annotation .ObjectMeta "mosn.sidecar.k8s.alipay.com/registry-port" 13330 }}
+  value: {{ valueOfMap .ObjectMeta.Annotations "mosn.sidecar.k8s.alipay.com/registry-port" 13330 }}
 - name: RPC_TR_PORT
   value: 12199
 `
+
+	defaultDBMeshConfigMapTemplate = `
+containers:
+- name: dbmesh-sidecar-container
+  image: {{ valueOfMap .ObjectMeta.Annotations "dbmesh.sidecar.k8s.alipay.com/image" "reg.docker.alibaba-inc.com/antmesh/dbmesh:1.0.2-5995f65" }}
+  imagePullPolicy: IfNotPresent
+  ports:
+  - containerPort: {{ valueOfMap .ObjectMeta.Annotations "dbmesh.sidecar.k8s.alipay.com/ingress-port" 12200 }}
+    protocol: TCP
+  - containerPort: {{ valueOfMap .ObjectMeta.Annotations "dbmesh.sidecar.k8s.alipay.com/egress-port" 12220 }}
+    protocol: TCP
+  - containerPort: {{ valueOfMap .ObjectMeta.Annotations "dbmesh.sidecar.k8s.alipay.com/registry-port" 13330 }}
+    protocol: TCP
+  lifecycle:
+    postStart:
+      exec:
+        command:
+        - bash
+        - {{ valueOfMap .ObjectMeta.Annotations "dbmesh.sidecar.k8s.alipay.com/post-start-command" "/home/admin/dbmesh/bin/process_checker.sh" }}
+  terminationMessagePolicy: File
+  resources:
+    requests:
+      {{ if isCPUSet .ObjectMeta }}
+      cpu: {{ CPUSetToInt64 .PodSpec "1000m" }}
+      {{ else }}
+      cpu: 0
+      {{ end }}
+      memory: {{ convertMemoryBasedOnCPUCount .PodSpec "128Mi" }}
+      ephemeral-storage: {{ valueOfMap .ObjectMeta.Annotations "dbmesh.sidecar.k8s.alipay.com/ephemeral-storage" "20G" }}
+    limits:
+      {{ if isCPUSet .ObjectMeta }}
+      cpu: {{ CPUSetToInt64 .PodSpec "1000m" }}
+      {{ else }}
+      cpu: {{ CPUShareToInt64 .PodSpec "1000m" }}
+      {{ end }}
+      memory: {{ convertMemoryBasedOnCPUCount .PodSpec "128Mi" }}
+      ephemeral-storage: {{ valueOfMap .ObjectMeta.Annotations "dbmesh.sidecar.k8s.alipay.com/ephemeral-storage" "20G" }}
+  volumeMounts:
+  - name: dbmesh-conf
+    mountPath: /home/admin/dbmesh/conf
+`
 )
 
-func addDefaultConfigMap(sidecar *alipayMOSNSidecar) {
+func addDefaultConfigMap(sidecar *alipaySidecar) {
 	informerFactory := informers.NewSharedInformerFactory(nil, controller.NoResyncPeriodFunc())
 	sidecar.SetInternalKubeInformerFactory(informerFactory)
 	// First add the existing classes to the cache.
@@ -81,7 +135,25 @@ func addDefaultConfigMap(sidecar *alipayMOSNSidecar) {
 			Namespace: "mosn-system",
 		},
 		Data: map[string]string{
-			MOSNSidecarTemplateKey: defaultConfigMapTemplate,
+			sidecarTemplateKey: defaultMOSNConfigMapTemplate,
+		},
+	})
+	informerFactory.Core().InternalVersion().ConfigMaps().Informer().GetStore().Add(&api.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "default-template",
+			Namespace: "dbmesh-system",
+		},
+		Data: map[string]string{
+			sidecarTemplateKey: defaultDBMeshConfigMapTemplate,
+		},
+	})
+	informerFactory.Core().InternalVersion().ConfigMaps().Informer().GetStore().Add(&api.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "sidecars",
+			Namespace: metav1.NamespaceSystem,
+		},
+		Data: map[string]string{
+			supportedSidecarKey: "[\"mosn\", \"dbmesh\"]",
 		},
 	})
 }
@@ -91,6 +163,9 @@ func TestAdmit(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "pod-with-mosn-sidecar",
 			Namespace: metav1.NamespaceSystem,
+			Labels: map[string]string{
+				alipaysigmak8sapi.LabelZone: "A001",
+			},
 			Annotations: map[string]string{
 				alipaysigmak8sapi.MOSNSidecarInject: string(alipaysigmak8sapi.SidecarInjectionPolicyEnabled),
 			},
@@ -216,7 +291,7 @@ func TestAdmit(t *testing.T) {
 
 	for i, testCase := range testCases {
 		glog.V(4).Infof("starting test case %q", testCase.name)
-		sidecar := newAlipayMOSNSidecarPlugin()
+		sidecar := newAlipaySidecarPlugin()
 
 		// Add default configmap.
 		addDefaultConfigMap(sidecar)
@@ -316,7 +391,7 @@ func TestValidate(t *testing.T) {
 
 	for i, testCase := range testCases {
 		glog.V(4).Infof("starting test case %q", testCase.name)
-		sidecar := newAlipayMOSNSidecarPlugin()
+		sidecar := newAlipaySidecarPlugin()
 
 		// Add default configmap.
 		addDefaultConfigMap(sidecar)

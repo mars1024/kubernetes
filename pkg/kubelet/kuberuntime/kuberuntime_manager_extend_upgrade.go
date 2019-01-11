@@ -464,6 +464,15 @@ func (m *kubeGenericRuntimeManager) upgradeContainerCommon(containerStatus *kube
 		podStatus, currentContainerStatus, podIP, imageRef, kubecontainer.ContainerTypeRegular, anonymousVolumes)
 	if err != nil {
 		glog.Errorf("Create container %q in pod %q failed: %v, %s", container.Name, format.Pod(pod), err, msg)
+		// known errors that are logged in other places are logged at higher levels here to avoid
+		// repetitive log spam
+		switch {
+		case err == images.ErrImagePullBackOff:
+			glog.V(3).Infof("container start failed: %v: %s", err, msg)
+			return nil, err.Error() + ":" + msg, err
+		default:
+			utilruntime.HandleError(fmt.Errorf("container start failed: %v: %s", err, msg))
+		}
 		return nil, err.Error() + ":" + msg, ErrUpgradeContainer
 	}
 	glog.V(4).Infof("Create container %q(id=%q) in pod %q successfully", container.Name, upgradedContainer.ID, format.Pod(pod))

@@ -962,7 +962,10 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 			errMsg := fmt.Sprintf("init container start failed: %v: %s", err, msg)
 			utilruntime.HandleError(fmt.Errorf(errMsg))
 			//if err != nil, msg is err msg, so can't get container info
-			m.updateContainerStateStatus(containerStatus, container.Name, msg, result.StateStatus, false, errMsg)
+			if err != images.ErrImagePullBackOff {
+				m.updateContainerStateStatus(containerStatus, container.Name, msg, result.StateStatus, false,
+					errMsg)
+			}
 			return
 		}
 		// if err==nil msg is containerID
@@ -999,9 +1002,11 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 				glog.V(3).Infof("container start failed: %v: %s", err, msg)
 			default:
 				utilruntime.HandleError(fmt.Errorf("container start failed: %v: %s", err, msg))
+				// in this condition, msg is error message, can't get container status,
+				m.updateContainerStateStatus(containerStatus, container.Name, msg, result.StateStatus, false,
+					fmt.Sprintf("container start failed: %v: %s", err, msg))
 			}
-			// in this condition, msg is error message, can't get container status,
-			m.updateContainerStateStatus(containerStatus, container.Name, msg, result.StateStatus, false, fmt.Sprintf("container start failed: %v: %s", err, msg))
+
 			if utilfeature.DefaultFeatureGate.Enabled(features.StartContainerByOrder) {
 				break
 			}

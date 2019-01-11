@@ -2,6 +2,7 @@ package kuberuntime
 
 import (
 	"fmt"
+	"k8s.io/kubernetes/pkg/kubelet/images"
 	"os"
 	"path/filepath"
 	"strings"
@@ -161,7 +162,7 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 		containerUpgradeResult, msg, err := m.upgradeContainer(containerStatusFromCache, podSandboxID, podSandboxConfig, pod, podStatus, pullSecrets, podIP, container)
 		success := false
 		statusMsg := ""
-		if err != nil {
+		if err != nil && err != images.ErrImagePullBackOff {
 			upgradeContainerResult.Fail(err, msg)
 			containerStatus.Message = msg
 			success = false
@@ -170,7 +171,7 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 			// known errors that are logged in other places are logged at higher levels here to avoid
 			// repetitive log spam
 			utilruntime.HandleError(fmt.Errorf("container start failed: %v: %s", err, msg))
-		} else {
+		} else if err == nil {
 			success = true
 			statusMsg = UpgradeContainerSuccess
 		}

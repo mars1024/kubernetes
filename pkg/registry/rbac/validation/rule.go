@@ -31,6 +31,9 @@ import (
 	"k8s.io/apiserver/pkg/authentication/user"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	rbacv1helpers "k8s.io/kubernetes/pkg/apis/rbac/v1"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	"k8s.io/apiserver/pkg/util/feature"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 )
 
 type AuthorizationRuleResolver interface {
@@ -115,6 +118,13 @@ type ClusterRoleBindingLister interface {
 }
 
 func (r *DefaultRuleResolver) RulesFor(user user.Info, namespace string) ([]rbacv1.PolicyRule, error) {
+	if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenant, err := multitenancyutil.TransformTenantInfoFromUser(user)
+		if err != nil {
+			return nil, err
+		}
+		r = r.ShallowCopyWithTenant(tenant).(*DefaultRuleResolver)
+	}
 	visitor := &ruleAccumulator{}
 	r.VisitRulesFor(user, namespace, visitor.visit)
 	return visitor.rules, utilerrors.NewAggregate(visitor.errors)
@@ -176,6 +186,13 @@ func (d *roleBindingDescriber) String() string {
 }
 
 func (r *DefaultRuleResolver) VisitRulesFor(user user.Info, namespace string, visitor func(source fmt.Stringer, rule *rbacv1.PolicyRule, err error) bool) {
+	if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenant, err := multitenancyutil.TransformTenantInfoFromUser(user)
+		if err != nil {
+			return
+		}
+		r = r.ShallowCopyWithTenant(tenant).(*DefaultRuleResolver)
+	}
 	if clusterRoleBindings, err := r.clusterRoleBindingLister.ListClusterRoleBindings(); err != nil {
 		if !visitor(nil, nil, err) {
 			return

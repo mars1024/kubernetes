@@ -31,6 +31,9 @@ import (
 	"k8s.io/kubernetes/plugin/pkg/auth/authorizer/node"
 	"k8s.io/kubernetes/plugin/pkg/auth/authorizer/rbac"
 	"k8s.io/kubernetes/plugin/pkg/auth/authorizer/rbac/bootstrappolicy"
+	"k8s.io/apiserver/pkg/util/feature"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancybypassadmin "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/auth/authorizer/bypassadmin"
 )
 
 type AuthorizationConfig struct {
@@ -116,6 +119,10 @@ func (config AuthorizationConfig) New() (authorizer.Authorizer, authorizer.RuleR
 		default:
 			return nil, nil, fmt.Errorf("unknown authorization mode %s specified", authorizationMode)
 		}
+	}
+
+	if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		authorizers = append(authorizers, multitenancybypassadmin.NewByPassingAdminTenantAuthorizer())
 	}
 
 	return union.New(authorizers...), union.NewRuleResolvers(ruleResolvers...), nil

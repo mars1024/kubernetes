@@ -55,6 +55,8 @@ import (
 	rolebindingstore "k8s.io/kubernetes/pkg/registry/rbac/rolebinding/storage"
 	rbacregistryvalidation "k8s.io/kubernetes/pkg/registry/rbac/validation"
 	"k8s.io/kubernetes/plugin/pkg/auth/authorizer/rbac/bootstrappolicy"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	"k8s.io/apiserver/pkg/util/feature"
 )
 
 const PostStartHookName = "rbac/bootstrap-roles"
@@ -133,6 +135,9 @@ type PolicyData struct {
 }
 
 func (p *PolicyData) EnsureRBACPolicy() genericapiserver.PostStartHookFunc {
+	if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		return func(context genericapiserver.PostStartHookContext) error { return nil }
+	}
 	return func(hookContext genericapiserver.PostStartHookContext) error {
 		// intializing roles is really important.  On some e2e runs, we've seen cases where etcd is down when the server
 		// starts, the roles don't initialize, and nothing works.

@@ -20,6 +20,10 @@ import (
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancynlc "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/controller/nodelifecycle"
+
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 )
 
 const (
@@ -69,6 +73,10 @@ var registerMetrics sync.Once
 
 // Register the metrics that are to be monitored.
 func Register() {
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		multitenancynlc.Register()
+		return
+	}
 	registerMetrics.Do(func() {
 		prometheus.MustRegister(zoneHealth)
 		prometheus.MustRegister(zoneSize)

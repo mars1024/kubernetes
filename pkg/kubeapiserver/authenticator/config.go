@@ -42,6 +42,8 @@ import (
 	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/serviceaccount"
 
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancyfilter "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/filter"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 )
 
@@ -313,6 +315,9 @@ func newAuthenticatorFromClientCAFile(clientCAFile string) (authenticator.Reques
 	opts := x509.DefaultVerifyOptions()
 	opts.Roots = roots
 
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		return x509.New(opts, multitenancyfilter.CommonNameUserConversionWithMultiTenancy), nil
+	}
 	return x509.New(opts, x509.CommonNameUserConversion), nil
 }
 

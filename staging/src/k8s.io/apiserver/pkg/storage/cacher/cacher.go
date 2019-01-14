@@ -65,6 +65,10 @@ type Config struct {
 	// GetAttrsFunc is used to get object labels, fields, and the uninitialized bool
 	GetAttrsFunc func(runtime.Object) (label labels.Set, field fields.Set, uninitialized bool, err error)
 
+	// Indexers is used to accelerate the list operations, go back to normal list
+	// operation if there are not indexes found.
+	Indexers *cache.Indexers
+
 	// TriggerPublisherFunc is used for optimizing amount of watchers that
 	// needs to process an incoming event.
 	TriggerPublisherFunc storage.TriggerPublisherFunc
@@ -192,7 +196,7 @@ type Cacher struct {
 // its internal cache and updating its cache in the background based on the
 // given configuration.
 func NewCacherFromConfig(config Config) *Cacher {
-	watchCache := newWatchCache(config.CacheCapacity, config.KeyFunc, config.GetAttrsFunc, config.Versioner)
+	watchCache := newWatchCache(config.CacheCapacity, config.KeyFunc, config.Indexers, config.GetAttrsFunc, config.Versioner)
 	listerWatcher := newCacherListerWatcher(config.Storage, config.ResourcePrefix, config.NewListFunc)
 	reflectorName := "storage/cacher.go:" + config.ResourcePrefix
 
@@ -511,7 +515,7 @@ func (c *Cacher) List(ctx context.Context, key string, resourceVersion string, p
 	}
 	filter := filterWithAttrsFunction(key, pred)
 
-	objs, readResourceVersion, err := c.watchCache.WaitUntilFreshAndList(listRV, trace)
+	objs, readResourceVersion, err := c.watchCache.WaitUntilFreshAndListWithIndex(listRV, pred.MatcherIndex(), trace)
 	if err != nil {
 		return err
 	}

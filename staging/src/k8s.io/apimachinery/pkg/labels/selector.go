@@ -54,6 +54,11 @@ type Selector interface {
 
 	// Make a deep copy of the selector.
 	DeepCopySelector() Selector
+
+	// RequiresExactMatch allows a caller to introspect whether a given selector
+	// requires a single specific label to be set, and if so returns the value it
+	// requires.
+	RequiresExactMatch(label string) (value string, found bool)
 }
 
 // Everything returns a selector that matches all labels.
@@ -69,6 +74,7 @@ func (n nothingSelector) String() string                     { return "" }
 func (n nothingSelector) Add(_ ...Requirement) Selector      { return n }
 func (n nothingSelector) Requirements() (Requirements, bool) { return nil, false }
 func (n nothingSelector) DeepCopySelector() Selector         { return n }
+func (n nothingSelector) RequiresExactMatch(label string) (value string, found bool) { return "", false }
 
 // Nothing returns a selector that matches no labels
 func Nothing() Selector {
@@ -357,6 +363,22 @@ func (lsel internalSelector) String() string {
 	}
 	return strings.Join(reqs, ",")
 }
+
+//
+func (lsel internalSelector) RequiresExactMatch(label string) (value string, found bool) {
+	for ix := range lsel {
+		if lsel[ix].key == label {
+			switch lsel[ix].operator {
+			case selection.Equals, selection.DoubleEquals, selection.In:
+				if len(lsel[ix].strValues) == 1 {
+					return lsel[ix].strValues[0], true
+				}
+			}
+		}
+	}
+	return "", false
+}
+
 
 // Token represents constant definition for lexer token
 type Token int

@@ -178,6 +178,24 @@ func copyFileToContainer(srcFile, destPath, containerID string) error {
 	return nil
 }
 
+// UpdateContainerExtraResources will update container's resources which not supported by docker official client.
+func UpdateContainerExtraResources(resources *runtimeapi.LinuxContainerResources, id string) error {
+	// Get DiskQuota.
+	DiskQuota := resources.DiskQuota
+
+	// Set timeout value as 10 second.
+	ctx, cancelFunc := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancelFunc()
+
+	// Update DiskQuota with "docker update".
+	cmd := exec.CommandContext(ctx, "docker", "update", "--disk", parseDiskQuotaToLabel(DiskQuota), id)
+	out, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to exec %v, out: %q, err: %v", cmd, string(out), err)
+	}
+	return nil
+}
+
 // updateContainerHosts merge host's host items and pod's validate host items and copy them into container.
 func updateContainerHosts(podContainerID, hostname string, containerInfo *dockertypes.ContainerJSON) error {
 	// containerHosts = hostHosts + validated podHosts

@@ -478,5 +478,11 @@ func (ds *dockerService) UpdateContainerResources(_ context.Context, r *runtimea
 	if err != nil {
 		return nil, fmt.Errorf("failed to update container %q: %v", r.ContainerId, err)
 	}
+
+	err = UpdateContainerExtraResources(resources, r.ContainerId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update diskquota for container %q: %v", r.ContainerId, err)
+	}
+
 	return &runtimeapi.UpdateContainerResourcesResponse{}, nil
 }

@@ -232,13 +232,8 @@ func (m *kubeGenericRuntimeManager) createContainerExtension(podSandboxID string
 		if parentContainerStatus != nil && parentContainerStatus.Resources != nil {
 			containerConfig.QuotaId = parentContainerStatus.QuotaId
 			containerConfig.Linux.Resources.DiskQuota = parentContainerStatus.Resources.DiskQuota
-		} else {
-			// Set "/" quota as the size of ephemeral storage.
-			applyDiskQuota(pod, container, containerConfig)
 		}
 	}
-
-	applyExtendContainerConfig(pod, container, containerConfig)
 
 	glog.V(4).Infof("The new config of container %q in %q is %v", container.Name, format.Pod(pod), *containerConfig)
 

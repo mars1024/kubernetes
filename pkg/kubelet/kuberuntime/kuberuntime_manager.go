@@ -486,7 +486,7 @@ func (m *kubeGenericRuntimeManager) containerChanged(container *v1.Container, co
 		changed, restartNeeded := computeResourceChanges(newResources, containerStatus)
 		if len(changed) > 0 {
 			needToRestart = restartNeeded
-			glog.V(1).Infof("resource requirement for container %q of pod %s changed", container.Name, format.Pod(pod))
+			glog.V(1).Infof("resource requirement for container %q of pod %s changed: %v", container.Name, format.Pod(pod), changed)
 			if needToRestart == false {
 				needToResize = true
 			}
@@ -518,6 +518,22 @@ func computeResourceChanges(lc *runtimeapi.LinuxContainerResources, containerSta
 
 	if lc.MemoryLimitInBytes != currentResources.MemoryLimitInBytes {
 		resourceChanged[v1.ResourceMemory] = true
+	}
+
+	// Compare rootfs quota only
+	// Pouch's DiskQuota
+	//"DiskQuota": {
+	//   ".*": "3g",
+	//   "/var/lib/mysql": "3g",
+	//   "/var/run/secrets/kubernetes.io/serviceaccount": "3g"
+	//},
+	expectedDiskQuotaRootFsAndVolume := lc.DiskQuota[string(sigmak8sapi.DiskQuotaModeRootFsAndVolume)]
+	currentDiskQuotaRootFsAndVolume := currentResources.DiskQuota[string(sigmak8sapi.DiskQuotaModeRootFsAndVolume)]
+	expectedDiskQuotaRootFsOnly := lc.DiskQuota[string(sigmak8sapi.DiskQuotaModeRootFsOnly)]
+	currentDiskQuotaRootFsOnly := currentResources.DiskQuota[string(sigmak8sapi.DiskQuotaModeRootFsOnly)]
+	if expectedDiskQuotaRootFsAndVolume != currentDiskQuotaRootFsAndVolume ||
+		expectedDiskQuotaRootFsOnly != currentDiskQuotaRootFsOnly {
+		resourceChanged[v1.ResourceEphemeralStorage] = true
 	}
 
 	// docker not support the update of OomScoreAdj

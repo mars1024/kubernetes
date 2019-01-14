@@ -164,19 +164,20 @@ func (kl *Kubelet) SyncDanglingPods() {
 		currentDanglingPods[key] = danglingPod
 	}
 
+	// TODO: Find another way to keep dangingPod.
 	// Add the "unSafeToRemove" danglingPod to currentDanglingPods.
-	for key, danglingPod := range remainingDanglingPods {
-		// Skip the danglingPod can be find in apiserver.
-		if _, exists := validPods[key]; exists {
-			continue
-		}
-		if _, exists := currentDanglingPods[key]; !exists {
-			glog.V(0).Infof("[DanglingPod] DanglingPod %s is terminated unexpectly", key)
-			// Mark danglingPod's phase as Unknown because it isn't in runtime(stopped or deleted).
-			danglingPod.Phase = v1.PodUnknown
-			currentDanglingPods[key] = danglingPod
-		}
-	}
+	//	for key, danglingPod := range remainingDanglingPods {
+	//		// Skip the danglingPod can be find in apiserver.
+	//		if _, exists := validPods[key]; exists {
+	//			continue
+	//		}
+	//		if _, exists := currentDanglingPods[key]; !exists {
+	//			glog.V(0).Infof("[DanglingPod] DanglingPod %s is terminated unexpectly", key)
+	//			// Mark danglingPod's phase as Unknown because it isn't in runtime(stopped or deleted).
+	//			danglingPod.Phase = v1.PodUnknown
+	//			currentDanglingPods[key] = danglingPod
+	//		}
+	//	}
 
 	// Update danglingPods to node's annotation.
 	if !reflect.DeepEqual(currentDanglingPods, danglingPodsMap) {

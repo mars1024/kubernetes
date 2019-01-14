@@ -321,13 +321,8 @@ func TestSyncDanglingPods(t *testing.T) {
 	kubelet.podManager.SetPods(pods)
 	expectDanglingPods := map[string]sigmak8sapi.DanglingPod{
 		// pod1: dangplingPod not in runtime,
-		// phase will be updated as "Unkown".
-		"pod1": sigmak8sapi.DanglingPod{
-			Name:      "pod1",
-			Namespace: "namespace1",
-			UID:       "uid1",
-			Phase:     v1.PodUnknown,
-		},
+		// It is not a danglingPod anymore.
+
 		// pod2: dangplingPod in runtime.
 		// pod2 can get sn from podManager.
 		"pod2": sigmak8sapi.DanglingPod{

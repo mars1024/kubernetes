@@ -2,6 +2,7 @@ package kuberuntime
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/golang/glog"
 	"k8s.io/api/core/v1"
@@ -170,6 +171,35 @@ func generateTopologyEnvs(node *v1.Node) []*runtimeapi.KeyValue {
 	}
 
 	return envs
+}
+
+// getDiskSize convert disk size such as "1Gi" to "1g".
+func getDiskSize(s string) string {
+	if strings.HasSuffix(s, "Ti") {
+		s = strings.Replace(s, "Ti", "t", -1)
+	}
+	if strings.HasSuffix(s, "T") {
+		s = strings.Replace(s, "T", "t", -1)
+	}
+	if strings.HasSuffix(s, "Gi") {
+		s = strings.Replace(s, "Gi", "g", -1)
+	}
+	if strings.HasSuffix(s, "G") {
+		s = strings.Replace(s, "G", "g", -1)
+	}
+	if strings.HasSuffix(s, "Mi") {
+		s = strings.Replace(s, "Mi", "m", -1)
+	}
+	if strings.HasSuffix(s, "M") {
+		s = strings.Replace(s, "M", "m", -1)
+	}
+	if strings.HasSuffix(s, "Ki") {
+		s = strings.Replace(s, "Ki", "k", -1)
+	}
+	if strings.HasSuffix(s, "K") {
+		s = strings.Replace(s, "K", "k", -1)
+	}
+	return s
 }
 
 // applyDiskQuota can set diskQuota in containerConfig.

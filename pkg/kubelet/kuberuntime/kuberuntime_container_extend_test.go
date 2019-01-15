@@ -508,3 +508,58 @@ func TestApplyDiskQuota(t *testing.T) {
 		}
 	}
 }
+
+func TestGetDiskSize(t *testing.T) {
+	testCases := []struct {
+		resource string
+		expect   string
+		message  string
+	}{
+		{
+			resource: "10Ti",
+			expect:   "10t",
+			message:  "convert Ti to t",
+		},
+		{
+			resource: "10T",
+			expect:   "10t",
+			message:  "convert T to t",
+		},
+		{
+			resource: "10Gi",
+			expect:   "10g",
+			message:  "convert Gi to g",
+		},
+		{
+			resource: "10G",
+			expect:   "10g",
+			message:  "convert Gi to g",
+		},
+		{
+			resource: "10Mi",
+			expect:   "10m",
+			message:  "convert Mi to m",
+		},
+		{
+			resource: "10M",
+			expect:   "10m",
+			message:  "convert M to m",
+		},
+		{
+			resource: "10Ki",
+			expect:   "10k",
+			message:  "convert Ki to k",
+		},
+		{
+			resource: "10K",
+			expect:   "10k",
+			message:  "convert K to k",
+		},
+	}
+	for _, testCase := range testCases {
+		diskSize := getDiskSize(testCase.resource)
+		if diskSize != testCase.expect {
+			t.Errorf("convert error in test case %s, expect: %s, actual: %s", testCase.message, testCase.expect, diskSize)
+		}
+	}
+}

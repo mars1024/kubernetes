@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strings"
 
 	"github.com/golang/glog"
 	"google.golang.org/grpc"
@@ -182,29 +181,6 @@ func (m *kubeGenericRuntimeManager) isDirtyContainer(pod *v1.Pod, container *v1.
 	}
 
 	return false
-}
-
-// getDiskSize convert disk size such as "1Gi" to "1g".
-func getDiskSize(s string) string {
-	if strings.HasSuffix(s, "Gi") {
-		s = strings.Replace(s, "Gi", "g", -1)
-	}
-	if strings.HasSuffix(s, "G") {
-		s = strings.Replace(s, "G", "g", -1)
-	}
-	if strings.HasSuffix(s, "Mi") {
-		s = strings.Replace(s, "Mi", "m", -1)
-	}
-	if strings.HasSuffix(s, "M") {
-		s = strings.Replace(s, "M", "m", -1)
-	}
-	if strings.HasSuffix(s, "Ki") {
-		s = strings.Replace(s, "Ki", "k", -1)
-	}
-	if strings.HasSuffix(s, "K") {
-		s = strings.Replace(s, "K", "k", -1)
-	}
-	return s
 }
 
 // createContainerExtension creates a container and returns a message indicates why it is failed on error.

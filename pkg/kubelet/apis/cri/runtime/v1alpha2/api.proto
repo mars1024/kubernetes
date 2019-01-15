@@ -546,6 +546,14 @@ message LinuxContainerResources {
     Int64Value memory_swappiness = 109;
     // List of ulimits to be set in the container
     repeated Ulimit ulimits = 110;
+    // The swap memory of container
+    int64 memory_swap = 111;
+    // The pids limit of container
+    int64 pids_limit = 112;
+    // Cpu  priority of container
+    int64 cpu_bvt_warp_ns = 113;
+    // Use to caculate low_wmark
+    float memory_wmark_ratio = 114;
 }
 
 // WeightDevice is a structure that holds device:weight pair
@@ -665,6 +673,15 @@ message LinuxContainerConfig {
     LinuxContainerResources resources = 1;
     // LinuxContainerSecurityContext configuration for the container.
     LinuxContainerSecurityContext security_context = 2;
+    // Rdt:  Resource Director Technology
+    IntelRdt intel_rdt = 100;
+}
+
+// https://github.com/opencontainers/runc/blob/4932620b6237ed2a91aa5b5ca8cca6a73c10311b/libcontainer/intelrdt/intelrdt.go
+message IntelRdt {
+    string intel_rdt_group = 1;
+    // mba: Memory Bandwidth Allocation
+    string intel_rdt_mba = 2;
 }
 
 // WindowsContainerSecurityContext holds windows security configuration that will be applied to a container.

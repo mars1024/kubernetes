@@ -289,3 +289,23 @@ func GetDanglingPodsFromNodeAnnotation(node *v1.Node) ([]sigmak8sapi.DanglingPod
 	}
 	return danglingPods, nil
 }
+
+// GetAllocSpecFromAnnotation can get netpriority from pod annotation.
+// Default value: 0
+func GetNetPriorityFromAnnotation(pod *v1.Pod) int {
+	if pod == nil || pod.Annotations == nil {
+		return 0
+	}
+
+	netpriorityStr, exists := pod.Annotations[sigmak8sapi.AnnotationNetPriority]
+	if !exists {
+		glog.V(4).Infof("No netpriority definition found in pod: %s", format.Pod(pod))
+		return 0
+	}
+	netpriority, err := strconv.Atoi(netpriorityStr)
+	if err != nil {
+		glog.V(4).Infof("Failed to convert netpriority string %s of pod %s into int: %v", netpriorityStr, format.Pod(pod), err)
+		return 0
+	}
+	return netpriority
+}

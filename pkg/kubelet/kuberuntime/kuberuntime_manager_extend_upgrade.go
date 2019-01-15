@@ -238,6 +238,8 @@ func (m *kubeGenericRuntimeManager) createContainerExtension(podSandboxID string
 		}
 	}
 
+	applyExtendContainerConfig(pod, container, containerConfig)
+
 	glog.V(4).Infof("The new config of container %q in %q is %v", container.Name, format.Pod(pod), *containerConfig)
 
 	// Deal with anonymousVolume

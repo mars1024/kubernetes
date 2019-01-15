@@ -336,6 +336,9 @@ type Resources struct {
 	PidsLimit            int64           // Setting pids limit for a container
 	Ulimits              []*units.Ulimit // List of ulimits to be set in the container
 
+	// Extended field.
+	CPUBvtWarpNs int64 `json:"CPUBvtWarpNs"` // https://yuque.antfin-inc.com/sys/sigma3.x/bibyod
+
 	// Applicable to Windows
 	CPUCount           int64  `json:"CpuCount"`   // CPU count
 	CPUPercent         int64  `json:"CpuPercent"` // CPU percent

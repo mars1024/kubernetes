@@ -248,7 +248,7 @@ func PodLabelIndexFunc(key string) cache.IndexFunc {
 }
 
 func PodIndexers() *cache.Indexers {
-	if utilfeature.DefaultFeatureGate.Enabled(features.LabelSelectorIndex) {
+	if utilfeature.DefaultFeatureGate.Enabled(features.SelectorIndex) {
 		return &cache.Indexers{
 			"spec.nodeName": NodeNameIndexFunc,
 			"sigma.ali/sn":  PodLabelIndexFunc("sigma.ali/sn"),

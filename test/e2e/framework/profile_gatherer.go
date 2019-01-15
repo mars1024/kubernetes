@@ -176,7 +176,7 @@ func GatherCPUProfileForSeconds(componentName string, profileBaseName string, se
 	if wg != nil {
 		defer wg.Done()
 	}
-	if err := gatherProfile(componentName, profileBaseName, fmt.Sprintf("profile?seconds=%v", seconds)); err != nil {
+	if err := gatherSigmaProfile(componentName, profileBaseName, fmt.Sprintf("profile?seconds=%v", seconds)); err != nil {
 		Logf("Failed to gather %v CPU profile: %v", componentName, err)
 	}
 }
@@ -185,7 +185,7 @@ func GatherMemoryProfile(componentName string, profileBaseName string, wg *sync.
 	if wg != nil {
 		defer wg.Done()
 	}
-	if err := gatherProfile(componentName, profileBaseName, "heap"); err != nil {
+	if err := gatherSigmaProfile(componentName, profileBaseName, "heap"); err != nil {
 		Logf("Failed to gather %v memory profile: %v", componentName, err)
 	}
 }

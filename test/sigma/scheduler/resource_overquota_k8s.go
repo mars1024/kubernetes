@@ -107,6 +107,8 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][resource][Serial]", func() {
 	// 13 .删除 podF1，F2
 	It("[p1] ResourceOverquotaK8s001 cpu-over-quota=2 & mem-over-quota=1.1.", func() {
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		framework.Logf("get one node to schedule, nodeName: %s", nodeName)
 
 		// Apply node affinity label to each node
@@ -457,6 +459,8 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][resource][Serial]", func() {
 	// 测试步骤和 cpu-over-quota = 2 完全相同
 	It("[p1] ResourceOverquotaK8s002 cpu-over-quota=1.5 & mem-over-quota=1.1.", func() {
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		framework.Logf("get one node to schedule, nodeName: %s", nodeName)
 
 		// Apply node affinity label to each node

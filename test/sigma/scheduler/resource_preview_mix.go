@@ -83,6 +83,8 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][resource][Serial]", func() {
 		"While fail to be scheduled on node with insufficient resource", func() {
 
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		framework.Logf("get one node to schedule, nodeName: %s", nodeName)
 
 		AllocatableCPU := nodeToAllocatableMapCPU[nodeName]

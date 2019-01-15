@@ -139,6 +139,10 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][resource][Serial]", func() {
 		framework.WaitForStableCluster(cs, masterNodes)
 
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
+		Expect(nodeName).ToNot(BeNil())
+
 		By(fmt.Sprintf("apply a label on the found node %s", nodeName))
 
 		allocatableCPU := nodeToAllocatableMapCPU[nodeName]
@@ -380,6 +384,8 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][resource][Serial]", func() {
 		framework.WaitForStableCluster(cs, masterNodes)
 
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		By(fmt.Sprintf("apply a label on the found node %s", nodeName))
 
 		allocatableCPU := nodeToAllocatableMapCPU[nodeName]

@@ -53,6 +53,8 @@ var _ = Describe("[sigma-2.0][sigma-scheduler][smoke][p1][nodeaffinity][Serial]"
 	It("A pod with node IP label should be scheduled to the specified node.", func() {
 
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		waitNodeResourceReleaseComplete(nodeName)
 		nodeIP := ""
 		for _, v := range nodeList.Items {
@@ -94,6 +96,8 @@ var _ = Describe("[sigma-2.0][sigma-scheduler][smoke][p1][nodeaffinity][Serial]"
 	It("A pod specified with a node IP, will not be scheduled to the node, if the node has mandatory labels.", func() {
 
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		waitNodeResourceReleaseComplete(nodeName)
 		nodeIP := ""
 		for _, v := range nodeList.Items {
@@ -143,6 +147,8 @@ var _ = Describe("[sigma-2.0][sigma-scheduler][smoke][p1][nodeaffinity][Serial]"
 	It("A pod specified with a node IP and IgnoreLabelBySpecifiedIp, will be scheduled to the node with mandatory labels.", func() {
 
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		waitNodeResourceReleaseComplete(nodeName)
 		nodeIP := ""
 		for _, v := range nodeList.Items {
@@ -199,6 +205,8 @@ var _ = Describe("[sigma-2.0][sigma-scheduler][smoke][p1][nodeaffinity][Serial]"
 	It("A pod specified with a node IP and mandatory, will be scheduled to the node with mandatory labels.", func() {
 
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		waitNodeResourceReleaseComplete(nodeName)
 		nodeIP := ""
 		for _, v := range nodeList.Items {
@@ -259,6 +267,8 @@ var _ = Describe("[sigma-2.0][sigma-scheduler][smoke][p1][nodeaffinity][Serial]"
 		}
 
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		waitNodeResourceReleaseComplete(nodeName)
 		nodeIP := ""
 		for _, v := range nodeList.Items {

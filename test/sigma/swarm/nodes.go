@@ -275,6 +275,14 @@ type Node struct {
 	LocalInfo *LocalInfo
 }
 
+// Nodestatus represents the content get from etcd key:/nodes/status/$sit/$nodesn
+type NodeStatus struct {
+	Sn            string
+	Hostname      string
+	Status        string
+	OfflineStatus string
+}
+
 // CreateOrUpdateNodeLogicInfoSmName updates sigma node LogicInfo
 func CreateOrUpdateNodeLogicInfoSmName(nodeName, value string) error {
 	node := GetNode(nodeName)
@@ -359,6 +367,27 @@ func DeleteNodeMandatoryLabels(nodeName string, labelNames ...string) error {
 
 	updateNode(nodeName, node)
 	return nil
+}
+
+// Check is node status is available
+func CheckNodeAvailable(nodeName string) bool {
+	// query the site info from armory
+	nsInfo, err := util.QueryArmory(fmt.Sprintf("sn=='%v'", nodeName))
+	Expect(err).NotTo(HaveOccurred(), "query armory return error:%s", err)
+
+	site := strings.ToLower(nsInfo[0].Site)
+	key := "/nodes/status/" + site + "/" + nsInfo[0].ServiceTag
+	data, err := EtcdGet(key)
+	Expect(err).NotTo(HaveOccurred())
+
+	var nodestatus = NodeStatus{}
+	err = json.Unmarshal(data, &nodestatus)
+	Expect(err).NotTo(HaveOccurred())
+
+	if nodestatus.Status == "available" {
+		return true
+	}
+	return false
 }
 
 // GetNode returns a sigma 2.0 node

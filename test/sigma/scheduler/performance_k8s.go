@@ -98,6 +98,8 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][performance][Serial]", func() {
 	// 并发创建多个 Pod 的验证
 	It("[performance][p2] performance_k8s_001 Create a lot of pods simultaneously.", func() {
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		framework.Logf("get one node to schedule, nodeName: %s", nodeName)
 
 		// Apply node label to each node

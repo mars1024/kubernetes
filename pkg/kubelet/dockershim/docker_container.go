@@ -29,6 +29,8 @@ import (
 	dockerfilters "github.com/docker/docker/api/types/filters"
 	dockerstrslice "github.com/docker/docker/api/types/strslice"
 	"github.com/golang/glog"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	"k8s.io/kubernetes/pkg/features"
 
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 	"k8s.io/kubernetes/pkg/kubelet/dockershim/libdocker"
@@ -179,10 +181,25 @@ func (ds *dockerService) CreateContainer(_ context.Context, r *runtimeapi.Create
 		createResp, err = recoverFromCreationConflictIfNeeded(ds.client, createConfig, err)
 	}
 
-	if createResp != nil {
-		return &runtimeapi.CreateContainerResponse{ContainerId: createResp.ID}, nil
+	if createResp == nil {
+		return nil, err
 	}
-	return nil, err
+
+	isHostDNS := labels[labelHostDNS]
+	if isHostDNS == "true" && utilfeature.DefaultFeatureGate.Enabled(features.AliDockerDNS) {
+		err := ds.updateContainerHostInfo(podSandboxID, createResp.ID)
+		if err != nil {
+			glog.Errorf("Failed to update hostinfo for container %s: %v", createResp.ID, err)
+			removeErr := ds.client.RemoveContainer(createResp.ID, dockertypes.ContainerRemoveOptions{RemoveVolumes: true, Force: true})
+			if removeErr != nil {
+				glog.Warningf("Failed to delete container %s: %v", createResp.ID, removeErr)
+			}
+			return nil, err
+		}
+	}
+
+	return &runtimeapi.CreateContainerResponse{ContainerId: createResp.ID}, nil
+
 }
 
 // getContainerLogPath returns the container log path specified by kubelet and the real

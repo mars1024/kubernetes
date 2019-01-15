@@ -401,6 +401,12 @@ const (
 	//
 	// Enable start containers by the order defined in pod spec
 	StartContainerByOrder utilfeature.Feature = "StartContainerByOrder"
+
+	// owner: @fankang.fk (fankang.fk@antfin.com)
+	// alpha: v1.10
+	//
+	// Enable DNS feature implemented in alidocker
+	AliDockerDNS utilfeature.Feature = "AliDockerDNS"
 )
 
 func init() {
@@ -471,6 +477,7 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	NetworkEnv:                                  {Default: false, PreRelease: utilfeature.Alpha},
 	IgnoreProtectionFinalizer:                   {Default: true, PreRelease: utilfeature.Alpha},
 	StartContainerByOrder:                       {Default: false, PreRelease: utilfeature.Alpha},
+	AliDockerDNS:                                {Default: false, PreRelease: utilfeature.Alpha},
 
 	// inherited features from generic apiserver, relisted here to get a conflict if it is changed
 	// unintentionally on either side:

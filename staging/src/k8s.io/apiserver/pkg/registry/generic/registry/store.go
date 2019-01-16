@@ -50,10 +50,9 @@ import (
 
 	"github.com/golang/glog"
 	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
-	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 	multitenancyregistry "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/registry"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 	"k8s.io/apiserver/pkg/util/feature"
-	"k8s.io/apiserver/pkg/authentication/user"
 )
 
 // ObjectFunc is a function to act on a given object. An error may be returned
@@ -1339,7 +1338,7 @@ func (e *Store) CompleteWithOptions(options *generic.StoreOptions) error {
 					return multitenancyregistry.MultiTenancyKeyRootFuncForNamespaced(ctx, prefix)
 				}
 				e.KeyFunc = func(ctx context.Context, name string) (string, error) {
-					return multitenancyregistry.MultiTenancyKeyFuncForNamespaced(ctx, prefix, name)
+					return multitenancyregistry.MultiTenancyKeyFuncForNamespaced(ctx, prefix, name, true)
 				}
 			} else {
 				e.KeyRootFunc = func(ctx context.Context) string {
@@ -1355,7 +1354,7 @@ func (e *Store) CompleteWithOptions(options *generic.StoreOptions) error {
 					return multitenancyregistry.MultiTenancyKeyRootFuncForNonNamespaced(ctx, prefix)
 				}
 				e.KeyFunc = func(ctx context.Context, name string) (string, error) {
-					return multitenancyregistry.MultiTenancyKeyFuncForNonNamespaced(ctx, prefix, name)
+					return multitenancyregistry.MultiTenancyKeyFuncForNonNamespaced(ctx, prefix, name, true)
 				}
 			} else {
 				e.KeyRootFunc = func(ctx context.Context) string {
@@ -1382,10 +1381,9 @@ func (e *Store) CompleteWithOptions(options *generic.StoreOptions) error {
 				if err != nil {
 					return "", err
 				}
-				user := &user.DefaultInfo{Extra: make(map[string][]string)}
-				multitenancyutil.TransformTenantInfoToUser(tenantInfo, user)
-				context := genericapirequest.WithNamespace(genericapirequest.NewContext(), accessor.GetNamespace())
-				return e.KeyFunc(genericapirequest.WithUser(context, user), accessor.GetName())
+				ctx := multitenancyutil.NewEmptyContextWithTenant(tenantInfo)
+				ctx = genericapirequest.WithNamespace(ctx, accessor.GetNamespace())
+				return multitenancyregistry.MultiTenancyKeyFuncForNamespaced(ctx, prefix, accessor.GetName(), false)
 			}
 			return e.KeyFunc(genericapirequest.WithNamespace(genericapirequest.NewContext(), accessor.GetNamespace()), accessor.GetName())
 		}
@@ -1395,9 +1393,7 @@ func (e *Store) CompleteWithOptions(options *generic.StoreOptions) error {
 			if err != nil {
 				return "", err
 			}
-			user := &user.DefaultInfo{Extra: make(map[string][]string)}
-			multitenancyutil.TransformTenantInfoToUser(tenantInfo, user)
-			return e.KeyFunc(genericapirequest.WithUser(genericapirequest.NewContext(), user), accessor.GetName())
+			return multitenancyregistry.MultiTenancyKeyFuncForNonNamespaced(multitenancyutil.NewEmptyContextWithTenant(tenantInfo), prefix, accessor.GetName(), false)
 		}
 		return e.KeyFunc(genericapirequest.NewContext(), accessor.GetName())
 	}

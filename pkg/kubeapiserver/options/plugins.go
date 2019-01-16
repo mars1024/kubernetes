@@ -70,6 +70,7 @@ import (
 	"k8s.io/kubernetes/plugin/pkg/admission/sigmascheduling"
 
 	alipaycmdb "k8s.io/kubernetes/plugin/pkg/admission/alipay/cmdb"
+	alipaycpushare "k8s.io/kubernetes/plugin/pkg/admission/alipay/cpushare"
 	alipayimagepullsecret "k8s.io/kubernetes/plugin/pkg/admission/alipay/imagepullsecret"
 	alipayinclusterkube "k8s.io/kubernetes/plugin/pkg/admission/alipay/inclusterkube"
 	alipaypodlocation "k8s.io/kubernetes/plugin/pkg/admission/alipay/podlocation"
@@ -133,6 +134,7 @@ var AllOrderedPlugins = []string{
 	alipaypodpreset.PluginName,       // Alipay PodPreset
 	alipayzappinfo.PluginName,        // Alipay ZAppInfo
 	alipayresource.PluginName,        // Alipay resource validateion admission
+	alipaycpushare.PluginName,        // Alipay cpushare injection admission
 	alipayimagepullsecret.PluginName, // Alipay image pull secret injection admission
 }
 
@@ -186,6 +188,7 @@ func RegisterAllAdmissionPlugins(plugins *admission.Plugins) {
 	alipayzappinfo.Register(plugins)
 	alipayimagepullsecret.Register(plugins)
 	alipayresource.Register(plugins)
+	alipaycpushare.Register(plugins)
 }
 
 // DefaultOffAdmissionPlugins get admission plugins off by default for kube-apiserver.

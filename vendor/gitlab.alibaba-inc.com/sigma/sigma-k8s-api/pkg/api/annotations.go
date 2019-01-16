@@ -52,7 +52,7 @@ const (
 	// AnnotationAutopilot is the prefix of autopilot service in node annotation
 	AnnotationAutopilot = "node.beta1.sigma.ali/autopilot"
 
-	// AnnotationDanglingPods records the wild pods
+	// AnnotationDanglingPods records the dangling pods
 	// Please refer to: https://lark.alipay.com/sys/sigma3.x/iqymrh
 	AnnotationDanglingPods = "node.beta1.sigma.ali/dangling-pods"
 

@@ -30,6 +30,10 @@ import (
 	nodeutil "k8s.io/kubernetes/pkg/util/node"
 )
 
+const (
+	AnnotationNodeReverseAddress = "node.cloud.alipay.com/reverse-address"
+)
+
 type KubeletClientConfig struct {
 	// Default port - used if no information about Kubelet port can be found in Node.NodeStatus.DaemonEndpoints.
 	Port         uint
@@ -157,6 +161,11 @@ func (k *NodeConnectionInfoGetter) GetConnectionInfo(nodeName types.NodeName) (*
 	node, err := k.nodes.Get(string(nodeName), metav1.GetOptions{})
 	if err != nil {
 		return nil, err
+	}
+
+	nodeReverseAddress, ok := node.Annotations[AnnotationNodeReverseAddress]
+	if ok && nodeReverseAddress != "" {
+		return k.GetConnectionInfoForVPC(nodeReverseAddress)
 	}
 
 	// Find a kubelet-reported address, using preferred address type

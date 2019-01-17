@@ -32,6 +32,7 @@ import (
 	v1helper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 	v1qos "k8s.io/kubernetes/pkg/apis/core/v1/helper/qos"
 	kubefeatures "k8s.io/kubernetes/pkg/features"
+	sigmautil "k8s.io/kubernetes/pkg/kubelet/sigma"
 )
 
 const (
@@ -125,6 +126,21 @@ func ResourceConfigForPod(pod *v1.Pod, enforceCPULimits bool, cpuPeriod uint64) 
 
 	// convert to CFS values
 	cpuShares := MilliCPUToShares(cpuRequests)
+
+	// Change cpushares to DefaultCPUShares if possible.
+	if cpuShares == MinShares {
+		var defaultCpuShares int64
+		for _, container := range pod.Spec.Containers {
+			hostConfig := sigmautil.GetHostConfigFromAnnotation(pod, container.Name)
+			if hostConfig != nil && hostConfig.DefaultCpuShares != nil && *hostConfig.DefaultCpuShares > MinShares {
+				defaultCpuShares = defaultCpuShares + *hostConfig.DefaultCpuShares
+			}
+		}
+		if defaultCpuShares > MinShares {
+			cpuShares = uint64(defaultCpuShares)
+		}
+	}
+
 	cpuQuota := MilliCPUToQuota(cpuLimits, int64(cpuPeriod))
 
 	// track if limits were applied for each resource.

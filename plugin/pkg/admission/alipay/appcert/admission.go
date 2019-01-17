@@ -8,8 +8,8 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"encoding/pem"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -17,17 +17,27 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/golang/glog"
+	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
+	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apiserver/pkg/admission"
-	"sigma3/staging/src/k8s.io/apimachinery/pkg/util/json"
+	api "k8s.io/kubernetes/pkg/apis/core"
+	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
+	informers "k8s.io/kubernetes/pkg/client/informers/informers_generated/internalversion"
+	settingslisters "k8s.io/kubernetes/pkg/client/listers/core/internalversion"
 )
 
-const PluginName = "AlipayAppCert"
+const (
+	PluginName        = "alipayAppCert"
+	AppCertSecretTemp = "%s-cert-local-key"
+	AppCertSecretKey  = "app_local_key"
+)
 
 // kmi invoke configurations
 const (
 	signatureHeader = "X-KMI-SIGNATURE"
-	kmiRespCode     = "resultCode"
-	kmiRespData     = "result"
 	kmiCodeSuccess  = "1"
 
 	kmiInvokeTimeout = 10
@@ -92,20 +102,136 @@ func Register(plugins *admission.Plugins) {
 	})
 }
 
-// AlipayAppCert is an implementation of admission.Interface.
-type AlipayAppCert struct {
+// alipayAppCert is an implementation of admission.Interface.
+type alipayAppCert struct {
 	*admission.Handler
+	client       internalclientset.Interface
+	secretLister settingslisters.SecretLister
 }
 
-func NewAlipayAppCert() *AlipayAppCert {
-	return &AlipayAppCert{Handler: admission.NewHandler(admission.Create)}
+// NewAlipayAppCert creates a new admission plugin
+func NewAlipayAppCert() *alipayAppCert {
+	return &alipayAppCert{Handler: admission.NewHandler(admission.Create)}
 }
 
-func (c *AlipayAppCert) Admit(a admission.Attributes) (err error) {
+// ValidateInitialization checks whether the plugin was correctly initialized.
+func (plugin *alipayAppCert) ValidateInitialization() error {
 	return nil
 }
 
-// internal util functions
+func (plugin *alipayAppCert) SetInternalKubeClientSet(client internalclientset.Interface) {
+	plugin.client = client
+}
+
+func (plugin *alipayAppCert) SetInternalKubeInformerFactory(f informers.SharedInformerFactory) {
+	secretInformer := f.Core().InternalVersion().Secrets()
+	plugin.secretLister = secretInformer.Lister()
+	plugin.SetReadyFunc(func() bool { return secretInformer.Informer().HasSynced() })
+}
+
+func (plugin *alipayAppCert) Admit(a admission.Attributes) (err error) {
+	// this admission plugin only work on application's pod resource
+	if shouldIgnore(a) {
+		return nil
+	}
+
+	// after shouldIgnore, the resource must be `pods`
+	pod, ok := a.GetObject().(*api.Pod)
+	if !ok {
+		return apierrors.NewBadRequest("Resource was marked with kind Pod but was unable to be converted")
+	}
+
+	// fetch appname from pod labels
+	appname := pod.Labels[sigmak8sapi.LabelAppName]
+
+	// check secret exist
+	exist, err := plugin.checkAppCertSecretExist(appname, pod)
+	if err != nil {
+		glog.Errorf("failed to fetch secret: %v", err)
+		return err
+	}
+	if exist {
+		glog.Infof("app_local_key.json for %s exists in secret", appname)
+		return nil
+	}
+
+	// fetch the app_local_key.json
+	appLocalKey, err := fetchAppIdentity(appname)
+	if err != nil {
+		glog.Errorf("failed to fetch app_local_key.json, err msg: %v", err)
+		return err
+	}
+
+	// save app_local_key.json to secret
+	gotSecret, err := plugin.createAppCertSecret(appname, appLocalKey, pod)
+	if err != nil {
+		glog.Error(err)
+		return err
+	} else {
+		glog.Infof("save app_loca_key to secret, key: %s", gotSecret)
+	}
+
+	return nil
+}
+
+func (plugin *alipayAppCert) checkAppCertSecretExist(appname string, pod *api.Pod) (bool, error) {
+	secretName := fmt.Sprintf(AppCertSecretTemp, appname)
+	_, err := plugin.secretLister.Secrets(pod.Namespace).Get(secretName)
+
+	// AppCertSecret is already exists in pod's namespace.
+	if err == nil {
+		return true, nil
+	}
+
+	if errors.IsNotFound(err) {
+		return false, nil
+	} else {
+		return false, err
+	}
+}
+
+func (plugin *alipayAppCert) createAppCertSecret(appname string, appLocalKey string, pod *api.Pod) (string, error) {
+	appCertSecret := plugin.generateAppCertSecret(appname, appLocalKey)
+	gotSecret, err := plugin.client.Core().Secrets(pod.Namespace).Create(appCertSecret)
+	if err != nil {
+		return "", fmt.Errorf("failed create secret: %v", err)
+	}
+	return gotSecret.Name, nil
+}
+
+func (plugin *alipayAppCert) generateAppCertSecret(appname string, appLocalKey string) *api.Secret {
+	secretName := fmt.Sprintf(AppCertSecretTemp, appname)
+	appCertSecret := &api.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: secretName,
+		},
+		Type: api.SecretTypeOpaque,
+		Data: map[string][]byte{},
+	}
+	appCertSecret.Data[AppCertSecretKey] = []byte(appLocalKey)
+	return appCertSecret
+}
+
+func shouldIgnore(a admission.Attributes) bool {
+	resource := a.GetResource().GroupResource()
+	if resource != api.Resource("pods") {
+		return true
+	}
+	if a.GetSubresource() != "" {
+		// only run the checks below on pods proper and not subresources
+		return true
+	}
+
+	_, ok := a.GetObject().(*api.Pod)
+	if !ok {
+		glog.Errorf("expected pod but got %s", a.GetKind().Kind)
+		return true
+	}
+
+	return false
+}
+
+// fetch app_local_key.json from KMI
 func fetchAppIdentity(appname string) (appLocalKey string, err error) {
 	// init private key & public key
 	block, _ := pem.Decode([]byte(pemKMIPublicKey))
@@ -159,12 +285,10 @@ func fetchAppIdentity(appname string) (appLocalKey string, err error) {
 	var kmiResp kmiInvokeResp
 	respBody, _ := ioutil.ReadAll(resp.Body)
 	if err = json.Unmarshal(respBody, &kmiResp); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to parse kmi response: %v", err)
 	}
 	if kmiResp.ResultCode != kmiCodeSuccess {
-		return "", errors.New(
-			fmt.Sprintf("failed to invoke kmi, result code: %s, error msg: %s", kmiResp.ResultCode, kmiResp.Result),
-		)
+		return "", fmt.Errorf("failed to invoke kmi, result code: %s, error msg: %s", kmiResp.ResultCode, kmiResp.Result)
 	} else {
 		return kmiResp.Result, nil
 	}

@@ -19,6 +19,8 @@ package rest
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"net/http"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -29,6 +31,11 @@ import (
 	"k8s.io/kubernetes/pkg/apis/core/validation"
 	"k8s.io/kubernetes/pkg/kubelet/client"
 	"k8s.io/kubernetes/pkg/registry/core/pod"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
+	multitenancymeta "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/meta"
+	"k8s.io/apiserver/pkg/util/feature"
+	genericrequest "k8s.io/apiserver/pkg/endpoints/request"
 )
 
 // LogREST implements the log endpoint for a Pod
@@ -70,7 +77,17 @@ func (r *LogREST) Get(ctx context.Context, name string, opts runtime.Object) (ru
 	if errs := validation.ValidatePodLogOptions(logOpts); len(errs) > 0 {
 		return nil, errors.NewInvalid(api.Kind("PodLogOptions"), name, errs)
 	}
-	location, transport, err := pod.LogLocation(r.Store, r.KubeletConn, ctx, name, logOpts)
+	var location *url.URL
+	var transport http.RoundTripper
+	var err error
+	if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		user, _ := genericrequest.UserFrom(ctx)
+		tenant, _ := multitenancyutil.TransformTenantInfoFromUser(user)
+		conn := r.KubeletConn.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(client.ConnectionInfoGetter)
+		location, transport, err = pod.LogLocation(r.Store, conn, ctx, name, logOpts)
+	} else {
+		location, transport, err = pod.LogLocation(r.Store, r.KubeletConn, ctx, name, logOpts)
+	}
 	if err != nil {
 		return nil, err
 	}

@@ -30,10 +30,6 @@ import (
 	nodeutil "k8s.io/kubernetes/pkg/util/node"
 )
 
-const (
-	AnnotationNodeReverseAddress = "node.cloud.alipay.com/reverse-address"
-)
-
 type KubeletClientConfig struct {
 	// Default port - used if no information about Kubelet port can be found in Node.NodeStatus.DaemonEndpoints.
 	Port         uint
@@ -67,6 +63,7 @@ type ConnectionInfo struct {
 // ConnectionInfoGetter provides ConnectionInfo for the kubelet running on a named node
 type ConnectionInfoGetter interface {
 	GetConnectionInfo(nodeName types.NodeName) (*ConnectionInfo, error)
+	GetNodeConnectionInfo(node *v1.Node) (*ConnectionInfo, error)
 }
 
 func MakeTransport(config *KubeletClientConfig) (http.RoundTripper, error) {
@@ -163,11 +160,27 @@ func (k *NodeConnectionInfoGetter) GetConnectionInfo(nodeName types.NodeName) (*
 		return nil, err
 	}
 
-	nodeReverseAddress, ok := node.Annotations[AnnotationNodeReverseAddress]
-	if ok && nodeReverseAddress != "" {
-		return k.GetConnectionInfoForVPC(nodeReverseAddress)
+	// Find a kubelet-reported address, using preferred address type
+	host, err := nodeutil.GetPreferredNodeAddress(node, k.preferredAddressTypes)
+	if err != nil {
+		return nil, err
 	}
 
+	// Use the kubelet-reported port, if present
+	port := int(node.Status.DaemonEndpoints.KubeletEndpoint.Port)
+	if port <= 0 {
+		port = k.defaultPort
+	}
+
+	return &ConnectionInfo{
+		Scheme:    k.scheme,
+		Hostname:  host,
+		Port:      strconv.Itoa(port),
+		Transport: k.transport,
+	}, nil
+}
+
+func (k *NodeConnectionInfoGetter) GetNodeConnectionInfo(node *v1.Node) (*ConnectionInfo, error) {
 	// Find a kubelet-reported address, using preferred address type
 	host, err := nodeutil.GetPreferredNodeAddress(node, k.preferredAddressTypes)
 	if err != nil {

@@ -72,13 +72,60 @@ func TestAdmitOtherResources(t *testing.T) {
 	}
 }
 
-func TestAdmit(t *testing.T) {
+func TestCheckAppCertSecretExist(t *testing.T) {
 	client := fake.NewSimpleClientset()
-	informerFactory := informers.NewSharedInformerFactory(client, 10*time.Second)
-	//plugin := NewTestAdmission(t, client, informerFactory)
+	informerFactory := informers.NewSharedInformerFactory(client, 1*time.Second)
+	plugin := NewTestAdmission(t, client, informerFactory)
+	pod := newPod(appname)
+
+	exists, err := plugin.checkAppCertSecretExist(appname, pod)
+	if err != nil {
+		t.Error(err)
+	}
+	if exists {
+		t.Errorf("check secret exist failed, expected: false, got: true")
+	}
 
 	secret := generateAppCertSecret(appname, appLocalKey)
+	secret.Namespace = appname
+	informerFactory.Core().InternalVersion().Secrets().Informer().GetStore().Add(secret)
+	exists, err = plugin.checkAppCertSecretExist(appname, pod)
+	if err != nil {
+		t.Error(err)
+	}
+	if !exists {
+		t.Errorf("check secret exist failed, expected: true, got: false")
+	}
+
 	informerFactory.Core().InternalVersion().Secrets().Informer().GetStore().Delete(secret)
+	exists, err = plugin.checkAppCertSecretExist(appname, pod)
+	if err != nil {
+		t.Error(err)
+	}
+	if exists {
+		t.Errorf("check secret exist failed, expected: false, got: true")
+	}
+}
+
+func TestCreateAppCertSecret(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	informerFactory := informers.NewSharedInformerFactory(client, 1*time.Second)
+	plugin := NewTestAdmission(t, client, informerFactory)
+	pod := newPod(appname)
+
+	_, err := plugin.createAppCertSecret(appname, appLocalKey, pod)
+	if err != nil {
+		t.Error(err)
+	}
+
+	store := informerFactory.Core().InternalVersion().Secrets().Informer().GetStore()
+	t.Log(store)
+	//item, exist, err := informerFactory.Core().InternalVersion().Secrets().Informer().GetStore().GetByKey(secretName)
+	//if err != nil {
+	//	t.Error(err)
+	//}
+	//t.Log(exist)
+	//t.Log(item.(string))
 }
 
 func TestGenerateAppCertSecret(t *testing.T) {

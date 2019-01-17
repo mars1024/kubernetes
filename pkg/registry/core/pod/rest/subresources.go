@@ -22,12 +22,18 @@ import (
 	"net/http"
 	"net/url"
 
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancymeta "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/meta"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apimachinery/pkg/util/proxy"
+	genericrequest "k8s.io/apiserver/pkg/endpoints/request"
 	genericfeatures "k8s.io/apiserver/pkg/features"
 	genericregistry "k8s.io/apiserver/pkg/registry/generic/registry"
 	"k8s.io/apiserver/pkg/registry/rest"
+	"k8s.io/apiserver/pkg/util/feature"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	api "k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/capabilities"
@@ -39,6 +45,7 @@ import (
 type ProxyREST struct {
 	Store          *genericregistry.Store
 	ProxyTransport http.RoundTripper
+	KubeletConn    client.ConnectionInfoGetter
 }
 
 // Implement Connecter
@@ -67,7 +74,19 @@ func (r *ProxyREST) Connect(ctx context.Context, id string, opts runtime.Object,
 	if !ok {
 		return nil, fmt.Errorf("Invalid options object: %#v", opts)
 	}
-	location, transport, err := pod.ResourceLocation(r.Store, r.ProxyTransport, ctx, id)
+
+	var location *url.URL
+	var transport http.RoundTripper
+	var err error
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		user, _ := genericrequest.UserFrom(ctx)
+		tenant, _ := multitenancyutil.TransformTenantInfoFromUser(user)
+		conn := r.KubeletConn.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(client.ConnectionInfoGetter)
+		location, transport, err = pod.ProxyLocation(r.Store, conn, ctx, id)
+	} else {
+		location, transport, err = pod.ProxyLocation(r.Store, r.KubeletConn, ctx, id)
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +118,17 @@ func (r *AttachREST) Connect(ctx context.Context, name string, opts runtime.Obje
 	if !ok {
 		return nil, fmt.Errorf("Invalid options object: %#v", opts)
 	}
-	location, transport, err := pod.AttachLocation(r.Store, r.KubeletConn, ctx, name, attachOpts)
+	var location *url.URL
+	var transport http.RoundTripper
+	var err error
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		user, _ := genericrequest.UserFrom(ctx)
+		tenant, _ := multitenancyutil.TransformTenantInfoFromUser(user)
+		conn := r.KubeletConn.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(client.ConnectionInfoGetter)
+		location, transport, err = pod.AttachLocation(r.Store, conn, ctx, name, attachOpts)
+	} else {
+		location, transport, err = pod.AttachLocation(r.Store, r.KubeletConn, ctx, name, attachOpts)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +165,17 @@ func (r *ExecREST) Connect(ctx context.Context, name string, opts runtime.Object
 	if !ok {
 		return nil, fmt.Errorf("invalid options object: %#v", opts)
 	}
-	location, transport, err := pod.ExecLocation(r.Store, r.KubeletConn, ctx, name, execOpts)
+	var location *url.URL
+	var transport http.RoundTripper
+	var err error
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		user, _ := genericrequest.UserFrom(ctx)
+		tenant, _ := multitenancyutil.TransformTenantInfoFromUser(user)
+		conn := r.KubeletConn.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(client.ConnectionInfoGetter)
+		location, transport, err = pod.ExecLocation(r.Store, conn, ctx, name, execOpts)
+	} else {
+		location, transport, err = pod.ExecLocation(r.Store, r.KubeletConn, ctx, name, execOpts)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +223,17 @@ func (r *PortForwardREST) Connect(ctx context.Context, name string, opts runtime
 	if !ok {
 		return nil, fmt.Errorf("invalid options object: %#v", opts)
 	}
-	location, transport, err := pod.PortForwardLocation(r.Store, r.KubeletConn, ctx, name, portForwardOpts)
+	var location *url.URL
+	var transport http.RoundTripper
+	var err error
+	if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		user, _ := genericrequest.UserFrom(ctx)
+		tenant, _ := multitenancyutil.TransformTenantInfoFromUser(user)
+		conn := r.KubeletConn.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(client.ConnectionInfoGetter)
+		location, transport, err = pod.PortForwardLocation(r.Store, conn, ctx, name, portForwardOpts)
+	} else {
+		location, transport, err = pod.PortForwardLocation(r.Store, r.KubeletConn, ctx, name, portForwardOpts)
+	}
 	if err != nil {
 		return nil, err
 	}

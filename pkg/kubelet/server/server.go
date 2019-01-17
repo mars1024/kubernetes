@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"net/http/pprof"
@@ -406,6 +407,22 @@ func (s *Server) InstallDebuggingHandlers(criHandler http.Handler) {
 		Operation("getContainerLogs"))
 	s.restfulCont.Add(ws)
 
+	ws = new(restful.WebService)
+	ws.
+		Path("/podProxy")
+	ws.Route(ws.GET("/{scheme}/{podAddr}/").
+		To(s.getPodProxy).
+		Operation("getPodProxy").
+		Param(ws.PathParameter("scheme", "http scheme").DataType("string")).
+		Param(ws.PathParameter("podAddr", "pod address (ip or ip:port)").DataType("string")))
+	ws.Route(ws.GET("/{scheme}/{podAddr}/{podProxyOpts:*}").
+		To(s.getPodProxy).
+		Operation("getPodProxy").
+		Param(ws.PathParameter("scheme", "http scheme").DataType("string")).
+		Param(ws.PathParameter("podAddr", "pod address (ip or ip:port)").DataType("string")).
+		Param(ws.PathParameter("podProxyOpts", "extra url").DataType("string")))
+	s.restfulCont.Add(ws)
+
 	configz.InstallHandler(s.restfulCont)
 
 	handlePprofEndpoint := func(req *restful.Request, resp *restful.Response) {
@@ -458,7 +475,7 @@ func (s *Server) InstallDebuggingDisabledHandlers() {
 
 	paths := []string{
 		"/run/", "/exec/", "/attach/", "/portForward/", "/containerLogs/",
-		"/runningpods/", pprofBasePath, logsPath}
+		"/runningpods/", pprofBasePath, logsPath, "/podProxy"}
 	for _, p := range paths {
 		s.restfulCont.Handle(p, h)
 	}
@@ -664,6 +681,47 @@ func proxyStream(w http.ResponseWriter, r *http.Request, url *url.URL) {
 	// TODO(random-liu): Set MaxBytesPerSec to throttle the stream.
 	handler := proxy.NewUpgradeAwareHandler(url, nil /*transport*/, false /*wrapTransport*/, true /*upgradeRequired*/, &responder{})
 	handler.ServeHTTP(w, r)
+}
+
+// getPodProxy handles requests to run a command inside a container.
+func (s *Server) getPodProxy(request *restful.Request, response *restful.Response) {
+	scheme := request.PathParameter("scheme")
+	podAddr := request.PathParameter("podAddr")
+	podProxyOpts := request.PathParameter("podProxyOpts")
+
+	if len(scheme) == 0 {
+		scheme = "http"
+	}
+	if len(podAddr) == 0 {
+		// TODO: Why return JSON when the rest return plaintext errors?
+		response.WriteError(http.StatusBadRequest, fmt.Errorf(`{"message": "Missing pod addr."}`))
+		return
+	}
+
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := &http.Client{Transport: tr}
+	resp, err := client.Get(fmt.Sprintf("%s://%s/%s", scheme, podAddr, podProxyOpts))
+	if err != nil {
+		response.WriteError(http.StatusBadRequest, fmt.Errorf(`{"message": %s}`, err.Error()))
+		return
+	}
+	contentType := resp.Header.Get(restful.HEADER_ContentType)
+	if len(contentType) > 0 {
+		response.ResponseWriter.Header().Set(restful.HEADER_ContentType, contentType)
+	}
+
+	defer resp.Body.Close()
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		response.WriteError(http.StatusInternalServerError, fmt.Errorf(`{"message": %s}`, err.Error()))
+		return
+	}
+
+	response.ResponseWriter.WriteHeader(resp.StatusCode)
+	response.ResponseWriter.Write(data)
+	return
 }
 
 // getAttach handles requests to attach to a container.

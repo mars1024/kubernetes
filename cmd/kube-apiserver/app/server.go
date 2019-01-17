@@ -30,6 +30,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"context"
 
 	"github.com/go-openapi/spec"
 	"github.com/golang/glog"
@@ -96,6 +97,10 @@ import (
 	multitenancyresolver "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/resolver"
 	multitenancyaggregator "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/kube-aggregator/pkg/apiserver"
 	multitenancycrdserver "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/apiextensions-apiserver/pkg/apiserver"
+	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
+	genericfilters "k8s.io/apiserver/pkg/server/filters"
+	multitenancyfilter "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/filter"
+	bucketingfilter "gitlab.alipay-inc.com/antcloud-aks/cafe-cluster-operator/pkg/apiserver/filter"
 )
 
 const etcdRetryLimit = 60
@@ -464,6 +469,34 @@ func buildGenericConfig(
 ) {
 	genericConfig = genericapiserver.NewConfig(legacyscheme.Codecs)
 	genericConfig.MergedResourceConfig = master.DefaultAPIResourceConfigSource()
+
+	genericConfig.BuildHandlerChainFunc = func(apiHandler http.Handler, c *genericapiserver.Config) (secure http.Handler) {
+		handler := genericapifilters.WithAuthorization(apiHandler, c.Authorization.Authorizer, c.Serializer)
+		if len(os.Getenv("FEATURE_RATE_LIMIT")) > 0 && utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+			inFlightHandler := bucketingfilter.NewInFlightFilterWithRestConfig(handler, genericConfig.LoopbackClientConfig)
+			// HACK(zuoxiu.jm): nil handler means it's already initialized, somehow singleton handler doesn't work
+			inFlightHandler.Run(context.TODO())
+			handler = inFlightHandler
+		} else {
+			handler = genericfilters.WithMaxInFlightLimit(handler, c.MaxRequestsInFlight, c.MaxMutatingRequestsInFlight, c.MaxWatchRequestsInFlight, c.LongRunningFunc)
+		}
+		if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+			handler = multitenancyfilter.WithImpersonation(handler, c.Authorization.Authorizer, c.Serializer)
+		} else {
+			handler = genericapifilters.WithImpersonation(handler, c.Authorization.Authorizer, c.Serializer)
+		}
+		handler = genericapifilters.WithAudit(handler, c.AuditBackend, c.AuditPolicyChecker, c.LongRunningFunc)
+		failedHandler := genericapifilters.Unauthorized(c.Serializer, c.Authentication.SupportsBasicAuth)
+		failedHandler = genericapifilters.WithFailedAuthenticationAudit(failedHandler, c.AuditBackend, c.AuditPolicyChecker)
+		handler = genericapifilters.WithAuthentication(handler, c.Authentication.Authenticator, failedHandler)
+		handler = genericfilters.WithCORS(handler, c.CorsAllowedOriginList, nil, nil, nil, "true")
+		handler = genericfilters.WithTimeoutForNonLongRunningRequests(handler, c.LongRunningFunc, c.RequestTimeout)
+		handler = genericfilters.WithWaitGroup(handler, c.LongRunningFunc, c.HandlerChainWaitGroup)
+		handler = genericapifilters.WithRequestInfo(handler, c.RequestInfoResolver)
+		handler = genericfilters.WithPanicRecovery(handler)
+		return handler
+
+	}
 
 	if lastErr = s.GenericServerRunOptions.ApplyTo(genericConfig); lastErr != nil {
 		return

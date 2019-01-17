@@ -27,10 +27,15 @@ import (
 	"k8s.io/apimachinery/pkg/util/proxy"
 	genericregistry "k8s.io/apiserver/pkg/registry/generic/registry"
 	"k8s.io/apiserver/pkg/registry/rest"
+	genericrequest "k8s.io/apiserver/pkg/endpoints/request"
 	api "k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/capabilities"
 	"k8s.io/kubernetes/pkg/kubelet/client"
 	"k8s.io/kubernetes/pkg/registry/core/node"
+	"k8s.io/kubernetes/staging/src/k8s.io/apiserver/pkg/util/feature"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
+	multitenancymeta "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/meta"
 )
 
 // ProxyREST implements the proxy subresource for a Node
@@ -66,7 +71,17 @@ func (r *ProxyREST) Connect(ctx context.Context, id string, opts runtime.Object,
 	if !ok {
 		return nil, fmt.Errorf("Invalid options object: %#v", opts)
 	}
-	location, transport, err := node.ResourceLocation(r.Store, r.Connection, r.ProxyTransport, ctx, id)
+	var location *url.URL
+	var transport http.RoundTripper
+	var err error
+	if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		user, _ := genericrequest.UserFrom(ctx)
+		tenant, _ := multitenancyutil.TransformTenantInfoFromUser(user)
+		conn := r.Connection.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(client.ConnectionInfoGetter)
+		location, transport, err = node.ResourceLocation(r.Store, conn, r.ProxyTransport, ctx, id)
+	} else {
+		location, transport, err = node.ResourceLocation(r.Store, r.Connection, r.ProxyTransport, ctx, id)
+	}
 	if err != nil {
 		return nil, err
 	}

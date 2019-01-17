@@ -79,6 +79,7 @@ import (
 	alipaysetdefault "k8s.io/kubernetes/plugin/pkg/admission/alipay/setdefault"
 	alipaysidecar "k8s.io/kubernetes/plugin/pkg/admission/alipay/sidecar"
 	alipayzappinfo "k8s.io/kubernetes/plugin/pkg/admission/alipay/zappinfo"
+	alipayappcert "k8s.io/kubernetes/plugin/pkg/admission/alipay/appcert"
 )
 
 // AllOrderedPlugins is the list of all the plugins in order.
@@ -136,6 +137,7 @@ var AllOrderedPlugins = []string{
 	alipayresource.PluginName,        // Alipay resource validateion admission
 	alipaycpushare.PluginName,        // Alipay cpushare injection admission
 	alipayimagepullsecret.PluginName, // Alipay image pull secret injection admission
+	alipayappcert.PluginName,         // Alipay app cert
 }
 
 // RegisterAllAdmissionPlugins registers all admission plugins and
@@ -189,6 +191,7 @@ func RegisterAllAdmissionPlugins(plugins *admission.Plugins) {
 	alipayimagepullsecret.Register(plugins)
 	alipayresource.Register(plugins)
 	alipaycpushare.Register(plugins)
+	alipayappcert.Register(plugins)
 }
 
 // DefaultOffAdmissionPlugins get admission plugins off by default for kube-apiserver.

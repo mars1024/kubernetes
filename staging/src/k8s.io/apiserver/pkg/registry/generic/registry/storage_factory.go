@@ -28,6 +28,7 @@ import (
 	etcdstorage "k8s.io/apiserver/pkg/storage/etcd"
 	"k8s.io/apiserver/pkg/storage/storagebackend"
 	"k8s.io/apiserver/pkg/storage/storagebackend/factory"
+	"k8s.io/client-go/tools/cache"
 )
 
 // Creates a cacher based given storageConfig.
@@ -37,6 +38,7 @@ func StorageWithCacher(capacity int) generic.StorageDecorator {
 		objectType runtime.Object,
 		resourcePrefix string,
 		keyFunc func(obj runtime.Object) (string, error),
+		Indexers *cache.Indexers,
 		newListFunc func() runtime.Object,
 		getAttrsFunc storage.AttrFunc,
 		triggerFunc storage.TriggerPublisherFunc) (storage.Interface, factory.DestroyFunc) {
@@ -59,6 +61,7 @@ func StorageWithCacher(capacity int) generic.StorageDecorator {
 			KeyFunc:              keyFunc,
 			NewListFunc:          newListFunc,
 			GetAttrsFunc:         getAttrsFunc,
+			Indexers:             Indexers,
 			TriggerPublisherFunc: triggerFunc,
 			Codec:                storageConfig.Codec,
 		}

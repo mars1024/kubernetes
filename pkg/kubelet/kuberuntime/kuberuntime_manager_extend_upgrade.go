@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strings"
 
 	"github.com/golang/glog"
 	"google.golang.org/grpc"
@@ -184,32 +183,8 @@ func (m *kubeGenericRuntimeManager) isDirtyContainer(pod *v1.Pod, container *v1.
 	return false
 }
 
-// getDiskSize convert disk size such as "1Gi" to "1g".
-func getDiskSize(s string) string {
-	if strings.HasSuffix(s, "Gi") {
-		s = strings.Replace(s, "Gi", "g", -1)
-	}
-	if strings.HasSuffix(s, "G") {
-		s = strings.Replace(s, "G", "g", -1)
-	}
-	if strings.HasSuffix(s, "Mi") {
-		s = strings.Replace(s, "Mi", "m", -1)
-	}
-	if strings.HasSuffix(s, "M") {
-		s = strings.Replace(s, "M", "m", -1)
-	}
-	if strings.HasSuffix(s, "Ki") {
-		s = strings.Replace(s, "Ki", "k", -1)
-	}
-	if strings.HasSuffix(s, "K") {
-		s = strings.Replace(s, "K", "k", -1)
-	}
-	return s
-}
-
 // createContainerExtension creates a container and returns a message indicates why it is failed on error.
 // Steps:
-// * pull the image
 // * create the container
 // * run the post PreStart lifecycle hooks (if applicable)
 func (m *kubeGenericRuntimeManager) createContainerExtension(podSandboxID string,
@@ -218,18 +193,12 @@ func (m *kubeGenericRuntimeManager) createContainerExtension(podSandboxID string
 	pod *v1.Pod,
 	podStatus *kubecontainer.PodStatus,
 	parentContainerStatus *runtimeapi.ContainerStatus,
-	pullSecrets []v1.Secret,
 	podIP string,
+	imageRef string,
 	containerType kubecontainer.ContainerType,
 	anonymousVolumes map[string]string) (*ContainerInfo, string, error) {
-	// Step 1: pull the image.
-	imageRef, msg, err := m.imagePuller.EnsureImageExists(pod, container, pullSecrets)
-	if err != nil {
-		m.recordContainerEvent(pod, container, "", v1.EventTypeWarning, events.FailedToCreateContainer, "Error: %v", grpc.ErrorDesc(err))
-		return nil, msg, err
-	}
 
-	// Step 2: create the container.
+	// Step 1: create the container.
 	ref, err := kubecontainer.GenerateContainerRef(pod, container)
 	if err != nil {
 		glog.Errorf("Can't make a ref to pod %q, container %v: %v", format.Pod(pod), container.Name, err)
@@ -269,6 +238,8 @@ func (m *kubeGenericRuntimeManager) createContainerExtension(podSandboxID string
 		}
 	}
 
+	applyExtendContainerConfig(pod, container, containerConfig)
+
 	glog.V(4).Infof("The new config of container %q in %q is %v", container.Name, format.Pod(pod), *containerConfig)
 
 	// Deal with anonymousVolume
@@ -290,7 +261,7 @@ func (m *kubeGenericRuntimeManager) createContainerExtension(podSandboxID string
 		return nil, grpc.ErrorDesc(err), ErrCreateContainer
 	}
 
-	// Step 3: Do PreStart hook
+	// Step 2: Do PreStart hook
 	err = m.internalLifecycle.PreStartContainer(pod, container, containerID)
 	if err != nil {
 		m.recorder.Eventf(ref, v1.EventTypeWarning, events.FailedToStartContainer, "Internal PreStartContainer hook failed: %v", err)
@@ -408,6 +379,13 @@ func (m *kubeGenericRuntimeManager) upgradeContainerCommon(containerStatus *kube
 	pullSecrets []v1.Secret,
 	podIP string,
 	container *v1.Container) (*ContainerInfo, string, error) {
+
+	imageRef, msg, err := m.imagePuller.EnsureImageExists(pod, container, pullSecrets)
+	if err != nil {
+		m.recordContainerEvent(pod, container, "", v1.EventTypeWarning, events.FailedToCreateContainer, "Error: %v", grpc.ErrorDesc(err))
+		return nil, msg, err
+	}
+
 	userinfoBackup := m.userinfoBackup
 	// Get current container's status
 	currentContainerStatus, err := m.runtimeService.ContainerStatus(containerStatus.ID.ID)
@@ -422,6 +400,10 @@ func (m *kubeGenericRuntimeManager) upgradeContainerCommon(containerStatus *kube
 	image, err := m.imageService.ImageStatus(imageSpec)
 	if err != nil {
 		return nil, fmt.Sprintf("Failed to inspect image %s", container.Image), err
+	}
+	if image == nil {
+		msg := fmt.Sprintf("image %s not found", container.Image)
+		return nil, msg, errors.New(msg)
 	}
 
 	mergedAnonymousVolumes := MergeAnonymousVolumesWithContainerMounts(image, container)
@@ -457,7 +439,7 @@ func (m *kubeGenericRuntimeManager) upgradeContainerCommon(containerStatus *kube
 	// Step3: Create new container.
 	// When new container is created, the runtime manager can't see old container any more and old container is waiting to be deleted by GC.
 	upgradedContainer, msg, err := m.createContainerExtension(podSandboxID, podSandboxConfig, container, pod,
-		podStatus, currentContainerStatus, pullSecrets, podIP, kubecontainer.ContainerTypeRegular, anonymousVolumes)
+		podStatus, currentContainerStatus, podIP, imageRef, kubecontainer.ContainerTypeRegular, anonymousVolumes)
 	if err != nil {
 		glog.Errorf("Create container %q in pod %q failed: %v, %s", container.Name, format.Pod(pod), err, msg)
 		// known errors that are logged in other places are logged at higher levels here to avoid
@@ -465,6 +447,7 @@ func (m *kubeGenericRuntimeManager) upgradeContainerCommon(containerStatus *kube
 		switch {
 		case err == images.ErrImagePullBackOff:
 			glog.V(3).Infof("container start failed: %v: %s", err, msg)
+			return nil, err.Error() + ":" + msg, err
 		default:
 			utilruntime.HandleError(fmt.Errorf("container start failed: %v: %s", err, msg))
 		}
@@ -511,6 +494,14 @@ func (m *kubeGenericRuntimeManager) upgradeContainerToRunningState(containerStat
 	upgradedContainer, msg, err := m.upgradeContainerCommon(containerStatus, podSandboxID, podSandboxConfig, pod, podStatus,
 		pullSecrets, podIP, container)
 	if err != nil {
+		// known errors that are logged in other places are logged at higher levels here to avoid
+		// repetitive log spam
+		switch {
+		case err == images.ErrImagePullBackOff:
+			glog.V(3).Infof("container start failed: %v: %s", err, msg)
+		default:
+			utilruntime.HandleError(fmt.Errorf("container upgrade failed: %v: %s", err, msg))
+		}
 		return upgradedContainer, msg, err
 	}
 	// Start new container.

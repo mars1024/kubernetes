@@ -46,6 +46,7 @@ import (
 	storeerr "k8s.io/apiserver/pkg/storage/errors"
 	"k8s.io/apiserver/pkg/storage/etcd/metrics"
 	"k8s.io/apiserver/pkg/util/dryrun"
+	"k8s.io/client-go/tools/cache"
 
 	"github.com/golang/glog"
 )
@@ -1364,6 +1365,11 @@ func (e *Store) CompleteWithOptions(options *generic.StoreOptions) error {
 		triggerFunc = storage.NoTriggerPublisher
 	}
 
+	indexers := options.Indexers
+	if indexers == nil {
+		indexers = &cache.Indexers{}
+	}
+
 	if e.DeleteCollectionWorkers == 0 {
 		e.DeleteCollectionWorkers = opts.DeleteCollectionWorkers
 	}
@@ -1387,6 +1393,7 @@ func (e *Store) CompleteWithOptions(options *generic.StoreOptions) error {
 			e.NewFunc(),
 			prefix,
 			keyFunc,
+			indexers,
 			e.NewListFunc,
 			attrFunc,
 			triggerFunc,

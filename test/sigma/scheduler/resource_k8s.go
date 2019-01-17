@@ -141,6 +141,8 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][resource][Serial]", func() {
 	It("[smoke][p0][bvt] resource_k8s_001 A pod with cpu/mem/ephemeral-storage request should be scheduled on node with enough resource successfully. "+
 		"While fail to be scheduled on node with insufficient resource", func() {
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		framework.Logf("get one node to schedule, nodeName: %s", nodeName)
 
 		// Apply node label to each node
@@ -311,6 +313,8 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][resource][Serial]", func() {
 	It("resource_k8s_002 A pod with over quota cpu request should be scheduled on node with enough resource successfully."+
 		"While fail to be scheduled on node with insufficient resource", func() {
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		framework.Logf("get one node to schedule, nodeName: %s", nodeName)
 
 		// Apply node affinity label to each node
@@ -427,6 +431,8 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][resource][Serial]", func() {
 	It("resource_k8s_003 A pod with extended resource request should be scheduled on node with enough resource successfully."+
 		"While fail to be scheduled on node with insufficient resource.", func() {
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		framework.Logf("get one node to schedule, nodeName: %s", nodeName)
 
 		// Apply node label to each node
@@ -543,6 +549,8 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][resource][Serial]", func() {
 		framework.WaitForStableCluster(cs, masterNodes)
 
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		By(fmt.Sprintf("apply a label on the found node %s", nodeName))
 
 		allocatableCPU := nodeToAllocatableMapCPU[nodeName]
@@ -828,6 +836,8 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][resource][Serial]", func() {
 		framework.WaitForStableCluster(cs, masterNodes)
 
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		By(fmt.Sprintf("apply a label on the found node %s", nodeName))
 
 		allocatableCPU := nodeToAllocatableMapCPU[nodeName]

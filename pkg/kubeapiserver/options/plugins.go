@@ -70,11 +70,14 @@ import (
 	"k8s.io/kubernetes/plugin/pkg/admission/sigmascheduling"
 
 	alipaycmdb "k8s.io/kubernetes/plugin/pkg/admission/alipay/cmdb"
+	alipaycpushare "k8s.io/kubernetes/plugin/pkg/admission/alipay/cpushare"
+	alipayimagepullsecret "k8s.io/kubernetes/plugin/pkg/admission/alipay/imagepullsecret"
 	alipayinclusterkube "k8s.io/kubernetes/plugin/pkg/admission/alipay/inclusterkube"
-	alipaymosnsidecar "k8s.io/kubernetes/plugin/pkg/admission/alipay/mosnsidecar"
 	alipaypodlocation "k8s.io/kubernetes/plugin/pkg/admission/alipay/podlocation"
 	alipaypodpreset "k8s.io/kubernetes/plugin/pkg/admission/alipay/podpreset"
+	alipayresource "k8s.io/kubernetes/plugin/pkg/admission/alipay/resource"
 	alipaysetdefault "k8s.io/kubernetes/plugin/pkg/admission/alipay/setdefault"
+	alipaysidecar "k8s.io/kubernetes/plugin/pkg/admission/alipay/sidecar"
 	alipayzappinfo "k8s.io/kubernetes/plugin/pkg/admission/alipay/zappinfo"
 )
 
@@ -113,7 +116,7 @@ var AllOrderedPlugins = []string{
 	deny.PluginName,                         // AlwaysDeny
 	namespacedelete.PluginName,              // NamespaceDelete
 
-	alipaymosnsidecar.PluginName,          // Alipay MOSN Sidecar
+	alipaysidecar.PluginName,              // Alipay Sidecar
 	armory.PluginName,                     // Armory
 	containerstate.PluginName,             // ContainerState
 	networkstatus.PluginName,              // NetworkStatus
@@ -124,12 +127,15 @@ var AllOrderedPlugins = []string{
 	alipodinjectionpostschedule.PluginName, // AliPodInjectionPostSchedule
 	poddeletionflowcontrol.PluginName,      // PodDeletionFlowControl
 
-	alipaysetdefault.PluginName,    // Alipay SetDefault
-	alipaycmdb.PluginName,          // Alipay CMDB
-	alipayinclusterkube.PluginName, // Alipay in-cluster kubernetes service
-	alipaypodlocation.PluginName,   // Alipay PodLocation
-	alipaypodpreset.PluginName,     // Alipay PodPreset
-	alipayzappinfo.PluginName,      // Alipay ZAppInfo
+	alipaysetdefault.PluginName,      // Alipay SetDefault
+	alipaycmdb.PluginName,            // Alipay CMDB
+	alipayinclusterkube.PluginName,   // Alipay in-cluster kubernetes service
+	alipaypodlocation.PluginName,     // Alipay PodLocation
+	alipaypodpreset.PluginName,       // Alipay PodPreset
+	alipayzappinfo.PluginName,        // Alipay ZAppInfo
+	alipayresource.PluginName,        // Alipay resource validateion admission
+	alipaycpushare.PluginName,        // Alipay cpushare injection admission
+	alipayimagepullsecret.PluginName, // Alipay image pull secret injection admission
 }
 
 // RegisterAllAdmissionPlugins registers all admission plugins and
@@ -173,13 +179,16 @@ func RegisterAllAdmissionPlugins(plugins *admission.Plugins) {
 	alipodinjectionpostschedule.Register(plugins)
 	poddeletionflowcontrol.Register(plugins)
 
-	alipaymosnsidecar.Register(plugins)
+	alipaysidecar.Register(plugins)
 	alipaysetdefault.Register(plugins)
 	alipaycmdb.Register(plugins)
 	alipayinclusterkube.Register(plugins)
 	alipaypodlocation.Register(plugins)
 	alipaypodpreset.Register(plugins)
 	alipayzappinfo.Register(plugins)
+	alipayimagepullsecret.Register(plugins)
+	alipayresource.Register(plugins)
+	alipaycpushare.Register(plugins)
 }
 
 // DefaultOffAdmissionPlugins get admission plugins off by default for kube-apiserver.

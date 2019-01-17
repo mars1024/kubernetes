@@ -45,4 +45,7 @@ const (
 
 	// pod container mode, e.g. dockervm/pod/...
 	LabelPodContainerModel = "sigma.ali/container-model"
+
+	// qos of pod. label value is defined in qosclass
+	LabelPodQOSClass = "sigma.ali/qos"
 )

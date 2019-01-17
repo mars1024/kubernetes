@@ -37,6 +37,8 @@ import (
 	"k8s.io/kubernetes/test/utils"
 
 	"github.com/golang/glog"
+	"fmt"
+	"runtime"
 )
 
 type HollowKubelet struct {
@@ -58,6 +60,11 @@ func NewHollowKubelet(
 	// Static config
 	// -----------------
 	f, c := GetHollowKubeletConfig(nodeName, kubeletPort, kubeletReadOnlyPort, maxPods, podsPerCore)
+	if runtime.GOOS == "linux" {
+		f.RemoteRuntimeEndpoint = fmt.Sprintf("unix:///var/run/dockershim-%s.sock", nodeName)
+	} else if runtime.GOOS == "windows" {
+		f.RemoteRuntimeEndpoint = fmt.Sprintf("tcp://localhost-%s:3735", nodeName)
+	}
 
 	// -----------------
 	// Injected objects

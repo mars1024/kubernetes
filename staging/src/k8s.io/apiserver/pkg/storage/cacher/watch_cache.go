@@ -80,6 +80,35 @@ func storeElementKey(obj interface{}) (string, error) {
 	return elem.Key, nil
 }
 
+func storeElementObject(obj interface{}) (runtime.Object, error) {
+	elem, ok := obj.(*storeElement)
+	if !ok {
+		return nil, fmt.Errorf("not a storeElement: %v", obj)
+	}
+	return elem.Object, nil
+}
+
+func storeElementIndexFunc(objIndexFunc cache.IndexFunc) cache.IndexFunc {
+	return func(obj interface{}) (strings []string, e error) {
+		seo, err := storeElementObject(obj)
+		if err != nil {
+			return nil, err
+		}
+		return objIndexFunc(seo)
+	}
+}
+
+func storeElementIndexers(indexers *cache.Indexers) cache.Indexers {
+	if indexers == nil {
+		return cache.Indexers{}
+	}
+	ret := cache.Indexers{}
+	for indexName, indexFunc := range *indexers {
+		ret[indexName] = storeElementIndexFunc(indexFunc)
+	}
+	return ret
+}
+
 // watchCacheElement is a single "watch event" stored in a cache.
 // It contains the resource version of the object and the object
 // itself.
@@ -122,7 +151,8 @@ type watchCache struct {
 	// history" i.e. from the moment just after the newest cached watched event.
 	// It is necessary to effectively allow clients to start watching at now.
 	// NOTE: We assume that <store> is thread-safe.
-	store cache.Store
+	// Use indexer to effectively support LIST operation with label/field selectors.
+	store cache.Indexer
 
 	// ResourceVersion up to which the watchCache is propagated.
 	resourceVersion uint64
@@ -147,6 +177,7 @@ type watchCache struct {
 func newWatchCache(
 	capacity int,
 	keyFunc func(runtime.Object) (string, error),
+	indexers *cache.Indexers,
 	getAttrsFunc func(runtime.Object) (labels.Set, fields.Set, bool, error),
 	versioner storage.Versioner) *watchCache {
 	wc := &watchCache{
@@ -156,7 +187,7 @@ func newWatchCache(
 		cache:               make([]watchCacheElement, capacity),
 		startIndex:          0,
 		endIndex:            0,
-		store:               cache.NewStore(storeElementKey),
+		store:               cache.NewIndexer(storeElementKey, 	storeElementIndexers(indexers)),
 		resourceVersion:     0,
 		listResourceVersion: 0,
 		clock:               clock.RealClock{},
@@ -318,6 +349,24 @@ func (w *watchCache) WaitUntilFreshAndList(resourceVersion uint64, trace *utiltr
 	if err != nil {
 		return nil, 0, err
 	}
+	return w.store.List(), w.resourceVersion, nil
+}
+
+// Don't change the WaitUntilFreshAndList for upstream compatibility.
+func (w *watchCache) WaitUntilFreshAndListWithIndex(resourceVersion uint64, matchValues []storage.MatchValue, trace *utiltrace.Trace) ([]interface{}, uint64, error) {
+	err := w.waitUntilFreshAndBlock(resourceVersion, trace)
+	defer w.RUnlock()
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// trying to query by index sequentially
+	for _, matchValue := range matchValues {
+		if result, err := w.store.ByIndex(matchValue.IndexName, matchValue.Value); err == nil {
+			return result, w.resourceVersion, nil
+		}
+	}
+	// go back to normal list operation when we can not find any index
 	return w.store.List(), w.resourceVersion, nil
 }
 

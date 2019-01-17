@@ -18,12 +18,12 @@ package cacher
 
 import (
 	"fmt"
+	"k8s.io/kubernetes/pkg/registry/core/pod"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
-	"k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,25 +36,28 @@ import (
 	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/apiserver/pkg/storage/etcd"
 	"k8s.io/client-go/tools/cache"
+	api "k8s.io/kubernetes/pkg/apis/core"
 )
 
-func makeTestPod(name string, resourceVersion uint64) *v1.Pod {
-	return &v1.Pod{
+func makeTestPod(name string, resourceVersion uint64) *api.Pod {
+	return makeTestPodDetails(name, resourceVersion, "some-node", map[string]string{"my-app": "my-app"})
+}
+
+func makeTestPodDetails(name string, resourceVersion uint64, node string, labels map[string]string) *api.Pod {
+	return &api.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:       "ns",
 			Name:            name,
 			ResourceVersion: strconv.FormatUint(resourceVersion, 10),
-			Labels: map[string]string{
-				"k8s-app": "my-app",
-			},
+			Labels: labels,
 		},
-		Spec: v1.PodSpec{
-			NodeName: "some-node",
+		Spec: api.PodSpec{
+			NodeName: node,
 		},
 	}
 }
 
-func makeTestStoreElement(pod *v1.Pod) *storeElement {
+func makeTestStoreElement(pod *api.Pod) *storeElement {
 	return &storeElement{
 		Key:           "prefix/ns/" + pod.Name,
 		Object:        pod,
@@ -65,25 +68,25 @@ func makeTestStoreElement(pod *v1.Pod) *storeElement {
 }
 
 // newTestWatchCache just adds a fake clock.
-func newTestWatchCache(capacity int) *watchCache {
+func newTestWatchCache(capacity int, indexers *cache.Indexers) *watchCache {
 	keyFunc := func(obj runtime.Object) (string, error) {
 		return storage.NamespaceKeyFunc("prefix", obj)
 	}
 	getAttrsFunc := func(obj runtime.Object) (labels.Set, fields.Set, bool, error) {
-		pod, ok := obj.(*v1.Pod)
+		pod, ok := obj.(*api.Pod)
 		if !ok {
 			return nil, nil, false, fmt.Errorf("not a pod")
 		}
 		return labels.Set(pod.Labels), fields.Set{"spec.nodeName": pod.Spec.NodeName}, false, nil
 	}
 	versioner := etcd.APIObjectVersioner{}
-	wc := newWatchCache(capacity, keyFunc, getAttrsFunc, versioner)
+	wc := newWatchCache(capacity, keyFunc, indexers, getAttrsFunc, versioner)
 	wc.clock = clock.NewFakeClock(time.Now())
 	return wc
 }
 
 func TestWatchCacheBasic(t *testing.T) {
-	store := newTestWatchCache(2)
+	store := newTestWatchCache(2, &cache.Indexers{})
 
 	// Test Add/Update/Delete.
 	pod1 := makeTestPod("pod", 1)
@@ -160,7 +163,7 @@ func TestWatchCacheBasic(t *testing.T) {
 }
 
 func TestEvents(t *testing.T) {
-	store := newTestWatchCache(5)
+	store := newTestWatchCache(5, &cache.Indexers{})
 
 	store.Add(makeTestPod("pod", 3))
 
@@ -280,7 +283,7 @@ func TestEvents(t *testing.T) {
 }
 
 func TestMarker(t *testing.T) {
-	store := newTestWatchCache(3)
+	store := newTestWatchCache(3, &cache.Indexers{})
 
 	// First thing that is called when propagated from storage is Replace.
 	store.Replace([]interface{}{
@@ -315,7 +318,7 @@ func TestMarker(t *testing.T) {
 }
 
 func TestWaitUntilFreshAndList(t *testing.T) {
-	store := newTestWatchCache(3)
+	store := newTestWatchCache(3, &cache.Indexers{})
 
 	// In background, update the store.
 	go func() {
@@ -336,7 +339,7 @@ func TestWaitUntilFreshAndList(t *testing.T) {
 }
 
 func TestWaitUntilFreshAndGet(t *testing.T) {
-	store := newTestWatchCache(3)
+	store := newTestWatchCache(3, &cache.Indexers{})
 
 	// In background, update the store.
 	go func() {
@@ -361,7 +364,7 @@ func TestWaitUntilFreshAndGet(t *testing.T) {
 }
 
 func TestWaitUntilFreshAndListTimeout(t *testing.T) {
-	store := newTestWatchCache(3)
+	store := newTestWatchCache(3, &cache.Indexers{})
 	fc := store.clock.(*clock.FakeClock)
 
 	// In background, step clock after the below call starts the timer.
@@ -397,7 +400,7 @@ func (t *testLW) Watch(options metav1.ListOptions) (watch.Interface, error) {
 }
 
 func TestReflectorForWatchCache(t *testing.T) {
-	store := newTestWatchCache(5)
+	store := newTestWatchCache(5, &cache.Indexers{})
 
 	{
 		_, version, err := store.WaitUntilFreshAndList(0, nil)
@@ -416,10 +419,10 @@ func TestReflectorForWatchCache(t *testing.T) {
 			return fw, nil
 		},
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-			return &v1.PodList{ListMeta: metav1.ListMeta{ResourceVersion: "10"}}, nil
+			return &api.PodList{ListMeta: metav1.ListMeta{ResourceVersion: "10"}}, nil
 		},
 	}
-	r := cache.NewReflector(lw, &v1.Pod{}, store, 0)
+	r := cache.NewReflector(lw, &api.Pod{}, store, 0)
 	r.ListAndWatch(wait.NeverStop)
 
 	{
@@ -430,5 +433,61 @@ func TestReflectorForWatchCache(t *testing.T) {
 		if version != 10 {
 			t.Errorf("unexpected resource version: %d", version)
 		}
+	}
+}
+
+func TestWaitUntilFreshAndListWithIndex(t *testing.T) {
+	store := newTestWatchCache(3, &cache.Indexers{
+		"label": pod.PodLabelIndexFunc("label"),
+		"spec.nodeName": pod.NodeNameIndexFunc,
+	})
+
+	// In background, update the store.
+	go func() {
+		store.Add(makeTestPodDetails("pod1", 2, "node1", map[string]string{"label": "value1"}))
+		store.Add(makeTestPodDetails("pod2", 3, "node1", map[string]string{"label": "value1"}))
+		store.Add(makeTestPodDetails("pod3", 5, "node2", map[string]string{"label": "value2"}))
+	}()
+
+	matchValues := []storage.MatchValue{
+		{IndexName: "label", Value: "value1"},
+		{IndexName: "spec.nodeName", Value: "node2"},
+	}
+	list, resourceVersion, err := store.WaitUntilFreshAndListWithIndex(5, matchValues, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resourceVersion != 5 {
+		t.Errorf("unexpected resourceVersion: %v, expected: 5", resourceVersion)
+	}
+	if len(list) != 2 {
+		t.Errorf("unexpected list returned: %#v", list)
+	}
+
+	matchValues = []storage.MatchValue{
+		{IndexName: "not-exist-label", Value: "whatever"},
+		{IndexName: "spec.nodeName", Value: "node2"},
+	}
+	list, resourceVersion, err = store.WaitUntilFreshAndListWithIndex(5, matchValues, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resourceVersion != 5 {
+		t.Errorf("unexpected resourceVersion: %v, expected: 5", resourceVersion)
+	}
+	if len(list) != 1 {
+		t.Errorf("unexpected list returned: %#v", list)
+	}
+
+	// list with index not exists
+	matchValues = []storage.MatchValue{
+		{IndexName: "not-exist-label", Value: "whatever"},
+	}
+	list, resourceVersion, err = store.WaitUntilFreshAndListWithIndex(5, matchValues, nil)
+	if resourceVersion != 5 {
+		t.Errorf("unexpected resourceVersion: %v, expected: 5", resourceVersion)
+	}
+	if len(list) != 3 {
+		t.Errorf("unexpected list returned: %#v", list)
 	}
 }

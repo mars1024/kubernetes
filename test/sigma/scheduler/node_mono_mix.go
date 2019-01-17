@@ -124,6 +124,8 @@ var _ = Describe("[ali][sigma-2.0+3.1][sigma-scheduler][node-mono][Serial]", fun
 		duName := "du-" + appName
 
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		// sleep 5s to wait for host.AllocPlanSize updated
 		time.Sleep(5 * time.Second)
 

@@ -32,6 +32,8 @@ import (
 // applyPlatformSpecificContainerConfig applies platform specific configurations to runtimeapi.ContainerConfig.
 func (m *kubeGenericRuntimeManager) applyPlatformSpecificContainerConfig(config *runtimeapi.ContainerConfig, container *v1.Container, pod *v1.Pod, uid *int64, username string) error {
 	config.Linux = m.generateLinuxContainerConfig(container, pod, uid, username)
+
+	applyExtendContainerConfig(pod, container, config)
 	return nil
 }
 
@@ -94,6 +96,9 @@ func (m *kubeGenericRuntimeManager) generateLinuxContainerConfig(container *v1.C
 			lc.Resources.Ulimits = append(lc.Resources.Ulimits, &runtimeapi.Ulimit{Name: ulimit.Name, Soft: ulimit.Soft, Hard: ulimit.Hard})
 		}
 	}
+
+	applyDiskQuota(pod, container, &runtimeapi.ContainerConfig{Linux: lc})
+	applyExtendContainerResource(pod, container, &runtimeapi.ContainerConfig{Linux: lc})
 
 	return lc
 }

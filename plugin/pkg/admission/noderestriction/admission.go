@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"io"
 
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -98,6 +100,10 @@ var (
 )
 
 func (c *nodePlugin) Admit(a admission.Attributes) error {
+	if c.features.Enabled(multitenancy.FeatureName) {
+		tenant, _ := multitenancyutil.TransformTenantInfoFromUser(a.GetUserInfo())
+		c = c.ShallowCopyWithTenant(tenant).(*nodePlugin)
+	}
 	nodeName, isNode := c.nodeIdentifier.NodeIdentity(a.GetUserInfo())
 
 	// Our job is just to restrict nodes

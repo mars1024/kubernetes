@@ -30,9 +30,9 @@ import (
 )
 
 const (
-	PluginName        = "alipayAppCert"
-	AppCertSecretTemp = "%s-cert-local-key"
-	AppCertSecretKey  = "app_local_key"
+	PluginName     = "alipayAppCert"
+	SecretNameTemp = "%s-cert-local-key"
+	SecretKey      = "app_local_key"
 )
 
 // kmi invoke configurations
@@ -175,7 +175,7 @@ func (plugin *alipayAppCert) Admit(a admission.Attributes) (err error) {
 }
 
 func (plugin *alipayAppCert) checkAppCertSecretExist(appname string, pod *api.Pod) (bool, error) {
-	secretName := fmt.Sprintf(AppCertSecretTemp, appname)
+	secretName := fmt.Sprintf(SecretNameTemp, appname)
 	_, err := plugin.secretLister.Secrets(pod.Namespace).Get(secretName)
 
 	// AppCertSecret is already exists in pod's namespace.
@@ -200,7 +200,7 @@ func (plugin *alipayAppCert) createAppCertSecret(appname string, appLocalKey str
 }
 
 func (plugin *alipayAppCert) generateAppCertSecret(appname string, appLocalKey string) *api.Secret {
-	secretName := fmt.Sprintf(AppCertSecretTemp, appname)
+	secretName := fmt.Sprintf(SecretNameTemp, appname)
 	appCertSecret := &api.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: secretName,
@@ -208,7 +208,7 @@ func (plugin *alipayAppCert) generateAppCertSecret(appname string, appLocalKey s
 		Type: api.SecretTypeOpaque,
 		Data: map[string][]byte{},
 	}
-	appCertSecret.Data[AppCertSecretKey] = []byte(appLocalKey)
+	appCertSecret.Data[SecretKey] = []byte(appLocalKey)
 	return appCertSecret
 }
 

@@ -28,6 +28,9 @@ import (
 	informers "k8s.io/kubernetes/pkg/client/informers/informers_generated/internalversion"
 	corelisters "k8s.io/kubernetes/pkg/client/listers/core/internalversion"
 	kubeapiserveradmission "k8s.io/kubernetes/pkg/kubeapiserver/admission"
+	"k8s.io/apiserver/pkg/util/feature"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
 )
 
 // PluginName indicates name of admission plugin.
@@ -60,6 +63,13 @@ func (p *Provision) Admit(a admission.Attributes) error {
 		return nil
 	}
 
+	if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenant, err := multitenancyutil.TransformTenantInfoFromUser(a.GetUserInfo())
+		if err != nil {
+			return err
+		}
+		p = p.ShallowCopyWithTenant(tenant).(*Provision)
+	}
 	// if we're here, then we've already passed authentication, so we're allowed to do what we're trying to do
 	// if we're here, then the API server has found a route, which means that if we have a non-empty namespace
 	// its a namespaced resource.

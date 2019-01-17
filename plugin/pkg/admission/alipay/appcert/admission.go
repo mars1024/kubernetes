@@ -27,12 +27,13 @@ import (
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	informers "k8s.io/kubernetes/pkg/client/informers/informers_generated/internalversion"
 	settingslisters "k8s.io/kubernetes/pkg/client/listers/core/internalversion"
+	kubeapiserveradmission "k8s.io/kubernetes/pkg/kubeapiserver/admission"
 )
 
 const (
-	PluginName     = "alipayAppCert"
-	SecretNameTemp = "%s-cert-local-key"
-	SecretKey      = "app_local_key"
+	PluginName           = "alipayAppCert"
+	SecretNameTemp       = "%s-cert-local-key"
+	AppIdentitySecretKey = "app_local_key"
 )
 
 // kmi invoke configurations
@@ -109,6 +110,12 @@ type alipayAppCert struct {
 	secretLister settingslisters.SecretLister
 }
 
+var (
+	_ = admission.Interface(&alipayAppCert{})
+	_ = kubeapiserveradmission.WantsInternalKubeInformerFactory(&alipayAppCert{})
+	_ = kubeapiserveradmission.WantsInternalKubeClientSet(&alipayAppCert{})
+)
+
 // NewAlipayAppCert creates a new admission plugin
 func NewAlipayAppCert() *alipayAppCert {
 	return &alipayAppCert{Handler: admission.NewHandler(admission.Create)}
@@ -116,6 +123,9 @@ func NewAlipayAppCert() *alipayAppCert {
 
 // ValidateInitialization checks whether the plugin was correctly initialized.
 func (plugin *alipayAppCert) ValidateInitialization() error {
+	if plugin.client == nil {
+		return fmt.Errorf("%s requires a client", PluginName)
+	}
 	return nil
 }
 
@@ -191,7 +201,7 @@ func (plugin *alipayAppCert) checkAppCertSecretExist(appname string, pod *api.Po
 }
 
 func (plugin *alipayAppCert) createAppCertSecret(appname string, appLocalKey string, pod *api.Pod) (string, error) {
-	appCertSecret := plugin.generateAppCertSecret(appname, appLocalKey)
+	appCertSecret := generateAppCertSecret(appname, appLocalKey)
 	gotSecret, err := plugin.client.Core().Secrets(pod.Namespace).Create(appCertSecret)
 	if err != nil {
 		return "", fmt.Errorf("failed create secret: %v", err)
@@ -199,7 +209,7 @@ func (plugin *alipayAppCert) createAppCertSecret(appname string, appLocalKey str
 	return gotSecret.Name, nil
 }
 
-func (plugin *alipayAppCert) generateAppCertSecret(appname string, appLocalKey string) *api.Secret {
+func generateAppCertSecret(appname string, appLocalKey string) *api.Secret {
 	secretName := fmt.Sprintf(SecretNameTemp, appname)
 	appCertSecret := &api.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -208,7 +218,7 @@ func (plugin *alipayAppCert) generateAppCertSecret(appname string, appLocalKey s
 		Type: api.SecretTypeOpaque,
 		Data: map[string][]byte{},
 	}
-	appCertSecret.Data[SecretKey] = []byte(appLocalKey)
+	appCertSecret.Data[AppIdentitySecretKey] = []byte(appLocalKey)
 	return appCertSecret
 }
 

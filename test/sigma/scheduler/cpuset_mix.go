@@ -1057,4 +1057,130 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][smoke][cpuset]", func() {
 			}
 		}
 	})
+
+	// case描述：cpusetmode
+	// 用于：验证cpuset分配方式
+	// 步骤 要求机器初始状态为空,初始可分配cpuset为n
+	// 1.  n/2核 sigma A, cpusetmode=Exclusive （预期成功）
+	// 2.  n-n/2核sigma B, cpusetmode=default（预期成功）
+	// 3.  1核 sigma C（预期失败）
+	// 4.  删除A（预期失败）
+	// 5.  n/2核 sigma Dcpusetmode=default（预期成功）
+
+	// 验证结果
+	// 1. 所有的cpuset不重复
+	It("[p2] cpuset_mix_011: Verify cpusetmode.", func() {
+		if env.GetTester() != "ant" {
+			Skip("Not ant, will skip.")
+		}
+		framework.WaitForStableCluster(cs, masterNodes)
+
+		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+		// get nodeIP by node name
+		nodeIP := nodesInfo[nodeName].Status.Addresses[0].Address
+
+		framework.Logf("get one node to schedule, nodeName: %s", nodeName)
+
+		AllocatableCPU := nodeToAllocatableMapCPU[nodeName]
+		AllocatableMemory := nodeToAllocatableMapMem[nodeName]
+		AllocatableDisk := nodeToAllocatableMapEphemeralStorage[nodeName]
+
+		requestedCPU := AllocatableCPU / 2
+		requestedMemory := AllocatableMemory / 16 //保证一定能扩容出来
+		requestedDisk := AllocatableDisk / 16     //保证一定能扩容出来
+
+		// get nodeIP by node name
+		tests := []resourceCase{
+			{
+				cpu:             requestedCPU,
+				mem:             requestedMemory,
+				ethstorage:      requestedDisk,
+				requestType:     requestTypeSigma,
+				affinityConfig:  map[string][]string{"ali.CpuSetMode": {"Exclusive"}, "ali.SpecifiedNcIps": {nodeIP}},
+				shouldScheduled: true,
+				spreadStrategy:  "default",
+			},
+			{
+				cpu:             AllocatableCPU - requestedCPU,
+				mem:             requestedMemory,
+				ethstorage:      requestedDisk,
+				requestType:     requestTypeSigma,
+				affinityConfig:  map[string][]string{"ali.CpuSetMode": {"default"}, "ali.SpecifiedNcIps": {nodeIP}},
+				shouldScheduled: true,
+				spreadStrategy:  "default",
+			},
+			{
+				cpu:             int64(1000),
+				mem:             requestedMemory,
+				ethstorage:      requestedDisk,
+				requestType:     requestTypeSigma,
+				affinityConfig:  map[string][]string{"ali.CpuSetMode": {"default"}, "ali.SpecifiedNcIps": {nodeIP}},
+				shouldScheduled: false,
+				spreadStrategy:  "default",
+			},
+			{
+				cleanIndexes: []int{0},
+				requestType:  cleanResource,
+			},
+			{
+				cpu:             requestedCPU,
+				mem:             requestedMemory,
+				ethstorage:      requestedDisk,
+				requestType:     requestTypeSigma,
+				affinityConfig:  map[string][]string{"ali.CpuSetMode": {"default"}, "ali.SpecifiedNcIps": {nodeIP}},
+				shouldScheduled: true,
+				spreadStrategy:  "default",
+			},
+		}
+		tc := &testContext{
+			testCases: tests,
+			caseName:  "cpuset_mix_011",
+			cs:        cs,
+			f:         f,
+		}
+		defer cleanJob(tc)
+
+		nodeName = ""
+		for i, test := range tc.testCases {
+			By(fmt.Sprintf("exec case:%d", i))
+			nodeN := ""
+			switch test.requestType {
+			case requestTypeKubernetes:
+				createAndVerifyK8sPod(tc, i, test)
+				po := tc.resourceToDelete[i].pod
+				newPod, err := tc.cs.CoreV1().Pods(po.Namespace).Get(po.Name, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				nodeN = newPod.Spec.NodeName
+
+			case requestTypeSigma:
+				createAndVerifySigmaCase(tc, i, test)
+				if test.shouldScheduled {
+					nodeN = strings.ToLower(tc.resourceToDelete[i].containerResult.HostSN)
+				}
+
+			case cleanResource:
+				framework.Logf("caseName: %v, caseIndex: %v, cleanResource, indexes: %v", tc.caseName, i, test.cleanIndexes)
+				cleanContainers(tc, test.cleanIndexes)
+			}
+			if len(nodeN) > 0 {
+				if len(nodeName) > 0 {
+					Expect(nodeName).To(Equal(nodeN))
+				} else {
+					nodeName = nodeN
+				}
+			}
+			cpuset := map[string]int{}
+			for k, v := range tc.resourceToDelete {
+				if v.beDeleted {
+					continue
+				}
+				framework.Logf("case:%d cpusets:%s", k, v.containerResult.CPUSet)
+				for _, vv := range strings.Split(v.containerResult.CPUSet, ",") {
+					cpuset[vv]++
+					Expect(cpuset[vv]).To(Equal(1))
+				}
+			}
+		}
+	})
 })

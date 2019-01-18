@@ -167,6 +167,7 @@ func newNodeLifecycleControllerFromClient(
 		useTaints,
 		false,
 		false,
+		false,
 	)
 	if err != nil {
 		return nil, err

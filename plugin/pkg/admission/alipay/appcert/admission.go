@@ -70,6 +70,7 @@ import (
 
 	"github.com/golang/glog"
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
+	alipaysigmak8sapi "gitlab.alipay-inc.com/sigma/apis/pkg/apis"
 	"k8s.io/apimachinery/pkg/api/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -82,7 +83,7 @@ import (
 )
 
 const (
-	PluginName               = "alipayAppCert"
+	PluginName               = "AlipayAppCert"
 	AppCertsSecretNamespace  = "app-certs"
 	PluginConfSecretName     = "basic-conf"
 	KMIEndpointSecretKey     = "kmi-endpoint"
@@ -93,9 +94,9 @@ const (
 
 // kmi invoke configurations
 const (
-	signatureHeader = "X-KMI-SIGNATURE"
-	kmiCodeNoCert   = "0"
-	kmiCodeSuccess  = "1"
+	signatureHeader  = "X-KMI-SIGNATURE"
+	kmiCodeNoCert    = "0"
+	kmiCodeSuccess   = "1"
 	kmiInvokeTimeout = 10
 )
 
@@ -145,7 +146,7 @@ func (plugin *alipayAppCert) SetInternalKubeClientSet(client internalclientset.I
 func (plugin *alipayAppCert) SetInternalKubeInformerFactory(f informers.SharedInformerFactory) {
 	secretInformer := f.Core().InternalVersion().Secrets()
 	plugin.secretLister = secretInformer.Lister()
-	plugin.SetReadyFunc(func() bool { return secretInformer.Informer().HasSynced() })
+	plugin.SetReadyFunc(secretInformer.Informer().HasSynced)
 }
 
 func (plugin *alipayAppCert) Admit(a admission.Attributes) (err error) {
@@ -160,18 +161,24 @@ func (plugin *alipayAppCert) Admit(a admission.Attributes) (err error) {
 		return apierrors.NewBadRequest("Resource was marked with kind Pod but was unable to be converted")
 	}
 
+	// check if mosn is enabled
+	if pod.Annotations[alipaysigmak8sapi.MOSNSidecarInject] != string(alipaysigmak8sapi.SidecarInjectionPolicyEnabled) {
+		// no need to fetch app_local_key.json if mosn is not enabled
+		return nil
+	}
+
 	// fetch appname from pod labels
 	appname := pod.Labels[sigmak8sapi.LabelAppName]
 	if appname == "" {
-		glog.Error("failed to fetch appname from labels, skip the appcert admission plugin")
-		return nil
+		glog.Error("failed to fetch appname from labels")
+		return admission.NewForbidden(a, fmt.Errorf("failed to fetch appname from labels"))
 	}
 
 	// fetch plugin conf from secret
 	pluginConfSecret, err := plugin.secretLister.Secrets(AppCertsSecretNamespace).Get(PluginConfSecretName)
 	if err != nil {
 		glog.Errorf("failed to fetch plugin configuration from secret, err msg: %v", err)
-		return nil
+		return admission.NewForbidden(a, fmt.Errorf("failed to fetch plugin configuration from secret, err msg: %v", err))
 	}
 	kmiEndpoint := string(pluginConfSecret.Data[KMIEndpointSecretKey])
 	pemKMIPublicKey := string(pluginConfSecret.Data[KMIPublicKeySecretKey])
@@ -181,9 +188,10 @@ func (plugin *alipayAppCert) Admit(a admission.Attributes) (err error) {
 	exist, err := plugin.checkAppCertSecretExist(appname, pod)
 	if err != nil {
 		glog.Errorf("failed to check secret exist, err msg: %v", err)
-		return nil
+		return admission.NewForbidden(a, fmt.Errorf("failed to check secret exist, err msg: %v", err))
 	}
 	if exist {
+		// app_local_key.json has been set to secret
 		return nil
 	}
 
@@ -191,7 +199,7 @@ func (plugin *alipayAppCert) Admit(a admission.Attributes) (err error) {
 	appLocalKey, err := fetchAppIdentity(appname, kmiEndpoint, pemKMIPublicKey, pemSigmaPrivateKey)
 	if err != nil {
 		glog.Errorf("failed to fetch app_local_key.json from kmi, err msg: %v", err)
-		return nil
+		return admission.NewForbidden(a, fmt.Errorf("failed to fetch app_local_key.json from kmi, err msg: %v", err))
 	}
 	if appLocalKey == "" {
 		return nil
@@ -200,8 +208,8 @@ func (plugin *alipayAppCert) Admit(a admission.Attributes) (err error) {
 	// save app_local_key.json to secret
 	gotSecret, err := plugin.createAppCertSecret(appname, appLocalKey, pod)
 	if err != nil {
-		glog.Error(err)
-		return nil
+		glog.Errorf("failed to save secret, err msg: %v", err)
+		return admission.NewForbidden(a, fmt.Errorf("failed to save secret, err msg: %v", err))
 	} else {
 		glog.Infof("save app_loca_key to secret, key: %s", gotSecret)
 	}

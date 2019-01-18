@@ -69,6 +69,7 @@ import (
 	"k8s.io/kubernetes/plugin/pkg/admission/poddeletionflowcontrol"
 	"k8s.io/kubernetes/plugin/pkg/admission/sigmascheduling"
 
+	alipayappcert "k8s.io/kubernetes/plugin/pkg/admission/alipay/appcert"
 	alipaycmdb "k8s.io/kubernetes/plugin/pkg/admission/alipay/cmdb"
 	alipaycpushare "k8s.io/kubernetes/plugin/pkg/admission/alipay/cpushare"
 	alipayimagepullsecret "k8s.io/kubernetes/plugin/pkg/admission/alipay/imagepullsecret"
@@ -79,7 +80,6 @@ import (
 	alipaysetdefault "k8s.io/kubernetes/plugin/pkg/admission/alipay/setdefault"
 	alipaysidecar "k8s.io/kubernetes/plugin/pkg/admission/alipay/sidecar"
 	alipayzappinfo "k8s.io/kubernetes/plugin/pkg/admission/alipay/zappinfo"
-	alipayappcert "k8s.io/kubernetes/plugin/pkg/admission/alipay/appcert"
 )
 
 // AllOrderedPlugins is the list of all the plugins in order.
@@ -117,6 +117,7 @@ var AllOrderedPlugins = []string{
 	deny.PluginName,                         // AlwaysDeny
 	namespacedelete.PluginName,              // NamespaceDelete
 
+	alipayappcert.PluginName,              // Alipay app cert
 	alipaysidecar.PluginName,              // Alipay Sidecar
 	armory.PluginName,                     // Armory
 	containerstate.PluginName,             // ContainerState
@@ -137,7 +138,6 @@ var AllOrderedPlugins = []string{
 	alipayresource.PluginName,        // Alipay resource validateion admission
 	alipaycpushare.PluginName,        // Alipay cpushare injection admission
 	alipayimagepullsecret.PluginName, // Alipay image pull secret injection admission
-	alipayappcert.PluginName,         // Alipay app cert
 }
 
 // RegisterAllAdmissionPlugins registers all admission plugins and

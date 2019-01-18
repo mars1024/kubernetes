@@ -397,3 +397,33 @@ func GetContainerUpdateStatus(pod *v1.Pod, containerName string) *sigmak8sapi.Co
 	framework.Logf("[GetContainerUpdateStatus] No update status found for container: %s", containerName)
 	return nil
 }
+
+// WaitTimeoutForContainerUpdateRetryCount check pod's update status retryCount to wait the action failed.
+func WaitTimeoutForContainerUpdateRetryCount(client clientset.Interface, pod *v1.Pod, containerName string, timeout time.Duration, retryCount int) error {
+	options := metav1.SingleObject(metav1.ObjectMeta{Name: pod.Name})
+	w, err := client.CoreV1().Pods(pod.Namespace).Watch(options)
+	if err != nil {
+		return err
+	}
+	_, err = watch.Until(timeout, w, func(event watch.Event) (bool, error) {
+		switch pod := event.Object.(type) {
+		case *v1.Pod:
+			containerStatus := GetContainerUpdateStatus(pod, containerName)
+			if containerStatus == nil {
+				return false, nil
+			}
+			if containerStatus.RetryCount > retryCount || containerStatus.RetryCount == retryCount {
+				framework.Logf("[WaitTimeoutForContainerUpdateRetryCount] container's updateStatus is updated successfully")
+				return true, nil
+			}
+			return false, nil
+
+		}
+		return false, nil
+	})
+	if err != nil {
+		return fmt.Errorf("[WaitTimeoutForContainerUpdateRetryCount] timeout")
+	}
+
+	return nil
+}

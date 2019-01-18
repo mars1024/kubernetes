@@ -1,3 +1,54 @@
+/*
+ * 功能描述
+ * 创建应用 Pod 时，从 KMI 获取应用身份凭证文件 (app_local_key.json)
+ * 并存放到 Namespace 为 `AppCertsSecretNamespace` 的 Secret 中
+ * Secret 的 Name 为应用名 (`appname`)，Secret 内键为 `AppIdentitySecretKey` 的值，存放 app_local_key.json 的内容
+ *
+ * 插件配置
+ * 插件运行前，需要在 Namespace 为 `AppCertsSecretNamespace` 的 Secret 中，添加 Name 为 `PluginConfSecretName` 的配置
+ * 配置示例：
+ * map[string][]byte {
+ *     "kmi-endpoint": []byte("http://kmi-d6593.alipay.net/service/getapplocalkey.json"),
+ *     "kmi-public-key": []byte(`-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA6W+X/Jjwa8L8LwhXMSvF
+slGa7RBTu9oWrLImhhtRjt2VngtDFUHOvHztM6ztBjQQe9XmRYYwOm0FxrJQ7G5s
+8IkpwDgnPSfiSP2PR/grHB5gdKuHP9fNtXQyp45V1XcmaswzN9l9EU/Tx5Brd1Fi
+BiBtT4dFoPty4NaITFOs7xX58BUl5hLitx2vaU/gVaZO+UwIRJw7+VkRJEUjVzOU
+UqbBXSYsmK340808OtnbCFnx1UczI6mP+ump+oVfJVWVPbBTwGdHlyDx3Gher6uw
+8BgowSl1nqRi10j9KnUGqT+25M7B+kr4QO865XIoGRrQbYayQXSQyDcjQNzTEJq2
+jQIDAQAB
+-----END PUBLIC KEY-----
+`),
+ *     "sigma-private-key": []byte(`-----BEGIN RSA PRIVATE KEY-----
+MIIEpAIBAAKCAQEAwAPoiMv7HRMeYXV2debCZ0i9pZbEhz0LPh//W4P4XdBr9ygP
+MCDHDEGAyoI/Iag+nyGW07FRcQle7mBE+8ktjiUWkbL6tSUbSsbfa8qspuQKx9Wc
+oyW1FopBlVEhEC+irAinUsuH0PEeaQfd19RQ1+gBYNNwbK20XokggfFc2dGXjsIp
+HZ8C6rEUEs00iU7dOzR2RIFGniVEkqAsyVaMRE2CR1p8XJDbrULDOPoJ2+CbNR1G
+pMOS2qae251BhMiO/64KSszPc9oHtFXxE0hnuvWuq4Vx+rZ5r0P5ImBXZQVcNo1Y
+CVX/R6EtUQpHn/Xmwl+RwvtPBf2L2ltLZ+MNzQIDAQABAoIBAQCoGUPTrq/yLjCk
+pY7FfPWoMhhFBQ6cTqavBpgpaAlhJ/u87kcNnURkyFuV7hySvJXF/kPqpAtmaAvB
+qGn7+410Kafueb/eIdQYzK3/0fkAShfeBnYQpgw45WSw8ct+PhWtgg3p/+Cw3MYA
+sTBXqLn1qli6iaCcpB2JvYbF+6WL0dqaQAD8MFJpzuerFvCwsAKC9m+SBxQR815h
+APEeW2SZvM1+sjDYIzc5LQbfUiwmzh6gg2ZIvnIT0LlasB+sN0PFeGSY50W62d1H
+BCg7l2WRtuml6qStqya9NBv2KSgD953AmtOApkCO2XiByWuDa6JpaYxFwIkxhpI1
+MR28Nf1JAoGBAOnhvXFE3O6o3GIPnGS/0Avw/lA5sSdoip3ED+vpI3NzJejkCzoj
+cL/mRmJv3scP/om1O4X+feN6eKPl3u0pVwFcsiwPF0vrykNmOgd6rKzG1CtpEef3
+xY7GDkKmi2rVfiyjenDqApsIEwnEc0UJyy2VvhWhc/4r96sk//h1TPcTAoGBANIs
+lTnwQgJvf1vBCPnx/SptKYcfkSwZjwyOOaV6Ym8Y4PYC5/UnpKrBGpgcukvQaktV
+IJdSgBILzziZlrJlUXHzkONXQfkjmR0xMrdmebmcLwa/5LEIyXje70MorshTGNfQ
+3ECazEc/5Oryu7MLSbnJESatxeUaqzQDnQtfOiOfAoGAfPKAhrbHYSkNM8YrQxfG
+SdrhwnJP1kHfbBGGf/35VoA5zIWoCdNNNPgMuiIR3j8JOQB9YERpdNHFCaqQwhrH
+xI6FEUyuoXzCfedrMPu0rEk8qERlsIuKG5Brpefbq6OK2MYtb41U/wX9RcaR3lwx
+E5VgC6ZJlYxfsCsAJPhluckCgYEAotRzkH25RlXHn/h/0dVPRI1qPQuR10696wZN
+VwzoMhZeQ3qg5ugdxUTyK6MmGhKQJ2j+ZP4/xrtrgfhMLk4cuWHwgJFbxX904o75
+MemsqMZ+EIae0SFzpbdiOu/L6dunRZzE5zCGzzSLUBNapC48ojlKlmLPDN6KgTPD
+ecn/KxUCgYBPXA3JWBBib39tumKjKlTswKp64sjsaB1ZPP9ZcUDRGZBMr4ODe6tE
+lBMdFQxQAU5lncKxl3X8/s2RKVmSdw7ALXY3pG0SrOEK2GSiwYj832MUwiHmqdYy
+C3p+6k9FpfrqAyRQkGJ94IaDTdtgZW0+G5wuG8cs3S8yk5rd71mrcg==
+-----END RSA PRIVATE KEY-----
+`),
+ * }
+ */
 package appcert
 
 import (
@@ -31,64 +82,21 @@ import (
 )
 
 const (
-	PluginName           = "alipayAppCert"
-	SecretNameTemp       = "%s-cert-local-key"
-	AppIdentitySecretKey = "app_local_key"
+	PluginName               = "alipayAppCert"
+	AppCertsSecretNamespace  = "app-certs"
+	PluginConfSecretName     = "basic-conf"
+	KMIEndpointSecretKey     = "kmi-endpoint"
+	KMIPublicKeySecretKey    = "kmi-public-key"
+	SigmaPrivateKeySecretKey = "sigma-private-key"
+	AppIdentitySecretKey     = "app-local-key"
 )
 
 // kmi invoke configurations
 const (
 	signatureHeader = "X-KMI-SIGNATURE"
-	kmiCodeNoCert = "0"
+	kmiCodeNoCert   = "0"
 	kmiCodeSuccess  = "1"
-
 	kmiInvokeTimeout = 10
-
-	// prod env
-	//KMIEndpoint = "http://kmi.alipay.com/service/getapplocalkey.json"
-	//pemKMIPublicKey = ``
-	//pemSigmaPrivateKey = ``
-
-	// dev env
-	kmiEndpoint     = "http://kmi-d6593.alipay.net/service/getapplocalkey.json"
-	pemKMIPublicKey = `-----BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA6W+X/Jjwa8L8LwhXMSvF
-slGa7RBTu9oWrLImhhtRjt2VngtDFUHOvHztM6ztBjQQe9XmRYYwOm0FxrJQ7G5s
-8IkpwDgnPSfiSP2PR/grHB5gdKuHP9fNtXQyp45V1XcmaswzN9l9EU/Tx5Brd1Fi
-BiBtT4dFoPty4NaITFOs7xX58BUl5hLitx2vaU/gVaZO+UwIRJw7+VkRJEUjVzOU
-UqbBXSYsmK340808OtnbCFnx1UczI6mP+ump+oVfJVWVPbBTwGdHlyDx3Gher6uw
-8BgowSl1nqRi10j9KnUGqT+25M7B+kr4QO865XIoGRrQbYayQXSQyDcjQNzTEJq2
-jQIDAQAB
------END PUBLIC KEY-----
-`
-	pemSigmaPrivateKey = `-----BEGIN RSA PRIVATE KEY-----
-MIIEpAIBAAKCAQEAwAPoiMv7HRMeYXV2debCZ0i9pZbEhz0LPh//W4P4XdBr9ygP
-MCDHDEGAyoI/Iag+nyGW07FRcQle7mBE+8ktjiUWkbL6tSUbSsbfa8qspuQKx9Wc
-oyW1FopBlVEhEC+irAinUsuH0PEeaQfd19RQ1+gBYNNwbK20XokggfFc2dGXjsIp
-HZ8C6rEUEs00iU7dOzR2RIFGniVEkqAsyVaMRE2CR1p8XJDbrULDOPoJ2+CbNR1G
-pMOS2qae251BhMiO/64KSszPc9oHtFXxE0hnuvWuq4Vx+rZ5r0P5ImBXZQVcNo1Y
-CVX/R6EtUQpHn/Xmwl+RwvtPBf2L2ltLZ+MNzQIDAQABAoIBAQCoGUPTrq/yLjCk
-pY7FfPWoMhhFBQ6cTqavBpgpaAlhJ/u87kcNnURkyFuV7hySvJXF/kPqpAtmaAvB
-qGn7+410Kafueb/eIdQYzK3/0fkAShfeBnYQpgw45WSw8ct+PhWtgg3p/+Cw3MYA
-sTBXqLn1qli6iaCcpB2JvYbF+6WL0dqaQAD8MFJpzuerFvCwsAKC9m+SBxQR815h
-APEeW2SZvM1+sjDYIzc5LQbfUiwmzh6gg2ZIvnIT0LlasB+sN0PFeGSY50W62d1H
-BCg7l2WRtuml6qStqya9NBv2KSgD953AmtOApkCO2XiByWuDa6JpaYxFwIkxhpI1
-MR28Nf1JAoGBAOnhvXFE3O6o3GIPnGS/0Avw/lA5sSdoip3ED+vpI3NzJejkCzoj
-cL/mRmJv3scP/om1O4X+feN6eKPl3u0pVwFcsiwPF0vrykNmOgd6rKzG1CtpEef3
-xY7GDkKmi2rVfiyjenDqApsIEwnEc0UJyy2VvhWhc/4r96sk//h1TPcTAoGBANIs
-lTnwQgJvf1vBCPnx/SptKYcfkSwZjwyOOaV6Ym8Y4PYC5/UnpKrBGpgcukvQaktV
-IJdSgBILzziZlrJlUXHzkONXQfkjmR0xMrdmebmcLwa/5LEIyXje70MorshTGNfQ
-3ECazEc/5Oryu7MLSbnJESatxeUaqzQDnQtfOiOfAoGAfPKAhrbHYSkNM8YrQxfG
-SdrhwnJP1kHfbBGGf/35VoA5zIWoCdNNNPgMuiIR3j8JOQB9YERpdNHFCaqQwhrH
-xI6FEUyuoXzCfedrMPu0rEk8qERlsIuKG5Brpefbq6OK2MYtb41U/wX9RcaR3lwx
-E5VgC6ZJlYxfsCsAJPhluckCgYEAotRzkH25RlXHn/h/0dVPRI1qPQuR10696wZN
-VwzoMhZeQ3qg5ugdxUTyK6MmGhKQJ2j+ZP4/xrtrgfhMLk4cuWHwgJFbxX904o75
-MemsqMZ+EIae0SFzpbdiOu/L6dunRZzE5zCGzzSLUBNapC48ojlKlmLPDN6KgTPD
-ecn/KxUCgYBPXA3JWBBib39tumKjKlTswKp64sjsaB1ZPP9ZcUDRGZBMr4ODe6tE
-lBMdFQxQAU5lncKxl3X8/s2RKVmSdw7ALXY3pG0SrOEK2GSiwYj832MUwiHmqdYy
-C3p+6k9FpfrqAyRQkGJ94IaDTdtgZW0+G5wuG8cs3S8yk5rd71mrcg==
------END RSA PRIVATE KEY-----
-`
 )
 
 type kmiInvokeResp struct {
@@ -154,23 +162,36 @@ func (plugin *alipayAppCert) Admit(a admission.Attributes) (err error) {
 
 	// fetch appname from pod labels
 	appname := pod.Labels[sigmak8sapi.LabelAppName]
+	if appname == "" {
+		glog.Error("failed to fetch appname from labels, skip the appcert admission plugin")
+		return nil
+	}
+
+	// fetch plugin conf from secret
+	pluginConfSecret, err := plugin.secretLister.Secrets(AppCertsSecretNamespace).Get(PluginConfSecretName)
+	if err != nil {
+		glog.Errorf("failed to fetch plugin configuration from secret, err msg: %v", err)
+		return nil
+	}
+	kmiEndpoint := string(pluginConfSecret.Data[KMIEndpointSecretKey])
+	pemKMIPublicKey := string(pluginConfSecret.Data[KMIPublicKeySecretKey])
+	pemSigmaPrivateKey := string(pluginConfSecret.Data[SigmaPrivateKeySecretKey])
 
 	// check secret exist
 	exist, err := plugin.checkAppCertSecretExist(appname, pod)
 	if err != nil {
-		glog.Errorf("failed to fetch secret: %v", err)
-		return err
+		glog.Errorf("failed to check secret exist, err msg: %v", err)
+		return nil
 	}
 	if exist {
-		glog.Infof("app_local_key.json for %s exists in secret", appname)
 		return nil
 	}
 
 	// fetch the app_local_key.json
-	appLocalKey, err := fetchAppIdentity(appname)
+	appLocalKey, err := fetchAppIdentity(appname, kmiEndpoint, pemKMIPublicKey, pemSigmaPrivateKey)
 	if err != nil {
-		glog.Errorf("failed to fetch app_local_key.json, err msg: %v", err)
-		return err
+		glog.Errorf("failed to fetch app_local_key.json from kmi, err msg: %v", err)
+		return nil
 	}
 	if appLocalKey == "" {
 		return nil
@@ -180,7 +201,7 @@ func (plugin *alipayAppCert) Admit(a admission.Attributes) (err error) {
 	gotSecret, err := plugin.createAppCertSecret(appname, appLocalKey, pod)
 	if err != nil {
 		glog.Error(err)
-		return err
+		return nil
 	} else {
 		glog.Infof("save app_loca_key to secret, key: %s", gotSecret)
 	}
@@ -189,8 +210,7 @@ func (plugin *alipayAppCert) Admit(a admission.Attributes) (err error) {
 }
 
 func (plugin *alipayAppCert) checkAppCertSecretExist(appname string, pod *api.Pod) (bool, error) {
-	secretName := fmt.Sprintf(SecretNameTemp, appname)
-	_, err := plugin.secretLister.Secrets(pod.Namespace).Get(secretName)
+	_, err := plugin.secretLister.Secrets(AppCertsSecretNamespace).Get(appname)
 
 	// AppCertSecret is already exists in pod's namespace.
 	if err == nil {
@@ -206,18 +226,17 @@ func (plugin *alipayAppCert) checkAppCertSecretExist(appname string, pod *api.Po
 
 func (plugin *alipayAppCert) createAppCertSecret(appname string, appLocalKey string, pod *api.Pod) (string, error) {
 	appCertSecret := generateAppCertSecret(appname, appLocalKey)
-	gotSecret, err := plugin.client.Core().Secrets(pod.Namespace).Create(appCertSecret)
+	gotSecret, err := plugin.client.Core().Secrets(AppCertsSecretNamespace).Create(appCertSecret)
 	if err != nil {
-		return "", fmt.Errorf("failed create secret: %v", err)
+		return "", fmt.Errorf("failed to create secret, err msg: %v", err)
 	}
 	return gotSecret.Name, nil
 }
 
 func generateAppCertSecret(appname string, appLocalKey string) *api.Secret {
-	secretName := fmt.Sprintf(SecretNameTemp, appname)
 	appCertSecret := &api.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: secretName,
+			Name: appname,
 		},
 		Type: api.SecretTypeOpaque,
 		Data: map[string][]byte{},
@@ -246,7 +265,7 @@ func shouldIgnore(a admission.Attributes) bool {
 }
 
 // fetch app_local_key.json from KMI
-func fetchAppIdentity(appname string) (appLocalKey string, err error) {
+func fetchAppIdentity(appname string, kmiEndpoint string, pemKMIPublicKey string, pemSigmaPrivateKey string) (appLocalKey string, err error) {
 	// init private key & public key
 	block, _ := pem.Decode([]byte(pemKMIPublicKey))
 	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
@@ -304,7 +323,7 @@ func fetchAppIdentity(appname string) (appLocalKey string, err error) {
 	if kmiResp.ResultCode == kmiCodeSuccess {
 		// fetch app_local_key.json success
 		return kmiResp.Result, nil
-	} else if kmiResp.ResultCode == kmiCodeNoCert{
+	} else if kmiResp.ResultCode == kmiCodeNoCert {
 		// no app_local_key.json for indicate app, return ""
 		return "", nil
 	} else {

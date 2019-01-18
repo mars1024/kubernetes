@@ -1,7 +1,6 @@
 /*
  * 功能描述
- * 创建应用 Pod 时，从 KMI 获取应用身份凭证文件 (app_local_key.json)
- * 并存放到 Namespace 为 `AppCertsSecretNamespace` 的 Secret 中
+ * 创建应用 Pod 时，从 KMI 获取应用身份凭证文件 (app_local_key.json)，并存放到 Pod 所属的 Namespace 的 Secret 中
  * Secret 的 Name 为应用名 (`appname`)，Secret 内键为 `AppIdentitySecretKey` 的值，存放 app_local_key.json 的内容
  *
  * 插件配置
@@ -82,6 +81,7 @@ import (
 	kubeapiserveradmission "k8s.io/kubernetes/pkg/kubeapiserver/admission"
 )
 
+// plugin conf
 const (
 	PluginName               = "AlipayAppCert"
 	AppCertsSecretNamespace  = "app-certs"
@@ -89,7 +89,12 @@ const (
 	KMIEndpointSecretKey     = "kmi-endpoint"
 	KMIPublicKeySecretKey    = "kmi-public-key"
 	SigmaPrivateKeySecretKey = "sigma-private-key"
-	AppIdentitySecretKey     = "app-local-key"
+)
+
+// app_local_key.json secret conf
+const (
+	AppIdentitySecretNameTemp = "%s-local-key"
+	AppIdentitySecretKey      = "app-local-key"
 )
 
 // kmi invoke configurations
@@ -180,9 +185,25 @@ func (plugin *alipayAppCert) Admit(a admission.Attributes) (err error) {
 		glog.Errorf("failed to fetch plugin configuration from secret, err msg: %v", err)
 		return admission.NewForbidden(a, fmt.Errorf("failed to fetch plugin configuration from secret, err msg: %v", err))
 	}
-	kmiEndpoint := string(pluginConfSecret.Data[KMIEndpointSecretKey])
-	pemKMIPublicKey := string(pluginConfSecret.Data[KMIPublicKeySecretKey])
-	pemSigmaPrivateKey := string(pluginConfSecret.Data[SigmaPrivateKeySecretKey])
+	var kmiEndpoint, pemKMIPublicKey, pemSigmaPrivateKey []byte
+	if _, err = base64.StdEncoding.Decode(kmiEndpoint, pluginConfSecret.Data[KMIEndpointSecretKey]); err != nil {
+		glog.Errorf("failed to decode plugin conf, err msg: %v", err)
+		return admission.NewForbidden(a, fmt.Errorf("failed to decode plugin conf, err msg: %v", err))
+	}
+	if _, err = base64.StdEncoding.Decode(pemKMIPublicKey, pluginConfSecret.Data[KMIPublicKeySecretKey]); err != nil {
+		glog.Errorf("failed to decode plugin conf, err msg: %v", err)
+		return admission.NewForbidden(a, fmt.Errorf("failed to decode plugin conf, err msg: %v", err))
+	}
+	if _, err = base64.StdEncoding.Decode(pemSigmaPrivateKey, pluginConfSecret.Data[SigmaPrivateKeySecretKey]); err != nil {
+		glog.Errorf("failed to decode plugin conf, err msg: %v", err)
+		return admission.NewForbidden(a, fmt.Errorf("failed to decode plugin conf, err msg: %v", err))
+	}
+
+	// make sure pod.Namespace is not empty
+	if pod.Namespace == "" {
+		namespace := a.GetNamespace()
+		pod.Namespace = namespace
+	}
 
 	// check secret exist
 	exist, err := plugin.checkAppCertSecretExist(appname, pod)
@@ -196,7 +217,7 @@ func (plugin *alipayAppCert) Admit(a admission.Attributes) (err error) {
 	}
 
 	// fetch the app_local_key.json
-	appLocalKey, err := fetchAppIdentity(appname, kmiEndpoint, pemKMIPublicKey, pemSigmaPrivateKey)
+	appLocalKey, err := fetchAppIdentity(appname, string(kmiEndpoint), string(pemKMIPublicKey), string(pemSigmaPrivateKey))
 	if err != nil {
 		glog.Errorf("failed to fetch app_local_key.json from kmi, err msg: %v", err)
 		return admission.NewForbidden(a, fmt.Errorf("failed to fetch app_local_key.json from kmi, err msg: %v", err))
@@ -206,19 +227,21 @@ func (plugin *alipayAppCert) Admit(a admission.Attributes) (err error) {
 	}
 
 	// save app_local_key.json to secret
-	gotSecret, err := plugin.createAppCertSecret(appname, appLocalKey, pod)
+	secretName := fmt.Sprintf(AppIdentitySecretNameTemp, appname)
+	gotSecret, err := plugin.createAppCertSecret(secretName, pod.Namespace, appLocalKey)
 	if err != nil {
 		glog.Errorf("failed to save secret, err msg: %v", err)
 		return admission.NewForbidden(a, fmt.Errorf("failed to save secret, err msg: %v", err))
 	} else {
-		glog.Infof("save app_loca_key to secret, key: %s", gotSecret)
+		glog.Infof("save app_loca_key to secret, secret name: %s", gotSecret.Name)
 	}
 
 	return nil
 }
 
 func (plugin *alipayAppCert) checkAppCertSecretExist(appname string, pod *api.Pod) (bool, error) {
-	_, err := plugin.secretLister.Secrets(AppCertsSecretNamespace).Get(appname)
+	secretName := fmt.Sprintf(AppIdentitySecretNameTemp, appname)
+	_, err := plugin.secretLister.Secrets(pod.Namespace).Get(secretName)
 
 	// AppCertSecret is already exists in pod's namespace.
 	if err == nil {
@@ -232,25 +255,21 @@ func (plugin *alipayAppCert) checkAppCertSecretExist(appname string, pod *api.Po
 	}
 }
 
-func (plugin *alipayAppCert) createAppCertSecret(appname string, appLocalKey string, pod *api.Pod) (string, error) {
-	appCertSecret := generateAppCertSecret(appname, appLocalKey)
-	gotSecret, err := plugin.client.Core().Secrets(AppCertsSecretNamespace).Create(appCertSecret)
-	if err != nil {
-		return "", fmt.Errorf("failed to create secret, err msg: %v", err)
-	}
-	return gotSecret.Name, nil
-}
-
-func generateAppCertSecret(appname string, appLocalKey string) *api.Secret {
+func (plugin *alipayAppCert) createAppCertSecret(secretName string, secretNamespace string, appLocalKey string) (*api.Secret, error) {
 	appCertSecret := &api.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: appname,
+			Name: secretName,
 		},
 		Type: api.SecretTypeOpaque,
 		Data: map[string][]byte{},
 	}
 	appCertSecret.Data[AppIdentitySecretKey] = []byte(appLocalKey)
-	return appCertSecret
+
+	gotSecret, err := plugin.client.Core().Secrets(secretNamespace).Create(appCertSecret)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create secret, err msg: %v", err)
+	}
+	return gotSecret, nil
 }
 
 func shouldIgnore(a admission.Attributes) bool {

@@ -1,6 +1,7 @@
 package appcert
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -128,8 +129,12 @@ func TestCheckAppCertSecretExist(t *testing.T) {
 		t.Errorf("check secret exist failed, expected: false, got: true")
 	}
 
-	secret := generateAppCertSecret(appname, appLocalKey)
-	secret.Namespace = AppCertsSecretNamespace
+	secretName := fmt.Sprintf(AppIdentitySecretNameTemp, appname)
+	secret, err := plugin.createAppCertSecret(secretName, appname, appLocalKey)
+	if err != nil {
+		t.Error(err)
+	}
+
 	informerFactory.Core().InternalVersion().Secrets().Informer().GetStore().Add(secret)
 	exists, err = plugin.checkAppCertSecretExist(appname, pod)
 	if err != nil {
@@ -149,25 +154,27 @@ func TestCheckAppCertSecretExist(t *testing.T) {
 	}
 }
 
-func TestGenerateAppCertSecret(t *testing.T) {
+func TestCreateAppCertSecret(t *testing.T) {
 	client := fake.NewSimpleClientset()
-	secret := generateAppCertSecret(appname, appLocalKey)
+	informerFactory := informers.NewSharedInformerFactory(client, 1*time.Second)
+	plugin := NewTestAdmission(t, client, informerFactory)
 
-	gotSecret, err := client.Core().Secrets(AppCertsSecretNamespace).Create(secret)
+	secretName := fmt.Sprintf(AppIdentitySecretNameTemp, appname)
+	gotSecret, err := plugin.createAppCertSecret(secretName, appname, appLocalKey)
 	if err != nil {
 		t.Fatalf("create secret error: %v", err)
 	}
 
-	if gotSecret.Namespace != AppCertsSecretNamespace {
-		t.Fatalf("secret namespace expected: %v\n got: %v", AppCertsSecretNamespace, gotSecret.Namespace)
+	if gotSecret.Namespace != appname {
+		t.Fatalf("secret namespace expected: %v\n got: %v", appname, gotSecret.Namespace)
 	}
 
-	if gotSecret.ObjectMeta.Name != appname {
-		t.Fatalf("secret name expected: %v\n got: %v", appname, gotSecret.ObjectMeta.Name)
+	if gotSecret.ObjectMeta.Name != secretName {
+		t.Fatalf("secret name expected: %v\n got: %v", secretName, gotSecret.ObjectMeta.Name)
 	}
 
 	if string(gotSecret.Data[AppIdentitySecretKey]) != appLocalKey {
-		t.Fatalf("secret data expected: %v\n got: %v", appLocalKey, string(gotSecret.Data[secret.Name]))
+		t.Fatalf("secret data expected: %v\n got: %v", appLocalKey, string(gotSecret.Data[AppIdentitySecretKey]))
 	}
 }
 

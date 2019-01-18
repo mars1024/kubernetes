@@ -39,6 +39,7 @@ const (
 // kmi invoke configurations
 const (
 	signatureHeader = "X-KMI-SIGNATURE"
+	kmiCodeNoCert = "0"
 	kmiCodeSuccess  = "1"
 
 	kmiInvokeTimeout = 10
@@ -171,6 +172,9 @@ func (plugin *alipayAppCert) Admit(a admission.Attributes) (err error) {
 		glog.Errorf("failed to fetch app_local_key.json, err msg: %v", err)
 		return err
 	}
+	if appLocalKey == "" {
+		return nil
+	}
 
 	// save app_local_key.json to secret
 	gotSecret, err := plugin.createAppCertSecret(appname, appLocalKey, pod)
@@ -297,9 +301,13 @@ func fetchAppIdentity(appname string) (appLocalKey string, err error) {
 	if err = json.Unmarshal(respBody, &kmiResp); err != nil {
 		return "", fmt.Errorf("failed to parse kmi response: %v", err)
 	}
-	if kmiResp.ResultCode != kmiCodeSuccess {
-		return "", fmt.Errorf("failed to invoke kmi, result code: %s, error msg: %s", kmiResp.ResultCode, kmiResp.Result)
-	} else {
+	if kmiResp.ResultCode == kmiCodeSuccess {
+		// fetch app_local_key.json success
 		return kmiResp.Result, nil
+	} else if kmiResp.ResultCode == kmiCodeNoCert{
+		// no app_local_key.json for indicate app, return ""
+		return "", nil
+	} else {
+		return "", fmt.Errorf("failed to invoke kmi, result code: %s, error msg: %s", kmiResp.ResultCode, kmiResp.Result)
 	}
 }

@@ -107,27 +107,6 @@ func TestCheckAppCertSecretExist(t *testing.T) {
 	}
 }
 
-func TestCreateAppCertSecret(t *testing.T) {
-	client := fake.NewSimpleClientset()
-	informerFactory := informers.NewSharedInformerFactory(client, 1*time.Second)
-	plugin := NewTestAdmission(t, client, informerFactory)
-	pod := newPod(appname)
-
-	_, err := plugin.createAppCertSecret(appname, appLocalKey, pod)
-	if err != nil {
-		t.Error(err)
-	}
-
-	store := informerFactory.Core().InternalVersion().Secrets().Informer().GetStore()
-	t.Log(store)
-	//item, exist, err := informerFactory.Core().InternalVersion().Secrets().Informer().GetStore().GetByKey(secretName)
-	//if err != nil {
-	//	t.Error(err)
-	//}
-	//t.Log(exist)
-	//t.Log(item.(string))
-}
-
 func TestGenerateAppCertSecret(t *testing.T) {
 	client := fake.NewSimpleClientset()
 	secretName := fmt.Sprintf(SecretNameTemp, appname)
@@ -151,8 +130,9 @@ func TestFetchAppIdentity(t *testing.T) {
 	ret, err := fetchAppIdentity("foo")
 	if err != nil {
 		t.Error(err)
-	} else {
-		t.Log(ret)
+	}
+	if ret == "" {
+		t.Errorf("failed to fetch `app_local_key.json` for app: foo")
 	}
 }
 

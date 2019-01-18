@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/kubernetes/pkg/controller/testutil"
 
@@ -88,9 +89,34 @@ func TestFilterNoExecuteTaints(t *testing.T) {
 			Effect: v1.TaintEffectNoSchedule,
 		},
 	}
-	taints = getNoExecuteTaints(taints)
+	taints = getNoExecuteTaints(taints, nil)
 	if len(taints) != 1 || taints[0].Key != "one" {
 		t.Errorf("Filtering doesn't work. Got %v", taints)
+	}
+}
+
+func TestFilterNoExecuteTaintsWithIgnoreKeys(t *testing.T) {
+	ignoreKeys := []string{"one", "two"}
+	taints := []v1.Taint{
+		{
+			Key:    "one",
+			Value:  "one",
+			Effect: v1.TaintEffectNoExecute,
+		},
+		{
+			Key:    "two",
+			Value:  "two",
+			Effect: v1.TaintEffectNoExecute,
+		},
+		{
+			Key:    "three",
+			Value:  "three",
+			Effect: v1.TaintEffectNoExecute,
+		},
+	}
+	taints = getNoExecuteTaints(taints, ignoreKeys)
+	if len(taints) != 1 || taints[0].Key != "three" {
+		t.Errorf("Filtering with ignore keys doesn't work. Got %v", taints)
 	}
 }
 
@@ -150,7 +176,7 @@ func TestCreatePod(t *testing.T) {
 	for _, item := range testCases {
 		stopCh := make(chan struct{})
 		fakeClientset := fake.NewSimpleClientset()
-		controller := NewNoExecuteTaintManager(fakeClientset)
+		controller := NewNoExecuteTaintManager(fakeClientset, false, false)
 		controller.recorder = testutil.NewFakeRecorder()
 		go controller.Run(stopCh)
 		controller.taintedNodes = item.taintedNodes
@@ -174,7 +200,7 @@ func TestCreatePod(t *testing.T) {
 func TestDeletePod(t *testing.T) {
 	stopCh := make(chan struct{})
 	fakeClientset := fake.NewSimpleClientset()
-	controller := NewNoExecuteTaintManager(fakeClientset)
+	controller := NewNoExecuteTaintManager(fakeClientset, false, false)
 	controller.recorder = testutil.NewFakeRecorder()
 	go controller.Run(stopCh)
 	controller.taintedNodes = map[string][]v1.Taint{
@@ -237,7 +263,7 @@ func TestUpdatePod(t *testing.T) {
 	for _, item := range testCases {
 		stopCh := make(chan struct{})
 		fakeClientset := fake.NewSimpleClientset()
-		controller := NewNoExecuteTaintManager(fakeClientset)
+		controller := NewNoExecuteTaintManager(fakeClientset, false, false)
 		controller.recorder = testutil.NewFakeRecorder()
 		go controller.Run(stopCh)
 		controller.taintedNodes = item.taintedNodes
@@ -301,7 +327,7 @@ func TestCreateNode(t *testing.T) {
 	for _, item := range testCases {
 		stopCh := make(chan struct{})
 		fakeClientset := fake.NewSimpleClientset(&v1.PodList{Items: item.pods})
-		controller := NewNoExecuteTaintManager(fakeClientset)
+		controller := NewNoExecuteTaintManager(fakeClientset, false, false)
 		controller.recorder = testutil.NewFakeRecorder()
 		go controller.Run(stopCh)
 		controller.NodeUpdated(nil, item.node)
@@ -324,7 +350,7 @@ func TestCreateNode(t *testing.T) {
 func TestDeleteNode(t *testing.T) {
 	stopCh := make(chan struct{})
 	fakeClientset := fake.NewSimpleClientset()
-	controller := NewNoExecuteTaintManager(fakeClientset)
+	controller := NewNoExecuteTaintManager(fakeClientset, false, false)
 	controller.recorder = testutil.NewFakeRecorder()
 	controller.taintedNodes = map[string][]v1.Taint{
 		"node1": {createNoExecuteTaint(1)},
@@ -422,7 +448,7 @@ func TestUpdateNode(t *testing.T) {
 	for _, item := range testCases {
 		stopCh := make(chan struct{})
 		fakeClientset := fake.NewSimpleClientset(&v1.PodList{Items: item.pods})
-		controller := NewNoExecuteTaintManager(fakeClientset)
+		controller := NewNoExecuteTaintManager(fakeClientset, false, false)
 		controller.recorder = testutil.NewFakeRecorder()
 		go controller.Run(stopCh)
 		controller.NodeUpdated(item.oldNode, item.newNode)
@@ -488,7 +514,7 @@ func TestUpdateNodeWithMultiplePods(t *testing.T) {
 		stopCh := make(chan struct{})
 		fakeClientset := fake.NewSimpleClientset(&v1.PodList{Items: item.pods})
 		sort.Sort(item.expectedDeleteTimes)
-		controller := NewNoExecuteTaintManager(fakeClientset)
+		controller := NewNoExecuteTaintManager(fakeClientset, false, false)
 		controller.recorder = testutil.NewFakeRecorder()
 		go controller.Run(stopCh)
 		controller.NodeUpdated(item.oldNode, item.newNode)
@@ -600,5 +626,35 @@ func TestGetMinTolerationTime(t *testing.T) {
 		if got != test.expected {
 			t.Errorf("Incorrect min toleration time: got %v, expected %v", got, test.expected)
 		}
+	}
+}
+
+func TestEvictPodByPolicyHandler(t *testing.T) {
+	fakeClientset := fake.NewSimpleClientset()
+	fn := evictPodByPolicyHandler(fakeClientset, nil)
+
+	arg := &WorkArgs{
+		NamespacedName: types.NamespacedName{
+			Namespace: "test",
+			Name:      "test",
+		},
+	}
+
+	if err := fn(arg); nil != err {
+		t.Errorf("invoke evictPodByPolicyHandler failed: %v", err)
+	}
+
+	actions := fakeClientset.Actions()
+
+	expected := false
+	for i := range actions {
+		a := actions[i]
+
+		if a.GetVerb() == "patch" && a.GetNamespace() == "test" && a.GetResource().Resource == "pods" {
+			expected = true
+		}
+	}
+	if !expected {
+		t.Errorf("Unexepected test result. Pod %s expected patch pod, but doesn't", arg.NamespacedName.String())
 	}
 }

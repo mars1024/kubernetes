@@ -409,8 +409,8 @@ func (d *namespacedResourcesDeleter) deleteEachItem(gvr schema.GroupVersionResou
 	if !listSupported {
 		return nil
 	}
+	background := metav1.DeletePropagationForceBackground
 	for _, item := range unstructuredList.Items {
-		background := metav1.DeletePropagationForceBackground
 		opts := &metav1.DeleteOptions{PropagationPolicy: &background}
 		if err = d.dynamicClient.Resource(gvr).Namespace(namespace).Delete(item.GetName(), opts); err != nil && !errors.IsNotFound(err) && !errors.IsMethodNotSupported(err) {
 			return err

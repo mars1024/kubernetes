@@ -1436,6 +1436,8 @@ func TestStoreDeleteWithOrphanDependents(t *testing.T) {
 
 // Test the DeleteOptions.PropagationPolicy is handled correctly
 func TestStoreDeletionPropagation(t *testing.T) {
+	defer utilfeaturetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.DisableCascadingDeletion, false)()
+
 	initialGeneration := int64(1)
 
 	// defaultDeleteStrategy doesn't implement rest.GarbageCollectionDeleteStrategy.
@@ -1567,6 +1569,224 @@ func TestStoreDeletionPropagation(t *testing.T) {
 			expectedNotFound:   true,
 		},
 		"existing deleteDependents finalizer, PropagationPolicy=Background, orphanDeleteStrategy": {
+			options:            &metav1.DeleteOptions{PropagationPolicy: &backgroundPolicy},
+			strategy:           orphanDeleteStrategy,
+			existingFinalizers: []string{metav1.FinalizerDeleteDependents},
+			expectedNotFound:   true,
+		},
+		"existing deleteDependents finalizer, PropagationPolicy=OrphanDependents, defaultDeleteStrategy": {
+			options:            &metav1.DeleteOptions{PropagationPolicy: &orphanPolicy},
+			strategy:           defaultDeleteStrategy,
+			existingFinalizers: []string{metav1.FinalizerDeleteDependents},
+			expectedFinalizers: []string{metav1.FinalizerOrphanDependents},
+		},
+		"existing deleteDependents finalizer, PropagationPolicy=OrphanDependents, orphanDeleteStrategy": {
+			options:            &metav1.DeleteOptions{PropagationPolicy: &orphanPolicy},
+			strategy:           orphanDeleteStrategy,
+			existingFinalizers: []string{metav1.FinalizerDeleteDependents},
+			expectedFinalizers: []string{metav1.FinalizerOrphanDependents},
+		},
+		"existing deleteDependents finalizer, PropagationPolicy=Default, defaultDeleteStrategy": {
+			options:            &metav1.DeleteOptions{PropagationPolicy: nil},
+			strategy:           defaultDeleteStrategy,
+			existingFinalizers: []string{metav1.FinalizerDeleteDependents},
+			expectedFinalizers: []string{metav1.FinalizerDeleteDependents},
+		},
+		"existing deleteDependents finalizer, PropagationPolicy=Default, orphanDeleteStrategy": {
+			options:            &metav1.DeleteOptions{PropagationPolicy: nil},
+			strategy:           orphanDeleteStrategy,
+			existingFinalizers: []string{metav1.FinalizerDeleteDependents},
+			expectedFinalizers: []string{metav1.FinalizerDeleteDependents},
+		},
+	}
+
+	testContext := genericapirequest.WithNamespace(genericapirequest.NewContext(), "test")
+	destroyFunc, registry := NewTestGenericStoreRegistry(t)
+	registry.EnableGarbageCollection = true
+	defer destroyFunc()
+
+	createPod := func(i int, finalizers []string) *example.Pod {
+		return &example.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("pod-%d", i), Finalizers: finalizers, Generation: initialGeneration},
+			Spec:       example.PodSpec{NodeName: "machine"},
+		}
+	}
+
+	i := 0
+	for title, tc := range testcases {
+		t.Logf("case title: %s", title)
+		registry.DeleteStrategy = tc.strategy
+		i++
+		pod := createPod(i, tc.existingFinalizers)
+		// create pod
+		_, err := registry.Create(testContext, pod, rest.ValidateAllObjectFunc, &metav1.CreateOptions{})
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+		_, _, err = registry.Delete(testContext, pod.Name, tc.options)
+		obj, err := registry.Get(testContext, pod.Name, &metav1.GetOptions{})
+		if tc.expectedNotFound {
+			if err == nil || !errors.IsNotFound(err) {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+			continue
+		}
+		if !tc.expectedNotFound && err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+		if !tc.expectedNotFound {
+			pod, ok := obj.(*example.Pod)
+			if !ok {
+				t.Fatalf("Expect the object to be a pod, but got %#v", obj)
+			}
+			if e, a := tc.expectedFinalizers, pod.ObjectMeta.Finalizers; !reflect.DeepEqual(e, a) {
+				t.Errorf("%v: Expect object %s to have finalizers %v, got %v", pod.Name, pod.ObjectMeta.Name, e, a)
+			}
+			if pod.ObjectMeta.DeletionTimestamp == nil {
+				t.Errorf("%v: Expect the object to have DeletionTimestamp set, but got %#v", pod.Name, pod.ObjectMeta)
+			}
+			if pod.ObjectMeta.DeletionGracePeriodSeconds == nil || *pod.ObjectMeta.DeletionGracePeriodSeconds != 0 {
+				t.Errorf("%v: Expect the object to have 0 DeletionGracePeriodSecond, but got %#v", pod.Name, pod.ObjectMeta)
+			}
+			if pod.Generation <= initialGeneration {
+				t.Errorf("%v: Deletion didn't increase Generation.", pod.Name)
+			}
+		}
+	}
+}
+
+func TestStoreDeletionPropagationSigma(t *testing.T) {
+	initialGeneration := int64(1)
+
+	// defaultDeleteStrategy doesn't implement rest.GarbageCollectionDeleteStrategy.
+	defaultDeleteStrategy := &testRESTStrategy{scheme, names.SimpleNameGenerator, true, false, true}
+	// orphanDeleteStrategy indicates the default garbage collection policy is
+	// to orphan dependentes.
+	orphanDeleteStrategy := &testOrphanDeleteStrategy{defaultDeleteStrategy}
+
+	foregroundPolicy := metav1.DeletePropagationForceForeground
+	backgroundPolicy := metav1.DeletePropagationForceBackground
+	orphanPolicy := metav1.DeletePropagationOrphan
+
+	testcases := map[string]struct {
+		options  *metav1.DeleteOptions
+		strategy rest.RESTDeleteStrategy
+		// finalizers that are already set in the object
+		existingFinalizers []string
+		expectedNotFound   bool
+		expectedFinalizers []string
+	}{
+		"no existing finalizers, PropagationPolicy=ForceForeground, defaultDeleteStrategy": {
+			options:            &metav1.DeleteOptions{PropagationPolicy: &foregroundPolicy},
+			strategy:           defaultDeleteStrategy,
+			expectedFinalizers: []string{metav1.FinalizerDeleteDependents},
+		},
+		"no existing finalizers, PropagationPolicy=ForceForeground, orphanDeleteStrategy": {
+			options:            &metav1.DeleteOptions{PropagationPolicy: &foregroundPolicy},
+			strategy:           orphanDeleteStrategy,
+			expectedFinalizers: []string{metav1.FinalizerDeleteDependents},
+		},
+		"no existing finalizers, PropagationPolicy=ForceBackground, defaultDeleteStrategy": {
+			options:          &metav1.DeleteOptions{PropagationPolicy: &backgroundPolicy},
+			strategy:         defaultDeleteStrategy,
+			expectedNotFound: true,
+		},
+		"no existing finalizers, PropagationPolicy=ForceBackground, orphanDeleteStrategy": {
+			options:          &metav1.DeleteOptions{PropagationPolicy: &backgroundPolicy},
+			strategy:         orphanDeleteStrategy,
+			expectedNotFound: true,
+		},
+		"no existing finalizers, PropagationPolicy=OrphanDependents, defaultDeleteStrategy": {
+			options:            &metav1.DeleteOptions{PropagationPolicy: &orphanPolicy},
+			strategy:           defaultDeleteStrategy,
+			expectedFinalizers: []string{metav1.FinalizerOrphanDependents},
+		},
+		"no existing finalizers, PropagationPolicy=OrphanDependents, orphanDeleteStrategy": {
+			options:            &metav1.DeleteOptions{PropagationPolicy: &orphanPolicy},
+			strategy:           orphanDeleteStrategy,
+			expectedFinalizers: []string{metav1.FinalizerOrphanDependents},
+		},
+		"no existing finalizers, PropagationPolicy=Default, defaultDeleteStrategy": {
+			options:          &metav1.DeleteOptions{PropagationPolicy: nil},
+			strategy:         defaultDeleteStrategy,
+			expectedNotFound: true,
+		},
+		"no existing finalizers, PropagationPolicy=Default, orphanDeleteStrategy": {
+			options:            &metav1.DeleteOptions{PropagationPolicy: nil},
+			strategy:           orphanDeleteStrategy,
+			expectedFinalizers: []string{metav1.FinalizerOrphanDependents},
+		},
+
+		// all cases in the following block have "existing orphan finalizer"
+		"existing orphan finalizer, PropagationPolicy=ForceForeground, defaultDeleteStrategy": {
+			options:            &metav1.DeleteOptions{PropagationPolicy: &foregroundPolicy},
+			strategy:           defaultDeleteStrategy,
+			existingFinalizers: []string{metav1.FinalizerOrphanDependents},
+			expectedFinalizers: []string{metav1.FinalizerDeleteDependents},
+		},
+		"existing orphan finalizer, PropagationPolicy=ForceForeground, orphanDeleteStrategy": {
+			options:            &metav1.DeleteOptions{PropagationPolicy: &foregroundPolicy},
+			strategy:           orphanDeleteStrategy,
+			existingFinalizers: []string{metav1.FinalizerOrphanDependents},
+			expectedFinalizers: []string{metav1.FinalizerDeleteDependents},
+		},
+		"existing orphan finalizer, PropagationPolicy=ForceBackground, defaultDeleteStrategy": {
+			options:            &metav1.DeleteOptions{PropagationPolicy: &backgroundPolicy},
+			strategy:           defaultDeleteStrategy,
+			existingFinalizers: []string{metav1.FinalizerOrphanDependents},
+			expectedNotFound:   true,
+		},
+		"existing orphan finalizer, PropagationPolicy=ForceBackground, orphanDeleteStrategy": {
+			options:            &metav1.DeleteOptions{PropagationPolicy: &backgroundPolicy},
+			strategy:           orphanDeleteStrategy,
+			existingFinalizers: []string{metav1.FinalizerOrphanDependents},
+			expectedNotFound:   true,
+		},
+		"existing orphan finalizer, PropagationPolicy=OrphanDependents, defaultDeleteStrategy": {
+			options:            &metav1.DeleteOptions{PropagationPolicy: &orphanPolicy},
+			strategy:           defaultDeleteStrategy,
+			existingFinalizers: []string{metav1.FinalizerOrphanDependents},
+			expectedFinalizers: []string{metav1.FinalizerOrphanDependents},
+		},
+		"existing orphan finalizer, PropagationPolicy=OrphanDependents, orphanDeleteStrategy": {
+			options:            &metav1.DeleteOptions{PropagationPolicy: &orphanPolicy},
+			strategy:           orphanDeleteStrategy,
+			existingFinalizers: []string{metav1.FinalizerOrphanDependents},
+			expectedFinalizers: []string{metav1.FinalizerOrphanDependents},
+		},
+		"existing orphan finalizer, PropagationPolicy=Default, defaultDeleteStrategy": {
+			options:            &metav1.DeleteOptions{PropagationPolicy: nil},
+			strategy:           defaultDeleteStrategy,
+			existingFinalizers: []string{metav1.FinalizerOrphanDependents},
+			expectedFinalizers: []string{metav1.FinalizerOrphanDependents},
+		},
+		"existing orphan finalizer, PropagationPolicy=Default, orphanDeleteStrategy": {
+			options:            &metav1.DeleteOptions{PropagationPolicy: nil},
+			strategy:           orphanDeleteStrategy,
+			existingFinalizers: []string{metav1.FinalizerOrphanDependents},
+			expectedFinalizers: []string{metav1.FinalizerOrphanDependents},
+		},
+
+		// all cases in the following block have "existing deleteDependents finalizer"
+		"existing deleteDependents finalizer, PropagationPolicy=ForceForeground, defaultDeleteStrategy": {
+			options:            &metav1.DeleteOptions{PropagationPolicy: &foregroundPolicy},
+			strategy:           defaultDeleteStrategy,
+			existingFinalizers: []string{metav1.FinalizerDeleteDependents},
+			expectedFinalizers: []string{metav1.FinalizerDeleteDependents},
+		},
+		"existing deleteDependents finalizer, PropagationPolicy=ForceForeground, orphanDeleteStrategy": {
+			options:            &metav1.DeleteOptions{PropagationPolicy: &foregroundPolicy},
+			strategy:           orphanDeleteStrategy,
+			existingFinalizers: []string{metav1.FinalizerDeleteDependents},
+			expectedFinalizers: []string{metav1.FinalizerDeleteDependents},
+		},
+		"existing deleteDependents finalizer, PropagationPolicy=ForceBackground, defaultDeleteStrategy": {
+			options:            &metav1.DeleteOptions{PropagationPolicy: &backgroundPolicy},
+			strategy:           defaultDeleteStrategy,
+			existingFinalizers: []string{metav1.FinalizerDeleteDependents},
+			expectedNotFound:   true,
+		},
+		"existing deleteDependents finalizer, PropagationPolicy=ForceBackground, orphanDeleteStrategy": {
 			options:            &metav1.DeleteOptions{PropagationPolicy: &backgroundPolicy},
 			strategy:           orphanDeleteStrategy,
 			existingFinalizers: []string{metav1.FinalizerDeleteDependents},

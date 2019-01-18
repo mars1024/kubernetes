@@ -185,15 +185,17 @@ func (plugin *alipayAppCert) Admit(a admission.Attributes) (err error) {
 		glog.Errorf("failed to fetch plugin configuration from secret, err msg: %v", err)
 		return admission.NewForbidden(a, fmt.Errorf("failed to fetch plugin configuration from secret, err msg: %v", err))
 	}
-	var kmiEndpoint, pemKMIPublicKey, pemSigmaPrivateKey []byte
+	kmiEndpoint := make([]byte, base64.StdEncoding.DecodedLen(len(pluginConfSecret.Data[KMIEndpointSecretKey])))
 	if _, err = base64.StdEncoding.Decode(kmiEndpoint, pluginConfSecret.Data[KMIEndpointSecretKey]); err != nil {
 		glog.Errorf("failed to decode plugin conf, err msg: %v", err)
 		return admission.NewForbidden(a, fmt.Errorf("failed to decode plugin conf, err msg: %v", err))
 	}
+	pemKMIPublicKey := make([]byte, base64.StdEncoding.DecodedLen(len(pluginConfSecret.Data[KMIPublicKeySecretKey])))
 	if _, err = base64.StdEncoding.Decode(pemKMIPublicKey, pluginConfSecret.Data[KMIPublicKeySecretKey]); err != nil {
 		glog.Errorf("failed to decode plugin conf, err msg: %v", err)
 		return admission.NewForbidden(a, fmt.Errorf("failed to decode plugin conf, err msg: %v", err))
 	}
+	pemSigmaPrivateKey := make([]byte, base64.StdEncoding.DecodedLen(len(pluginConfSecret.Data[SigmaPrivateKeySecretKey])))
 	if _, err = base64.StdEncoding.Decode(pemSigmaPrivateKey, pluginConfSecret.Data[SigmaPrivateKeySecretKey]); err != nil {
 		glog.Errorf("failed to decode plugin conf, err msg: %v", err)
 		return admission.NewForbidden(a, fmt.Errorf("failed to decode plugin conf, err msg: %v", err))

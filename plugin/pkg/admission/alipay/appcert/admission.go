@@ -179,6 +179,23 @@ func (plugin *alipayAppCert) Admit(a admission.Attributes) (err error) {
 		return admission.NewForbidden(a, fmt.Errorf("failed to fetch appname from labels"))
 	}
 
+	// make sure pod.Namespace is not empty
+	if pod.Namespace == "" {
+		namespace := a.GetNamespace()
+		pod.Namespace = namespace
+	}
+
+	// check secret exist
+	exist, err := plugin.checkAppCertSecretExist(appname, pod)
+	if err != nil {
+		glog.Errorf("failed to check secret exist, err msg: %v", err)
+		return admission.NewForbidden(a, fmt.Errorf("failed to check secret exist, err msg: %v", err))
+	}
+	if exist {
+		// app_local_key.json has been set to secret
+		return nil
+	}
+
 	// fetch plugin conf from secret
 	pluginConfSecret, err := plugin.secretLister.Secrets(AppCertsSecretNamespace).Get(PluginConfSecretName)
 	if err != nil {
@@ -202,23 +219,6 @@ func (plugin *alipayAppCert) Admit(a admission.Attributes) (err error) {
 	if !ok || len(pemSigmaPrivateKey) <= 0 {
 		glog.Errorf("failed to decode plugin conf, key[%s]", SigmaPrivateKeySecretKey)
 		return admission.NewForbidden(a, fmt.Errorf("failed to decode plugin conf, key[%s]", SigmaPrivateKeySecretKey))
-	}
-
-	// make sure pod.Namespace is not empty
-	if pod.Namespace == "" {
-		namespace := a.GetNamespace()
-		pod.Namespace = namespace
-	}
-
-	// check secret exist
-	exist, err := plugin.checkAppCertSecretExist(appname, pod)
-	if err != nil {
-		glog.Errorf("failed to check secret exist, err msg: %v", err)
-		return admission.NewForbidden(a, fmt.Errorf("failed to check secret exist, err msg: %v", err))
-	}
-	if exist {
-		// app_local_key.json has been set to secret
-		return nil
 	}
 
 	// fetch the app_local_key.json

@@ -185,20 +185,23 @@ func (plugin *alipayAppCert) Admit(a admission.Attributes) (err error) {
 		glog.Errorf("failed to fetch plugin configuration from secret, err msg: %v", err)
 		return admission.NewForbidden(a, fmt.Errorf("failed to fetch plugin configuration from secret, err msg: %v", err))
 	}
-	kmiEndpoint := make([]byte, base64.StdEncoding.DecodedLen(len(pluginConfSecret.Data[KMIEndpointSecretKey])))
-	if _, err = base64.StdEncoding.Decode(kmiEndpoint, pluginConfSecret.Data[KMIEndpointSecretKey]); err != nil {
-		glog.Errorf("failed to decode plugin conf, err msg: %v", err)
-		return admission.NewForbidden(a, fmt.Errorf("failed to decode plugin conf, err msg: %v", err))
+
+	kmiEndpoint, ok := pluginConfSecret.Data[KMIEndpointSecretKey]
+	if !ok || len(kmiEndpoint) <= 0 {
+		glog.Errorf("failed to decode plugin conf, key[%s]", KMIEndpointSecretKey)
+		return admission.NewForbidden(a, fmt.Errorf("failed to decode plugin conf, key[%s]", KMIEndpointSecretKey))
 	}
-	pemKMIPublicKey := make([]byte, base64.StdEncoding.DecodedLen(len(pluginConfSecret.Data[KMIPublicKeySecretKey])))
-	if _, err = base64.StdEncoding.Decode(pemKMIPublicKey, pluginConfSecret.Data[KMIPublicKeySecretKey]); err != nil {
-		glog.Errorf("failed to decode plugin conf, err msg: %v", err)
-		return admission.NewForbidden(a, fmt.Errorf("failed to decode plugin conf, err msg: %v", err))
+
+	pemKMIPublicKey, ok := pluginConfSecret.Data[KMIPublicKeySecretKey]
+	if !ok || len(pemKMIPublicKey) <= 0 {
+		glog.Errorf("failed to decode plugin conf, key[%s]", KMIPublicKeySecretKey)
+		return admission.NewForbidden(a, fmt.Errorf("failed to decode plugin conf, key[%s]", KMIPublicKeySecretKey))
 	}
-	pemSigmaPrivateKey := make([]byte, base64.StdEncoding.DecodedLen(len(pluginConfSecret.Data[SigmaPrivateKeySecretKey])))
-	if _, err = base64.StdEncoding.Decode(pemSigmaPrivateKey, pluginConfSecret.Data[SigmaPrivateKeySecretKey]); err != nil {
-		glog.Errorf("failed to decode plugin conf, err msg: %v", err)
-		return admission.NewForbidden(a, fmt.Errorf("failed to decode plugin conf, err msg: %v", err))
+
+	pemSigmaPrivateKey, ok := pluginConfSecret.Data[SigmaPrivateKeySecretKey]
+	if !ok || len(pemSigmaPrivateKey) <= 0 {
+		glog.Errorf("failed to decode plugin conf, key[%s]", SigmaPrivateKeySecretKey)
+		return admission.NewForbidden(a, fmt.Errorf("failed to decode plugin conf, key[%s]", SigmaPrivateKeySecretKey))
 	}
 
 	// make sure pod.Namespace is not empty

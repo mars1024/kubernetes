@@ -50,25 +50,6 @@
         }
       }
     ],
-    "affinity": {
-      "nodeAffinity": {},
-      "podAffinity": {
-        "requiredDuringSchedulingIgnoredDuringExecution": [
-          {
-            "labelSelector": {},
-            "topologyKey": "kubernetes.io/hostname"
-          }
-        ]
-      },
-      "podAntiAffinity": {
-        "requiredDuringSchedulingIgnoredDuringExecution": [
-          {
-            "labelSelector": {},
-            "topologyKey": "kubernetes.io/hostname"
-          }
-        ]
-      }
-    },
     "dnsConfig": {}
   },
   "status": {}

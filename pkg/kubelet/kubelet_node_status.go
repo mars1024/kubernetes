@@ -508,7 +508,7 @@ func (kl *Kubelet) defaultNodeStatusFuncs() []func(*v1.Node) error {
 		nodestatus.DaemonEndpoints(kl.daemonEndpoints),
 		nodestatus.Images(kl.nodeStatusMaxImages, kl.imageManager.GetImageList),
 		nodestatus.GoRuntime(),
-		nodestatus.LocalInfo(kl.GetCachedMachineInfo),
+		nodestatus.LocalInfo(kl.GetCachedMachineInfo, kl.getRootDir),
 	)
 	if utilfeature.DefaultFeatureGate.Enabled(features.AttachVolumeLimit) {
 		setters = append(setters, nodestatus.VolumeLimits(kl.volumePluginMgr.ListVolumePluginWithLimits))

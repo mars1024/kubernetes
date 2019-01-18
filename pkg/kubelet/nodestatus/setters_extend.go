@@ -9,6 +9,7 @@ import (
 	cadvisorapiv1 "github.com/google/cadvisor/info/v1"
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	"k8s.io/api/core/v1"
+	"k8s.io/kubernetes/pkg/kubelet/diskinfo"
 )
 
 // getCPUTopology get cpu topology info from cadvisor machine info.
@@ -45,7 +46,16 @@ func getCPUTopology(machineInfoFunc func() (*cadvisorapiv1.MachineInfo, error)) 
 // 2.get disk info
 // 3.update node annotation
 func LocalInfo(machineInfoFunc func() (*cadvisorapiv1.MachineInfo, error), // typically Kubelet.GetCachedMachineInfo
+	rootDirGetter func() string,
 ) Setter {
+
+	// TODO (chenjun.cj): for now, we don't think the disk device will be added during kubelet running
+	// so we cache disk information
+	disks, err := diskinfo.GetDiskInfo(rootDirGetter())
+	if nil != err {
+		glog.Errorf("get disk info err: %v", err)
+	}
+
 	return func(node *v1.Node) error {
 		// step 1: get cpu info
 		cpuTopologyInfo, err := getCPUTopology(machineInfoFunc)
@@ -57,7 +67,9 @@ func LocalInfo(machineInfoFunc func() (*cadvisorapiv1.MachineInfo, error), // ty
 		}
 
 		// step 2: get disk info
-		//TODO
+		if len(disks) > 0 {
+			localInfo.DiskInfos = disks
+		}
 
 		// step 3: update node annotation.
 		if node.Annotations == nil {

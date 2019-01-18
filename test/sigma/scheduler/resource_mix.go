@@ -1220,4 +1220,57 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][resource][Serial]", func() {
 		}
 		testContext.execTests()
 	})
+	//混合链路磁盘分配case：源于ant sigma2的bug
+	//1. 创建一个使用全量boot盘sigma3的pod:预期成功
+	//2. 创建一个使用1/2boot盘的sigma2的container:预期失败
+	It("[smoke][p0] resourceMix009 ，验证分配磁盘正常", func() {
+		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+		nodeIP := nodesInfo[nodeName].Status.Addresses[0].Address
+
+		framework.Logf("get one node to schedule, nodeName: %s IP: %s", nodeName, nodeIP)
+
+		AllocatableCPU := nodeToAllocatableMapCPU[nodeName]
+		AllocatableMemory := nodeToAllocatableMapMem[nodeName]
+		AllocatableDisk := nodeToAllocatableMapEphemeralStorage[nodeName]
+
+		requestedCPU := AllocatableCPU / 4
+		requestedMemory := AllocatableMemory / 4
+		requestedDisk := AllocatableDisk / 2
+
+		leftCPU := AllocatableCPU - requestedCPU
+		leftMemory := AllocatableMemory - requestedMemory
+
+		tests := []resourceCase{
+			{
+				cpu:             requestedCPU,
+				mem:             requestedMemory,
+				ethstorage:      AllocatableDisk,
+				affinityConfig:  map[string][]string{api.LabelNodeIP: {nodeIP}},
+				requestType:     requestTypeKubernetes,
+				shouldScheduled: true,
+				cpushare:        true,
+			},
+			{
+				cpu:             leftCPU,
+				mem:             leftMemory,
+				ethstorage:      requestedDisk,
+				requestType:     requestTypeSigma,
+				affinityConfig:  map[string][]string{"ali.SpecifiedNcIps": {nodeIP}},
+				shouldScheduled: false,
+				cpushare:        true,
+			},
+		}
+
+		testContext := &testContext{
+			caseName:  "resourceMix009",
+			cs:        cs,
+			localInfo: nil,
+			f:         f,
+			testCases: tests,
+			nodeName:  nodeName,
+		}
+
+		testContext.execTests()
+	})
 })

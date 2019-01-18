@@ -67,7 +67,7 @@ var _ admission.MutationInterface = &imageSecret{}
 // 1. If the pod does not specify DefaultImagePullSecret, it appends the pod's imagePullSecrets with DefaultImagePullSecret.
 func NewPlugin() *imageSecret {
 	return &imageSecret{
-		Handler: admission.NewHandler(admission.Create, admission.Update),
+		Handler: admission.NewHandler(admission.Create),
 	}
 }
 
@@ -96,7 +96,7 @@ func (i *imageSecret) Admit(a admission.Attributes) (err error) {
 	pod := a.GetObject().(*api.Pod)
 	glog.V(3).Infof("imageSecret starts to admit %s/%s, operation: %v, pod: %v", pod.Namespace, pod.Name, a.GetOperation(), dumpJson(&pod.ObjectMeta))
 
-	if a.GetOperation() != admission.Create && a.GetOperation() != admission.Update {
+	if a.GetOperation() != admission.Create {
 		return nil
 	}
 

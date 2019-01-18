@@ -82,27 +82,6 @@ func TestAdmit(t *testing.T) {
 			},
 		},
 		{
-			name: "Update: Pod has no ImagePullSecrets",
-			pod: &api.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "bar",
-					Namespace: "foo",
-				},
-				Spec: api.PodSpec{
-					Containers: []api.Container{
-						api.Container{
-							Name:  "container1",
-							Image: "image1",
-						},
-					},
-				},
-			},
-			action: admission.Update,
-			expectImagePullSecrets: []api.LocalObjectReference{
-				{Name: DefaultImagePullSecret},
-			},
-		},
-		{
 			name: "Create: Pod has DefaultImagePullSecret",
 			pod: &api.Pod{
 				ObjectMeta: metav1.ObjectMeta{
@@ -127,30 +106,6 @@ func TestAdmit(t *testing.T) {
 			},
 		},
 		{
-			name: "Update: Pod has DefaultImagePullSecret",
-			pod: &api.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "bar",
-					Namespace: "foo4",
-				},
-				Spec: api.PodSpec{
-					Containers: []api.Container{
-						api.Container{
-							Name:  "container1",
-							Image: "image1",
-						},
-					},
-					ImagePullSecrets: []api.LocalObjectReference{
-						{Name: DefaultImagePullSecret},
-					},
-				},
-			},
-			action: admission.Update,
-			expectImagePullSecrets: []api.LocalObjectReference{
-				{Name: DefaultImagePullSecret},
-			},
-		},
-		{
 			name: "Create: Pod has other ImagePullSecret",
 			pod: &api.Pod{
 				ObjectMeta: metav1.ObjectMeta{
@@ -170,31 +125,6 @@ func TestAdmit(t *testing.T) {
 				},
 			},
 			action: admission.Create,
-			expectImagePullSecrets: []api.LocalObjectReference{
-				{Name: "other-secret"},
-				{Name: DefaultImagePullSecret},
-			},
-		},
-		{
-			name: "Update: Pod has other ImagePullSecret",
-			pod: &api.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "bar",
-					Namespace: "foo6",
-				},
-				Spec: api.PodSpec{
-					Containers: []api.Container{
-						api.Container{
-							Name:  "container1",
-							Image: "image1",
-						},
-					},
-					ImagePullSecrets: []api.LocalObjectReference{
-						{Name: "other-secret"},
-					},
-				},
-			},
-			action: admission.Update,
 			expectImagePullSecrets: []api.LocalObjectReference{
 				{Name: "other-secret"},
 				{Name: DefaultImagePullSecret},

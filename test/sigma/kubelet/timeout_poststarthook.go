@@ -34,7 +34,7 @@ func doTimeoutPostStartTestCase(f *framework.Framework, testCase *TimeoutPostSta
 
 	// Step3: Wait for container's postStartHook timeout.
 	By("wait until pod's poststarthook timeout")
-	err = util.WaitTimeoutForContainerUpdateStatus(f.ClientSet, testPod, containerName, 1*time.Minute, timeoutErr, false)
+	err = util.WaitTimeoutForContainerUpdateStatus(f.ClientSet, testPod, containerName, 3*time.Minute, timeoutErr, false)
 	Expect(err).NotTo(HaveOccurred(), "pod's poststarthook timeout")
 }
 

@@ -61,6 +61,7 @@ func doInplaceUpdateContainerResourceTestCase(f *framework.Framework, testCase *
 		Expect(state).Should(Equal(sigmak8sapi.InplaceUpdateStateSucceeded))
 
 		if testCase.expectDiskQuota != "" {
+			time.Sleep(time.Second * 10)
 			// Check DiskQuota.
 			checkCommand := "df -h | grep '/$' | awk '{print $2}'"
 			result := f.ExecShellInContainer(testPod.Name, containerName, checkCommand)
@@ -134,7 +135,6 @@ var _ = Describe("[sigma-kubelet] inplace_update_003 update container's diskquot
 			},
 		}
 		pod.Spec.Containers[0].Resources = resources
-		pod.Annotations[sigmak8sapi.AnnotationPodInplaceUpdateState] = sigmak8sapi.InplaceUpdateStateAccepted
 		pod.Annotations[sigmak8sapi.AnnotationPodAllocSpec] = fmt.Sprintf(`{"containers":[{"name":"%s","hostConfig":{"diskQuotaMode":"/"}}]}`, pod.Spec.Containers[0].Name)
 		patchData := fmt.Sprintf(`{"metadata":{"annotations":{%q:%q}},"spec":{"containers":[{"name":"pod-base","resources":{"requests": {"ephemeral-storage": "5Gi"}, "limits":{"ephemeral-storage": "5Gi"}}}]}}`,
 			sigmak8sapi.AnnotationPodInplaceUpdateState, sigmak8sapi.InplaceUpdateStateAccepted)

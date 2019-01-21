@@ -1,7 +1,9 @@
 package sidecar
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -65,6 +67,10 @@ containers:
   volumeMounts:
   - name: mosn-conf
     mountPath: /home/admin/mosn/conf
+{{ with .AppCert }}
+  - name: app-cert
+    mountPath: /home/admin/release/run
+{{ end }}
 volumes:
 - flexVolume:
     driver: alipay/pouch-volume
@@ -72,6 +78,15 @@ volumes:
       image: {{ valueOfMap .ObjectMeta.Annotations "mosn.sidecar.k8s.alipay.com/image" "reg.docker.alibaba-inc.com/antmesh/mosn:1.1.0-b9ea686" }}
       imagePath: /home/admin/mosn/conf/.
   name: mosn-conf
+{{ with .AppCert }}
+- name: app-local-key
+  secret:
+    secretName: {{ .AppCert.Name }}
+    defaultMode: 0444
+    items:
+    - key: app-local-key
+      path: app_local_key.json
+{{ end }}
 appEnvs:
 - name: MOSN_ENABLE
   value: "true"
@@ -125,7 +140,11 @@ containers:
 `
 )
 
-func addDefaultConfigMap(sidecar *alipaySidecar) {
+const (
+	sigmaTestAppName = "sigmatestapphost"
+)
+
+func addDefaultConfigMap(sidecar *alipaySidecar, addAppSecret bool) {
 	informerFactory := informers.NewSharedInformerFactory(nil, controller.NoResyncPeriodFunc())
 	sidecar.SetInternalKubeInformerFactory(informerFactory)
 	// First add the existing classes to the cache.
@@ -156,6 +175,17 @@ func addDefaultConfigMap(sidecar *alipaySidecar) {
 			supportedSidecarKey: "[\"mosn\", \"dbmesh\"]",
 		},
 	})
+	if addAppSecret {
+		informerFactory.Core().InternalVersion().Secrets().Informer().GetStore().Add(&api.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf("%s-local-key", sigmaTestAppName),
+				Namespace: metav1.NamespaceSystem,
+			},
+			Data: map[string][]byte{
+				AppIdentitySecretKey: []byte(base64.StdEncoding.EncodeToString([]byte("testappsecret"))),
+			},
+		})
+	}
 }
 
 func TestAdmit(t *testing.T) {
@@ -256,10 +286,14 @@ func TestAdmit(t *testing.T) {
 	podWithWrongInjection := podToBeInjected.DeepCopy()
 	podWithWrongInjection.Annotations[alipaysigmak8sapi.MOSNSidecarInject] = "wrong-value"
 
+	podWithAppCertInjection := podToBeInjected.DeepCopy()
+	podWithAppCertInjection.Labels[sigmak8sapi.LabelAppName] = sigmaTestAppName
+
 	testCases := []struct {
 		name              string
 		podToBeInjected   *api.Pod
 		podAfterInjection *api.Pod
+		addAppCert        bool
 		operation         admission.Operation
 		expectedError     bool
 	}{
@@ -287,6 +321,13 @@ func TestAdmit(t *testing.T) {
 			operation:       admission.Delete,
 			expectedError:   false,
 		},
+		{
+			name:            "with appcert specified",
+			podToBeInjected: podWithAppCertInjection,
+			addAppCert:      true,
+			operation:       admission.Create,
+			expectedError:   false,
+		},
 	}
 
 	for i, testCase := range testCases {
@@ -294,7 +335,7 @@ func TestAdmit(t *testing.T) {
 		sidecar := newAlipaySidecarPlugin()
 
 		// Add default configmap.
-		addDefaultConfigMap(sidecar)
+		addDefaultConfigMap(sidecar, testCase.addAppCert)
 
 		attrs := admission.NewAttributesRecord(
 			testCase.podToBeInjected,
@@ -394,7 +435,7 @@ func TestValidate(t *testing.T) {
 		sidecar := newAlipaySidecarPlugin()
 
 		// Add default configmap.
-		addDefaultConfigMap(sidecar)
+		addDefaultConfigMap(sidecar, false)
 
 		attrs := admission.NewAttributesRecord(
 			testCase.pod,

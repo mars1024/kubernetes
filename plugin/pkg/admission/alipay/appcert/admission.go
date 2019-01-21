@@ -47,7 +47,7 @@ C3p+6k9FpfrqAyRQkGJ94IaDTdtgZW0+G5wuG8cs3S8yk5rd71mrcg==
 -----END RSA PRIVATE KEY-----
 `),
  * }
- */
+*/
 package appcert
 
 import (
@@ -206,19 +206,19 @@ func (plugin *alipayAppCert) Admit(a admission.Attributes) (err error) {
 	kmiEndpoint, ok := pluginConfSecret.Data[KMIEndpointSecretKey]
 	if !ok || len(kmiEndpoint) <= 0 {
 		glog.Errorf("failed to decode plugin conf, key[%s]", KMIEndpointSecretKey)
-		return admission.NewForbidden(a, fmt.Errorf("failed to decode plugin conf, key[%s]", KMIEndpointSecretKey))
+		return nil
 	}
 
 	pemKMIPublicKey, ok := pluginConfSecret.Data[KMIPublicKeySecretKey]
 	if !ok || len(pemKMIPublicKey) <= 0 {
 		glog.Errorf("failed to decode plugin conf, key[%s]", KMIPublicKeySecretKey)
-		return admission.NewForbidden(a, fmt.Errorf("failed to decode plugin conf, key[%s]", KMIPublicKeySecretKey))
+		return nil
 	}
 
 	pemSigmaPrivateKey, ok := pluginConfSecret.Data[SigmaPrivateKeySecretKey]
 	if !ok || len(pemSigmaPrivateKey) <= 0 {
 		glog.Errorf("failed to decode plugin conf, key[%s]", SigmaPrivateKeySecretKey)
-		return admission.NewForbidden(a, fmt.Errorf("failed to decode plugin conf, key[%s]", SigmaPrivateKeySecretKey))
+		return nil
 	}
 
 	// fetch the app_local_key.json

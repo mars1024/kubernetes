@@ -244,3 +244,17 @@ func getAnnotationValue(annotation map[string]string, key string) string {
 	value, _ := annotation[key]
 	return value
 }
+
+// skipPodCreate skip  pod create
+func skipPodCreate(pod *v1.Pod) bool {
+	return skipPodBecausePending(pod)
+}
+
+// skipPodBecausePending skip pod create according to annotation
+func skipPodBecausePending(pod *v1.Pod) bool {
+	pendingTimeStr := sigmautil.GetPodAnnotationByName(pod, sigmak8sapi.AnnotationPodPendingTimeSeconds)
+	if len(pendingTimeStr) == 0 {
+		return false
+	}
+	return true
+}

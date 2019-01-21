@@ -736,6 +736,56 @@ func TestGetDanglingPodsFromNodeAnnotation(t *testing.T) {
 	}
 }
 
+func TestGetPodAnnotationByName(t *testing.T) {
+	tests := []struct {
+		name            string
+		pod             *v1.Pod
+		annotationKey   string
+		annotationValue string
+	}{
+		{
+			name:            "pod is nil",
+			pod:             nil,
+			annotationValue: "",
+		},
+		{
+			name:            "pod annotation nil",
+			pod:             &v1.Pod{},
+			annotationValue: "",
+		},
+		{
+			name: "pod annotation key not exist",
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						"test-key": "test-value",
+					},
+				},
+			},
+			annotationKey:   "test123",
+			annotationValue: "",
+		},
+		{
+			name: "everything is ok",
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						"test-key": "test-value",
+					},
+				},
+			},
+			annotationKey:   "test-key",
+			annotationValue: "test-value",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			value := GetPodAnnotationByName(test.pod, test.annotationKey)
+			assert.Equal(t, test.annotationValue, value)
+		})
+	}
+}
+
 func TestGetNetPriorityFromAnnotation(t *testing.T) {
 	netPriority := 2
 	tests := []struct {

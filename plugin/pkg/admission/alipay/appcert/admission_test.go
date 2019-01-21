@@ -120,8 +120,9 @@ func TestCheckAppCertSecretExist(t *testing.T) {
 	informerFactory := informers.NewSharedInformerFactory(client, 1*time.Second)
 	plugin := NewTestAdmission(t, client, informerFactory)
 	pod := newPod(appname)
+	secretName := generateAppCertSecretName(appname)
 
-	exists, err := plugin.checkAppCertSecretExist(appname, pod)
+	exists, err := plugin.checkAppCertSecretExist(secretName, pod)
 	if err != nil {
 		t.Error(err)
 	}
@@ -129,14 +130,13 @@ func TestCheckAppCertSecretExist(t *testing.T) {
 		t.Errorf("check secret exist failed, expected: false, got: true")
 	}
 
-	secretName := fmt.Sprintf(AppIdentitySecretNameTemp, appname)
 	secret, err := plugin.createAppCertSecret(secretName, appname, appLocalKey)
 	if err != nil {
 		t.Error(err)
 	}
 
 	informerFactory.Core().InternalVersion().Secrets().Informer().GetStore().Add(secret)
-	exists, err = plugin.checkAppCertSecretExist(appname, pod)
+	exists, err = plugin.checkAppCertSecretExist(secretName, pod)
 	if err != nil {
 		t.Error(err)
 	}
@@ -145,7 +145,7 @@ func TestCheckAppCertSecretExist(t *testing.T) {
 	}
 
 	informerFactory.Core().InternalVersion().Secrets().Informer().GetStore().Delete(secret)
-	exists, err = plugin.checkAppCertSecretExist(appname, pod)
+	exists, err = plugin.checkAppCertSecretExist(secretName, pod)
 	if err != nil {
 		t.Error(err)
 	}

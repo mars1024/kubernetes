@@ -65,6 +65,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/golang/glog"
@@ -186,7 +187,8 @@ func (plugin *alipayAppCert) Admit(a admission.Attributes) (err error) {
 	}
 
 	// check secret exist
-	exist, err := plugin.checkAppCertSecretExist(appname, pod)
+	secretName := generateAppCertSecretName(appname)
+	exist, err := plugin.checkAppCertSecretExist(secretName, pod)
 	if err != nil {
 		glog.Errorf("failed to check secret exist, err msg: %v", err)
 		return admission.NewForbidden(a, fmt.Errorf("failed to check secret exist, err msg: %v", err))
@@ -232,7 +234,6 @@ func (plugin *alipayAppCert) Admit(a admission.Attributes) (err error) {
 	}
 
 	// save app_local_key.json to secret
-	secretName := fmt.Sprintf(AppIdentitySecretNameTemp, appname)
 	gotSecret, err := plugin.createAppCertSecret(secretName, pod.Namespace, appLocalKey)
 	if err != nil {
 		glog.Errorf("failed to save secret, err msg: %v", err)
@@ -244,8 +245,7 @@ func (plugin *alipayAppCert) Admit(a admission.Attributes) (err error) {
 	return nil
 }
 
-func (plugin *alipayAppCert) checkAppCertSecretExist(appname string, pod *api.Pod) (bool, error) {
-	secretName := fmt.Sprintf(AppIdentitySecretNameTemp, appname)
+func (plugin *alipayAppCert) checkAppCertSecretExist(secretName string, pod *api.Pod) (bool, error) {
 	_, err := plugin.secretLister.Secrets(pod.Namespace).Get(secretName)
 
 	// AppCertSecret is already exists in pod's namespace.
@@ -361,4 +361,10 @@ func fetchAppIdentity(appname string, kmiEndpoint string, pemKMIPublicKey string
 	} else {
 		return "", fmt.Errorf("failed to invoke kmi, result code: %s, error msg: %s", kmiResp.ResultCode, kmiResp.Result)
 	}
+}
+
+// generateAppCertSecretName returns secret name for app certificates,
+// which is a valid DNS subdomain. (RFC 1123)
+func generateAppCertSecretName(appname string) string {
+	return fmt.Sprintf(AppIdentitySecretNameTemp, strings.ToLower(appname))
 }

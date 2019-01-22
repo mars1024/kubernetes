@@ -375,3 +375,55 @@ func checkExpectFinalizer(f *framework.Framework, podName string, expectFinalize
 		return false, nil
 	}
 }
+
+// Get container's update status from pod.
+func GetContainerUpdateStatus(pod *v1.Pod, containerName string) *sigmak8sapi.ContainerStatus {
+	updateStatusStr, exists := pod.Annotations[sigmak8sapi.AnnotationPodUpdateStatus]
+	if !exists {
+		framework.Logf("[GetContainerUpdateStatus] update status doesn't exist")
+		return nil
+	}
+	framework.Logf("[GetContainerUpdateStatus] updateStatusStr: %v", updateStatusStr)
+	containerStatus := sigmak8sapi.ContainerStateStatus{}
+	if err := json.Unmarshal([]byte(updateStatusStr), &containerStatus); err != nil {
+		framework.Logf("[GetContainerUpdateStatus] unmarshal failed")
+		return nil
+	}
+	for containerInfo, containerStatus := range containerStatus.Statuses {
+		if containerInfo.Name == containerName {
+			return &containerStatus
+		}
+	}
+	framework.Logf("[GetContainerUpdateStatus] No update status found for container: %s", containerName)
+	return nil
+}
+
+// WaitTimeoutForContainerUpdateRetryCount check pod's update status retryCount to wait the action failed.
+func WaitTimeoutForContainerUpdateRetryCount(client clientset.Interface, pod *v1.Pod, containerName string, timeout time.Duration, retryCount int) error {
+	options := metav1.SingleObject(metav1.ObjectMeta{Name: pod.Name})
+	w, err := client.CoreV1().Pods(pod.Namespace).Watch(options)
+	if err != nil {
+		return err
+	}
+	_, err = watch.Until(timeout, w, func(event watch.Event) (bool, error) {
+		switch pod := event.Object.(type) {
+		case *v1.Pod:
+			containerStatus := GetContainerUpdateStatus(pod, containerName)
+			if containerStatus == nil {
+				return false, nil
+			}
+			if containerStatus.RetryCount > retryCount || containerStatus.RetryCount == retryCount {
+				framework.Logf("[WaitTimeoutForContainerUpdateRetryCount] container's updateStatus is updated successfully")
+				return true, nil
+			}
+			return false, nil
+
+		}
+		return false, nil
+	})
+	if err != nil {
+		return fmt.Errorf("[WaitTimeoutForContainerUpdateRetryCount] timeout")
+	}
+
+	return nil
+}

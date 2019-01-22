@@ -47,15 +47,24 @@ func LoadAlipayBasePod(name string, expectStatus k8sApi.ContainerState, enableOv
 				Values:   []string{"true"},
 			},
 		}
-		pod.Spec.Affinity.NodeAffinity = &v1.NodeAffinity{
-			RequiredDuringSchedulingIgnoredDuringExecution: &v1.NodeSelector{
+		if pod.Spec.Affinity == nil {
+			pod.Spec.Affinity = &v1.Affinity{}
+		}
+		if pod.Spec.Affinity.NodeAffinity == nil {
+			pod.Spec.Affinity.NodeAffinity = &v1.NodeAffinity{}
+		}
+		if pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution == nil {
+			pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = &v1.NodeSelector{
 				NodeSelectorTerms: []v1.NodeSelectorTerm{
-					{
-						MatchExpressions: nodeTerms,
+					v1.NodeSelectorTerm{
+						MatchExpressions: []v1.NodeSelectorRequirement{},
 					},
 				},
-			},
+			}
 		}
+		pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions = append(
+			pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions, nodeTerms...)
+		
 		toleration := []v1.Toleration{
 			{
 				Key:      k8sApi.LabelEnableOverQuota,

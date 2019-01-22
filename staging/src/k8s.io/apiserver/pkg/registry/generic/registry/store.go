@@ -40,12 +40,15 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
+	"k8s.io/apiserver/pkg/features"
 	"k8s.io/apiserver/pkg/registry/generic"
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/apiserver/pkg/storage"
 	storeerr "k8s.io/apiserver/pkg/storage/errors"
 	"k8s.io/apiserver/pkg/storage/etcd/metrics"
 	"k8s.io/apiserver/pkg/util/dryrun"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	"k8s.io/client-go/tools/cache"
 
 	"github.com/golang/glog"
 )
@@ -1364,6 +1367,11 @@ func (e *Store) CompleteWithOptions(options *generic.StoreOptions) error {
 		triggerFunc = storage.NoTriggerPublisher
 	}
 
+	indexers := options.Indexers
+	if indexers == nil {
+		indexers = &cache.Indexers{}
+	}
+
 	if e.DeleteCollectionWorkers == 0 {
 		e.DeleteCollectionWorkers = opts.DeleteCollectionWorkers
 	}
@@ -1387,6 +1395,7 @@ func (e *Store) CompleteWithOptions(options *generic.StoreOptions) error {
 			e.NewFunc(),
 			prefix,
 			keyFunc,
+			indexers,
 			e.NewListFunc,
 			attrFunc,
 			triggerFunc,

@@ -1,0 +1,155 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    mosn.sidecar.k8s.alipay.com/inject: enabled
+  labels:
+    ali.AppDeployUnit: tradecore-RZ00A-2-4096-30
+    ali.AppName: tradecore
+    ali.BizName: cloudprovision
+    ali.CpuCount: "2"
+    ali.DiskSize: 30G
+    ali.EnableOverQuota: "true"
+    ali.IncreaseReplica: "1"
+    ali.InstanceGroup: linkw_tradecore_test
+    ali.MaxInstancePerHost: "10"
+    ali.MemoryPredict: "4294967296"
+    ali.Privileged: "false"
+    ali.RequestId: opsconsole_1469637_f2bea3f1-6d3b-4169-8f1a-0750b85fdb47
+    ali.SigmaVersion: Sigma3.1
+    ali.Site: eu95
+    ali.SpreadStrictly: "true"
+    ali.container.owner: cloudprovision
+    ali.host.dns: "true"
+    com.alipay.acs.container.server_type: DOCKER_VM
+    com.alipay.cloudprovision.bizDomain: ""
+    com.alipay.cloudprovision.bizName: tradecore
+    com.alipay.cloudprovision.bizType: Server
+    com.alipay.cloudprovision.sourceSys: opsconsole
+    com.alipay.cloudprovision.zone: RZ00A
+    meta.k8s.alipay.com/app-deploy-unit: tradecore-RZ00A-2-4096-30
+    meta.k8s.alipay.com/app-env: TEST
+    meta.k8s.alipay.com/zone: RZ00A
+    sigma.ali/app-name: foo
+    sigma.ali/deploy-unit: tradecore-RZ00A-2-4096-30
+    sigma.ali/instance-group: linkw_tradecore_t1
+    sigma.ali/site: eu95
+  name: tradecore-eu95-0-rz00a-test-alipay-net-4davko5
+  namespace: tradecore
+spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: sigma.ali/is-over-quota
+                operator: In
+                values:
+                  - "true"
+    podAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector: {}
+          topologyKey: kubernetes.io/hostname
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector: {}
+          topologyKey: kubernetes.io/hostname
+  containers:
+    - env:
+        - name: SERVER_CONF_MAVEN
+          value: test
+        - name: SERVER_CONF_ZONE
+          value: RZ00A
+        - name: SERVER_CONF_DBMODE
+          value: test
+        - name: SERVER_CONF_DOMAINNAME
+          value: rz00a.alipay.net
+        - name: SERVER_CONF_CONFREGURL
+          value: confreg-pool.rz00a.alipay.net
+        - name: SERVER_CONF_TARGETSERVER
+          value: tradecore-1-1
+        - name: SERVER_CONF_ZMODE
+          value: "true"
+        - name: ALIPAY_LOCATION
+          value: eu95
+        - name: ALIPAY_ZONE
+          value: RZ00A
+        - name: SERVER_ENV
+          value: TEST
+        - name: Sigma_Version
+          value: Sigma3.1
+        - name: SN
+          value: b170cfab-ebfd-4aa3-b16c-e1c5bdbaaa56
+        - name: KUBERNETES_SERVICE_HOST
+          value: apiserver.sigma-eu95.svc.alipay.net
+        - name: KUBERNETES_SERVICE_PORT
+          value: "6443"
+        - name: ALIPAY_SIGMA_CPUMODE
+          value: cpushare
+      image: reg.docker.alibaba-inc.com/linkw/0e326f189e67d2b91776c11a1f945bf5:2019-01-02
+      imagePullPolicy: IfNotPresent
+      name: tradecore-eu95-0-rz00a-test-alipay-net-4davko5v23
+      resources:
+        limits:
+          cpu: "2"
+          ephemeral-storage: 30Gi
+          memory: 4Gi
+        requests:
+          cpu: "2"
+          ephemeral-storage: 30Gi
+          memory: 4Gi
+      securityContext:
+        capabilities: {}
+        privileged: false
+        readOnlyRootFilesystem: false
+      terminationMessagePath: /dev/termination-log
+      terminationMessagePolicy: File
+      volumeMounts:
+        - mountPath: /home/admin/logs
+          name: volume1
+  dnsConfig:
+    nameservers:
+      - 10.101.0.1
+      - 10.101.0.17
+      - 10.101.0.33
+    options:
+      - name: timeout:2
+      - name: attempts:2
+      - name: rotate
+    searches:
+      - test.alipay.net
+  dnsPolicy: None
+  hostAliases:
+    - hostnames:
+        - www.springframework.org
+      ip: 10.228.241.117
+    - hostnames:
+        - localhost
+        - localhost.localdomain
+      ip: 127.0.0.1
+  restartPolicy: Always
+  schedulerName: default-scheduler
+  securityContext: {}
+  serviceAccount: default
+  serviceAccountName: default
+  terminationGracePeriodSeconds: 10
+  tolerations:
+    - effect: NoSchedule
+      key: sigma.ali/is-over-quota
+      operator: Equal
+      value: "true"
+    - effect: NoExecute
+      key: node.kubernetes.io/not-ready
+      operator: Exists
+      tolerationSeconds: 300
+    - effect: NoExecute
+      key: node.kubernetes.io/unreachable
+      operator: Exists
+      tolerationSeconds: 300
+  volumes:
+    - flexVolume:
+        driver: alipay/pouch-volume
+        options:
+          image: reg.docker.alibaba-inc.com/linkw/0e326f189e67d2b91776c11a1f945bf5:2019-01-02
+          imagePath: /home/admin/logs/.
+      name: volume1

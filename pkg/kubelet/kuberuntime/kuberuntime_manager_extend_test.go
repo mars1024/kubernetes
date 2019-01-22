@@ -131,14 +131,13 @@ func TestSyncPodExtension(t *testing.T) {
 	}
 
 	podActions := podActions{
-		ContainersToStartBecauseDesireState: make(map[kubecontainer.ContainerID]containerOperationInfo),
+		ContainersToStartBecauseDesireState: []int{},
 		ContainersToKillBecauseDesireState:  make(map[kubecontainer.ContainerID]containerOperationInfo),
 		ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
 		ContainersToUpgrade:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
 	}
 
-	podActions.ContainersToStartBecauseDesireState[kubecontainer.ContainerID{ID: containerIDOfSecond}] =
-		containerOperationInfo{&pod.Spec.Containers[1], containerNameSecond, "test"}
+	podActions.ContainersToStartBecauseDesireState = append(podActions.ContainersToStartBecauseDesireState, 1)
 
 	podActions.ContainersToKillBecauseDesireState[kubecontainer.ContainerID{ID: containerIDOfThird}] =
 		containerOperationInfo{&pod.Spec.Containers[2], containerNameThird, "test"}
@@ -470,7 +469,7 @@ func TestComputePodActions_extension(t *testing.T) {
 					Attempt:                             uint32(0),
 					ContainersToStart:                   []int{},
 					ContainersToKill:                    make(map[kubecontainer.ContainerID]containerToKillInfo),
-					ContainersToStartBecauseDesireState: getOperatorContainerMap(ContainerStart, []string{containerNameFirst}, basePod, baseStatus),
+					ContainersToStartBecauseDesireState: []int{0},
 					ContainersToKillBecauseDesireState:  getOperatorContainerMap(ContainerStop, []string{containerNameSecond}, basePod, baseStatus),
 					ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
 					ContainersToUpgrade:                 make(map[kubecontainer.ContainerID]containerOperationInfo),

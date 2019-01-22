@@ -116,6 +116,9 @@ func TestTaintNodeByCondition(t *testing.T) {
 		true,        // Run taint manager
 		true,        // Use taint based evictions
 		true,        // Enabled TaintNodeByCondition feature
+		false,
+		false,
+		false,
 	)
 	if err != nil {
 		t.Errorf("Failed to create node controller: %v", err)

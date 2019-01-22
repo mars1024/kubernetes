@@ -80,6 +80,17 @@ const (
 	// validation, merging, mutation can be tested without
 	// committing.
 	DryRun utilfeature.Feature = "DryRun"
+
+	// owner: @fansong.cfs
+	// alpha: v1.12
+	//
+	// Allow index labels and fields in apiserver, so that list operations get accelerated.
+	SelectorIndex utilfeature.Feature = "SelectorIndex"
+
+	// owner: @stephen.xd
+	// alpha: v1.12
+	// Allow to fall back to native deletion policy
+	DisableCascadingDeletion utilfeature.Feature = "DisableCascadingDeletion"
 )
 
 func init() {
@@ -90,11 +101,13 @@ func init() {
 // To add a new feature, define a key for it above and add it here. The features will be
 // available throughout Kubernetes binaries.
 var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureSpec{
-	StreamingProxyRedirects: {Default: true, PreRelease: utilfeature.Beta},
-	ValidateProxyRedirects:  {Default: false, PreRelease: utilfeature.Alpha},
-	AdvancedAuditing:        {Default: true, PreRelease: utilfeature.GA},
-	APIResponseCompression:  {Default: false, PreRelease: utilfeature.Alpha},
-	Initializers:            {Default: false, PreRelease: utilfeature.Alpha},
-	APIListChunking:         {Default: true, PreRelease: utilfeature.Beta},
-	DryRun:                  {Default: false, PreRelease: utilfeature.Alpha},
+	StreamingProxyRedirects:  {Default: true, PreRelease: utilfeature.Beta},
+	ValidateProxyRedirects:   {Default: false, PreRelease: utilfeature.Alpha},
+	AdvancedAuditing:         {Default: true, PreRelease: utilfeature.GA},
+	APIResponseCompression:   {Default: false, PreRelease: utilfeature.Alpha},
+	Initializers:             {Default: false, PreRelease: utilfeature.Alpha},
+	APIListChunking:          {Default: true, PreRelease: utilfeature.Beta},
+	DryRun:                   {Default: false, PreRelease: utilfeature.Alpha},
+	SelectorIndex:            {Default: false, PreRelease: utilfeature.Alpha},
+	DisableCascadingDeletion: {Default: true, PreRelease: utilfeature.Beta},
 }

@@ -395,6 +395,37 @@ const (
 	//
 	// Ignore protection finalizer when do upgrade
 	IgnoreProtectionFinalizer utilfeature.Feature = "IgnoreProtectionFinalizer"
+
+	// owner: @fankang.fk (fankang.fk@antfin.com)
+	// alpha: v1.10
+	//
+	// Enable start containers by the order defined in pod spec
+	StartContainerByOrder utilfeature.Feature = "StartContainerByOrder"
+
+	// owner: @fankang.fk (fankang.fk@antfin.com)
+	// alpha: v1.10
+	//
+	// Enable DNS feature implemented in alidocker
+	AliDockerDNS utilfeature.Feature = "AliDockerDNS"
+
+	// owner: @chenjun.cj (chenjun.cj@alibaba-inc.com)
+	// alpha: v1.12
+	//
+	// Disable Node-Lifecycle-Controller evict Pods when Node Ready condition is False or Unknown
+	// Node-Lifecycle-Controller will also clear all Nodes' taints node.kubernetes.io/unreachable=:NoExecute and node.kubernetes.io/not-ready=:NoExecute
+	DisableEvictPodByNodeReadyCondition utilfeature.Feature = "DisableEvictPodByNodeReadyCondition"
+
+	// owner: @chenjun.cj (chenjun.cj@alibaba-inc.com)
+	// alpha: v1.12
+	//
+	// Evict Pod by Policy instead of delete Pods directly
+	EvictPodByPolicy utilfeature.Feature = "EvictPodByPolicy"
+
+	// owner: @chenjun.cj (chenjun.cj@alibaba-inc.com)
+	// alpha: v1.12
+	//
+	// Disable Node-Lifecycle-Controller change Pod status when Node Ready condition is False or Unknown
+	DisableChangePodStatusByNodeReadyCondition utilfeature.Feature = "DisableChangePodStatusByNodeReadyCondition"
 )
 
 func init() {
@@ -410,7 +441,7 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	ExperimentalHostUserNamespaceDefaultingGate: {Default: false, PreRelease: utilfeature.Beta},
 	ExperimentalCriticalPodAnnotation:           {Default: false, PreRelease: utilfeature.Alpha},
 	DevicePlugins:                               {Default: true, PreRelease: utilfeature.Beta},
-	TaintBasedEvictions:                         {Default: false, PreRelease: utilfeature.Alpha},
+	TaintBasedEvictions:                         {Default: true, PreRelease: utilfeature.Alpha},
 	RotateKubeletServerCertificate:              {Default: true, PreRelease: utilfeature.Beta},
 	RotateKubeletClientCertificate:              {Default: true, PreRelease: utilfeature.Beta},
 	PersistentLocalVolumes:                      {Default: true, PreRelease: utilfeature.Beta},
@@ -464,15 +495,21 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	DisablePodEviction:                          {Default: false, PreRelease: utilfeature.Alpha},
 	NetworkEnv:                                  {Default: false, PreRelease: utilfeature.Alpha},
 	IgnoreProtectionFinalizer:                   {Default: true, PreRelease: utilfeature.Alpha},
+	StartContainerByOrder:                       {Default: false, PreRelease: utilfeature.Alpha},
+	AliDockerDNS:                                {Default: false, PreRelease: utilfeature.Alpha},
+	DisableEvictPodByNodeReadyCondition:         {Default: true, PreRelease: utilfeature.Beta},
+	EvictPodByPolicy:                            {Default: true, PreRelease: utilfeature.Alpha},
+	DisableChangePodStatusByNodeReadyCondition:  {Default: true, PreRelease: utilfeature.Beta},
 
 	// inherited features from generic apiserver, relisted here to get a conflict if it is changed
 	// unintentionally on either side:
-	genericfeatures.StreamingProxyRedirects: {Default: true, PreRelease: utilfeature.Beta},
-	genericfeatures.AdvancedAuditing:        {Default: true, PreRelease: utilfeature.GA},
-	genericfeatures.APIResponseCompression:  {Default: false, PreRelease: utilfeature.Alpha},
-	genericfeatures.Initializers:            {Default: false, PreRelease: utilfeature.Alpha},
-	genericfeatures.APIListChunking:         {Default: true, PreRelease: utilfeature.Beta},
-	genericfeatures.DryRun:                  {Default: false, PreRelease: utilfeature.Alpha},
+	genericfeatures.StreamingProxyRedirects:  {Default: true, PreRelease: utilfeature.Beta},
+	genericfeatures.AdvancedAuditing:         {Default: true, PreRelease: utilfeature.GA},
+	genericfeatures.APIResponseCompression:   {Default: false, PreRelease: utilfeature.Alpha},
+	genericfeatures.Initializers:             {Default: false, PreRelease: utilfeature.Alpha},
+	genericfeatures.APIListChunking:          {Default: true, PreRelease: utilfeature.Beta},
+	genericfeatures.DryRun:                   {Default: false, PreRelease: utilfeature.Alpha},
+	genericfeatures.DisableCascadingDeletion: {Default: true, PreRelease: utilfeature.Beta},
 
 	// inherited features from apiextensions-apiserver, relisted here to get a conflict if it is changed
 	// unintentionally on either side:

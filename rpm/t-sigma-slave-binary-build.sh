@@ -4,8 +4,8 @@
 ROOT_PATH="k8s.io/kubernetes/"
 mkdir -p $1/../src/$ROOT_PATH
 
-# delete git and init git to v1.10
-cd $1  && git branch  && git status && git tag -d `git tag` &&  git tag v1.10 &&  git tag
+# delete git then init git to v1.12
+cd $1  && git branch  && git status && git tag -d `git tag` &&  git tag v1.12 &&  git tag
 
 # sync file
 rsync -avz $1/*  $1/../src/$ROOT_PATH  --exclude=.svn --exclude=_output/
@@ -25,7 +25,7 @@ git reset --hard HEAD
 git clean -xdf
 git rev-parse --short  HEAD
 git status
-git tag -d `git tag` &&  git tag v1.10 &&  git tag
+git tag -d `git tag` &&  git tag v1.12 &&  git tag
 
 # compile binary
 bin="sigma-slave"

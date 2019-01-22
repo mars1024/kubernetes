@@ -140,6 +140,9 @@ var PostStartHookTimeoutSeconds string = "PostStartHookTimeoutSeconds"
 // ImagePull timeout key in ContainerExtraConfig
 var ImagePullTimeoutSeconds string = "ImagePullTimeoutSeconds"
 
+// PreStopHook timeout key in ContainerExtraConfig
+var PreStopHookTimeoutSeconds string = "PreStopHookTimeoutSeconds"
+
 // ContainerExtraConfig contains container's extra config such as timeout.
 type ContainerExtraConfig struct {
 	ContainerConfigs map[ContainerInfo]ContainerConfig `json:"containerConfigs"`

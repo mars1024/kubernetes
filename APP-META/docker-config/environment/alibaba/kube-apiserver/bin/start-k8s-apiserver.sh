@@ -16,6 +16,10 @@ if [ $ETCD_USE_TLS == "true" ]; then
     etcdTlsOpts="--etcd-cafile=$certDir/etcd-ca.crt --etcd-certfile=$certDir/apiserver-etcd-client.crt --etcd-keyfile=$certDir/apiserver-etcd-client.key"
 fi
 
+if [[ -n $ETCD_SERVERS_OVERRIDES ]]; then
+    etcdServersOverridesOpts="--etcd-servers-overrides=$ETCD_SERVERS_OVERRIDES"
+fi
+
 pidof kube-apiserver || {
 $workDir/bin/kube-apiserver \
     --enable-admission-plugins=Initializers,NamespaceLifecycle,ServiceAccount,LimitRanger,DefaultStorageClass,DefaultTolerationSeconds,PodPreset,ResourceQuota,ValidatingAdmissionWebhook,MutatingAdmissionWebhook,AliPodLifeTimeHook,PodDeletionFlowControl,AliPodInjectionPreSchedule,AliPodInjectionPostSchedule,ContainerState \
@@ -27,6 +31,7 @@ $workDir/bin/kube-apiserver \
     --client-ca-file=$certDir/ca.crt \
     --etcd-servers=$CLUSTER_ETCD --storage-backend=etcd3 \
     $etcdTlsOpts \
+    $etcdServersOverridesOpts \
     --external-hostname=localhost \
     --feature-gates=AllAlpha=false,CSINodeInfo=true,CSIDriverRegistry=true \
     --insecure-bind-address=0.0.0.0 --insecure-port=8080 \

@@ -93,6 +93,8 @@ type HostConfigInfo struct {
 	Ulimits []Ulimit `json:"ulimits,omitempty"`
 	// CPU CFS (Completely Fair Scheduler) period. Set this to overwrite agent default value
 	CpuPeriod int64 `json:"cpuPeriod,omitempty"`
+	// DefaultCpuShares will be used when requests cpu is 0.
+	DefaultCpuShares *int64 `json:"defaultCpuShares,omitempty"`
 }
 
 type WeightDevice struct {

@@ -28,13 +28,17 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/kubernetes/pkg/apis/core/helper"
 	v1helper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
+	"k8s.io/kubernetes/pkg/scheduler/algorithm"
+	"k8s.io/kubernetes/pkg/util/slice"
 
 	"github.com/golang/glog"
 )
@@ -108,6 +112,8 @@ type NoExecuteTaintManager struct {
 
 	nodeUpdateQueue workqueue.Interface
 	podUpdateQueue  workqueue.Interface
+
+	disableEvictPodByNodeReadyCondition bool
 }
 
 func deletePodHandler(c clientset.Interface, emitEventFunc func(types.NamespacedName)) func(args *WorkArgs) error {
@@ -130,9 +136,43 @@ func deletePodHandler(c clientset.Interface, emitEventFunc func(types.Namespaced
 	}
 }
 
-func getNoExecuteTaints(taints []v1.Taint) []v1.Taint {
+// TODO: implement Evict Pod By PodEvictPolicy
+// for now, we add label["pod.sigma.ali/eviction=true"] to Pod by default
+func evictPodByPolicyHandler(c clientset.Interface, emitEventFunc func(types.NamespacedName)) func(args *WorkArgs) error {
+	return func(args *WorkArgs) error {
+		ns := args.NamespacedName.Namespace
+		name := args.NamespacedName.Name
+		glog.V(0).Infof("NoExecuteTaintManager is evicting Pod %q by add Label['pod.sigma.ali/eviction=true']", args.NamespacedName.String())
+		if emitEventFunc != nil {
+			emitEventFunc(args.NamespacedName)
+		}
+		// TODO: use vendor from Sigma 3.1 APIs or make the Label configurable
+		data := fmt.Sprintf(`{"metadata":{"labels":{%q:%q}}}`, "pod.sigma.ali/eviction", "true")
+		err := retry.RetryOnConflict(wait.Backoff{
+			Duration: 10 * time.Millisecond,
+			Jitter:   0.1,
+			Factor:   1,
+			Steps:    retries,
+		}, func() error {
+			_, err := c.CoreV1().Pods(ns).Patch(name, types.StrategicMergePatchType, []byte(data))
+			return err
+		})
+
+		if nil != err {
+			glog.V(0).Infof("NoExecuteTaintManager evict Pod %q by add Label failed: %s", args.NamespacedName.String(), err)
+		} else {
+			glog.V(0).Infof("NoExecuteTaintManager evict Pod %q by add Label['pod.sigma.ali/eviction=true'] success", args.NamespacedName.String())
+		}
+		return err
+	}
+}
+
+func getNoExecuteTaints(taints []v1.Taint, ignoreTaintKeys []string) []v1.Taint {
 	result := []v1.Taint{}
 	for i := range taints {
+		if slice.ContainsString(ignoreTaintKeys, taints[i].Key, nil) {
+			continue
+		}
 		if taints[i].Effect == v1.TaintEffectNoExecute {
 			result = append(result, taints[i])
 		}
@@ -182,7 +222,7 @@ func getMinTolerationTime(tolerations []v1.Toleration) time.Duration {
 
 // NewNoExecuteTaintManager creates a new NoExecuteTaintManager that will use passed clientset to
 // communicate with the API server.
-func NewNoExecuteTaintManager(c clientset.Interface) *NoExecuteTaintManager {
+func NewNoExecuteTaintManager(c clientset.Interface, evictPodByPolicy bool, disableEvictPodByNodeReadyCondition bool) *NoExecuteTaintManager {
 	eventBroadcaster := record.NewBroadcaster()
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "taint-controller"})
 	eventBroadcaster.StartLogging(glog.Infof)
@@ -200,8 +240,17 @@ func NewNoExecuteTaintManager(c clientset.Interface) *NoExecuteTaintManager {
 
 		nodeUpdateQueue: workqueue.New(),
 		podUpdateQueue:  workqueue.New(),
+
+		disableEvictPodByNodeReadyCondition: disableEvictPodByNodeReadyCondition,
 	}
-	tm.taintEvictionQueue = CreateWorkerQueue(deletePodHandler(c, tm.emitPodDeletionEvent))
+
+	var evictHandler func(args *WorkArgs) error
+	if evictPodByPolicy {
+		evictHandler = evictPodByPolicyHandler(c, tm.emitPodDeletionEvent)
+	} else {
+		evictHandler = deletePodHandler(c, tm.emitPodDeletionEvent)
+	}
+	tm.taintEvictionQueue = CreateWorkerQueue(evictHandler)
 
 	return tm
 }
@@ -320,13 +369,19 @@ func (tc *NoExecuteTaintManager) NodeUpdated(oldNode *v1.Node, newNode *v1.Node)
 	if oldNode != nil {
 		oldTaints = oldNode.Spec.Taints
 	}
-	oldTaints = getNoExecuteTaints(oldTaints)
+
+	var ignoreTaintKeys []string
+	if tc.disableEvictPodByNodeReadyCondition {
+		ignoreTaintKeys = []string{algorithm.TaintNodeNotReady}
+	}
+
+	oldTaints = getNoExecuteTaints(oldTaints, ignoreTaintKeys)
 
 	newTaints := []v1.Taint{}
 	if newNode != nil {
 		newTaints = newNode.Spec.Taints
 	}
-	newTaints = getNoExecuteTaints(newTaints)
+	newTaints = getNoExecuteTaints(newTaints, ignoreTaintKeys)
 
 	if oldNode != nil && newNode != nil && helper.Semantic.DeepEqual(oldTaints, newTaints) {
 		return

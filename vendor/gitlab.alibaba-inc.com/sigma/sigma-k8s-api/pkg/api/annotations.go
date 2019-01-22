@@ -52,7 +52,7 @@ const (
 	// AnnotationAutopilot is the prefix of autopilot service in node annotation
 	AnnotationAutopilot = "node.beta1.sigma.ali/autopilot"
 
-	// AnnotationDanglingPods records the wild pods
+	// AnnotationDanglingPods records the dangling pods
 	// Please refer to: https://lark.alipay.com/sys/sigma3.x/iqymrh
 	AnnotationDanglingPods = "node.beta1.sigma.ali/dangling-pods"
 
@@ -67,4 +67,8 @@ const (
 
 	// AnnotationContainerExtraConfig is annotation key of container's config defined by user
 	AnnotationContainerExtraConfig = "pod.beta1.sigma.ali/container-extra-config"
+
+	// AnnotationPodPendingTimeSeconds is annotation key of pod pending, with this key,
+	// sigmalet will skip pod create, the value is timeout seconds, zero represent without limit
+	AnnotationPodPendingTimeSeconds = "pod.beta1.sigma.ali/pending-time-seconds"
 )

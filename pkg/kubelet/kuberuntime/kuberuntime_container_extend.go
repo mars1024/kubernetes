@@ -2,6 +2,7 @@ package kuberuntime
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/golang/glog"
 	"k8s.io/api/core/v1"
@@ -170,4 +171,63 @@ func generateTopologyEnvs(node *v1.Node) []*runtimeapi.KeyValue {
 	}
 
 	return envs
+}
+
+// getDiskSize convert disk size such as "1Gi" to "1g".
+func getDiskSize(s string) string {
+	if strings.HasSuffix(s, "Ti") {
+		s = strings.Replace(s, "Ti", "t", -1)
+	}
+	if strings.HasSuffix(s, "T") {
+		s = strings.Replace(s, "T", "t", -1)
+	}
+	if strings.HasSuffix(s, "Gi") {
+		s = strings.Replace(s, "Gi", "g", -1)
+	}
+	if strings.HasSuffix(s, "G") {
+		s = strings.Replace(s, "G", "g", -1)
+	}
+	if strings.HasSuffix(s, "Mi") {
+		s = strings.Replace(s, "Mi", "m", -1)
+	}
+	if strings.HasSuffix(s, "M") {
+		s = strings.Replace(s, "M", "m", -1)
+	}
+	if strings.HasSuffix(s, "Ki") {
+		s = strings.Replace(s, "Ki", "k", -1)
+	}
+	if strings.HasSuffix(s, "K") {
+		s = strings.Replace(s, "K", "k", -1)
+	}
+	return s
+}
+
+// applyDiskQuota can set diskQuota in containerConfig.
+// Resources field of containerConfig should not be nil.
+func applyDiskQuota(pod *v1.Pod, container *v1.Container, containerConfig *runtimeapi.ContainerConfig) error {
+	// Set "/" quota as the size of ephemeral storage in requests.
+	requestEphemeralStorage, requestESExists := container.Resources.Requests[v1.ResourceEphemeralStorage]
+	if !requestESExists || requestEphemeralStorage.IsZero() {
+		glog.V(4).Infof("request requestEphemeralStorage is not defined in pod: %q, ignore to setup diskquota", format.Pod(pod))
+		return nil
+	}
+
+	// Ensure QuotaId exists in container.
+	if containerConfig.QuotaId == "" {
+		// Set QuotaId as -1 to generate a new quotaid.
+		containerConfig.QuotaId = "-1"
+	}
+
+	// Default diskQuotaMode is "DiskQuotaModeRootFsAndVolume"
+	diskQuotaMode := sigmak8sapi.DiskQuotaModeRootFsAndVolume
+	// Change diskQuotaMode if needed.
+	containerHostConfig := sigmautil.GetHostConfigFromAnnotation(pod, container.Name)
+	if containerHostConfig != nil && containerHostConfig.DiskQuotaMode == sigmak8sapi.DiskQuotaModeRootFsOnly {
+		diskQuotaMode = sigmak8sapi.DiskQuotaModeRootFsOnly
+	}
+	glog.V(4).Infof("Set RootFs DiskQuotaMode as %s for container %s in pod %s",
+		string(diskQuotaMode), container.Name, format.Pod(pod))
+	containerConfig.Linux.Resources.DiskQuota = map[string]string{string(diskQuotaMode): getDiskSize(requestEphemeralStorage.String())}
+
+	return nil
 }

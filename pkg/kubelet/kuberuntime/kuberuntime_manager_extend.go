@@ -2,6 +2,7 @@ package kuberuntime
 
 import (
 	"fmt"
+	"k8s.io/kubernetes/pkg/kubelet/images"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,11 +12,13 @@ import (
 	"google.golang.org/grpc/status"
 	"k8s.io/api/core/v1"
 	"k8s.io/client-go/util/flowcontrol"
+	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/kubelet/events"
 	"k8s.io/kubernetes/pkg/kubelet/util/format"
 
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	sigmautil "k8s.io/kubernetes/pkg/kubelet/sigma"
@@ -98,24 +101,42 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 	}
 
 	// step 2: start container which need to start.
-	for containerID, containerInfo := range changes.ContainersToStartBecauseDesireState {
-		startContainerResult := kubecontainer.NewSyncResult(kubecontainer.StartContainer, containerInfo.name)
+	// step 2: start container which need to start.
+	for _, idx := range changes.ContainersToStartBecauseDesireState {
+		container := &pod.Spec.Containers[idx]
+		status := podStatus.FindContainerStatusByName(container.Name)
+		if status == nil {
+			glog.V(4).Infof("Failed to get status of %s in pod %s, start container in next loop",
+				container.Name, format.Pod(pod))
+
+			if utilfeature.DefaultFeatureGate.Enabled(features.StartContainerByOrder) {
+				break
+			}
+			continue
+		}
+		containerID := status.ID
+
+		startContainerResult := kubecontainer.NewSyncResult(kubecontainer.StartContainer, container.Name)
 		result.AddSyncResult(startContainerResult)
 
-		containerStatus := createContainerStatus(podStatus, sigmak8sapi.StartContainerAction, containerInfo.name, pod)
+		containerStatus := createContainerStatus(podStatus, sigmak8sapi.StartContainerAction, container.Name, pod)
 
-		glog.V(4).Infof("start container %+v in pod %v", containerInfo.container, format.Pod(pod))
+		glog.V(4).Infof("start container %+v in pod %v", container, format.Pod(pod))
 
-		if msg, err := m.startContainerWithOutPullImage(podSandboxConfig, containerInfo.container, containerID.ID,
+		if msg, err := m.startContainerWithOutPullImage(podSandboxConfig, container, containerID.ID,
 			pod, podStatus); err != nil {
 			startContainerResult.Fail(err, msg)
-			m.updateContainerStateStatus(containerStatus, containerInfo.name, containerID.ID, result.StateStatus, false, msg)
+			m.updateContainerStateStatus(containerStatus, container.Name, containerID.ID, result.StateStatus, false, msg)
 
 			// known errors that are logged in other places are logged at higher levels here to avoid
 			// repetitive log spam
 			utilruntime.HandleError(fmt.Errorf("container start failed: %v: %s", err, msg))
+			// Break if containers should be started in order
+			if utilfeature.DefaultFeatureGate.Enabled(features.StartContainerByOrder) {
+				break
+			}
 		} else {
-			m.updateContainerStateStatus(containerStatus, containerInfo.name, containerID.ID, result.StateStatus, true, StartContainerSuccess)
+			m.updateContainerStateStatus(containerStatus, container.Name, containerID.ID, result.StateStatus, true, StartContainerSuccess)
 		}
 	}
 
@@ -141,7 +162,7 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 		containerUpgradeResult, msg, err := m.upgradeContainer(containerStatusFromCache, podSandboxID, podSandboxConfig, pod, podStatus, pullSecrets, podIP, container)
 		success := false
 		statusMsg := ""
-		if err != nil {
+		if err != nil && err != images.ErrImagePullBackOff {
 			upgradeContainerResult.Fail(err, msg)
 			containerStatus.Message = msg
 			success = false
@@ -150,7 +171,7 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 			// known errors that are logged in other places are logged at higher levels here to avoid
 			// repetitive log spam
 			utilruntime.HandleError(fmt.Errorf("container start failed: %v: %s", err, msg))
-		} else {
+		} else if err == nil {
 			success = true
 			statusMsg = UpgradeContainerSuccess
 		}

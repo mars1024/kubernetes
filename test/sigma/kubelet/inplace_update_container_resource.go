@@ -1,12 +1,14 @@
 package kubelet
 
 import (
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
 	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -16,14 +18,16 @@ import (
 )
 
 type InplaceUpdateContainerResourceTestCase struct {
-	pod           *v1.Pod
-	patchData     string
-	expectSuccess bool
+	pod             *v1.Pod
+	patchData       string
+	expectSuccess   bool
+	expectDiskQuota string
 }
 
 func doInplaceUpdateContainerResourceTestCase(f *framework.Framework, testCase *InplaceUpdateContainerResourceTestCase) {
 	// set container init resource and mutate image before create.
 	pod := testCase.pod
+	containerName := pod.Spec.Containers[0].Name
 
 	// Step 1: Create pod.
 	testPod, err := f.ClientSet.CoreV1().Pods(f.Namespace.Name).Create(pod)
@@ -33,7 +37,7 @@ func doInplaceUpdateContainerResourceTestCase(f *framework.Framework, testCase *
 
 	// Step 2: Wait for container's creation finished.
 	By("wait until pod running and have pod/host IP")
-	err = util.WaitTimeoutForPodStatus(f.ClientSet, testPod, v1.PodRunning, 30*time.Minute)
+	err = util.WaitTimeoutForPodStatus(f.ClientSet, testPod, v1.PodRunning, 3*time.Minute)
 	Expect(err).NotTo(HaveOccurred(), "pod status is not running")
 
 	// Step 3: Update container resource requirement to trigger update action.
@@ -55,6 +59,15 @@ func doInplaceUpdateContainerResourceTestCase(f *framework.Framework, testCase *
 		state, _ := getPod.Annotations[sigmak8sapi.AnnotationPodInplaceUpdateState]
 		framework.Logf("inplace update state after updating is: %s", state)
 		Expect(state).Should(Equal(sigmak8sapi.InplaceUpdateStateSucceeded))
+
+		if testCase.expectDiskQuota != "" {
+			time.Sleep(time.Second * 10)
+			// Check DiskQuota.
+			checkCommand := "df -h | grep '/$' | awk '{print $2}'"
+			result := f.ExecShellInContainer(testPod.Name, containerName, checkCommand)
+			framework.Logf("command resut: %v", result)
+			checkResult(checkMethodEqual, result, []string{testCase.expectDiskQuota})
+		}
 	} else {
 		err = util.WaitTimeoutForContainerUpdateStatus(f.ClientSet, testPod, "pod-base", 3*time.Minute, "failed to update container", false)
 		Expect(err).NotTo(HaveOccurred(), "\"failed to update container\" does not appear in container update status")
@@ -83,7 +96,60 @@ var _ = Describe("[sigma-kubelet] inplace_update_001 update container's resource
 	})
 })
 
-var _ = Describe("[sigma-kubelet] [Disruptive] inplace_update_002 update container's resource with a large value, should return error", func() {
+var _ = Describe("[sigma-kubelet] inplace_update_002 update container's diskquota should be ok(DiskQuotaMode: .*)", func() {
+	f := framework.NewDefaultFramework("sigma-kubelet")
+	It("update container's diskQuota when EphemeralStorage is changed", func() {
+		pod := generateRunningPod()
+		resources := v1.ResourceRequirements{
+			Requests: v1.ResourceList{
+				v1.ResourceEphemeralStorage: resource.MustParse("2Gi"),
+			},
+			Limits: v1.ResourceList{
+				v1.ResourceEphemeralStorage: resource.MustParse("2Gi"),
+			},
+		}
+		pod.Spec.Containers[0].Resources = resources
+		patchData := fmt.Sprintf(`{"metadata":{"annotations":{%q:%q}},"spec":{"containers":[{"name":"pod-base","resources":{"requests": {"ephemeral-storage": "5Gi"}, "limits":{"ephemeral-storage": "5Gi"}}}]}}`,
+			sigmak8sapi.AnnotationPodInplaceUpdateState, sigmak8sapi.InplaceUpdateStateAccepted)
+		testCase := InplaceUpdateContainerResourceTestCase{
+			pod:             pod,
+			patchData:       patchData,
+			expectSuccess:   true,
+			expectDiskQuota: "5.0G",
+		}
+
+		doInplaceUpdateContainerResourceTestCase(f, &testCase)
+	})
+})
+
+var _ = Describe("[sigma-kubelet] inplace_update_003 update container's diskquota should be ok(DiskQuotaMode: /)", func() {
+	f := framework.NewDefaultFramework("sigma-kubelet")
+	It("update container's diskQuota when EphemeralStorage is changed", func() {
+		pod := generateRunningPod()
+		resources := v1.ResourceRequirements{
+			Requests: v1.ResourceList{
+				v1.ResourceEphemeralStorage: resource.MustParse("2Gi"),
+			},
+			Limits: v1.ResourceList{
+				v1.ResourceEphemeralStorage: resource.MustParse("2Gi"),
+			},
+		}
+		pod.Spec.Containers[0].Resources = resources
+		pod.Annotations[sigmak8sapi.AnnotationPodAllocSpec] = fmt.Sprintf(`{"containers":[{"name":"%s","hostConfig":{"diskQuotaMode":"/"}}]}`, pod.Spec.Containers[0].Name)
+		patchData := fmt.Sprintf(`{"metadata":{"annotations":{%q:%q}},"spec":{"containers":[{"name":"pod-base","resources":{"requests": {"ephemeral-storage": "5Gi"}, "limits":{"ephemeral-storage": "5Gi"}}}]}}`,
+			sigmak8sapi.AnnotationPodInplaceUpdateState, sigmak8sapi.InplaceUpdateStateAccepted)
+		testCase := InplaceUpdateContainerResourceTestCase{
+			pod:             pod,
+			patchData:       patchData,
+			expectSuccess:   true,
+			expectDiskQuota: "5.0G",
+		}
+
+		doInplaceUpdateContainerResourceTestCase(f, &testCase)
+	})
+})
+
+var _ = Describe("[sigma-kubelet] [Disruptive] inplace_update_004 update container's resource with a large value, should return error", func() {
 	f := framework.NewDefaultFramework("sigma-kubelet")
 	initResource := getResourceRequirements(getResourceList("500m", "128Mi"), getResourceList("500m", "128Mi"))
 	It("update container's resource requirement with a large value", func() {

@@ -161,7 +161,7 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 	It("[ant][sigma-alipay-bvt][adapter-concurrency] test adapter pod lifecycle use adapter with concurrency.", func() {
 		var wg sync.WaitGroup
 		var lock sync.Mutex
-		count := 20
+		count := 10
 		var num int
 		for i := 0; i < count; i++ {
 			wg.Add(1)
@@ -204,7 +204,7 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 	It("[ant][sigma-alipay-bvt][sigma3-concurrency] test sigma3 pod lifecycle use sigma3.1 with concurrency.", func() {
 		var wg sync.WaitGroup
 		var lock sync.Mutex
-		count := 20
+		count := 10
 		var num int
 		for i := 0; i < count; i++ {
 			wg.Add(1)

@@ -136,20 +136,6 @@ func (m *kubeGenericRuntimeManager) startContainer(podSandboxID string, podSandb
 		return grpc.ErrorDesc(err), ErrCreateContainerConfig
 	}
 
-	// Set "/" quota as the size of ephemeral storage.
-	limitEphemeralStorage, limitESExists := container.Resources.Limits[v1.ResourceEphemeralStorage]
-	requestEphemeralStorage, requestESExists := container.Resources.Requests[v1.ResourceEphemeralStorage]
-	if limitESExists && requestESExists && !limitEphemeralStorage.IsZero() && limitEphemeralStorage.Cmp(requestEphemeralStorage) == 0 {
-		// 2.0 container to 3.1 container, quota id not empty
-		if containerConfig.QuotaId == "" {
-			// Set QuotaId as -1 to generate a new quotaid.
-			containerConfig.QuotaId = "-1"
-		}
-		// ".*" means the limitation of rootfs and volume.
-		// https://github.com/alibaba/pouch/blob/master/docs/features/pouch_with_diskquota.md#parameter-details
-		containerConfig.Linux.Resources.DiskQuota = map[string]string{".*": getDiskSize(limitEphemeralStorage.String())}
-	}
-
 	containerID, err := m.runtimeService.CreateContainer(podSandboxID, containerConfig, podSandboxConfig)
 	if err != nil {
 		m.recordContainerEvent(pod, container, containerID, v1.EventTypeWarning, events.FailedToCreateContainer, "Error: %v", grpc.ErrorDesc(err))

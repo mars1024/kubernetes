@@ -135,6 +135,8 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][resource][Serial]", func() {
 	// 2.  剩余 整机核 cpushare sigma（预期成功）
 	It("[smoke][p0] resourceMix001 CPU、内存、磁盘都满足场景下，验证分配成功", func() {
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		framework.Logf("get one node to schedule, nodeName: %s", nodeName)
 
 		cpuSetModeLabel := "CpuSetMode"
@@ -201,6 +203,8 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][resource][Serial]", func() {
 	// 3.  CPU 资源 1000, 内存资源 1024 + 1, 磁盘资源 1024, sigma（预期失败）
 	It("resourceMix002 校验内存不足", func() {
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		framework.Logf("get one node to schedule, nodeName: %s", nodeName)
 
 		cpuSetModeLabel := "CpuSetMode"
@@ -293,6 +297,8 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][resource][Serial]", func() {
 	// 3.  CPU 资源 1000, 内存资源 1024, 磁盘资源 1024 + 1 sigma（预期失败）
 	It("resourceMix003 校验磁盘不足", func() {
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		framework.Logf("get one node to schedule, nodeName: %s", nodeName)
 
 		cpuSetModeLabel := "CpuSetMode"
@@ -378,6 +384,7 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][resource][Serial]", func() {
 	// 6. host 模式 sigma（预期成功）
 	It("resourceMix004 sigma 2.0 AllocateMode=host and k8s.", func() {
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
 
 		cpuSetModeLabel := "CpuSetMode"
 		cpuSetModeLabels := map[string]string{
@@ -478,6 +485,7 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][resource][Serial]", func() {
 	//9. 删除第6步创建的容器，使用磁盘quota为requestedDisk + requestedVolume*2创建容器E，预期成功
 	It("[ant] resourceMix005 sigma 2.0 volume and k8s.", func() {
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
 
 		if env.Tester == env.TesterJituan {
 			Skip("skip this test")
@@ -664,6 +672,7 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][resource][Serial]", func() {
 		// 集团不支持 update 修改 memory，只支持 update env/label/cpu
 		// memory 仅混布链路支持，用 rebind
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
 
 		nodeAffinityKey := "node-for-resource-e2e-test"
 		framework.AddOrUpdateLabelOnNode(cs, nodeName, nodeAffinityKey, nodeName)
@@ -775,6 +784,7 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][resource][Serial]", func() {
 		}
 		dp := "max-instance-filter-resourcemix008"
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
 
 		nodeAffinityKey := "node-for-resource-e2e-test"
 		framework.AddOrUpdateLabelOnNode(cs, nodeName, nodeAffinityKey, nodeName)
@@ -1075,6 +1085,8 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][resource][Serial]", func() {
 			Skip("ant sigma 2.0 preview")
 		}
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		requestedCPU := int64(1000)         //1core
 		requestedMemory := int64(524288000) //512M
 		requestedDisk := int64(524288000)   //512M
@@ -1206,6 +1218,59 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][resource][Serial]", func() {
 			testCases: tests,
 			nodeName:  nodeName,
 		}
+		testContext.execTests()
+	})
+	//混合链路磁盘分配case：源于ant sigma2的bug
+	//1. 创建一个使用全量boot盘sigma3的pod:预期成功
+	//2. 创建一个使用1/2boot盘的sigma2的container:预期失败
+	It("[smoke][p0] resourceMix009 ，验证分配磁盘正常", func() {
+		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+		nodeIP := nodesInfo[nodeName].Status.Addresses[0].Address
+
+		framework.Logf("get one node to schedule, nodeName: %s IP: %s", nodeName, nodeIP)
+
+		AllocatableCPU := nodeToAllocatableMapCPU[nodeName]
+		AllocatableMemory := nodeToAllocatableMapMem[nodeName]
+		AllocatableDisk := nodeToAllocatableMapEphemeralStorage[nodeName]
+
+		requestedCPU := AllocatableCPU / 4
+		requestedMemory := AllocatableMemory / 4
+		requestedDisk := AllocatableDisk / 2
+
+		leftCPU := AllocatableCPU - requestedCPU
+		leftMemory := AllocatableMemory - requestedMemory
+
+		tests := []resourceCase{
+			{
+				cpu:             requestedCPU,
+				mem:             requestedMemory,
+				ethstorage:      AllocatableDisk,
+				affinityConfig:  map[string][]string{api.LabelNodeIP: {nodeIP}},
+				requestType:     requestTypeKubernetes,
+				shouldScheduled: true,
+				cpushare:        true,
+			},
+			{
+				cpu:             leftCPU,
+				mem:             leftMemory,
+				ethstorage:      requestedDisk,
+				requestType:     requestTypeSigma,
+				affinityConfig:  map[string][]string{"ali.SpecifiedNcIps": {nodeIP}},
+				shouldScheduled: false,
+				cpushare:        true,
+			},
+		}
+
+		testContext := &testContext{
+			caseName:  "resourceMix009",
+			cs:        cs,
+			localInfo: nil,
+			f:         f,
+			testCases: tests,
+			nodeName:  nodeName,
+		}
+
 		testContext.execTests()
 	})
 })

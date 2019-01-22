@@ -2,10 +2,12 @@ package kuberuntime
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	alipaysigmak8sapi "gitlab.alipay-inc.com/sigma/apis/pkg/apis"
@@ -318,6 +320,246 @@ func TestGenerateTopologyEnvs(t *testing.T) {
 			if value != env.Value {
 				t.Errorf("TestCase %s: key %s expect value %s, but got %s", desc, env.Key, value, env.Value)
 			}
+		}
+	}
+}
+
+func TestApplyDiskQuota(t *testing.T) {
+	for desc, testCase := range map[string]struct {
+		pod               *v1.Pod
+		expectedDiskQuota map[string]string
+	}{
+		"pod has diskquota and the quota mode is not set": {
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:       "12345678",
+					Name:      "bar",
+					Namespace: "new",
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name:            "foo",
+							Image:           "busybox",
+							ImagePullPolicy: v1.PullIfNotPresent,
+							Resources: v1.ResourceRequirements{
+								Requests: v1.ResourceList{
+									v1.ResourceEphemeralStorage: resource.MustParse("5Gi"),
+								},
+								Limits: v1.ResourceList{
+									v1.ResourceEphemeralStorage: resource.MustParse("5Gi"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedDiskQuota: map[string]string{".*": "5g"},
+		},
+		"pod has diskquota and the quota mode is '.*'": {
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:       "12345678",
+					Name:      "bar",
+					Namespace: "new",
+					Annotations: map[string]string{
+						sigmak8sapi.AnnotationPodAllocSpec: `{"containers":[{"name":"foo","hostConfig":{"diskQuotaMode":".*"}}]}`,
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name:            "foo",
+							Image:           "busybox",
+							ImagePullPolicy: v1.PullIfNotPresent,
+							Resources: v1.ResourceRequirements{
+								Requests: v1.ResourceList{
+									v1.ResourceEphemeralStorage: resource.MustParse("5Gi"),
+								},
+								Limits: v1.ResourceList{
+									v1.ResourceEphemeralStorage: resource.MustParse("5Gi"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedDiskQuota: map[string]string{".*": "5g"},
+		},
+		"pod has diskquota and the quota mode is '/'": {
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:       "12345678",
+					Name:      "bar",
+					Namespace: "new",
+					Annotations: map[string]string{
+						sigmak8sapi.AnnotationPodAllocSpec: `{"containers":[{"name":"foo","hostConfig":{"diskQuotaMode":"/"}}]}`,
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name:            "foo",
+							Image:           "busybox",
+							ImagePullPolicy: v1.PullIfNotPresent,
+							Resources: v1.ResourceRequirements{
+								Requests: v1.ResourceList{
+									v1.ResourceEphemeralStorage: resource.MustParse("5Gi"),
+								},
+								Limits: v1.ResourceList{
+									v1.ResourceEphemeralStorage: resource.MustParse("5Gi"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedDiskQuota: map[string]string{"/": "5g"},
+		},
+		"pod has diskquota and the quota mode is invalid": {
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:       "12345678",
+					Name:      "bar",
+					Namespace: "new",
+					Annotations: map[string]string{
+						sigmak8sapi.AnnotationPodAllocSpec: `{"containers":[{"name":"foo","hostConfig":{"diskQuotaMode":"invalid"}}]}`,
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name:            "foo",
+							Image:           "busybox",
+							ImagePullPolicy: v1.PullIfNotPresent,
+							Resources: v1.ResourceRequirements{
+								Requests: v1.ResourceList{
+									v1.ResourceEphemeralStorage: resource.MustParse("5Gi"),
+								},
+								Limits: v1.ResourceList{
+									v1.ResourceEphemeralStorage: resource.MustParse("5Gi"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedDiskQuota: map[string]string{".*": "5g"},
+		},
+		"pod has no ResourceEphemeralStorage defined and the quota mode is '.*'": {
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:       "12345678",
+					Name:      "bar",
+					Namespace: "new",
+					Annotations: map[string]string{
+						sigmak8sapi.AnnotationPodAllocSpec: `containers":[{"name":"foo","hostConfig":{"diskQuotaMode":".*"}}]`,
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name:            "foo",
+							Image:           "busybox",
+							ImagePullPolicy: v1.PullIfNotPresent,
+						},
+					},
+				},
+			},
+			expectedDiskQuota: map[string]string{},
+		},
+		"pod has no ResourceEphemeralStorage defined and the quota mode is '/'": {
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:       "12345678",
+					Name:      "bar",
+					Namespace: "new",
+					Annotations: map[string]string{
+						sigmak8sapi.AnnotationPodAllocSpec: `containers":[{"name":"foo","hostConfig":{"diskQuotaMode":"/"}}]`,
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name:            "foo",
+							Image:           "busybox",
+							ImagePullPolicy: v1.PullIfNotPresent,
+						},
+					},
+				},
+			},
+			expectedDiskQuota: map[string]string{},
+		},
+	} {
+		containerConfig := &runtimeapi.ContainerConfig{
+			Linux: &runtimeapi.LinuxContainerConfig{
+				Resources: &runtimeapi.LinuxContainerResources{},
+			},
+		}
+		container := &testCase.pod.Spec.Containers[0]
+		applyDiskQuota(testCase.pod, container, containerConfig)
+
+		if len(containerConfig.Linux.Resources.DiskQuota) == 0 && len(testCase.expectedDiskQuota) == 0 {
+			continue
+		}
+
+		if !reflect.DeepEqual(containerConfig.Linux.Resources.DiskQuota, testCase.expectedDiskQuota) {
+			t.Errorf("test case: %v, expected DiskQuota %s, but got: %s", desc, testCase.expectedDiskQuota, containerConfig.Linux.Resources.DiskQuota)
+		}
+	}
+}
+
+func TestGetDiskSize(t *testing.T) {
+	testCases := []struct {
+		resource string
+		expect   string
+		message  string
+	}{
+		{
+			resource: "10Ti",
+			expect:   "10t",
+			message:  "convert Ti to t",
+		},
+		{
+			resource: "10T",
+			expect:   "10t",
+			message:  "convert T to t",
+		},
+		{
+			resource: "10Gi",
+			expect:   "10g",
+			message:  "convert Gi to g",
+		},
+		{
+			resource: "10G",
+			expect:   "10g",
+			message:  "convert Gi to g",
+		},
+		{
+			resource: "10Mi",
+			expect:   "10m",
+			message:  "convert Mi to m",
+		},
+		{
+			resource: "10M",
+			expect:   "10m",
+			message:  "convert M to m",
+		},
+		{
+			resource: "10Ki",
+			expect:   "10k",
+			message:  "convert Ki to k",
+		},
+		{
+			resource: "10K",
+			expect:   "10k",
+			message:  "convert K to k",
+		},
+	}
+	for _, testCase := range testCases {
+		diskSize := getDiskSize(testCase.resource)
+		if diskSize != testCase.expect {
+			t.Errorf("convert error in test case %s, expect: %s, actual: %s", testCase.message, testCase.expect, diskSize)
 		}
 	}
 }

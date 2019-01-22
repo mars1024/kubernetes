@@ -41,12 +41,14 @@ import (
 	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/apiserver/pkg/storage/names"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	podutil "k8s.io/kubernetes/pkg/api/pod"
 	api "k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/apis/core/helper/qos"
 	"k8s.io/kubernetes/pkg/apis/core/validation"
 	"k8s.io/kubernetes/pkg/kubelet/client"
+	proxyutil "k8s.io/kubernetes/pkg/proxy/util"
 )
 
 // podStrategy implements behavior for Pods
@@ -220,8 +222,40 @@ func MatchPod(label labels.Selector, field fields.Selector) storage.SelectionPre
 		Label:       label,
 		Field:       field,
 		GetAttrs:    GetAttrs,
+		IndexLabels: []string{"sigma.ali/sn"},
 		IndexFields: []string{"spec.nodeName"},
 	}
+}
+
+func NodeNameIndexFunc(obj interface{}) ([]string, error) {
+	pod, ok := obj.(*api.Pod)
+	if !ok {
+		return nil, fmt.Errorf("not a pod")
+	}
+	return []string{pod.Spec.NodeName}, nil
+}
+
+func PodLabelIndexFunc(key string) cache.IndexFunc {
+	return func(obj interface{}) ([]string, error) {
+		pod, ok := obj.(*api.Pod)
+		if !ok {
+			return nil, fmt.Errorf("not a pod")
+		}
+		if value, ok := pod.Labels[key]; ok {
+			return []string{value}, nil
+		}
+		return nil, nil
+	}
+}
+
+func PodIndexers() *cache.Indexers {
+	if utilfeature.DefaultFeatureGate.Enabled(features.SelectorIndex) {
+		return &cache.Indexers{
+			"spec.nodeName": NodeNameIndexFunc,
+			"sigma.ali/sn":  PodLabelIndexFunc("sigma.ali/sn"),
+		}
+	}
+	return nil
 }
 
 func NodeNameTriggerFunc(obj runtime.Object) []storage.MatchValue {
@@ -288,6 +322,10 @@ func ResourceLocation(getter ResourceGetter, rt http.RoundTripper, ctx context.C
 				break
 			}
 		}
+	}
+
+	if err := proxyutil.IsProxyableIP(pod.Status.PodIP); err != nil {
+		return nil, nil, errors.NewBadRequest(err.Error())
 	}
 
 	loc := &url.URL{

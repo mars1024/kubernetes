@@ -77,6 +77,8 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][cpushare][cpu]", func() {
 		framework.WaitForStableCluster(cs, masterNodes)
 
 		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
 		framework.Logf("get one node to schedule, nodeName: %s", nodeName)
 		AllocatableCPU := nodeToAllocatableMapCPU[nodeName]
 		AllocatableMemory := nodeToAllocatableMapMem[nodeName]

@@ -419,11 +419,8 @@ type podActions struct {
 	// the value contains necessary information to kill a container.
 	// it's operation same to ContainersToKill, it just used to distinguish.
 	ContainersToKillBecauseDesireState map[kubecontainer.ContainerID]containerOperationInfo
-	// ContainersToStartBecauseDesireState keeps a map of containers that need to be to started,
-	// the key is the container ID of the container, while
-	// the value contains necessary information to start a container.
-	// it different from containersToStart, because it not need to create a container.
-	ContainersToStartBecauseDesireState map[kubecontainer.ContainerID]containerOperationInfo
+	// ContainersToStartBecauseDesireState keeps a list of indexes for containers that need to be started.
+	ContainersToStartBecauseDesireState []int
 	// ContainersToUpdate keeps a map of containers that need to be updated, note that
 	// the key is the container ID of the container, while
 	// the value contains necessary information to update a container.
@@ -489,7 +486,7 @@ func (m *kubeGenericRuntimeManager) containerChanged(container *v1.Container, co
 		changed, restartNeeded := computeResourceChanges(newResources, containerStatus)
 		if len(changed) > 0 {
 			needToRestart = restartNeeded
-			glog.V(1).Infof("resource requirement for container %q of pod %s changed", container.Name, format.Pod(pod))
+			glog.V(1).Infof("resource requirement for container %q of pod %s changed: %v", container.Name, format.Pod(pod), changed)
 			if needToRestart == false {
 				needToResize = true
 			}
@@ -521,6 +518,22 @@ func computeResourceChanges(lc *runtimeapi.LinuxContainerResources, containerSta
 
 	if lc.MemoryLimitInBytes != currentResources.MemoryLimitInBytes {
 		resourceChanged[v1.ResourceMemory] = true
+	}
+
+	// Compare rootfs quota only
+	// Pouch's DiskQuota
+	//"DiskQuota": {
+	//   ".*": "3g",
+	//   "/var/lib/mysql": "3g",
+	//   "/var/run/secrets/kubernetes.io/serviceaccount": "3g"
+	//},
+	expectedDiskQuotaRootFsAndVolume := lc.DiskQuota[string(sigmak8sapi.DiskQuotaModeRootFsAndVolume)]
+	currentDiskQuotaRootFsAndVolume := currentResources.DiskQuota[string(sigmak8sapi.DiskQuotaModeRootFsAndVolume)]
+	expectedDiskQuotaRootFsOnly := lc.DiskQuota[string(sigmak8sapi.DiskQuotaModeRootFsOnly)]
+	currentDiskQuotaRootFsOnly := currentResources.DiskQuota[string(sigmak8sapi.DiskQuotaModeRootFsOnly)]
+	if expectedDiskQuotaRootFsAndVolume != currentDiskQuotaRootFsAndVolume ||
+		expectedDiskQuotaRootFsOnly != currentDiskQuotaRootFsOnly {
+		resourceChanged[v1.ResourceEphemeralStorage] = true
 	}
 
 	// docker not support the update of OomScoreAdj
@@ -558,7 +571,7 @@ func (m *kubeGenericRuntimeManager) computePodActions(pod *v1.Pod, podStatus *ku
 		Attempt:                             attempt,
 		ContainersToStart:                   []int{},
 		ContainersToKill:                    make(map[kubecontainer.ContainerID]containerToKillInfo),
-		ContainersToStartBecauseDesireState: make(map[kubecontainer.ContainerID]containerOperationInfo),
+		ContainersToStartBecauseDesireState: []int{},
 		ContainersToKillBecauseDesireState:  make(map[kubecontainer.ContainerID]containerOperationInfo),
 		ContainersToUpdate:                  make(map[kubecontainer.ContainerID]containerOperationInfo),
 		ContainersToUpgrade:                 make(map[kubecontainer.ContainerID]containerOperationInfo),
@@ -611,10 +624,7 @@ func (m *kubeGenericRuntimeManager) computePodActions(pod *v1.Pod, podStatus *ku
 				name:      containerStatus.Name,
 				container: &pod.Spec.Containers[idx],
 			}
-			changes.ContainersToStartBecauseDesireState[containerStatus.ID] = containerOperationInfo{
-				name:      containerStatus.Name,
-				container: &pod.Spec.Containers[idx],
-			}
+			changes.ContainersToStartBecauseDesireState = append(changes.ContainersToStartBecauseDesireState, idx)
 			glog.V(4).Infof("Container %q will be restarted in pod %q because of sandbox restart", container.Name, format.Pod(pod))
 		}
 		return changes
@@ -699,12 +709,7 @@ func (m *kubeGenericRuntimeManager) computePodActions(pod *v1.Pod, podStatus *ku
 
 			switch action {
 			case ContainerStart:
-				changes.ContainersToStartBecauseDesireState[containerStatus.ID] = containerOperationInfo{
-					name:      containerStatus.Name,
-					container: &pod.Spec.Containers[idx],
-					message: fmt.Sprintf("container %s need to start by annotation, because  "+
-						"current state is %s not equal to desire state", container.Name, containerStatus.State),
-				}
+				changes.ContainersToStartBecauseDesireState = append(changes.ContainersToStartBecauseDesireState, idx)
 			case ContainerStop:
 				if hasProtectFinalizer {
 					glog.V(3).Infof("pod %s has protection finalizer, could not stop it", format.Pod(pod))
@@ -807,6 +812,16 @@ func (m *kubeGenericRuntimeManager) computePodActions(pod *v1.Pod, podStatus *ku
 func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStatus *kubecontainer.PodStatus, pullSecrets []v1.Secret, backOff *flowcontrol.Backoff) (result kubecontainer.PodSyncResult) {
 	// Step 1: Compute sandbox and container changes.
 	podContainerChanges := m.computePodActions(pod, podStatus)
+
+	// Only create container when the ahead containers are all in running state.
+	// Case: There are two containers in pod: container0-1.
+	//       If container0 is started failed, the creation of container1 should be canceled to guaranteed order in next SyncPod.
+	//       In other words, container1 only should be created and started in the case of container0 is running.
+	if utilfeature.DefaultFeatureGate.Enabled(features.StartContainerByOrder) &&
+		len(podContainerChanges.ContainersToStartBecauseDesireState) > 0 {
+		podContainerChanges.ContainersToStart = []int{}
+	}
+
 	// result.StateStatus get from annotation, if failed or not exist, create a new one.
 	_, _, result.StateStatus = sigmautil.GetContainerDesiredStateFromAnnotation(pod)
 	glog.V(3).Infof("computePodActions got %+v for pod %q", podContainerChanges, format.Pod(pod))
@@ -963,7 +978,10 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 			errMsg := fmt.Sprintf("init container start failed: %v: %s", err, msg)
 			utilruntime.HandleError(fmt.Errorf(errMsg))
 			//if err != nil, msg is err msg, so can't get container info
-			m.updateContainerStateStatus(containerStatus, container.Name, msg, result.StateStatus, false, errMsg)
+			if err != images.ErrImagePullBackOff {
+				m.updateContainerStateStatus(containerStatus, container.Name, msg, result.StateStatus, false,
+					errMsg)
+			}
 			return
 		}
 		// if err==nil msg is containerID
@@ -983,6 +1001,9 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 		if isInBackOff {
 			startContainerResult.Fail(err, msg)
 			glog.V(4).Infof("Backing Off restarting container %+v in pod %v", container, format.Pod(pod))
+			if utilfeature.DefaultFeatureGate.Enabled(features.StartContainerByOrder) {
+				break
+			}
 			continue
 		}
 		containerStatus := createContainerStatus(podStatus, sigmak8sapi.StartContainerAction, container.Name, pod)
@@ -997,9 +1018,14 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 				glog.V(3).Infof("container start failed: %v: %s", err, msg)
 			default:
 				utilruntime.HandleError(fmt.Errorf("container start failed: %v: %s", err, msg))
+				// in this condition, msg is error message, can't get container status,
+				m.updateContainerStateStatus(containerStatus, container.Name, msg, result.StateStatus, false,
+					fmt.Sprintf("container start failed: %v: %s", err, msg))
 			}
-			// in this condition, msg is error message, can't get container status,
-			m.updateContainerStateStatus(containerStatus, container.Name, msg, result.StateStatus, false, fmt.Sprintf("container start failed: %v: %s", err, msg))
+
+			if utilfeature.DefaultFeatureGate.Enabled(features.StartContainerByOrder) {
+				break
+			}
 			continue
 		} else {
 			// if err==nil msg is containerID

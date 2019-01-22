@@ -1,6 +1,7 @@
 package kubelet
 
 import (
+	"os"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -8,6 +9,7 @@ import (
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/kubernetes/pkg/util/slice"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/sigma/util"
 )
@@ -42,8 +44,19 @@ var _ = Describe("[sigma-kubelet]", func() {
 
 		// Step5: Wait for upgrade action finished.
 		By("wait until pod is upgraded")
-		err = util.WaitTimeoutForContainerUpdateStatus(f.ClientSet, upgradedPod, containerName, 3*time.Minute, upgradeSuccessStr, true)
-		Expect(err).NotTo(HaveOccurred(), "upgrade pod err")
+		// Use featuregate to identify.
+		env := os.Getenv("TESTER")
+		// IgnoreProtectionFinalizer's default value is true, so environments with "false" value should be added to notDefaultValueEnvs.
+		notDefaultValueEnvs := []string{"ant"}
+		if slice.ContainsString(notDefaultValueEnvs, env, nil) {
+			By("wait until pod upgradd timeout")
+			err = util.WaitTimeoutForContainerUpdateStatus(f.ClientSet, upgradedPod, containerName, 1*time.Minute, upgradeSuccessStr, true)
+			Expect(err).To(HaveOccurred(), "upgrade timeout")
+		} else {
+			By("wait until pod is upgraded")
+			err = util.WaitTimeoutForContainerUpdateStatus(f.ClientSet, upgradedPod, containerName, 3*time.Minute, upgradeSuccessStr, true)
+			Expect(err).NotTo(HaveOccurred(), "upgrade pod err")
+		}
 
 		// Step6: Get latest pod to check pod status
 		By(caseName + "check pod still running")

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -24,9 +25,9 @@ import (
 	"github.com/sirupsen/logrus"
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/kubernetes/pkg/util/system"
 	"k8s.io/kubernetes/test/sigma/env"
 	"k8s.io/kubernetes/test/sigma/swarm"
-	"k8s.io/kubernetes/pkg/util/system"
 )
 
 // variable set in BeforeEach, never modified afterwards
@@ -34,6 +35,8 @@ var masterNodes sets.String
 
 // the timeout of waiting for pod running.
 var waitForPodRunningTimeout = 5 * time.Minute
+
+const containerPrefix = "container-"
 
 type pausePodConfig struct {
 	Name                              string
@@ -45,6 +48,7 @@ type pausePodConfig struct {
 	Ports                             []v1.ContainerPort
 	OwnerReferences                   []metav1.OwnerReference
 	PriorityClassName                 string
+	ResourcesForMultiContainers       []v1.ResourceRequirements
 }
 
 func initPausePod(f *framework.Framework, conf pausePodConfig) *v1.Pod {
@@ -98,6 +102,21 @@ func initPausePod(f *framework.Framework, conf pausePodConfig) *v1.Pod {
 	if conf.Resources != nil {
 		pod.Spec.Containers[0].Resources = *conf.Resources
 	}
+
+	if len(conf.ResourcesForMultiContainers) > 0 {
+		pod.Spec.Containers = []v1.Container{}
+	}
+
+	for i, r := range conf.ResourcesForMultiContainers {
+		c := v1.Container{
+			Name:      containerPrefix + strconv.Itoa(i),
+			Image:     pauseImage,
+			Ports:     conf.Ports,
+			Resources: r,
+		}
+		pod.Spec.Containers = append(pod.Spec.Containers, c)
+	}
+
 	if env.GetTester() == env.TesterJituan {
 		pod.Spec.Tolerations = append(pod.Spec.Tolerations, v1.Toleration{
 			Key:      sigmak8sapi.LabelResourcePool,
@@ -105,6 +124,7 @@ func initPausePod(f *framework.Framework, conf pausePodConfig) *v1.Pod {
 			Effect:   v1.TaintEffectNoSchedule,
 		})
 	}
+
 	return pod
 }
 
@@ -340,6 +360,33 @@ func getAvailableResourceOnNode(f *framework.Framework, nodeName string) []int64
 	}
 
 	return []int64{availableCPU, availableMemory, availableDisk}
+}
+
+func formatAllocSpecStringWithSpreadStrategyForMultiContainers(name string, strategy sigmak8sapi.SpreadStrategy, count int) string {
+	allocSpecRequest := &sigmak8sapi.AllocSpec{
+		Containers: []sigmak8sapi.Container{},
+	}
+
+	for i := 0; i < count; i++ {
+		c := sigmak8sapi.Container{
+			Name: containerPrefix + strconv.Itoa(i),
+			Resource: sigmak8sapi.ResourceRequirements{
+				CPU: sigmak8sapi.CPUSpec{
+					CPUSet: &sigmak8sapi.CPUSetSpec{
+						SpreadStrategy: strategy,
+					},
+				},
+			},
+		}
+		allocSpecRequest.Containers = append(allocSpecRequest.Containers, c)
+	}
+
+	allocSpecBytes, err := json.Marshal(&allocSpecRequest)
+	if err != nil {
+		return ""
+	}
+
+	return string(allocSpecBytes)
 }
 
 func formatAllocSpecStringWithSpreadStrategy(name string, strategy sigmak8sapi.SpreadStrategy) string {

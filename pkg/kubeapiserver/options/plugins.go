@@ -63,8 +63,8 @@ import (
 	"k8s.io/kubernetes/plugin/pkg/admission/alipodinjectionpreschedule"
 	"k8s.io/kubernetes/plugin/pkg/admission/alipodlifecyclehook"
 	"k8s.io/kubernetes/plugin/pkg/admission/armory"
+	"k8s.io/kubernetes/plugin/pkg/admission/auditdelete"
 	"k8s.io/kubernetes/plugin/pkg/admission/containerstate"
-	"k8s.io/kubernetes/plugin/pkg/admission/namespacedelete"
 	"k8s.io/kubernetes/plugin/pkg/admission/networkstatus"
 	"k8s.io/kubernetes/plugin/pkg/admission/poddeletionflowcontrol"
 	"k8s.io/kubernetes/plugin/pkg/admission/sigmascheduling"
@@ -111,7 +111,7 @@ var AllOrderedPlugins = []string{
 	validatingwebhook.PluginName,            // ValidatingAdmissionWebhook
 	resourcequota.PluginName,                // ResourceQuota
 	deny.PluginName,                         // AlwaysDeny
-	namespacedelete.PluginName,              // NamespaceDelete
+	auditdelete.PluginName,                  // NamespaceDelete
 
 	alipaymosnsidecar.PluginName,          // Alipay MOSN Sidecar
 	armory.PluginName,                     // Armory
@@ -162,7 +162,7 @@ func RegisterAllAdmissionPlugins(plugins *admission.Plugins) {
 	resize.Register(plugins)
 	storageobjectinuseprotection.Register(plugins)
 
-	namespacedelete.Register(plugins)
+	auditdelete.Register(plugins)
 
 	armory.Register(plugins)
 	containerstate.Register(plugins)

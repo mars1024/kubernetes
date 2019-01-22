@@ -735,9 +735,9 @@ func shouldOrphanDependents(ctx context.Context, e *Store, accessor metav1.Objec
 	}
 	if options != nil && options.PropagationPolicy != nil {
 		switch *options.PropagationPolicy {
-		case metav1.DeletePropagationOrphan, metav1.DeletePropagationBackground, metav1.DeletePropagationForeground:
+		case metav1.DeletePropagationOrphan:
 			return true
-		case metav1.DeletePropagationForceForeground, metav1.DeletePropagationForceBackground:
+		case metav1.DeletePropagationBackground, metav1.DeletePropagationForeground:
 			return false
 		}
 	}
@@ -779,9 +779,9 @@ func shouldDeleteDependents(ctx context.Context, e *Store, accessor metav1.Objec
 	}
 	if options != nil && options.PropagationPolicy != nil {
 		switch *options.PropagationPolicy {
-		case metav1.DeletePropagationForceForeground:
+		case metav1.DeletePropagationForeground:
 			return true
-		case metav1.DeletePropagationBackground, metav1.DeletePropagationOrphan, metav1.DeletePropagationForeground, metav1.DeletePropagationForceBackground:
+		case metav1.DeletePropagationBackground, metav1.DeletePropagationOrphan:
 			return false
 		}
 	}

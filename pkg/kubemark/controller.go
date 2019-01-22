@@ -245,7 +245,7 @@ func (kubemarkController *KubemarkController) RemoveNodeFromNodeGroup(nodeGroup 
 	if pod.ObjectMeta.Labels[nodeGroupLabel] != nodeGroup {
 		return fmt.Errorf("can't delete node %s from nodegroup %s. Node is not in nodegroup", node, nodeGroup)
 	}
-	policy := metav1.DeletePropagationForceForeground
+	policy := metav1.DeletePropagationForeground
 	var err error
 	for i := 0; i < numRetries; i++ {
 		err = kubemarkController.externalCluster.client.CoreV1().ReplicationControllers(namespaceKubemark).Delete(

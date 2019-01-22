@@ -416,16 +416,12 @@ const (
 	DeletePropagationOrphan DeletionPropagation = "Orphan"
 	// Deletes the object from the key-value store, the garbage collector will
 	// delete the dependents in the background.
-	DeletePropagationForceBackground DeletionPropagation = "ForceBackground"
-	// NOT USED. Equivalent to DeletePropagationOrphan.
 	DeletePropagationBackground DeletionPropagation = "Background"
 	// The object exists in the key-value store until the garbage collector
 	// deletes all the dependents whose ownerReference.blockOwnerDeletion=true
 	// from the key-value store.  API sever will put the "foregroundDeletion"
 	// finalizer on the object, and sets its deletionTimestamp.  This policy is
 	// cascading, i.e., the dependents will be deleted with Foreground.
-	DeletePropagationForceForeground DeletionPropagation = "ForceForeground"
-	// NOT USED. Equivalent to DeletePropagationOrphan.
 	DeletePropagationForeground DeletionPropagation = "Foreground"
 )
 

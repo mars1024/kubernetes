@@ -1,13 +1,16 @@
-package namespacedelete
+package auditdelete
 
 import (
 	"errors"
 	"fmt"
 	"io"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	"github.com/golang/glog"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apiserver/pkg/admission"
-	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
+	informers "k8s.io/kubernetes/pkg/client/informers/informers_generated/internalversion"
+	settingslisters "k8s.io/kubernetes/pkg/client/listers/core/internalversion"
 	kubeapiserveradmission "k8s.io/kubernetes/pkg/kubeapiserver/admission"
 )
 
@@ -26,14 +29,14 @@ func Register(plugins *admission.Plugins) {
 // auditDeletePlugin is an implementation of admission.Interface.
 type auditDeletePlugin struct {
 	*admission.Handler
-	client internalclientset.Interface
+	podLister    settingslisters.PodLister
 	// podCounterHandler is used for testing purpose: they are set to fake
 	// functions when testing
-	podCounterHandler func(string) (int, error)
+	podCounterHandler func(string, admission.Attributes) (int, error)
 }
 
 var _ admission.ValidationInterface = &auditDeletePlugin{}
-var _ = kubeapiserveradmission.WantsInternalKubeClientSet(&auditDeletePlugin{})
+var _ = kubeapiserveradmission.WantsInternalKubeInformerFactory(&auditDeletePlugin{})
 
 // NewPlugin creates a new auditDelete admission plugin.
 func newPlugin() *auditDeletePlugin {
@@ -44,16 +47,17 @@ func newPlugin() *auditDeletePlugin {
 
 // ValidateInitialization implements the InitializationValidator interface.
 func (p *auditDeletePlugin) ValidateInitialization() error {
-	if p.client == nil {
-		return fmt.Errorf("%s requires a client", PluginName)
+	if p.podLister == nil {
+		return fmt.Errorf("%s requires a podLister", PluginName)
 	}
 	p.podCounterHandler = p.podCounter
 	return nil
 }
 
-// SetInternalKubeClientSet implements the WantsInternalKubeClientSet interface.
-func (p *auditDeletePlugin) SetInternalKubeClientSet(client internalclientset.Interface) {
-	p.client = client
+func (p *auditDeletePlugin) SetInternalKubeInformerFactory(f informers.SharedInformerFactory) {
+	podInformer := f.Core().InternalVersion().Pods()
+	p.podLister = podInformer.Lister()
+	p.SetReadyFunc(podInformer.Informer().HasSynced)
 }
 
 // Validate makes an admission decision based on the request attributes
@@ -61,25 +65,45 @@ func (p *auditDeletePlugin) Validate(a admission.Attributes) error {
 	if a == nil {
 		return nil
 	}
-	if a.GetOperation() != admission.Delete {
+	if a.GetOperation() != admission.Delete || len(a.GetSubresource()) != 0 {
 		return nil
 	}
-	if a.GetKind().Kind != "Namespace" {
-		return nil
+	glog.Infof("AuditDelete got event: %#v", a)
+
+	if a.GetKind().Kind == "Namespace" {
+		namespace := a.GetNamespace()
+		if namespace == "" {
+			return nil
+		}
+		return p.validateNamespaceDeletion(namespace)
 	}
-	namespace := a.GetNamespace()
-	if namespace == "" {
-		return nil
+
+	if a.GetKind().Kind == "InPlaceSet" || a.GetKind().Kind == "StatefulSet" {
+		return p.validateWorkloadDeletion(a)
 	}
-	return p.validateNamespaceDeletion(namespace)
+
+	return nil
 }
 
-func (p *auditDeletePlugin) podCounter(namespace string) (int, error) {
-	list, err := p.client.Core().Pods(namespace).List(v1.ListOptions{})
+func (p *auditDeletePlugin) podCounter(namespace string, expectedOwner admission.Attributes) (int, error) {
+	list, err := p.podLister.Pods(namespace).List(labels.Everything())
 	if err != nil {
 		return 0, err
 	}
-	return len(list.Items), nil
+	count := 0
+	for _, p := range list {
+		if p.DeletionTimestamp != nil {
+			continue
+		}
+		if expectedOwner != nil {
+			owner := metav1.GetControllerOf(p)
+			if owner == nil || owner.Name != expectedOwner.GetName() || owner.Kind != expectedOwner.GetKind().Kind {
+				continue
+			}
+		}
+		count++
+	}
+	return count, nil
 }
 
 // validateNamespaceDeletion returns an error if the namespace contains any workload resources
@@ -87,7 +111,7 @@ func (p *auditDeletePlugin) validateNamespaceDeletion(namespace string) (err err
 
 	counters := []struct {
 		kind    string
-		counter func(namespace string) (int, error)
+		counter func(string, admission.Attributes) (int, error)
 	}{
 		{"pods", p.podCounterHandler},
 	}
@@ -96,7 +120,7 @@ func (p *auditDeletePlugin) validateNamespaceDeletion(namespace string) (err err
 	var nonEmptyList []string
 
 	for _, c := range counters {
-		num, err := c.counter(namespace)
+		num, err := c.counter(namespace, nil)
 		if err != nil {
 			errList = append(errList, fmt.Errorf("error listing %s, %v", c.kind, err))
 			continue
@@ -117,4 +141,14 @@ func (p *auditDeletePlugin) validateNamespaceDeletion(namespace string) (err err
 		return errors.New(errStr)
 	}
 	return nil
+}
+
+// validateNamespaceDeletion returns an error if the workload contains any pods
+func (p *auditDeletePlugin) validateWorkloadDeletion(a admission.Attributes) (err error) {
+	podNum, err := p.podCounterHandler(a.GetNamespace(), a)
+	if err != nil {
+		return fmt.Errorf("error listing pods for %s %s/%s: %v", a.GetKind().Kind, a.GetNamespace(), a.GetName(), err)
+	}
+
+	return fmt.Errorf("forbid to delete %s %s/%s for existing %d pods", a.GetKind().Kind, a.GetNamespace(), a.GetName(), podNum)
 }

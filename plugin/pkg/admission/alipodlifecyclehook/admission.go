@@ -117,7 +117,7 @@ func (c *aliPodLifeCycleHook) Admit(a admission.Attributes) error {
 		return nil
 	}
 
-	if pod.Labels == nil {
+	if pod.Labels == nil || pod.DeletionTimestamp != nil {
 		return nil
 	}
 

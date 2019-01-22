@@ -46,6 +46,13 @@ const (
 	defaultLogsDir = "/home/admin/logs"
 )
 
+// app_local_key.json secret conf
+const (
+	AppIdentitySecretNameTemp = "%s-local-key"
+	// AppIdentitySecretKey is used in MOSN templates
+	AppIdentitySecretKey = "app-local-key"
+)
+
 // sidecarInjectionSpec collects all container infos and volumes for
 // sidecar container injection.
 type sidecarInjectionSpec struct {
@@ -59,12 +66,14 @@ type sidecarInjectionSpec struct {
 type sidecarTemplateData struct {
 	ObjectMeta *metav1.ObjectMeta
 	PodSpec    *api.PodSpec
+	AppCert    *api.Secret
 }
 
 // alipaySidecar is an implementation of admission.Interface.
 type alipaySidecar struct {
 	*admission.Handler
 	configMapLister corelisters.ConfigMapLister
+	secretLister    corelisters.SecretLister
 }
 
 var (
@@ -88,12 +97,19 @@ func newAlipaySidecarPlugin() *alipaySidecar {
 
 func (s *alipaySidecar) SetInternalKubeInformerFactory(f informers.SharedInformerFactory) {
 	s.configMapLister = f.Core().InternalVersion().ConfigMaps().Lister()
-	s.SetReadyFunc(f.Core().InternalVersion().ConfigMaps().Informer().HasSynced)
+	s.secretLister = f.Core().InternalVersion().Secrets().Lister()
+	s.SetReadyFunc(func() bool {
+		return f.Core().InternalVersion().ConfigMaps().Informer().HasSynced() &&
+			f.Core().InternalVersion().Secrets().Informer().HasSynced()
+	})
 }
 
 func (s *alipaySidecar) ValidateInitialization() error {
 	if s.configMapLister == nil {
 		return fmt.Errorf("missing configMapLister")
+	}
+	if s.secretLister == nil {
+		return fmt.Errorf("missing secretLister")
 	}
 	return nil
 }
@@ -164,6 +180,10 @@ func (s *alipaySidecar) Admit(a admission.Attributes) (err error) {
 	pod, ok := a.GetObject().(*api.Pod)
 	if !ok {
 		return apierrors.NewBadRequest("Resource was marked with kind Pod but was unable to be converted")
+	}
+
+	if pod.Namespace == "" {
+		pod.Namespace = pod.GetNamespace()
 	}
 
 	names, err := s.getSupportSidecarNames()
@@ -370,9 +390,15 @@ func (s *alipaySidecar) constructSidecarInjectionSpecFromConfigMap(pod *api.Pod,
 		return nil, fmt.Errorf("template not exists in data of %s sidecar config map error", cmKey)
 	}
 
+	appCert, err := s.getPodCertificates(pod)
+	if err != nil {
+		return nil, err
+	}
+
 	sidecarTemplateData := &sidecarTemplateData{
 		ObjectMeta: &pod.ObjectMeta,
 		PodSpec:    &pod.Spec,
+		AppCert:    appCert,
 	}
 	templatedStr, err := executeTemplateToString(template, sidecarTemplateData)
 
@@ -388,6 +414,19 @@ func (s *alipaySidecar) constructSidecarInjectionSpecFromConfigMap(pod *api.Pod,
 	}
 
 	return &sidecarSpec, nil
+}
+
+func (s *alipaySidecar) getPodCertificates(pod *api.Pod) (*api.Secret, error) {
+	// secretName is generated from alipay/appcert admission
+	secretName := fmt.Sprintf(AppIdentitySecretNameTemp, strings.ToLower(pod.Labels[sigmak8sapi.LabelAppName]))
+	cert, err := s.secretLister.Secrets(pod.Namespace).Get(secretName)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return cert, nil
 }
 
 func shouldIgnore(a admission.Attributes) bool {

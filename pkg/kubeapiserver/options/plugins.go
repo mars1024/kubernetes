@@ -69,6 +69,7 @@ import (
 	"k8s.io/kubernetes/plugin/pkg/admission/poddeletionflowcontrol"
 	"k8s.io/kubernetes/plugin/pkg/admission/sigmascheduling"
 
+	alipayappcert "k8s.io/kubernetes/plugin/pkg/admission/alipay/appcert"
 	alipaycmdb "k8s.io/kubernetes/plugin/pkg/admission/alipay/cmdb"
 	alipaycpushare "k8s.io/kubernetes/plugin/pkg/admission/alipay/cpushare"
 	alipayimagepullsecret "k8s.io/kubernetes/plugin/pkg/admission/alipay/imagepullsecret"
@@ -116,6 +117,7 @@ var AllOrderedPlugins = []string{
 	deny.PluginName,                         // AlwaysDeny
 	namespacedelete.PluginName,              // NamespaceDelete
 
+	alipayappcert.PluginName,              // Alipay app cert
 	alipaysidecar.PluginName,              // Alipay Sidecar
 	armory.PluginName,                     // Armory
 	containerstate.PluginName,             // ContainerState
@@ -189,6 +191,7 @@ func RegisterAllAdmissionPlugins(plugins *admission.Plugins) {
 	alipayimagepullsecret.Register(plugins)
 	alipayresource.Register(plugins)
 	alipaycpushare.Register(plugins)
+	alipayappcert.Register(plugins)
 }
 
 // DefaultOffAdmissionPlugins get admission plugins off by default for kube-apiserver.

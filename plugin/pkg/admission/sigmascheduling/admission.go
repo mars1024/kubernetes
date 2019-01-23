@@ -261,8 +261,21 @@ func validatePod(attributes admission.Attributes) error {
 					fmt.Sprintf("duplicity cpuIDs `%s`", strings.Join(ids, ", "))))
 			}
 
+			// validate cpuset spread strategy
+			switch container.Resource.CPU.CPUSet.SpreadStrategy {
+			case sigmaapi.SpreadStrategySameCoreFirst, sigmaapi.SpreadStrategySpread:
+			default:
+				fld := containerField.Index(i).Child("resource").Child("cpu").Child("cpuset").Child("spreadStrategy")
+				expectValues := fmt.Sprintf("[%s, %s]", sigmaapi.SpreadStrategySameCoreFirst, sigmaapi.SpreadStrategySpread)
+				allErrs = append(allErrs, field.Invalid(fld, string(container.Resource.CPU.CPUSet.SpreadStrategy), expectValues))
+			}
+
 			// validate cpuIDs count
 			milliValue := pod.Spec.Containers[idx].Resources.Requests.Cpu().MilliValue()
+			if milliValue == 0 {
+				break
+			}
+
 			count := milliValue / 1000
 			fractionalValue := milliValue % 1000
 			if fractionalValue == 0 {
@@ -276,14 +289,6 @@ func validatePod(attributes admission.Attributes) error {
 				fld := field.NewPath("spec").Child("containers").Index(i).Child("resources").Child("requests").Child("cpu")
 				allErrs = append(allErrs, field.Invalid(fld, fmt.Sprintf("%v", pod.Spec.Containers[idx].Resources.Requests.Cpu().String()),
 					fmt.Sprintf("pod spec is invalid, must be integer")))
-			}
-
-			switch container.Resource.CPU.CPUSet.SpreadStrategy {
-			case sigmaapi.SpreadStrategySameCoreFirst, sigmaapi.SpreadStrategySpread:
-			default:
-				fld := containerField.Index(i).Child("resource").Child("cpu").Child("cpuset").Child("spreadStrategy")
-				expectValues := fmt.Sprintf("[%s, %s]", sigmaapi.SpreadStrategySameCoreFirst, sigmaapi.SpreadStrategySpread)
-				allErrs = append(allErrs, field.Invalid(fld, string(container.Resource.CPU.CPUSet.SpreadStrategy), expectValues))
 			}
 		}
 

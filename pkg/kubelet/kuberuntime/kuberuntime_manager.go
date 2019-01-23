@@ -455,7 +455,9 @@ func (m *kubeGenericRuntimeManager) podSandboxChanged(pod *v1.Pod, podStatus *ku
 		glog.V(2).Infof("More than 1 sandboxes for pod %q are ready. Need to reconcile them", format.Pod(pod))
 		return true, false, sandboxStatus.Metadata.Attempt + 1, sandboxStatus.Id
 	}
-	if sandboxStatus.State != runtimeapi.PodSandboxState_SANDBOX_READY {
+
+	// Needs to start sandbox if pod has IP.
+	if len(pod.Status.PodIP) > 0 && sandboxStatus.State != runtimeapi.PodSandboxState_SANDBOX_READY {
 		glog.V(2).Infof("No ready sandbox for pod %q can be found. Need to start the latest one", format.Pod(pod))
 		return false, true, sandboxStatus.Metadata.Attempt + 1, sandboxStatus.Id
 	}
@@ -946,6 +948,27 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 			result.Fail(err)
 			return
 		}
+
+		podSandboxStatus, err := m.runtimeService.PodSandboxStatus(podSandboxID)
+		if err != nil {
+			ref, referr := ref.GetReference(legacyscheme.Scheme, pod)
+			if referr != nil {
+				glog.Errorf("Couldn't make a ref to pod %q: '%v'", format.Pod(pod), referr)
+			}
+			m.recorder.Eventf(ref, v1.EventTypeWarning, events.FailedStatusPodSandBox, "Unable to get pod sandbox status: %v", err)
+			glog.Errorf("Failed to get pod sandbox status: %v; Skipping pod %q", err, format.Pod(pod))
+			result.Fail(err)
+			return
+		}
+
+		// If we ever allow updating a pod from non-host-network to
+		// host-network, we may use a stale IP.
+		if !kubecontainer.IsHostNetworkPod(pod) {
+			// Overwrite the podIP passed in the pod status, since we just started the pod sandbox.
+			podIP = m.determinePodSandboxIP(pod.Namespace, pod.Name, podSandboxStatus)
+			glog.V(4).Infof("Determined the ip %q for pod %q after sandbox restart", podIP, format.Pod(pod))
+		}
+
 		glog.V(4).Infof("Starting sandbox for pod %s success", format.Pod(pod))
 	}
 

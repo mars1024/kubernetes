@@ -21,7 +21,7 @@ const (
 	// StaragentURL URL of SA
 	StaragentURL = "http://inc.agent.alibaba-inc.com/api/task"
 	// StaragentAPITimeout API timeout of SA
-	StaragentAPITimeout = "30"
+	StaragentAPITimeout = "60"
 	// StaragentAPIKey API key of SA
 	StaragentAPIKey = "0eb5fc49b702c8f4ac3d17d5950af8ec"
 	// StaragentAPICode API code of SA

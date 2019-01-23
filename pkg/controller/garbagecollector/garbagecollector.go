@@ -500,7 +500,7 @@ func (gc *GarbageCollector) attemptToDeleteItem(item *node) error {
 		// doesn't have dependents, the function will remove the
 		// FinalizerDeletingDependents from the item, resulting in the final
 		// deletion of the item.
-		policy := metav1.DeletePropagationForceForeground
+		policy := metav1.DeletePropagationForeground
 		return gc.deleteObject(item.identity, &policy)
 	default:
 		// item doesn't have any solid owner, so it needs to be garbage
@@ -513,10 +513,10 @@ func (gc *GarbageCollector) attemptToDeleteItem(item *node) error {
 			policy = metav1.DeletePropagationOrphan
 		case hasDeleteDependentsFinalizer(latest):
 			// if an existing foreground finalizer is already on the object, honor it.
-			policy = metav1.DeletePropagationForceForeground
+			policy = metav1.DeletePropagationForeground
 		default:
 			// otherwise, default to background.
-			policy = metav1.DeletePropagationForceBackground
+			policy = metav1.DeletePropagationBackground
 		}
 		glog.V(2).Infof("delete object %s with propagation policy %s", item.identity, policy)
 		return gc.deleteObject(item.identity, &policy)

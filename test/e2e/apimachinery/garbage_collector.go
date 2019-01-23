@@ -73,23 +73,13 @@ func estimateMaximumPods(c clientset.Interface, min, max int32) int32 {
 	return availablePods
 }
 
-func getForceForegroundOptions() *metav1.DeleteOptions {
-	policy := metav1.DeletePropagationForceForeground
-	return &metav1.DeleteOptions{PropagationPolicy: &policy}
-}
-
-func getForceBackgroundOptions() *metav1.DeleteOptions {
-	policy := metav1.DeletePropagationForceBackground
-	return &metav1.DeleteOptions{PropagationPolicy: &policy}
-}
-
 func getForegroundOptions() *metav1.DeleteOptions {
-	policy := metav1.DeletePropagationForceForeground
+	policy := metav1.DeletePropagationForeground
 	return &metav1.DeleteOptions{PropagationPolicy: &policy}
 }
 
 func getBackgroundOptions() *metav1.DeleteOptions {
-	policy := metav1.DeletePropagationForceBackground
+	policy := metav1.DeletePropagationBackground
 	return &metav1.DeleteOptions{PropagationPolicy: &policy}
 }
 

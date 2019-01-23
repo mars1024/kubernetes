@@ -40,14 +40,12 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
-	"k8s.io/apiserver/pkg/features"
 	"k8s.io/apiserver/pkg/registry/generic"
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/apiserver/pkg/storage"
 	storeerr "k8s.io/apiserver/pkg/storage/errors"
 	"k8s.io/apiserver/pkg/storage/etcd/metrics"
 	"k8s.io/apiserver/pkg/util/dryrun"
-	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/golang/glog"
@@ -741,8 +739,6 @@ func shouldOrphanDependents(ctx context.Context, e *Store, accessor metav1.Objec
 		case metav1.DeletePropagationOrphan:
 			return true
 		case metav1.DeletePropagationBackground, metav1.DeletePropagationForeground:
-			return utilfeature.DefaultFeatureGate.Enabled(features.DisableCascadingDeletion)
-		case metav1.DeletePropagationForceForeground, metav1.DeletePropagationForceBackground:
 			return false
 		}
 	}
@@ -784,11 +780,9 @@ func shouldDeleteDependents(ctx context.Context, e *Store, accessor metav1.Objec
 	}
 	if options != nil && options.PropagationPolicy != nil {
 		switch *options.PropagationPolicy {
-		case metav1.DeletePropagationForceForeground:
-			return utilfeature.DefaultFeatureGate.Enabled(features.DisableCascadingDeletion)
 		case metav1.DeletePropagationForeground:
-			return !utilfeature.DefaultFeatureGate.Enabled(features.DisableCascadingDeletion)
-		case metav1.DeletePropagationOrphan, metav1.DeletePropagationForceBackground, metav1.DeletePropagationBackground:
+			return true
+		case metav1.DeletePropagationBackground, metav1.DeletePropagationOrphan:
 			return false
 		}
 	}

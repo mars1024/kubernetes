@@ -80,12 +80,10 @@ func ValidateDeleteOptions(options *metav1.DeleteOptions) field.ErrorList {
 		allErrs = append(allErrs, field.Invalid(field.NewPath("propagationPolicy"), options.PropagationPolicy, "orphanDependents and deletionPropagation cannot be both set"))
 	}
 	if options.PropagationPolicy != nil &&
-		*options.PropagationPolicy != metav1.DeletePropagationForceForeground &&
-		*options.PropagationPolicy != metav1.DeletePropagationForceBackground &&
 		*options.PropagationPolicy != metav1.DeletePropagationForeground &&
 		*options.PropagationPolicy != metav1.DeletePropagationBackground &&
 		*options.PropagationPolicy != metav1.DeletePropagationOrphan {
-		allErrs = append(allErrs, field.NotSupported(field.NewPath("propagationPolicy"), options.PropagationPolicy, []string{string(metav1.DeletePropagationForeground), string(metav1.DeletePropagationBackground), string(metav1.DeletePropagationOrphan), string(metav1.DeletePropagationForceForeground), string(metav1.DeletePropagationForceBackground), "nil"}))
+		allErrs = append(allErrs, field.NotSupported(field.NewPath("propagationPolicy"), options.PropagationPolicy, []string{string(metav1.DeletePropagationForeground), string(metav1.DeletePropagationBackground), string(metav1.DeletePropagationOrphan), "nil"}))
 	}
 	allErrs = append(allErrs, validateDryRun(field.NewPath("dryRun"), options.DryRun)...)
 	return allErrs

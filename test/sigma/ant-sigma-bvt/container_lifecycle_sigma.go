@@ -48,7 +48,7 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 		//create
 		pod, result := MustCreatePod(s, f.ClientSet, createConfig)
 		defer util.DeletePod(f.ClientSet, &pod)
-
+		framework.Logf("Pod Info: %#v", DumpJson(pod))
 		By("Check container info.")
 		CheckAdapterCreateResource(f, &pod, result, createConfig)
 		//stop pod
@@ -124,6 +124,8 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 		newPod, err := f.ClientSet.CoreV1().Pods(pod.Namespace).Get(pod.Name, metav1.GetOptions{})
 		Expect(err).To(BeNil(), "[Sigma3.1LifeCycle] get created sigma3.1 pod failed.")
 		Expect(newPod).NotTo(BeNil(), "[Sigma3.1LifeCycle] get created sigma3.1 pod nil.")
+		framework.Logf("Pod Info: %#v", DumpJson(newPod))
+
 		CheckSigmaCreateResource(f, newPod)
 		checkDNSPolicy(f, newPod)
 
@@ -180,7 +182,7 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 				//create
 				pod, result := MustCreatePod(s, f.ClientSet, createConfig)
 				defer util.DeletePod(f.ClientSet, &pod)
-
+				framework.Logf("Pod Info: %#v", DumpJson(pod))
 				By("Check container info.")
 				CheckAdapterCreateResource(f, &pod, result, createConfig)
 
@@ -221,6 +223,7 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 				err = CreateSigmaPod(f.ClientSet, pod)
 				Expect(err).NotTo(HaveOccurred(), "[Sigma3.1LifeCycle] Create sigma3.1 pod failed.")
 				defer util.DeletePod(f.ClientSet, pod)
+				framework.Logf("Pod Info: %#v", DumpJson(pod))
 				//check resource
 				newPod, err := f.ClientSet.CoreV1().Pods(pod.Namespace).Get(pod.Name, metav1.GetOptions{})
 				Expect(err).To(BeNil(), "[Sigma3.1LifeCycle] get created sigma3.1 pod failed.")

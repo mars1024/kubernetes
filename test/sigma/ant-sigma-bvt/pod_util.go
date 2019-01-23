@@ -64,7 +64,7 @@ func LoadAlipayBasePod(name string, expectStatus k8sApi.ContainerState, enableOv
 		}
 		pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions = append(
 			pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions, nodeTerms...)
-		
+
 		toleration := []v1.Toleration{
 			{
 				Key:      k8sApi.LabelEnableOverQuota,
@@ -97,7 +97,7 @@ func CreateSigmaPod(client clientset.Interface, pod *v1.Pod) error {
 	var err error
 	defer func() {
 		if err != nil && pod != nil {
-			framework.Logf("Wait pod ready failed, Pod info:%#v, err:%#v", *pod, err)
+			framework.Logf("Wait pod ready failed, Pod info:%#v, err:%#v", DumpJson(pod), err)
 		}
 	}()
 	_, err = client.CoreV1().Pods(pod.Namespace).Create(pod)
@@ -202,7 +202,7 @@ func UpgradeSigmaPod(client clientset.Interface, pod *v1.Pod, upgradePod *v1.Pod
 	var err error
 	defer func() {
 		if err != nil {
-			framework.Logf("Upgrade pod failed, pod:%#v, err:%#v", *pod, err)
+			framework.Logf("Upgrade pod failed, pod:%#v, err:%#v", DumpJson(pod), err)
 		}
 	}()
 	pod, err = client.CoreV1().Pods(pod.Namespace).Get(pod.Name, metav1.GetOptions{})

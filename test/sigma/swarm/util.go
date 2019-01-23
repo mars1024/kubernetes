@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strings"
 	"time"
 )
 
@@ -164,4 +165,18 @@ func newRequest(method, url string, opts ...Option) (*http.Request, error) {
 		}
 	}
 	return req, nil
+}
+
+func GetEnv(env []string, key string) string {
+	return GetEnvWithDefault(env, key, "")
+}
+
+func GetEnvWithDefault(env []string, key, defaultValue string) string {
+	for _, pair := range env {
+		parts := strings.SplitN(pair, "=", 2)
+		if parts[0] == key {
+			return parts[1]
+		}
+	}
+	return defaultValue
 }

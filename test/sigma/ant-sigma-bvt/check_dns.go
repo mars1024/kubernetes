@@ -11,9 +11,10 @@ import (
 	"k8s.io/kubernetes/test/sigma/util"
 )
 
-//checkDNSPolicy() check dnsPolicy and dnsConfig.
-func checkDNSPolicy(f *framework.Framework, pod *v1.Pod) {
+//CheckDNSPolicy() check dnsPolicy and dnsConfig.
+func CheckDNSPolicy(f *framework.Framework, pod *v1.Pod) {
 	//check dnsPolicy
+	framework.Logf("pod info:%v", DumpJson(pod))
 	expectDNSPolicy := getDNSPolicy(pod)
 	getPod, _ := f.ClientSet.CoreV1().Pods(pod.Namespace).Get(pod.Name, metav1.GetOptions{})
 	framework.Logf("DNSPolicy:%v, expect:%v, podInfo:%#v", pod.Spec.DNSPolicy, expectDNSPolicy, DumpJson(getPod))
@@ -62,7 +63,8 @@ func getDNSOptions(pod *v1.Pod) []string {
 //getDNSPolicy()
 func getDNSPolicy(pod *v1.Pod) v1.DNSPolicy {
 	dnsConfig := pod.Spec.DNSConfig
-	if len(dnsConfig.Searches) != 0 && len(dnsConfig.Options) != 0 && len(dnsConfig.Nameservers) != 0 {
+	if dnsConfig != nil && len(dnsConfig.Searches) != 0 &&
+		len(dnsConfig.Options) != 0 && len(dnsConfig.Nameservers) != 0 {
 		return v1.DNSNone
 	}
 	return v1.DNSDefault

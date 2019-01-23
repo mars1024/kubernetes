@@ -60,7 +60,6 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 		By("Start pod.")
 		MustOperatePod(s, f.ClientSet, result.ContainerSn, &pod, "start", v1.PodRunning)
 		By("check pod dnsPolicy")
-		checkDNSPolicy(f, &pod)
 
 		// update pod
 		By("Update Pod, increase resources.")
@@ -68,6 +67,7 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 		MustUpdate(s, f.ClientSet, &pod, updateConfig, timeOut*time.Minute)
 		CheckAdapterUpdatedResource(f, &pod, updateConfig)
 
+		CheckDNSPolicy(f, &pod)
 		//restart pod
 		By("Restart pod.")
 		MustOperatePod(s, f.ClientSet, result.ContainerSn, &pod, "restart", v1.PodRunning)
@@ -141,7 +141,7 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 		framework.Logf("Pod Info: %#v", DumpJson(newPod))
 
 		CheckSigmaCreateResource(f, newPod)
-		checkDNSPolicy(f, newPod)
+		CheckDNSPolicy(f, newPod)
 
 		//stop pod
 		By("Stop sigma3.1 pod.")
@@ -151,7 +151,7 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 		By("Start sigma3.1 pod.")
 		err = StopOrStartSigmaPod(f.ClientSet, newPod, k8sApi.ContainerStateRunning)
 		Expect(err).To(BeNil(), "[Sigma3.1LifeCycle] Start sigma3.1 pod failed.")
-		checkDNSPolicy(f, newPod)
+		CheckDNSPolicy(f, newPod)
 
 		//upgrade pod.
 		By("Upgrade sigma3.1 pod, expect exited.")
@@ -169,7 +169,7 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 		err = UpgradeSigmaPod(f.ClientSet, newPod, NewUpgradePod(upgradeEnv2), k8sApi.ContainerStateRunning)
 		Expect(err).To(BeNil(), "[Sigma3.1LifeCycle] Upgrade created sigma3.1 expect running pod failed.")
 		CheckSigmaUpgradeResource(f, newPod, NewUpgradePod(upgradeEnv2))
-		checkDNSPolicy(f, newPod)
+		CheckDNSPolicy(f, newPod)
 
 		// update pod.
 		By("Update sigma 3.1 pod,  increase resource, expect running.")

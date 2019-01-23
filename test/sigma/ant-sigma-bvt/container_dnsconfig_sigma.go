@@ -105,7 +105,7 @@ func CheckAdapterDNSPolicy(f * framework.Framework, createConfig *dockerclient.C
 	pod, result := MustCreatePod(s, f.ClientSet, createConfig)
 	defer util.DeletePod(f.ClientSet, &pod)
 
-	checkDNSPolicy(f, &pod)
+	CheckDNSPolicy(f, &pod)
 	//stop pod
 	By("Stop pod.")
 	MustOperatePod(s, f.ClientSet, result.ContainerSn, &pod, "stop", v1.PodPending)
@@ -114,7 +114,7 @@ func CheckAdapterDNSPolicy(f * framework.Framework, createConfig *dockerclient.C
 	MustOperatePod(s, f.ClientSet, result.ContainerSn, &pod, "start", v1.PodRunning)
 	By("check pod dnsPolicy")
 
-	checkDNSPolicy(f, &pod)
+	CheckDNSPolicy(f, &pod)
 	//restart pod
 	By("Restart pod.")
 	MustOperatePod(s, f.ClientSet, result.ContainerSn, &pod, "restart", v1.PodRunning)
@@ -131,7 +131,7 @@ func CheckAdapterDNSPolicy(f * framework.Framework, createConfig *dockerclient.C
 	Expect(err).To(BeNil(), "[AdapterLifeCycle] [2] upgrade container expect exited failed.")
 
 	MustOperatePod(s, f.ClientSet, result.ContainerSn, &pod, "start", v1.PodRunning)
-	checkDNSPolicy(f, &pod)
+	CheckDNSPolicy(f, &pod)
 
 	//delete pod
 	By("Delete pod.")
@@ -154,7 +154,7 @@ func CheckSigma31DNSPolicy(f *framework.Framework, pod *v1.Pod) {
 	newPod, err := f.ClientSet.CoreV1().Pods(pod.Namespace).Get(pod.Name, metav1.GetOptions{})
 	Expect(err).To(BeNil(), "[Sigma3.1LifeCycle] get created sigma3.1 pod failed.")
 	Expect(newPod).NotTo(BeNil(), "[Sigma3.1LifeCycle] get created sigma3.1 pod nil.")
-	checkDNSPolicy(f, newPod)
+	CheckDNSPolicy(f, newPod)
 
 	//stop pod
 	By("Stop sigma3.1 pod.")
@@ -164,13 +164,13 @@ func CheckSigma31DNSPolicy(f *framework.Framework, pod *v1.Pod) {
 	By("Start sigma3.1 pod.")
 	err = StopOrStartSigmaPod(f.ClientSet, newPod, k8sApi.ContainerStateRunning)
 	Expect(err).To(BeNil(), "[Sigma3.1LifeCycle] Start sigma3.1 pod failed.")
-	checkDNSPolicy(f, newPod)
+	CheckDNSPolicy(f, newPod)
 
 	//upgrade pod.
 	By("Upgrade sigma3.1 pod, expect running.")
 	err = UpgradeSigmaPod(f.ClientSet, newPod, NewUpgradePod(upgradeEnv2), k8sApi.ContainerStateRunning)
 	Expect(err).To(BeNil(), "[Sigma3.1LifeCycle] Upgrade created sigma3.1 expect running pod failed.")
-	checkDNSPolicy(f, newPod)
+	CheckDNSPolicy(f, newPod)
 
 	//delete pod
 	By("Delete sigma3.1 pod.")

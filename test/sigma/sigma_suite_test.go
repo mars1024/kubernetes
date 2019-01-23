@@ -25,6 +25,8 @@ import (
 	_ "k8s.io/kubernetes/test/sigma/controller"
 	_ "k8s.io/kubernetes/test/sigma/kubelet"
 	_ "k8s.io/kubernetes/test/sigma/scheduler"
+	_ "k8s.io/kubernetes/test/sigma/ant-migrate"
+
 )
 
 func init() {

@@ -1335,6 +1335,17 @@ func (e *Store) CompleteWithOptions(options *generic.StoreOptions) error {
 		if isNamespaced {
 			if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
 				e.KeyRootFunc = func(ctx context.Context) string {
+
+					/////////////////////////
+					// TODO: remove this hack after usage of legacy admin tenant is gone
+					if user, ok := genericapirequest.UserFrom(ctx); ok {
+						tenant, _ := multitenancyutil.TransformTenantInfoFromUser(user)
+						if tenant != nil && multitenancyutil.IsMultiTenancyWiseTenant(tenant) {
+							return prefix
+						}
+					}
+					/////////////////////////
+
 					return multitenancyregistry.MultiTenancyKeyRootFuncForNamespaced(ctx, prefix)
 				}
 				e.KeyFunc = func(ctx context.Context, name string) (string, error) {
@@ -1351,6 +1362,17 @@ func (e *Store) CompleteWithOptions(options *generic.StoreOptions) error {
 		} else {
 			if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
 				e.KeyRootFunc = func(ctx context.Context) string {
+
+					/////////////////////////
+					// TODO: remove this hack after usage of legacy admin tenant is gone
+					if user, ok := genericapirequest.UserFrom(ctx); ok {
+						tenant, _ := multitenancyutil.TransformTenantInfoFromUser(user)
+						if tenant != nil && multitenancyutil.IsMultiTenancyWiseTenant(tenant) {
+							return prefix
+						}
+					}
+					/////////////////////////
+
 					return multitenancyregistry.MultiTenancyKeyRootFuncForNonNamespaced(ctx, prefix)
 				}
 				e.KeyFunc = func(ctx context.Context, name string) (string, error) {

@@ -1,14 +1,14 @@
 package auditdelete
 
 import (
-	"errors"
 	"fmt"
 	"io"
 
-	"github.com/golang/glog"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apiserver/pkg/admission"
+	"k8s.io/kubernetes/pkg/apis/apps"
 	informers "k8s.io/kubernetes/pkg/client/informers/informers_generated/internalversion"
 	settingslisters "k8s.io/kubernetes/pkg/client/listers/core/internalversion"
 	kubeapiserveradmission "k8s.io/kubernetes/pkg/kubeapiserver/admission"
@@ -17,6 +17,8 @@ import (
 const (
 	// PluginName indicates name of admission plugin.
 	PluginName = "AuditDelete"
+
+	modeForStatefulSet = "statefulset.beta1.sigma.ali/mode"
 )
 
 // Register registers a plugin
@@ -68,7 +70,6 @@ func (p *auditDeletePlugin) Validate(a admission.Attributes) error {
 	if a.GetOperation() != admission.Delete || len(a.GetSubresource()) != 0 {
 		return nil
 	}
-	glog.Infof("AuditDelete got event: %#v", a)
 
 	if a.GetKind().Kind == "Namespace" {
 		namespace := a.GetNamespace()
@@ -78,8 +79,16 @@ func (p *auditDeletePlugin) Validate(a admission.Attributes) error {
 		return p.validateNamespaceDeletion(namespace)
 	}
 
-	if a.GetKind().Kind == "InPlaceSet" || a.GetKind().Kind == "StatefulSet" {
+	if a.GetKind().Kind == "InPlaceSet" {
 		return p.validateWorkloadDeletion(a)
+	} else if a.GetKind().Kind == "StatefulSet" {
+		set, ok := a.GetObject().(*apps.StatefulSet)
+		if !ok {
+			return errors.NewBadRequest("Resource was marked with kind StatefulSet but was unable to be converted by AuditDelete")
+		}
+		if set.Labels[modeForStatefulSet] == "sigma" {
+			return p.validateWorkloadDeletion(a)
+		}
 	}
 
 	return nil
@@ -138,7 +147,7 @@ func (p *auditDeletePlugin) validateNamespaceDeletion(namespace string) (err err
 		errStr += fmt.Sprintf("The following error(s) occurred while validating the DELETE operation on the namespace %s: %v.", namespace, errList)
 	}
 	if errStr != "" {
-		return errors.New(errStr)
+		return fmt.Errorf(errStr)
 	}
 	return nil
 }
@@ -150,5 +159,8 @@ func (p *auditDeletePlugin) validateWorkloadDeletion(a admission.Attributes) (er
 		return fmt.Errorf("error listing pods for %s %s/%s: %v", a.GetKind().Kind, a.GetNamespace(), a.GetName(), err)
 	}
 
-	return fmt.Errorf("forbid to delete %s %s/%s for existing %d pods", a.GetKind().Kind, a.GetNamespace(), a.GetName(), podNum)
+	if podNum > 0 {
+		return fmt.Errorf("forbid to delete %s %s/%s for existing %d pods", a.GetKind().Kind, a.GetNamespace(), a.GetName(), podNum)
+	}
+	return nil
 }

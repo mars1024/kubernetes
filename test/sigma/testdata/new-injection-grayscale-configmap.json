@@ -1,0 +1,11 @@
+{
+    "apiVersion": "v1",
+    "data": {
+        "mode": "include",
+        "apps" : "[\"buy2\"]"
+    },
+    "kind": "ConfigMap",
+    "metadata": {
+        "name": "sigma-injectionappgrayscale-config"
+    }
+}

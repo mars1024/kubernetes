@@ -22,7 +22,7 @@ fi
 
 pidof kube-apiserver || {
 $workDir/bin/kube-apiserver \
-    --enable-admission-plugins=Initializers,NamespaceLifecycle,ServiceAccount,LimitRanger,DefaultStorageClass,DefaultTolerationSeconds,PodPreset,ResourceQuota,ValidatingAdmissionWebhook,MutatingAdmissionWebhook,AliPodLifeTimeHook,PodDeletionFlowControl,AliPodInjectionPreSchedule,AliPodInjectionPostSchedule,ContainerState \
+    --enable-admission-plugins=Initializers,NamespaceLifecycle,ServiceAccount,LimitRanger,DefaultStorageClass,DefaultTolerationSeconds,PodPreset,ResourceQuota,ValidatingAdmissionWebhook,MutatingAdmissionWebhook,AliPodLifeTimeHook,PodDeletionFlowControl,AliPodInjectionPreSchedule,NewAliPodInjectionPreSchedule,AliPodInjectionPostSchedule,ContainerState \
     --advertise-address=$(hostname -i) \
     --allow-privileged=true \
     --audit-policy-file=$workDir/cfg/audit.yaml --audit-log-path=$workDir/log/k8s-audit.log --audit-log-format=json --audit-log-maxsize=10240 --audit-log-maxbackup=1 \

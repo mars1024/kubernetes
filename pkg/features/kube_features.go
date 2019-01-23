@@ -503,13 +503,12 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 
 	// inherited features from generic apiserver, relisted here to get a conflict if it is changed
 	// unintentionally on either side:
-	genericfeatures.StreamingProxyRedirects:  {Default: true, PreRelease: utilfeature.Beta},
-	genericfeatures.AdvancedAuditing:         {Default: true, PreRelease: utilfeature.GA},
-	genericfeatures.APIResponseCompression:   {Default: false, PreRelease: utilfeature.Alpha},
-	genericfeatures.Initializers:             {Default: false, PreRelease: utilfeature.Alpha},
-	genericfeatures.APIListChunking:          {Default: true, PreRelease: utilfeature.Beta},
-	genericfeatures.DryRun:                   {Default: false, PreRelease: utilfeature.Alpha},
-	genericfeatures.DisableCascadingDeletion: {Default: true, PreRelease: utilfeature.Beta},
+	genericfeatures.StreamingProxyRedirects: {Default: true, PreRelease: utilfeature.Beta},
+	genericfeatures.AdvancedAuditing:        {Default: true, PreRelease: utilfeature.GA},
+	genericfeatures.APIResponseCompression:  {Default: false, PreRelease: utilfeature.Alpha},
+	genericfeatures.Initializers:            {Default: false, PreRelease: utilfeature.Alpha},
+	genericfeatures.APIListChunking:         {Default: true, PreRelease: utilfeature.Beta},
+	genericfeatures.DryRun:                  {Default: false, PreRelease: utilfeature.Alpha},
 
 	// inherited features from apiextensions-apiserver, relisted here to get a conflict if it is changed
 	// unintentionally on either side:

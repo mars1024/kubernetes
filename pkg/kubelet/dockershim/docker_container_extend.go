@@ -183,16 +183,19 @@ func UpdateContainerExtraResources(resources *runtimeapi.LinuxContainerResources
 	// Get DiskQuota.
 	DiskQuota := resources.DiskQuota
 
-	// Set timeout value as 10 second.
-	ctx, cancelFunc := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancelFunc()
+	if len(DiskQuota) > 0 {
+		// Set timeout value as 10 second.
+		ctx, cancelFunc := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancelFunc()
 
-	// Update DiskQuota with "docker update".
-	cmd := exec.CommandContext(ctx, "docker", "update", "--disk", parseDiskQuotaToLabel(DiskQuota), id)
-	out, err := cmd.Output()
-	if err != nil {
-		return fmt.Errorf("failed to exec %v, out: %q, err: %v", cmd, string(out), err)
+		// Update DiskQuota with "docker update".
+		cmd := exec.CommandContext(ctx, "docker", "update", "--disk", parseDiskQuotaToLabel(DiskQuota), id)
+		out, err := cmd.Output()
+		if err != nil {
+			return fmt.Errorf("failed to exec %v, out: %q, err: %v", cmd, string(out), err)
+		}
 	}
+
 	return nil
 }
 

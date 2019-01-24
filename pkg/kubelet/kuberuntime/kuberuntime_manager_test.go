@@ -853,7 +853,10 @@ func TestComputePodActions(t *testing.T) {
 			actions: noAction,
 		},
 		"Kill pod and recreate everything if the pod sandbox is dead, and RestartPolicy == Always": {
-			mutatePodFn: func(pod *v1.Pod) { pod.Spec.RestartPolicy = v1.RestartPolicyAlways },
+			mutatePodFn: func(pod *v1.Pod) {
+				pod.Spec.RestartPolicy = v1.RestartPolicyAlways
+				pod.Status.PodIP = "1.1.1.1"
+			},
 			mutateStatusFn: func(status *kubecontainer.PodStatus) {
 				status.SandboxStatuses[0].State = runtimeapi.PodSandboxState_SANDBOX_NOTREADY
 			},
@@ -871,7 +874,10 @@ func TestComputePodActions(t *testing.T) {
 			},
 		},
 		"Kill pod and recreate all containers (except for the succeeded one) if the pod sandbox is dead, and RestartPolicy == OnFailure": {
-			mutatePodFn: func(pod *v1.Pod) { pod.Spec.RestartPolicy = v1.RestartPolicyOnFailure },
+			mutatePodFn: func(pod *v1.Pod) {
+				pod.Spec.RestartPolicy = v1.RestartPolicyOnFailure
+				pod.Status.PodIP = "1.1.1.1"
+			},
 			mutateStatusFn: func(status *kubecontainer.PodStatus) {
 				status.SandboxStatuses[0].State = runtimeapi.PodSandboxState_SANDBOX_NOTREADY
 				status.ContainerStatuses[1].State = kubecontainer.ContainerStateExited

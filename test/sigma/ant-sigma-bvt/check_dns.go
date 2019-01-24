@@ -24,13 +24,13 @@ func checkDNSPolicy(f *framework.Framework, pod *v1.Pod) {
 func compareDNSConfig(f *framework.Framework, pod *v1.Pod) {
 	podDNSConfig := getPodDNSConfig(f, pod)
 	if pod.Spec.DNSPolicy == v1.DNSNone {
-		framework.Logf("pod DNSConfig:%#v, resolve: %#v", pod.Spec.DNSConfig, *podDNSConfig)
+		framework.Logf("pod DNSConfig:%#v, resolve: %#v", pod.Spec.DNSConfig, DumpJson(podDNSConfig))
 		Expect(IsEqualSlice(pod.Spec.DNSConfig.Nameservers, podDNSConfig.Servers)).To(BeTrue(), "DNSNone, Unexpected DNSConfig nameServers")
 		Expect(IsEqualSlice(pod.Spec.DNSConfig.Searches, podDNSConfig.Searches)).To(BeTrue(), "DNSNone, Unexpected DNSConfig searches")
 		Expect(IsEqualSlice(getDNSOptions(pod), podDNSConfig.Options)).To(BeTrue(), "DNSNone, Unexpected DNSConfig options.")
 	} else if pod.Spec.DNSPolicy == v1.DNSDefault {
 		nodeDNSConfig := getNodeDNSConfig(pod)
-		framework.Logf("pod DNSConfig:%#v, pod resolv: %#v, node resolv:%#v", pod.Spec.DNSConfig, *podDNSConfig, *nodeDNSConfig)
+		framework.Logf("pod DNSConfig:%#v, pod resolv: %#v, node resolv:%#v", pod.Spec.DNSConfig, DumpJson(podDNSConfig), DumpJson(nodeDNSConfig))
 		compareNodePodResolvAndConfig(getDNSOptions(pod), nodeDNSConfig.Options, podDNSConfig.Options)
 		compareNodePodResolvAndConfig(pod.Spec.DNSConfig.Searches, nodeDNSConfig.Searches, podDNSConfig.Searches)
 		compareNodePodResolvAndConfig(pod.Spec.DNSConfig.Nameservers, nodeDNSConfig.Servers, podDNSConfig.Servers)

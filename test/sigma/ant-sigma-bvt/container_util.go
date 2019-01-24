@@ -96,9 +96,9 @@ func GetCreateResultWithTimeOut(client clientset.Interface, requestId string, ti
 	t := time.Now()
 	for {
 		task, body, err := s.GetAsyncJson(requestId)
-		framework.Logf("Get Async request %v, task:%#v, body:%v, err:%v", requestId, *task, body, err)
-		if err != nil || body != "" {
-			return nil, fmt.Errorf("get container result failed, ")
+		framework.Logf("Get Async request %v, task:%#v, body:%v, err:%v", requestId, DumpJson(task), body, err)
+		if err != nil || body != "" || task == nil {
+			return nil, fmt.Errorf("get container result failed.")
 		}
 
 		if task.State == "finish" {
@@ -134,9 +134,9 @@ func GetUpgradeResultWithTimeOut(requestId string, timeout time.Duration) (bool,
 	t := time.Now()
 	for {
 		task, body, err := s.GetAsyncJson(requestId)
-		framework.Logf("Get Async request %v, task:%#v, body:%#v, err:%#v", requestId, *task, body, err)
-		if err != nil || body != "" {
-			return false, fmt.Errorf("get container result failed, ")
+		framework.Logf("Get Async request %v, task:%#v, body:%#v, err:%#v", requestId, DumpJson(task), body, err)
+		if err != nil || body != "" || task == nil {
+			return false, fmt.Errorf("get container result failed.")
 		}
 
 		if task.State == "finish" {

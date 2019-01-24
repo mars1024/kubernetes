@@ -1,10 +1,13 @@
 package ant_sigma_bvt
 
 import (
+	"encoding/json"
 	"io"
 	"io/ioutil"
+	"reflect"
 	"strconv"
 	"strings"
+	"unsafe"
 )
 
 func Atoi64(str string, def int64) int64 {
@@ -110,4 +113,21 @@ func IsEqualSlice(parent, sub []string) bool {
 		return true
 	}
 	return false
+}
+
+func DumpJson(v interface{}) string {
+	str, err := json.Marshal(v)
+	if err != nil {
+		return err.Error()
+	}
+	return String(str)
+}
+
+// ToString convert slice to string without mem copy.
+func String(b []byte) (s string) {
+	pbytes := (*reflect.SliceHeader)(unsafe.Pointer(&b))
+	pstring := (*reflect.StringHeader)(unsafe.Pointer(&s))
+	pstring.Data = pbytes.Data
+	pstring.Len = pbytes.Len
+	return
 }

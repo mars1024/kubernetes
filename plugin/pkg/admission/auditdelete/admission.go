@@ -3,10 +3,13 @@ package auditdelete
 import (
 	"fmt"
 	"io"
+	"reflect"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/admission"
 	"k8s.io/kubernetes/pkg/apis/apps"
 	informers "k8s.io/kubernetes/pkg/client/informers/informers_generated/internalversion"
@@ -19,6 +22,7 @@ const (
 	PluginName = "AuditDelete"
 
 	modeForStatefulSet = "statefulset.beta1.sigma.ali/mode"
+	enableCascadingDeletion = "sigma.ali/enable-cascading-deletion"
 )
 
 // Register registers a plugin
@@ -34,7 +38,7 @@ type auditDeletePlugin struct {
 	podLister    settingslisters.PodLister
 	// podCounterHandler is used for testing purpose: they are set to fake
 	// functions when testing
-	podCounterHandler func(string, admission.Attributes) (int, error)
+	podCounterHandler func(string, metav1.Object) (int, error)
 }
 
 var _ admission.ValidationInterface = &auditDeletePlugin{}
@@ -67,7 +71,14 @@ func (p *auditDeletePlugin) Validate(a admission.Attributes) error {
 	if a == nil {
 		return nil
 	}
-	if a.GetOperation() != admission.Delete || len(a.GetSubresource()) != 0 {
+	if a.GetOperation() != admission.Delete || len(a.GetSubresource()) != 0 || strings.HasPrefix(a.GetNamespace(), "e2e-tests") {
+		return nil
+	}
+
+	objectMeta, err := getObjectMeta(a.GetObject())
+	if err != nil {
+		return err
+	} else if objectMeta.GetAnnotations()[enableCascadingDeletion] == "true" {
 		return nil
 	}
 
@@ -80,21 +91,21 @@ func (p *auditDeletePlugin) Validate(a admission.Attributes) error {
 	}
 
 	if a.GetKind().Kind == "InPlaceSet" {
-		return p.validateWorkloadDeletion(a)
+		return p.validateWorkloadDeletion(objectMeta)
 	} else if a.GetKind().Kind == "StatefulSet" {
 		set, ok := a.GetObject().(*apps.StatefulSet)
 		if !ok {
 			return errors.NewBadRequest("Resource was marked with kind StatefulSet but was unable to be converted by AuditDelete")
 		}
 		if set.Labels[modeForStatefulSet] == "sigma" {
-			return p.validateWorkloadDeletion(a)
+			return p.validateWorkloadDeletion(objectMeta)
 		}
 	}
 
 	return nil
 }
 
-func (p *auditDeletePlugin) podCounter(namespace string, expectedOwner admission.Attributes) (int, error) {
+func (p *auditDeletePlugin) podCounter(namespace string, expectedOwner metav1.Object) (int, error) {
 	list, err := p.podLister.Pods(namespace).List(labels.Everything())
 	if err != nil {
 		return 0, err
@@ -106,7 +117,7 @@ func (p *auditDeletePlugin) podCounter(namespace string, expectedOwner admission
 		}
 		if expectedOwner != nil {
 			owner := metav1.GetControllerOf(p)
-			if owner == nil || owner.Name != expectedOwner.GetName() || owner.Kind != expectedOwner.GetKind().Kind {
+			if owner == nil || owner.UID != expectedOwner.GetUID() {
 				continue
 			}
 		}
@@ -120,7 +131,7 @@ func (p *auditDeletePlugin) validateNamespaceDeletion(namespace string) (err err
 
 	counters := []struct {
 		kind    string
-		counter func(string, admission.Attributes) (int, error)
+		counter func(string, metav1.Object) (int, error)
 	}{
 		{"pods", p.podCounterHandler},
 	}
@@ -153,14 +164,31 @@ func (p *auditDeletePlugin) validateNamespaceDeletion(namespace string) (err err
 }
 
 // validateNamespaceDeletion returns an error if the workload contains any pods
-func (p *auditDeletePlugin) validateWorkloadDeletion(a admission.Attributes) (err error) {
-	podNum, err := p.podCounterHandler(a.GetNamespace(), a)
+func (p *auditDeletePlugin) validateWorkloadDeletion(obj metav1.Object) (err error) {
+	podNum, err := p.podCounterHandler(obj.GetNamespace(), obj)
 	if err != nil {
-		return fmt.Errorf("error listing pods for %s %s/%s: %v", a.GetKind().Kind, a.GetNamespace(), a.GetName(), err)
+		return fmt.Errorf("error listing pods for %s/%s: %v", obj.GetNamespace(), obj.GetName(), err)
 	}
 
 	if podNum > 0 {
-		return fmt.Errorf("forbid to delete %s %s/%s for existing %d pods", a.GetKind().Kind, a.GetNamespace(), a.GetName(), podNum)
+		return fmt.Errorf("forbid to delete %s/%s for existing %d pods", obj.GetNamespace(), obj.GetName(), podNum)
 	}
 	return nil
+}
+
+func getObjectMeta(obj runtime.Object) (*metav1.ObjectMeta, error) {
+	var objMeta metav1.ObjectMeta
+	var foundObjectMeta bool
+	e := reflect.ValueOf(obj).Elem()
+	for i := 0; i < e.NumField() && !foundObjectMeta; i++ {
+		if e.Type().Field(i).Type == reflect.TypeOf(metav1.ObjectMeta{}) {
+			objMeta = e.Field(i).Interface().(metav1.ObjectMeta)
+			foundObjectMeta = true
+		}
+	}
+
+	if !foundObjectMeta {
+		return nil, fmt.Errorf("not found ObjectMeta in %#v", obj)
+	}
+	return &objMeta, nil
 }

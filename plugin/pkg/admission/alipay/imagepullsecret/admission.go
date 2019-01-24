@@ -182,6 +182,9 @@ func (i *imageSecret) getOrCreateImagePullSecret(pod *api.Pod) (string, error) {
 	}
 	gotSecret, err := i.client.Core().Secrets(pod.Namespace).Create(userSecret)
 	if err != nil {
+		if errors.IsAlreadyExists(err) {
+			return userSecret.Name, nil
+		}
 		return "", fmt.Errorf("failed create secret: %v", err)
 	}
 	return gotSecret.Name, nil

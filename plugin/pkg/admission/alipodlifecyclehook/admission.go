@@ -284,6 +284,9 @@ func (c *aliPodLifeCycleHook) getOrCreateImagePullSecret(pod *api.Pod, username,
 	}
 	gotSecret, err := c.client.Core().Secrets(pod.Namespace).Create(newSecret)
 	if err != nil {
+		if errors.IsAlreadyExists(err) {
+			return newSecret.Name, nil
+		}
 		return "", fmt.Errorf("failed create secret: %v", err)
 	}
 	return gotSecret.Name, nil

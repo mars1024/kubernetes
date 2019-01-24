@@ -94,9 +94,9 @@ func TestDeleteValidation(t *testing.T) {
 		},
 		{
 			name: "delete statefulset succeed 2",
-			pod: newPod("ss-ns", &metav1.OwnerReference{Name: "ss-test", Kind: "StatefulSet"}),
+			pod: newPod("ss-ns", &metav1.OwnerReference{Name: "ss-test", Kind: "StatefulSet", UID: "uid01"}),
 			object: &apps.StatefulSet{
-				ObjectMeta: metav1.ObjectMeta{Name: "ss-test", Namespace: "ss-ns"},
+				ObjectMeta: metav1.ObjectMeta{Name: "ss-test", Namespace: "ss-ns", UID: "uid01"},
 				Spec: apps.StatefulSetSpec{},
 			},
 			kind: "StatefulSet",
@@ -104,9 +104,9 @@ func TestDeleteValidation(t *testing.T) {
 		},
 		{
 			name: "delete statefulset failed 1",
-			pod: newPod("ss-ns", &metav1.OwnerReference{Name: "ss-test", Kind: "StatefulSet"}),
+			pod: newPod("ss-ns", &metav1.OwnerReference{Name: "ss-test", Kind: "StatefulSet", UID: "uid01"}),
 			object: &apps.StatefulSet{
-				ObjectMeta: metav1.ObjectMeta{Name: "ss-test", Namespace: "ss-ns", Labels: map[string]string{modeForStatefulSet: "sigma"}},
+				ObjectMeta: metav1.ObjectMeta{Name: "ss-test", Namespace: "ss-ns", Labels: map[string]string{modeForStatefulSet: "sigma"}, UID: "uid01"},
 				Spec: apps.StatefulSetSpec{},
 			},
 			kind: "StatefulSet",

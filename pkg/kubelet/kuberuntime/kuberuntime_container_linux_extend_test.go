@@ -4,12 +4,15 @@ package kuberuntime
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 )
 
@@ -81,5 +84,190 @@ func makeAllocSpecWithCpuPeriod(containerName string, cpuPeriod int64) *sigmak8s
 				},
 			},
 		},
+	}
+}
+
+func TestApplyDiskQuota(t *testing.T) {
+	for desc, testCase := range map[string]struct {
+		pod               *v1.Pod
+		expectedDiskQuota map[string]string
+	}{
+		"pod has diskquota and the quota mode is not set": {
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:       "12345678",
+					Name:      "bar",
+					Namespace: "new",
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name:            "foo",
+							Image:           "busybox",
+							ImagePullPolicy: v1.PullIfNotPresent,
+							Resources: v1.ResourceRequirements{
+								Requests: v1.ResourceList{
+									v1.ResourceEphemeralStorage: resource.MustParse("5Gi"),
+								},
+								Limits: v1.ResourceList{
+									v1.ResourceEphemeralStorage: resource.MustParse("5Gi"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedDiskQuota: map[string]string{".*": "5g"},
+		},
+		"pod has diskquota and the quota mode is '.*'": {
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:       "12345678",
+					Name:      "bar",
+					Namespace: "new",
+					Annotations: map[string]string{
+						sigmak8sapi.AnnotationPodAllocSpec: `{"containers":[{"name":"foo","hostConfig":{"diskQuotaMode":".*"}}]}`,
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name:            "foo",
+							Image:           "busybox",
+							ImagePullPolicy: v1.PullIfNotPresent,
+							Resources: v1.ResourceRequirements{
+								Requests: v1.ResourceList{
+									v1.ResourceEphemeralStorage: resource.MustParse("5Gi"),
+								},
+								Limits: v1.ResourceList{
+									v1.ResourceEphemeralStorage: resource.MustParse("5Gi"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedDiskQuota: map[string]string{".*": "5g"},
+		},
+		"pod has diskquota and the quota mode is '/'": {
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:       "12345678",
+					Name:      "bar",
+					Namespace: "new",
+					Annotations: map[string]string{
+						sigmak8sapi.AnnotationPodAllocSpec: `{"containers":[{"name":"foo","hostConfig":{"diskQuotaMode":"/"}}]}`,
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name:            "foo",
+							Image:           "busybox",
+							ImagePullPolicy: v1.PullIfNotPresent,
+							Resources: v1.ResourceRequirements{
+								Requests: v1.ResourceList{
+									v1.ResourceEphemeralStorage: resource.MustParse("5Gi"),
+								},
+								Limits: v1.ResourceList{
+									v1.ResourceEphemeralStorage: resource.MustParse("5Gi"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedDiskQuota: map[string]string{"/": "5g"},
+		},
+		"pod has diskquota and the quota mode is invalid": {
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:       "12345678",
+					Name:      "bar",
+					Namespace: "new",
+					Annotations: map[string]string{
+						sigmak8sapi.AnnotationPodAllocSpec: `{"containers":[{"name":"foo","hostConfig":{"diskQuotaMode":"invalid"}}]}`,
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name:            "foo",
+							Image:           "busybox",
+							ImagePullPolicy: v1.PullIfNotPresent,
+							Resources: v1.ResourceRequirements{
+								Requests: v1.ResourceList{
+									v1.ResourceEphemeralStorage: resource.MustParse("5Gi"),
+								},
+								Limits: v1.ResourceList{
+									v1.ResourceEphemeralStorage: resource.MustParse("5Gi"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedDiskQuota: map[string]string{".*": "5g"},
+		},
+		"pod has no ResourceEphemeralStorage defined and the quota mode is '.*'": {
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:       "12345678",
+					Name:      "bar",
+					Namespace: "new",
+					Annotations: map[string]string{
+						sigmak8sapi.AnnotationPodAllocSpec: `containers":[{"name":"foo","hostConfig":{"diskQuotaMode":".*"}}]`,
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name:            "foo",
+							Image:           "busybox",
+							ImagePullPolicy: v1.PullIfNotPresent,
+						},
+					},
+				},
+			},
+			expectedDiskQuota: map[string]string{},
+		},
+		"pod has no ResourceEphemeralStorage defined and the quota mode is '/'": {
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:       "12345678",
+					Name:      "bar",
+					Namespace: "new",
+					Annotations: map[string]string{
+						sigmak8sapi.AnnotationPodAllocSpec: `containers":[{"name":"foo","hostConfig":{"diskQuotaMode":"/"}}]`,
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name:            "foo",
+							Image:           "busybox",
+							ImagePullPolicy: v1.PullIfNotPresent,
+						},
+					},
+				},
+			},
+			expectedDiskQuota: map[string]string{},
+		},
+	} {
+		containerConfig := &runtimeapi.ContainerConfig{
+			Linux: &runtimeapi.LinuxContainerConfig{
+				Resources: &runtimeapi.LinuxContainerResources{},
+			},
+		}
+		container := &testCase.pod.Spec.Containers[0]
+		applyDiskQuota(testCase.pod, container, containerConfig.Linux)
+
+		if len(containerConfig.Linux.Resources.DiskQuota) == 0 && len(testCase.expectedDiskQuota) == 0 {
+			continue
+		}
+
+		if !reflect.DeepEqual(containerConfig.Linux.Resources.DiskQuota, testCase.expectedDiskQuota) {
+			t.Errorf("test case: %v, expected DiskQuota %s, but got: %s", desc, testCase.expectedDiskQuota, containerConfig.Linux.Resources.DiskQuota)
+		}
 	}
 }

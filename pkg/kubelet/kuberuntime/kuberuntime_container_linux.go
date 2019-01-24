@@ -21,12 +21,10 @@ package kuberuntime
 import (
 	"time"
 
-	"github.com/golang/glog"
 	"k8s.io/api/core/v1"
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 	"k8s.io/kubernetes/pkg/kubelet/qos"
 	sigmautil "k8s.io/kubernetes/pkg/kubelet/sigma"
-	"k8s.io/kubernetes/pkg/kubelet/util/format"
 )
 
 // applyPlatformSpecificContainerConfig applies platform specific configurations to runtimeapi.ContainerConfig.
@@ -38,6 +36,7 @@ func (m *kubeGenericRuntimeManager) applyPlatformSpecificContainerConfig(config 
 }
 
 // generateLinuxContainerConfig generates linux container config for kubelet runtime v1.
+// All supported resources will be generated here.
 func (m *kubeGenericRuntimeManager) generateLinuxContainerConfig(container *v1.Container, pod *v1.Pod, uid *int64, username string) *runtimeapi.LinuxContainerConfig {
 	lc := &runtimeapi.LinuxContainerConfig{
 		Resources:       &runtimeapi.LinuxContainerResources{},
@@ -56,16 +55,6 @@ func (m *kubeGenericRuntimeManager) generateLinuxContainerConfig(container *v1.C
 	// of CPU shares.
 	cpuShares = milliCPUToShares(cpuRequest.MilliValue())
 	lc.Resources.CpuShares = cpuShares
-
-	// Change cpushares to DefaultCPUShares if possible.
-	if lc.Resources.CpuShares == minShares {
-		hostConfig := sigmautil.GetHostConfigFromAnnotation(pod, container.Name)
-		if hostConfig != nil && hostConfig.DefaultCpuShares != nil && *hostConfig.DefaultCpuShares > minShares {
-			glog.V(0).Infof("Set cpushares with default value %d for container %s in pod %s",
-				*hostConfig.DefaultCpuShares, container.Name, format.Pod(pod))
-			lc.Resources.CpuShares = *hostConfig.DefaultCpuShares
-		}
-	}
 
 	if memoryLimit != 0 {
 		lc.Resources.MemoryLimitInBytes = memoryLimit
@@ -90,15 +79,7 @@ func (m *kubeGenericRuntimeManager) generateLinuxContainerConfig(container *v1.C
 		}
 	}
 
-	ulimits := sigmautil.GetUlimitsFromAnnotation(container, pod)
-	if len(ulimits) != 0 {
-		for _, ulimit := range ulimits {
-			lc.Resources.Ulimits = append(lc.Resources.Ulimits, &runtimeapi.Ulimit{Name: ulimit.Name, Soft: ulimit.Soft, Hard: ulimit.Hard})
-		}
-	}
-
-	applyDiskQuota(pod, container, &runtimeapi.ContainerConfig{Linux: lc})
-	applyExtendContainerResource(pod, container, &runtimeapi.ContainerConfig{Linux: lc})
+	applyExtendContainerResource(pod, container, lc)
 
 	return lc
 }

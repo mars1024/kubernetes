@@ -33,6 +33,7 @@ const (
 	retries = 5
 )
 
+//AddLabelsToNode patch label to node. Incase scheduler receiving delay, will sleep 1s.
 func AddLabelsToNode(c clientset.Interface, nodeName string, labels map[string]string) error {
 	tokens := make([]string, 0, len(labels))
 	for k, v := range labels {
@@ -43,6 +44,7 @@ func AddLabelsToNode(c clientset.Interface, nodeName string, labels map[string]s
 	var err error
 	for attempt := 0; attempt < retries; attempt++ {
 		_, err = c.CoreV1().Nodes().Patch(nodeName, types.MergePatchType, []byte(patch))
+		time.Sleep(time.Second)
 		if err != nil {
 			if !apierrs.IsConflict(err) {
 				return err
@@ -50,7 +52,6 @@ func AddLabelsToNode(c clientset.Interface, nodeName string, labels map[string]s
 		} else {
 			break
 		}
-		time.Sleep(100 * time.Millisecond)
 	}
 	return err
 }

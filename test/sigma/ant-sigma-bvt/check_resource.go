@@ -12,10 +12,10 @@ import (
 	k8sApi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	"gitlab.alipay-inc.com/sigma/clients/armory"
 	"k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/staging/src/k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/sigma/swarm"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 //CheckAdapterCreateResource()  check created container info by adapter, cpu/disk/mem/hostname/ip/env/network/armory.
@@ -73,6 +73,40 @@ func CheckAdapterCreateResource(f *framework.Framework, testPod *v1.Pod, result 
 
 	By("sigma-adapter:check container dnsConfig")
 	checkDNSPolicy(f, testPod)
+}
+
+//CheckAdapterUpdatedResource()  check updated container info by adapter, cpu/disk/mem
+func CheckAdapterUpdatedResource(f *framework.Framework, testPod *v1.Pod, updateConfig *ContainerUpdate) {
+	var err error
+	testPod, err = f.ClientSet.CoreV1().Pods(testPod.Namespace).Get(testPod.Name, metav1.GetOptions{})
+	Expect(err).NotTo(HaveOccurred(), "get updated pod failed.")
+	framework.Logf("Pod %v info:%v", testPod.Name, testPod.Annotations)
+	time.Sleep(time.Second * 30)
+	By("sigma-adapter: check container memory should same as pod.")
+	cmd := []string{"cat", "/proc/meminfo"}
+	stdout, _, err := RetryExec(f, testPod, cmd, "check_mem", 10, 2)
+	Expect(err).NotTo(HaveOccurred(), "[AdapterLifeCycleUpdate] get 3.1 pod memory error")
+	isEqual := CompareMemory(updateConfig.Memory, stdout)
+	Expect(err).NotTo(HaveOccurred(), "[AdapterLifeCycleUpdate] check 3.1 pod mem is not equal with input.")
+	Expect(isEqual).To(BeTrue(), "[AdapterLifeCycleUpdate] check 3.1 pod mem is not equal with input.")
+
+	By("sigma-adapter: check container cpu should same as pod.")
+	cmd = []string{"cat", "/proc/cpuinfo"}
+	stdout, _, err = RetryExec(f, testPod, cmd, "check_cpu", 10, 2)
+	framework.Logf("Pod %v info:%v", testPod.Name, testPod.Annotations)
+	Expect(err).NotTo(HaveOccurred(), "[AdapterLifeCycleUpdate] get 3.1 pod cpu error")
+	isEqual = CompareCPU(int64(updateConfig.CPUCount), stdout)
+	Expect(err).NotTo(HaveOccurred(), "[AdapterLifeCycleUpdate] check 3.1 pod cpu is not equal with input.")
+	Expect(isEqual).To(BeTrue(), "[AdapterLifeCycleUpdate] check 3.1 pod cpu is not equal with input.")
+
+	By("sigma-adapter: check container disksize should same as pod.")
+	cmd = []string{"df", "-h"}
+	stdout, _, err = RetryExec(f, testPod, cmd, "check_disk", 10, 2)
+	Expect(err).NotTo(HaveOccurred(), "[AdapterLifeCycleUpdate] get 3.1 pod disksize error")
+	disk := Quota2Byte(updateConfig.DiskQuota)
+	isEqual = CompareDisk(disk, stdout)
+	Expect(err).NotTo(HaveOccurred(), "[AdapterLifeCycleUpdate] check 3.1 pod disksize is not equal with input.")
+	Expect(isEqual).To(BeTrue(), "[AdapterLifeCycleUpdate] check 3.1 pod disksize is not equal with input.")
 }
 
 //CheckAdapterUpgradeResource() check resource upgraded by adapter. check env/ip/network/armory

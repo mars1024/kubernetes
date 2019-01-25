@@ -9,8 +9,9 @@
       "meta.k8s.alipay.com/app-deploy-unit": "myapp-prod",
       "sigma.ali/deploy-unit": "myapp-prod",
       "sigma.ali/app-name": "alipay-test-bvt-container",
-      "meta.k8s.alipay.com/zone":"GZ",
-      "sigma.ali/instance-group": "sigma-alipay-test"
+      "meta.k8s.alipay.com/zone": "GZ",
+      "sigma.ali/instance-group": "sigma-alipay-test",
+      "ali.host.dns": "true"
     },
     "annotations": {
       "pod.beta1.sigma.ali/net-priority": "10"

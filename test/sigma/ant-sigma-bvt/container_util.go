@@ -60,6 +60,15 @@ func LoadBaseCreateFile(file string) (*dockerclient.ContainerConfig, error) {
 	return config, nil
 }
 
+// LoadUpdateConfig()
+func LoadUpdateConfig(cpu int, memory int64, disk string) *ContainerUpdate {
+	return &ContainerUpdate{
+		Memory:    memory,
+		CPUCount:  cpu,
+		DiskQuota: disk,
+	}
+}
+
 //GetPodLists() list pods use label selector.
 func GetPodLists(kubeClient clientset.Interface, key, value, ns string) ([]v1.Pod, error) {
 	listOptions := metav1.ListOptions{
@@ -104,7 +113,7 @@ func GetCreateResultWithTimeOut(client clientset.Interface, requestId string, ti
 		if task.State == "finish" {
 			framework.Logf("finish to query sigma 2.0 request id[%s]", requestId)
 			for _, ac := range task.Actions {
-				framework.Logf("Actions:%#v", *ac)
+				framework.Logf("Actions:%#v", DumpJson(ac))
 				if ac.State != "success" {
 					continue
 				}

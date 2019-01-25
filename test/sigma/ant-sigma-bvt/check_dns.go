@@ -5,6 +5,7 @@ import (
 
 	. "github.com/onsi/gomega"
 	"k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/sigma/util"
@@ -14,7 +15,8 @@ import (
 func checkDNSPolicy(f *framework.Framework, pod *v1.Pod) {
 	//check dnsPolicy
 	expectDNSPolicy := getDNSPolicy(pod)
-	framework.Logf("DNSPolicy:%v, expect:%v", pod.Spec.DNSPolicy, expectDNSPolicy)
+	getPod, _ := f.ClientSet.CoreV1().Pods(pod.Namespace).Get(pod.Name, metav1.GetOptions{})
+	framework.Logf("DNSPolicy:%v, expect:%v, podInfo:%#v", pod.Spec.DNSPolicy, expectDNSPolicy, DumpJson(getPod))
 	Expect(pod.Spec.DNSPolicy).To(Equal(expectDNSPolicy), "Check DNSPolicy, unexpected dnsPolicy")
 	//check resolve.conf
 	compareDNSConfig(f, pod)

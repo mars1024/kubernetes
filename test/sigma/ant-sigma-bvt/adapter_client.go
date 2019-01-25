@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/sigma/swarm"
 	"k8s.io/kubernetes/test/sigma/util"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type AdapterServer struct {
@@ -39,7 +41,9 @@ type CreateResp struct {
 
 //NewHttpClient() init adapter client.
 func (s *AdapterServer) NewHttpClient() (*http.Client, error) {
-	client := &http.Client{}
+	client := &http.Client{
+		Timeout: 5 * time.Minute,
+	}
 	pool := x509.NewCertPool()
 	ca, err := ioutil.ReadFile(s.AlipayCeritficatePath + "/ca.pem")
 	if err != nil {
@@ -59,6 +63,13 @@ func (s *AdapterServer) NewHttpClient() (*http.Client, error) {
 			Certificates:       []tls.Certificate{cli},
 			InsecureSkipVerify: true,
 		},
+		Dial: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).Dial,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
 	}
 	client.Transport = tr
 	return client, nil
@@ -377,9 +388,54 @@ func (s *AdapterServer) UpgradeContainer(name, requestId string, nostart bool, r
 	return upgradeResp, "", nil
 }
 
+type ContainerUpdate struct {
+	// Applicable to all platforms
+	Memory    int64                 // Memory limit (in bytes)
+	CPUCount  int `json:"CpuCount"` // 内部使用
+	DiskQuota string                // Disk limit (in bytes)
+}
+
+// MustUpdateContainer() update container, wait pod ready.
+func MustUpdateContainer(s *AdapterServer, client clientset.Interface, pod *v1.Pod, updateReq *ContainerUpdate, timeout time.Duration) error {
+	timer := time.NewTimer(timeout)
+	ch := make(chan int)
+	go func() {
+		defer GinkgoRecover()
+		reqInfo, err := json.Marshal(updateReq)
+		framework.Logf("Update pod %v, ReqInfo:%v", pod.Name, string(reqInfo))
+		Expect(err).NotTo(HaveOccurred(), "[AdapterLifeCycle]marshal upgrade ReqInfo failed.")
+
+		updateResp, message, err := s.UpdateContainer(pod.Name, reqInfo)
+		Expect(err).NotTo(HaveOccurred(), "[AdapterLifeCycle] update pod error.")
+		Expect(message).To(Equal(""), "[AdapterLifeCycle] update pod failed.")
+		Expect(updateResp).NotTo(BeNil(), "[AdapterLifeCycle] get update response failed.")
+		Expect(updateResp.Id).NotTo(BeEmpty(), "[AdapterLifeCycle] get updated pod sn failed.")
+		close(ch)
+	}()
+	for {
+		select {
+		case <-timer.C:
+			pod, _ := client.CoreV1().Pods(pod.Namespace).Get(pod.Name, metav1.GetOptions{})
+			framework.Logf("update timeout, pod:%#v", DumpJson(pod))
+			return fmt.Errorf("timeout")
+		case n := <-ch:
+			if n == 0 {
+				framework.Logf("update succeed, return.")
+				return nil
+			}
+		}
+	}
+}
+
+// update container and check resource.
+func MustUpdate(s *AdapterServer, client clientset.Interface, pod *v1.Pod, updateReq *ContainerUpdate, timeout time.Duration) {
+	err := MustUpdateContainer(s, client, pod, updateReq, timeout)
+	Expect(err).NotTo(HaveOccurred(), "update container failed.")
+}
+
 //UpdateContainer() update container.
 func (s *AdapterServer) UpdateContainer(name string, reqInfo []byte) (*CreateResp, string, error) {
-	url := fmt.Sprintf("https://%v:%v/containers/%s/update", s.AdapterAddress, name)
+	url := fmt.Sprintf("https://%v/containers/%s/update", s.AdapterAddress, name)
 	glog.V(2).Infof("Method:%v, URL:%v", http.MethodPost, url)
 	client, err := s.NewHttpClient()
 	if err != nil {

@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/golang/glog"
 	libcontainercgroups "github.com/opencontainers/runc/libcontainer/cgroups"
 
 	"k8s.io/api/core/v1"
@@ -127,6 +128,7 @@ func ResourceConfigForPod(pod *v1.Pod, enforceCPULimits bool, cpuPeriod uint64) 
 	// convert to CFS values
 	cpuShares := MilliCPUToShares(cpuRequests)
 
+	// FIXME(tongkai.ytk): need to remove defaultCpushares, replaced to hostConfig.CpuShares
 	// Change cpushares to DefaultCPUShares if possible.
 	if cpuShares == MinShares {
 		var defaultCpuShares int64
@@ -138,6 +140,20 @@ func ResourceConfigForPod(pod *v1.Pod, enforceCPULimits bool, cpuPeriod uint64) 
 		}
 		if defaultCpuShares > MinShares {
 			cpuShares = uint64(defaultCpuShares)
+		}
+	}
+
+	// when pod annotation.allocSpec is not nil, reset cpuShares
+	allocSpec := sigmautil.GetAllocSpecFromAnnotation(pod)
+	if allocSpec != nil {
+		resetCpuShares := int64(0)
+		for _, container := range allocSpec.Containers {
+			resetCpuShares += container.HostConfig.CpuShares
+		}
+		if resetCpuShares >= MinShares {
+			cpuShares = uint64(resetCpuShares)
+			glog.V(0).Infof("Reset CpuShares with hostConfig value %d for all containers in pod %s",
+				resetCpuShares, pod.Name)
 		}
 	}
 

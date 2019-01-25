@@ -69,7 +69,7 @@ type HostConfigInfo struct {
 	BlkioWeight int64 `json:"blkioWeight,omitempty"`
 	//Tune a container’s pids limit. Set -1 for unlimited.
 	PidsLimit uint16 `json:"pidsLimit,omitempty"`
-	//
+	// Cpu  priority of container
 	CPUBvtWarpNs     int     `json:"cpuBvtWarpNs,omitempty"`
 	MemoryWmarkRatio float64 `json:"memoryWmarkRatio,omitempty"`
 	IntelRdtMba      string  `json:"intelRdtMba,omitempty"`
@@ -93,8 +93,14 @@ type HostConfigInfo struct {
 	Ulimits []Ulimit `json:"ulimits,omitempty"`
 	// CPU CFS (Completely Fair Scheduler) period. Set this to overwrite agent default value
 	CpuPeriod int64 `json:"cpuPeriod,omitempty"`
+	// CPU CFS (Completely Fair Scheduler) quota. Default: 0 (not specified).
+	CpuQuota int64 `json:"cpuQuota,omitempty"`
+	// CPU shares (relative weight vs. other containers). Default: 0 (not specified).
+	CpuShares int64 `json:"cpuShares,omitempty"`
 	// DefaultCpuShares will be used when requests cpu is 0.
 	DefaultCpuShares *int64 `json:"defaultCpuShares,omitempty"`
+	// OOMScoreAdj adjusts the oom-killer score. Default: 0 (not specified).
+	OomScoreAdj int64 `json:"oomScoreAdj,omitempty"`
 }
 
 type WeightDevice struct {

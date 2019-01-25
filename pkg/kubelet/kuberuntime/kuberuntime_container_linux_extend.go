@@ -68,12 +68,14 @@ func applyDiskQuota(pod *v1.Pod, container *v1.Container, lc *runtimeapi.LinuxCo
 }
 
 // applyExtendContainerResource can merge extended resource feilds into container config of CRI.
-func applyExtendContainerResource(pod *v1.Pod, container *v1.Container, lc *runtimeapi.LinuxContainerConfig) {
+func applyExtendContainerResource(pod *v1.Pod, container *v1.Container,
+	lc *runtimeapi.LinuxContainerConfig, enforceCPULimits bool) {
 	// Set ulimits if possible.
 	ulimits := sigmautil.GetUlimitsFromAnnotation(container, pod)
 	if len(ulimits) != 0 {
 		for _, ulimit := range ulimits {
-			lc.Resources.Ulimits = append(lc.Resources.Ulimits, &runtimeapi.Ulimit{Name: ulimit.Name, Soft: ulimit.Soft, Hard: ulimit.Hard})
+			lc.Resources.Ulimits = append(lc.Resources.Ulimits, &runtimeapi.Ulimit{Name: ulimit.Name,
+				Soft: ulimit.Soft, Hard: ulimit.Hard})
 		}
 	}
 
@@ -91,10 +93,60 @@ func applyExtendContainerResource(pod *v1.Pod, container *v1.Container, lc *runt
 				lc.Resources.CpuShares = *hostConfig.DefaultCpuShares
 			}
 		}
+
 		// Set extra resources.
-		lc.Resources.MemorySwappiness = &runtimeapi.Int64Value{int64(hostConfig.MemorySwappiness)}
+		lc.Resources.MemorySwappiness = &runtimeapi.Int64Value{hostConfig.MemorySwappiness}
 		lc.Resources.MemorySwap = hostConfig.MemorySwap
-		lc.Resources.CpuBvtWarpNs = int64(hostConfig.CPUBvtWarpNs)
 		lc.Resources.PidsLimit = int64(hostConfig.PidsLimit)
+
+		// NOTE(tongkai.ytk): DELETE ME IF NOT NECESSARY
+		//   At this point, when container is CPUSET with Cpu resource set, CpuShares = Cpu.Request * 1024,
+		//                         CpuPeriod = default 100000, CpuQuota = -1.
+		//                  when container is not CPUSET, CpuShares = Cpu.Request * 1024, CpuPeriod = default 100000 or
+		//                         annotation.Container.HostConfig.CpuPeriod(must be larger than 100000),
+		//                         CpuQuota = Cpu.Limit * CpuPeriod.
+		//                  when container is CPUSET with Cpu Resource not set or set 0, CpuShares = 2(minShares),
+		//                         CpuPeriod = default 100000, CpuQuota = -1.
+		//                         if hostConfig.DefaultCpuShares != nil, CpuShares will be DefaultCpuShares.
+		//                  when container is not CPUSET with Cpu Resource not set or set 0, CpuShares = 2(minShares),
+		//                         CpuPeriod = default 100000 or annotation.Container.HostConfig.CpuPeriod(must be
+		//                         larger than 100000), CpuQuota = 0(equal to -1).
+		//                         if hostConfig.DefaultCpuShares != nil, CpuShares will be DefaultCpuShares.
+		//   When m.cpuCFSQuota is turn off, CpuPeriod = 0, CpuQuota = 0 (the struct initialized value)
+		// reset CPU resources: CpuShares/CpuQuota/CpuPeriod/CpuBvtWarpNs with hostConfig
+		if hostConfig.CpuShares >= minShares {
+			lc.Resources.CpuShares = hostConfig.CpuShares
+			glog.V(0).Infof("Set cpushares with value %d for container %s in pod %s",
+				hostConfig.CpuShares, container.Name, format.Pod(pod))
+		}
+		if enforceCPULimits {
+			// only when cpu CFS quota is turn on, reset CpuQuota and CpuPeriod
+			if hostConfig.CpuPeriod >= minQuotaPeriod {
+				lc.Resources.CpuPeriod = hostConfig.CpuPeriod
+				glog.V(0).Infof("Set CpuPeriod with hostConfig value %d for container %s in pod %s",
+					hostConfig.CpuPeriod, container.Name, format.Pod(pod))
+				if container.Resources.Limits.Cpu().MilliValue() != 0 {
+					lc.Resources.CpuQuota = (container.Resources.Limits.Cpu().MilliValue() *
+						lc.Resources.CpuPeriod) / milliCPUToCPU
+					glog.V(0).Infof("Set CpuQuota with value %d by cpu.limits*period for container %s in pod %s",
+						lc.Resources.CpuQuota, container.Name, format.Pod(pod))
+				}
+			}
+			if hostConfig.CpuQuota >= minQuotaPeriod {
+				lc.Resources.CpuQuota = hostConfig.CpuQuota
+				glog.V(0).Infof("Set CpuQuota with hostConfig value %d for container %s in pod %s",
+					hostConfig.CpuQuota, container.Name, format.Pod(pod))
+			}
+		}
+		if hostConfig.CPUBvtWarpNs != 0 {
+			lc.Resources.CpuBvtWarpNs = int64(hostConfig.CPUBvtWarpNs)
+		}
+
+		// reset Memory resource: OomScoreAdj with hostConfig
+		if hostConfig.OomScoreAdj != 0 {
+			lc.Resources.OomScoreAdj = hostConfig.OomScoreAdj
+			glog.V(0).Infof("Set OomScoreAdj with hostConfig value %d for container %s in pod %s",
+				hostConfig.OomScoreAdj, container.Name, format.Pod(pod))
+		}
 	}
 }

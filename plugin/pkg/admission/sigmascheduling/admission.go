@@ -336,13 +336,18 @@ func validatePod(attributes admission.Attributes) error {
 	for i, container := range oldAllocSpec.Containers {
 		if container.Resource.CPU.CPUSet != nil && allocSpec.Containers[i].Resource.CPU.CPUSet != nil {
 			oldAllocSpec.Containers[i].Resource.CPU.CPUSet.CPUIDs = allocSpec.Containers[i].Resource.CPU.CPUSet.CPUIDs
+		} else if !(container.Resource.CPU.CPUSet == nil && allocSpec.Containers[i].Resource.CPU.CPUSet == nil) {
+			// cpuset field has been removed or added, which means it has switch cpuset mode(cpuset or cpushare)
+			if isInInplaceUpdateProcess(pod) {
+				oldAllocSpec.Containers[i].Resource.CPU.CPUSet = allocSpec.Containers[i].Resource.CPU.CPUSet
+			}
 		}
 	}
 
 	if !apiequality.Semantic.DeepEqual(allocSpec, oldAllocSpec) {
 		// TODO: Pinpoint the specific field that causes the invalid error after we have strategic merge diff
 		return admission.NewForbidden(attributes,
-			fmt.Errorf("can not %s annotation %s due to only cpuIDs can update", op, sigmaapi.AnnotationPodAllocSpec))
+			fmt.Errorf("can not %s annotation %s due to only cpuIDs and cpuset field can be updated", op, sigmaapi.AnnotationPodAllocSpec))
 	}
 
 	return nil

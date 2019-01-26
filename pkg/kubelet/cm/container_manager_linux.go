@@ -304,9 +304,9 @@ func NewContainerManager(kubeClient clientset.Interface, nodeName types.NodeName
 	}
 
 	// If customCgroupParents is not defined in parameter, then try to get it from ConfigMap.
-	if len(cm.customCgroupParents) == 0 {
+	/*if len(cm.customCgroupParents) == 0 {
 		cm.listWatchCustomCgroupParentConfigMap(kubeClient)
-	}
+	}*/
 
 	return cm, nil
 }

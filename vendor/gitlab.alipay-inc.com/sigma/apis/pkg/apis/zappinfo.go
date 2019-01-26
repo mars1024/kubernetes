@@ -1,3 +1,7 @@
+/*
+Copyright 2019 The Alipay Authors. All Rights Reserved.
+*/
+
 package apis
 
 type ZappinfoStatus string

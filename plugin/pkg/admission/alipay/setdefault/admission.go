@@ -173,7 +173,7 @@ next:
 		allocSpec.Containers = append(allocSpec.Containers, newAllocSpecContainer(c.Name))
 	}
 
-	// 设置默认的cgroup 根节点名，这里比较tricky的是部分参数是根据设置的 cgroup parent来决定使用值.
+	// 设置默认的 cgroup 根节点名，这里比较 tricky 的是部分参数是根据设置的 cgroup parent 来决定使用值.
 	// 期望能有更好的方式解决这类配置问题
 	netPriority := podNetPriority(pod)
 	for i, c := range allocSpec.Containers {

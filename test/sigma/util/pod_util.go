@@ -259,61 +259,47 @@ func GenerateContainerStatePatchData(containerName string, desireState sigmak8sa
 
 // PauseContainer can pause a container by setting desired state to "paused".
 func PauseContainer(client clientset.Interface, pod *v1.Pod, namespace string, containerName string) error {
-	patchData, err := GenerateContainerStatePatchData(containerName, sigmak8sapi.ContainerStatePaused)
-	if err != nil {
-		return err
-	}
-
-	// TODO: Define all successStr in sigma k8s api when support reason field in AnnotationPodUpdateStatus
-	pauseSuccessStr := "pause container success"
-	_, err = client.CoreV1().Pods(namespace).Patch(pod.Name, types.StrategicMergePatchType, []byte(patchData))
-	if err != nil {
-		return err
-	}
-
-	err = WaitTimeoutForContainerUpdateStatus(client, pod, containerName, 3*time.Minute, pauseSuccessStr, true)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return patchContainerToDesiredState(client, pod, namespace, containerName,
+		"pause container success", sigmak8sapi.ContainerStatePaused)
 }
 
 // StartContainer can start a container by setting desired state to "running".
 func StartContainer(client clientset.Interface, pod *v1.Pod, namespace string, containerName string) error {
-	patchData, err := GenerateContainerStatePatchData(containerName, sigmak8sapi.ContainerStateRunning)
-	if err != nil {
-		return err
-	}
-
-	startSuccessStr := "start container success"
-	_, err = client.CoreV1().Pods(namespace).Patch(pod.Name, types.StrategicMergePatchType, []byte(patchData))
-	if err != nil {
-		return err
-	}
-
-	err = WaitTimeoutForContainerUpdateStatus(client, pod, containerName, 3*time.Minute, startSuccessStr, true)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return patchContainerToDesiredState(client, pod, namespace, containerName,
+		"start container success", sigmak8sapi.ContainerStateRunning)
 }
 
 // StopContainer can stop a container by setting desired state to "exited".
 func StopContainer(client clientset.Interface, pod *v1.Pod, namespace string, containerName string) error {
-	patchData, err := GenerateContainerStatePatchData(containerName, sigmak8sapi.ContainerStateExited)
+	return patchContainerToDesiredState(client, pod, namespace, containerName,
+		"kill container success", sigmak8sapi.ContainerStateExited)
+}
+
+// SuspendContainer can suspend a container by setting desired state to "suspended".
+func SuspendContainer(client clientset.Interface, pod *v1.Pod, namespace string, containerName string) error {
+	return patchContainerToDesiredState(client, pod, namespace, containerName,
+		"suspend container success", sigmak8sapi.ContainerStateSuspended)
+}
+
+// UnsuspendContainer can unsuspend a container by setting desired state from "suspended" to "running".
+func UnsuspendContainer(client clientset.Interface, pod *v1.Pod, namespace string, containerName string) error {
+	return patchContainerToDesiredState(client, pod, namespace, containerName,
+		"unsuspend container success", sigmak8sapi.ContainerStateRunning)
+}
+
+func patchContainerToDesiredState(client clientset.Interface, pod *v1.Pod, namespace, containerName,
+	successStr string, desiredContainerState sigmak8sapi.ContainerState) error {
+	patchData, err := GenerateContainerStatePatchData(containerName, desiredContainerState)
 	if err != nil {
 		return err
 	}
 
-	stopSuccessStr := "kill container success"
 	_, err = client.CoreV1().Pods(namespace).Patch(pod.Name, types.StrategicMergePatchType, []byte(patchData))
 	if err != nil {
 		return err
 	}
 
-	err = WaitTimeoutForContainerUpdateStatus(client, pod, containerName, 3*time.Minute, stopSuccessStr, true)
+	err = WaitTimeoutForContainerUpdateStatus(client, pod, containerName, 3*time.Minute, successStr, true)
 	if err != nil {
 		return err
 	}

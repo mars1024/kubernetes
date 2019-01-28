@@ -50,7 +50,8 @@ func TestAdmission(t *testing.T) {
 			sigmaapi.ContainerInfo{Name: "name1"}: sigmaapi.ContainerStateCreated,
 			sigmaapi.ContainerInfo{Name: "name2"}: sigmaapi.ContainerStateExited,
 			sigmaapi.ContainerInfo{Name: "name3"}: sigmaapi.ContainerStateRunning,
-			sigmaapi.ContainerInfo{Name: "name4"}: sigmaapi.ContainerStatePaused},
+			sigmaapi.ContainerInfo{Name: "name4"}: sigmaapi.ContainerStatePaused,
+			sigmaapi.ContainerInfo{Name: "name5"}: sigmaapi.ContainerStateSuspended},
 	}
 	stateBytes, err := json.Marshal(state)
 	status := sigmaapi.ContainerStateStatus{
@@ -81,6 +82,7 @@ func TestAdmission(t *testing.T) {
 				{Name: "name2"},
 				{Name: "name3"},
 				{Name: "name4"},
+				{Name: "name5"},
 			},
 		},
 	}
@@ -95,6 +97,7 @@ func TestAdmission(t *testing.T) {
 		{Name: "name1"},
 		{Name: "name2"},
 		{Name: "name4"},
+		{Name: "name5"},
 	}
 	state.States[sigmaapi.ContainerInfo{Name: "name3"}] = sigmaapi.ContainerStateCreated
 	stateBytes, err = json.Marshal(state)

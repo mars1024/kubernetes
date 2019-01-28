@@ -28,6 +28,8 @@ const (
 	ExceededGracePeriod     = "ExceededGracePeriod"
 	FailedToUpdateContainer = "FailedUpdateContainer"
 	UpdatedContainer        = "Updated"
+	SuspendedContainer      = "Suspended"
+	UnsuspendedContainer    = "Unsuspended"
 
 	// Pod event reason list
 	FailedToKillPod                = "FailedKillPod"

@@ -130,7 +130,8 @@ func validateState(attributes admission.Attributes, status sigmaapi.ContainerSta
 	op := attributes.GetOperation()
 	switch status {
 	case sigmaapi.ContainerStateCreated, sigmaapi.ContainerStatePaused,
-		sigmaapi.ContainerStateExited, sigmaapi.ContainerStateUnknown:
+		sigmaapi.ContainerStateExited, sigmaapi.ContainerStateUnknown,
+		sigmaapi.ContainerStateSuspended:
 	case sigmaapi.ContainerStateRunning:
 		if restartPolicy == api.RestartPolicyNever {
 			err := fmt.Errorf("pod restart policy is never, so container can't be started")

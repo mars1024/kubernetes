@@ -11,11 +11,12 @@ type ContainerState string
 
 // container states are designed as same as those in Kubernetes code.
 const (
-	ContainerStateCreated ContainerState = "created"
-	ContainerStateRunning ContainerState = "running"
-	ContainerStateExited  ContainerState = "exited"
-	ContainerStateUnknown ContainerState = "unknown"
-	ContainerStatePaused  ContainerState = "paused"
+	ContainerStateCreated   ContainerState = "created"
+	ContainerStateRunning   ContainerState = "running"
+	ContainerStateExited    ContainerState = "exited"
+	ContainerStateUnknown   ContainerState = "unknown"
+	ContainerStatePaused    ContainerState = "paused"
+	ContainerStateSuspended ContainerState = "suspended"
 )
 
 // ContainerAction is the action performed on container
@@ -23,12 +24,14 @@ type ContainerAction string
 
 const (
 	// create represents just create the container not start it
-	CreateContainerAction  ContainerAction = "create"
-	StartContainerAction   ContainerAction = "start"
-	StopContainerAction    ContainerAction = "stop"
-	UpgradeContainerAction ContainerAction = "upgrade"
-	UpdateContainerAction  ContainerAction = "update"
-	PauseContainerAction   ContainerAction = "pause"
+	CreateContainerAction    ContainerAction = "create"
+	StartContainerAction     ContainerAction = "start"
+	StopContainerAction      ContainerAction = "stop"
+	UpgradeContainerAction   ContainerAction = "upgrade"
+	UpdateContainerAction    ContainerAction = "update"
+	PauseContainerAction     ContainerAction = "pause"
+	SuspendContainerAction   ContainerAction = "suspend"
+	UnsuspendContainerAction ContainerAction = "unsuspend"
 )
 
 // InplaceUpdateState is inplace update state.

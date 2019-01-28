@@ -11,6 +11,7 @@ import (
 
 	dockertypes "github.com/docker/docker/api/types"
 	"github.com/golang/glog"
+
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 )
 
@@ -321,4 +322,24 @@ func updateCreateConfigExtend(config *dockertypes.ContainerCreateConfig, runtime
 	config.HostConfig.Resources.CPUBvtWarpNs = runtimeConfig.Linux.Resources.CpuBvtWarpNs
 	// Set PidsLimit field.
 	config.HostConfig.Resources.PidsLimit = runtimeConfig.Linux.Resources.PidsLimit
+}
+
+// PauseContainer pauses the container.
+func (ds *dockerService) PauseContainer(_ context.Context, r *runtimeapi.PauseContainerRequest) (*runtimeapi.PauseContainerResponse, error) {
+	err := ds.client.PauseContainer(r.ContainerId)
+	if err != nil {
+		return nil, err
+	}
+
+	return &runtimeapi.PauseContainerResponse{}, nil
+}
+
+// UnpauseContainer unpauses the container.
+func (ds *dockerService) UnpauseContainer(_ context.Context, r *runtimeapi.UnpauseContainerRequest) (*runtimeapi.UnpauseContainerResponse, error) {
+	err := ds.client.UnpauseContainer(r.ContainerId)
+	if err != nil {
+		return nil, err
+	}
+
+	return &runtimeapi.UnpauseContainerResponse{}, nil
 }

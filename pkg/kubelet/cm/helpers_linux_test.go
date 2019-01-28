@@ -24,11 +24,14 @@ import (
 	"testing"
 	"time"
 
+	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	utilfeaturetesting "k8s.io/apiserver/pkg/util/feature/testing"
 	pkgfeatures "k8s.io/kubernetes/pkg/features"
+	"k8s.io/kubernetes/staging/src/k8s.io/apimachinery/pkg/util/json"
 )
 
 // getResourceList returns a ResourceList with the
@@ -284,11 +287,76 @@ func TestResourceConfigForPodWithCustomCPUCFSQuotaPeriod(t *testing.T) {
 	burstablePartialShares := MilliCPUToShares(200)
 	burstableQuota := MilliCPUToQuota(200, int64(defaultQuotaPeriod))
 	guaranteedShares := MilliCPUToShares(100)
-	// guaranteedQuota := MilliCPUToQuota(100, int64(defaultQuotaPeriod))
-	// guaranteedTunedQuota := MilliCPUToQuota(100, int64(tunedQuotaPeriod))
+	guaranteedQuota := MilliCPUToQuota(100, int64(defaultQuotaPeriod))
+	//guaranteedTunedQuota := MilliCPUToQuota(100, int64(tunedQuotaPeriod))
 	memoryQuantity = resource.MustParse("100Mi")
 	cpuNoLimit := int64(-1)
 	guaranteedMemory := memoryQuantity.Value()
+	defaultCpuShares := int64(12345)
+	expectedDefaultCpuShares := uint64(12345)
+	expectedDefaultCpuSharesDouble := expectedDefaultCpuShares * 2
+	hostConfigCpushares := int64(54321)
+	expectedhostConfigCpushares := uint64(54321)
+	expectedhostConfigCpusharesTriple := expectedhostConfigCpushares * 3
+
+	annotationWithEmptyAllocSpec, _ := json.Marshal(&sigmak8sapi.AllocSpec{})
+	annotationWithEmptyContainers, _ := json.Marshal(&sigmak8sapi.AllocSpec{
+		Containers: []sigmak8sapi.Container{},
+	})
+	annotationWithEmptyHostConfig, _ := json.Marshal(&sigmak8sapi.AllocSpec{
+		Containers: []sigmak8sapi.Container{
+			{},
+			{},
+		},
+	})
+	annotationWithDefaultCpuShares, _ := json.Marshal(&sigmak8sapi.AllocSpec{
+		Containers: []sigmak8sapi.Container{
+			{
+				HostConfig: sigmak8sapi.HostConfigInfo{
+					DefaultCpuShares: &defaultCpuShares,
+				},
+			},
+			{
+				HostConfig: sigmak8sapi.HostConfigInfo{
+					DefaultCpuShares: &defaultCpuShares,
+				},
+			},
+		},
+	})
+	annotationWithHostConfigCpushares, _ := json.Marshal(&sigmak8sapi.AllocSpec{
+		Containers: []sigmak8sapi.Container{
+			{
+				HostConfig: sigmak8sapi.HostConfigInfo{
+					CpuShares: hostConfigCpushares,
+				},
+			},
+			{
+				HostConfig: sigmak8sapi.HostConfigInfo{
+					CpuShares: hostConfigCpushares * 2,
+				},
+			},
+		},
+	})
+	annotationWithDefaultAndCpuShares, _ := json.Marshal(&sigmak8sapi.AllocSpec{
+		Containers: []sigmak8sapi.Container{
+			{
+				HostConfig: sigmak8sapi.HostConfigInfo{
+					DefaultCpuShares: &defaultCpuShares,
+					CpuShares:        hostConfigCpushares,
+					CpuQuota:         450000,
+					CpuPeriod:        150000,
+				},
+			},
+			{
+				HostConfig: sigmak8sapi.HostConfigInfo{
+					DefaultCpuShares: &defaultCpuShares,
+					CpuShares:        0,
+					CpuQuota:         450000,
+					CpuPeriod:        150000,
+				},
+			},
+		},
+	})
 	testCases := map[string]struct {
 		pod              *v1.Pod
 		expected         *ResourceConfig
@@ -469,6 +537,131 @@ func TestResourceConfigForPodWithCustomCPUCFSQuotaPeriod(t *testing.T) {
 			quotaPeriod:      tunedQuotaPeriod,
 			expected:         &ResourceConfig{CpuShares: &guaranteedShares, CpuQuota: &cpuNoLimit, CpuPeriod: &tunedQuotaPeriod, Memory: &guaranteedMemory},
 		},
+		"empty-allocSpec": {
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						sigmak8sapi.AnnotationPodAllocSpec: string(annotationWithEmptyAllocSpec),
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Resources: getResourceRequirements(getResourceList("100m", "100Mi"), getResourceList("100m", "100Mi")),
+						},
+					},
+				},
+			},
+			enforceCPULimits: true,
+			quotaPeriod:      tunedQuotaPeriod,
+			expected:         &ResourceConfig{CpuShares: &guaranteedShares, CpuQuota: &cpuNoLimit, CpuPeriod: &tunedQuotaPeriod, Memory: &guaranteedMemory},
+		},
+		"empty-containers": {
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						sigmak8sapi.AnnotationPodAllocSpec: string(annotationWithEmptyContainers),
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Resources: getResourceRequirements(getResourceList("100m", "100Mi"), getResourceList("100m", "100Mi")),
+						},
+					},
+				},
+			},
+			enforceCPULimits: true,
+			quotaPeriod:      tunedQuotaPeriod,
+			expected:         &ResourceConfig{CpuShares: &guaranteedShares, CpuQuota: &cpuNoLimit, CpuPeriod: &tunedQuotaPeriod, Memory: &guaranteedMemory},
+		},
+		"empty-hostConfig": {
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						sigmak8sapi.AnnotationPodAllocSpec: string(annotationWithEmptyHostConfig),
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Resources: getResourceRequirements(getResourceList("100m", "100Mi"), getResourceList("100m", "100Mi")),
+						},
+					},
+				},
+			},
+			enforceCPULimits: true,
+			quotaPeriod:      tunedQuotaPeriod,
+			expected:         &ResourceConfig{CpuShares: &guaranteedShares, CpuQuota: &cpuNoLimit, CpuPeriod: &tunedQuotaPeriod, Memory: &guaranteedMemory},
+		},
+		"reset-cpushares-with-hostConfig-defaultCpuShares": {
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						sigmak8sapi.AnnotationPodAllocSpec: string(annotationWithDefaultCpuShares),
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Resources: getResourceRequirements(getResourceList("0m", "50Mi"), getResourceList("40m", "50Mi")),
+						},
+						{
+							Resources: getResourceRequirements(getResourceList("0m", "50Mi"), getResourceList("60m", "50Mi")),
+						},
+					},
+				},
+			},
+			enforceCPULimits: true,
+			quotaPeriod:      defaultQuotaPeriod,
+			expected:         &ResourceConfig{CpuShares: &expectedDefaultCpuSharesDouble, CpuQuota: &guaranteedQuota, CpuPeriod: &defaultQuotaPeriod, Memory: &guaranteedMemory},
+		},
+		"reset-cpushares-with-hostConfig-cpuShares": {
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						sigmak8sapi.AnnotationPodAllocSpec: string(annotationWithHostConfigCpushares),
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Resources: getResourceRequirements(getResourceList("0m", "100Mi"), getResourceList("0m", "100Mi")),
+						},
+						{
+							Resources: getResourceRequirements(getResourceList("0m", "100Mi"), getResourceList("0m", "100Mi")),
+						},
+					},
+				},
+			},
+			enforceCPULimits: false,
+			quotaPeriod:      tunedQuotaPeriod,
+			// when request cpu = 0, CpuQuota=CpuPeriod=0
+			expected: &ResourceConfig{CpuShares: &expectedhostConfigCpusharesTriple, Memory: &burstableMemory},
+		},
+		"reset-cpushares-with-hostConfig-defaultCpuShares-cpuShares": {
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						sigmak8sapi.AnnotationPodAllocSpec: string(annotationWithDefaultAndCpuShares),
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name:      "",
+							Resources: getResourceRequirements(getResourceList("0m", "100Mi"), getResourceList("100m", "100Mi")),
+						},
+						{
+							Resources: getResourceRequirements(getResourceList("0m", "100Mi"), getResourceList("100m", "100Mi")),
+						},
+					},
+				},
+			},
+			enforceCPULimits: true,
+			quotaPeriod:      defaultQuotaPeriod,
+			expected:         &ResourceConfig{CpuShares: &expectedhostConfigCpushares, CpuQuota: &burstableQuota, CpuPeriod: &defaultQuotaPeriod, Memory: &burstableMemory},
+		},
 	}
 
 	for testName, testCase := range testCases {
@@ -476,16 +669,30 @@ func TestResourceConfigForPodWithCustomCPUCFSQuotaPeriod(t *testing.T) {
 		actual := ResourceConfigForPod(testCase.pod, testCase.enforceCPULimits, testCase.quotaPeriod)
 
 		if !reflect.DeepEqual(actual.CpuPeriod, testCase.expected.CpuPeriod) {
-			t.Errorf("unexpected result, test: %v, cpu period not as expected", testName)
+			var actVal, expectVal uint64
+			if actual.CpuPeriod != nil {
+				actVal = *actual.CpuPeriod
+			}
+			if testCase.expected.CpuPeriod != nil {
+				expectVal = *testCase.expected.CpuPeriod
+			}
+			t.Errorf("unexpected result, test: %v, cpu period: %v not as expected: %v", testName, actVal, expectVal)
 		}
 		if !reflect.DeepEqual(actual.CpuQuota, testCase.expected.CpuQuota) {
-			t.Errorf("unexpected result, test: %v, cpu quota not as expected", testName)
+			var actVal, expectVal int64
+			if actual.CpuQuota != nil {
+				actVal = *actual.CpuQuota
+			}
+			if testCase.expected.CpuQuota != nil {
+				expectVal = *testCase.expected.CpuQuota
+			}
+			t.Errorf("unexpected result, test: %v, cpu quota: %v not as expected: %v", testName, actVal, expectVal)
 		}
 		if !reflect.DeepEqual(actual.CpuShares, testCase.expected.CpuShares) {
-			t.Errorf("unexpected result, test: %v, cpu shares not as expected", testName)
+			t.Errorf("unexpected result, test: %v, cpu shares: %v not as expected: %v", testName, *actual.CpuShares, *testCase.expected.CpuShares)
 		}
 		if !reflect.DeepEqual(actual.Memory, testCase.expected.Memory) {
-			t.Errorf("unexpected result, test: %v, memory not as expected", testName)
+			t.Errorf("unexpected result, test: %v, memory: %v not as expected: %v", testName, *actual.Memory, *testCase.expected.Memory)
 		}
 	}
 }

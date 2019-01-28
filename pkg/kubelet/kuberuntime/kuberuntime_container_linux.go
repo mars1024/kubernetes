@@ -67,6 +67,7 @@ func (m *kubeGenericRuntimeManager) generateLinuxContainerConfig(container *v1.C
 		allocSpecResource := sigmautil.GetAllocResourceFromAnnotation(pod, container.Name)
 		// Set CpuQuota as -1 if container's mode is "CpuSet".
 		if allocSpecResource != nil && allocSpecResource.CPU.CPUSet != nil {
+			lc.Resources.CpuPeriod = int64(m.cpuCFSQuotaPeriod.Duration / time.Microsecond)
 			lc.Resources.CpuQuota = -1
 		} else {
 			// if cpuLimit.Amount is nil, then the appropriate default value is returned
@@ -79,7 +80,7 @@ func (m *kubeGenericRuntimeManager) generateLinuxContainerConfig(container *v1.C
 		}
 	}
 
-	applyExtendContainerResource(pod, container, lc)
+	applyExtendContainerResource(pod, container, lc, m.cpuCFSQuota)
 
 	return lc
 }

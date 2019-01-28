@@ -271,3 +271,620 @@ func TestApplyDiskQuota(t *testing.T) {
 		}
 	}
 }
+
+func TestApplyExtendContainerResource(t *testing.T) {
+	defaultCpuShares := int64(44444)
+	hostConfigCpuShares := int64(12345)
+	hostConfigCpuQuota := int64(450000)
+	hostConfigCpuPeriod := int64(150000)
+	hostConfigOomScoreAdj := int64(1000)
+	hostConfigMemorySwappiness := int64(10000000)
+	hostConfigMemorySwap := int64(20000000)
+	hostConfigPidsLimit := uint16(65535)
+	hostConfigCpuBvtWarpNs := -1
+
+	annotationWithNilAllocSpect, _ := json.Marshal(nil)
+	annotationWithEmptyAllocSpec, _ := json.Marshal(&sigmak8sapi.AllocSpec{})
+	annotationWithEmptyContainers, _ := json.Marshal(&sigmak8sapi.AllocSpec{
+		Containers: []sigmak8sapi.Container{},
+	})
+	annotationWithEmptyHostConfig1, _ := json.Marshal(&sigmak8sapi.AllocSpec{
+		Containers: []sigmak8sapi.Container{
+			{
+				Name:       "container-1",
+				HostConfig: sigmak8sapi.HostConfigInfo{},
+			},
+		},
+	})
+	annotationWithEmptyHostConfig, _ := json.Marshal(&sigmak8sapi.AllocSpec{
+		Containers: []sigmak8sapi.Container{
+			{
+				Name: "container-1",
+			},
+		},
+	})
+	annotationWithCpuShares, _ := json.Marshal(&sigmak8sapi.AllocSpec{
+		Containers: []sigmak8sapi.Container{
+			{
+				Name: "container-1",
+				HostConfig: sigmak8sapi.HostConfigInfo{
+					CpuShares: hostConfigCpuShares,
+				},
+			},
+			{
+				Name: "container-2",
+				HostConfig: sigmak8sapi.HostConfigInfo{
+					CpuShares: 54321,
+				},
+			},
+		},
+	})
+	annotationWithCpuQuota, _ := json.Marshal(&sigmak8sapi.AllocSpec{
+		Containers: []sigmak8sapi.Container{
+			{
+				Name: "container-1",
+				HostConfig: sigmak8sapi.HostConfigInfo{
+					CpuQuota: hostConfigCpuQuota,
+				},
+			},
+			{
+				Name: "container-2",
+				HostConfig: sigmak8sapi.HostConfigInfo{
+					CpuQuota: 5000,
+				},
+			},
+		},
+	})
+	annotationWithCpuPeriod, _ := json.Marshal(&sigmak8sapi.AllocSpec{
+		Containers: []sigmak8sapi.Container{
+			{
+				Name: "container-1",
+				HostConfig: sigmak8sapi.HostConfigInfo{
+					CpuPeriod: hostConfigCpuPeriod,
+				},
+			},
+			{
+				Name: "container-2",
+				HostConfig: sigmak8sapi.HostConfigInfo{
+					CpuQuota: 2000,
+				},
+			},
+		},
+	})
+	annotationWithAll, _ := json.Marshal(&sigmak8sapi.AllocSpec{
+		Containers: []sigmak8sapi.Container{
+			{
+				Name:       "container-2",
+				HostConfig: sigmak8sapi.HostConfigInfo{},
+			},
+			{
+				Name: "container-1",
+				HostConfig: sigmak8sapi.HostConfigInfo{
+					DefaultCpuShares: &defaultCpuShares,
+					CpuShares:        hostConfigCpuShares,
+					CpuQuota:         hostConfigCpuQuota,
+					CpuPeriod:        hostConfigCpuPeriod,
+					CPUBvtWarpNs:     hostConfigCpuBvtWarpNs,
+					OomScoreAdj:      hostConfigOomScoreAdj,
+					MemorySwappiness: hostConfigMemorySwappiness,
+					MemorySwap:       hostConfigMemorySwap,
+					PidsLimit:        hostConfigPidsLimit,
+				},
+			},
+		},
+	})
+	annotationWithContainerNotExist, _ := json.Marshal(&sigmak8sapi.AllocSpec{
+		Containers: []sigmak8sapi.Container{
+			{
+				Name: "container-2",
+				HostConfig: sigmak8sapi.HostConfigInfo{
+					DefaultCpuShares: &defaultCpuShares,
+					CpuShares:        hostConfigCpuShares,
+					CpuQuota:         hostConfigCpuQuota,
+					CpuPeriod:        hostConfigCpuPeriod,
+					CPUBvtWarpNs:     hostConfigCpuBvtWarpNs,
+					OomScoreAdj:      hostConfigOomScoreAdj,
+					MemorySwappiness: hostConfigMemorySwappiness,
+					MemorySwap:       hostConfigMemorySwap,
+					PidsLimit:        hostConfigPidsLimit,
+				},
+			},
+		},
+	})
+	annotationWithInvalidValue, _ := json.Marshal(&sigmak8sapi.AllocSpec{
+		Containers: []sigmak8sapi.Container{
+			{
+				Name: "container-1",
+				HostConfig: sigmak8sapi.HostConfigInfo{
+					CpuShares:    -1,
+					CpuQuota:     -2,
+					CpuPeriod:    -3,
+					OomScoreAdj:  0,
+					CPUBvtWarpNs: 0,
+				},
+			},
+		},
+	})
+
+	for desc, testCase := range map[string]struct {
+		pod                             *v1.Pod
+		expectedContainerResourceConfig runtimeapi.LinuxContainerResources
+	}{
+		"pod with nil allocSpec": {
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:       "12345678",
+					Name:      "bar",
+					Namespace: "new",
+					Annotations: map[string]string{
+						sigmak8sapi.AnnotationPodAllocSpec: string(annotationWithNilAllocSpect),
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name:            "container-1",
+							Image:           "busybox",
+							ImagePullPolicy: v1.PullIfNotPresent,
+							Resources: v1.ResourceRequirements{
+								Requests: v1.ResourceList{
+									v1.ResourceMemory: resource.MustParse("1Gi"),
+								},
+								Limits: v1.ResourceList{
+									v1.ResourceMemory: resource.MustParse("1Gi"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedContainerResourceConfig: runtimeapi.LinuxContainerResources{
+				CpuShares:    5 * 1024,
+				CpuQuota:     700000,
+				CpuPeriod:    122333,
+				CpuBvtWarpNs: 2,
+				OomScoreAdj:  500,
+			},
+		},
+		"pod with empty allocSpec": {
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:       "12345678",
+					Name:      "bar",
+					Namespace: "new",
+					Annotations: map[string]string{
+						sigmak8sapi.AnnotationPodAllocSpec: string(annotationWithEmptyAllocSpec),
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name:            "container-1",
+							Image:           "busybox",
+							ImagePullPolicy: v1.PullIfNotPresent,
+							Resources: v1.ResourceRequirements{
+								Requests: v1.ResourceList{
+									v1.ResourceMemory: resource.MustParse("1Gi"),
+								},
+								Limits: v1.ResourceList{
+									v1.ResourceMemory: resource.MustParse("1Gi"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedContainerResourceConfig: runtimeapi.LinuxContainerResources{
+				CpuShares:    5 * 1024,
+				CpuQuota:     700000,
+				CpuPeriod:    122333,
+				CpuBvtWarpNs: 2,
+				OomScoreAdj:  500,
+			},
+		},
+		"pod with empty containers": {
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:       "12345678",
+					Name:      "bar",
+					Namespace: "new",
+					Annotations: map[string]string{
+						sigmak8sapi.AnnotationPodAllocSpec: string(annotationWithEmptyContainers),
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name:            "container-1",
+							Image:           "busybox",
+							ImagePullPolicy: v1.PullIfNotPresent,
+							Resources: v1.ResourceRequirements{
+								Requests: v1.ResourceList{
+									v1.ResourceMemory: resource.MustParse("1Gi"),
+								},
+								Limits: v1.ResourceList{
+									v1.ResourceMemory: resource.MustParse("1Gi"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedContainerResourceConfig: runtimeapi.LinuxContainerResources{
+				CpuShares:    5 * 1024,
+				CpuQuota:     700000,
+				CpuPeriod:    122333,
+				CpuBvtWarpNs: 2,
+				OomScoreAdj:  500,
+			},
+		},
+		"pod with empty hostconfig1": {
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:       "12345678",
+					Name:      "bar",
+					Namespace: "new",
+					Annotations: map[string]string{
+						sigmak8sapi.AnnotationPodAllocSpec: string(annotationWithEmptyHostConfig1),
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name:            "container-1",
+							Image:           "busybox",
+							ImagePullPolicy: v1.PullIfNotPresent,
+							Resources: v1.ResourceRequirements{
+								Requests: v1.ResourceList{
+									v1.ResourceMemory: resource.MustParse("1Gi"),
+								},
+								Limits: v1.ResourceList{
+									v1.ResourceMemory: resource.MustParse("1Gi"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedContainerResourceConfig: runtimeapi.LinuxContainerResources{
+				CpuShares:        5 * 1024,
+				CpuQuota:         700000,
+				CpuPeriod:        122333,
+				CpuBvtWarpNs:     2,
+				OomScoreAdj:      500,
+				MemorySwappiness: &runtimeapi.Int64Value{int64(0)},
+			},
+		},
+		"pod with empty hostconfig2": {
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:       "12345678",
+					Name:      "bar",
+					Namespace: "new",
+					Annotations: map[string]string{
+						sigmak8sapi.AnnotationPodAllocSpec: string(annotationWithEmptyHostConfig),
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name:            "container-1",
+							Image:           "busybox",
+							ImagePullPolicy: v1.PullIfNotPresent,
+							Resources: v1.ResourceRequirements{
+								Requests: v1.ResourceList{
+									v1.ResourceMemory: resource.MustParse("1Gi"),
+								},
+								Limits: v1.ResourceList{
+									v1.ResourceMemory: resource.MustParse("1Gi"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedContainerResourceConfig: runtimeapi.LinuxContainerResources{
+				CpuShares:        5 * 1024,
+				CpuQuota:         700000,
+				CpuPeriod:        122333,
+				CpuBvtWarpNs:     2,
+				OomScoreAdj:      500,
+				MemorySwappiness: &runtimeapi.Int64Value{int64(0)},
+			},
+		},
+		"pod with hostConfig cpushares": {
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:       "12345678",
+					Name:      "bar",
+					Namespace: "new",
+					Annotations: map[string]string{
+						sigmak8sapi.AnnotationPodAllocSpec: string(annotationWithCpuShares),
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name:            "container-1",
+							Image:           "busybox",
+							ImagePullPolicy: v1.PullIfNotPresent,
+							Resources: v1.ResourceRequirements{
+								Requests: v1.ResourceList{
+									v1.ResourceMemory: resource.MustParse("1Gi"),
+									v1.ResourceCPU:    *resource.NewMilliQuantity(100, resource.DecimalSI),
+								},
+								Limits: v1.ResourceList{
+									v1.ResourceMemory: resource.MustParse("1Gi"),
+									v1.ResourceCPU:    *resource.NewMilliQuantity(100, resource.DecimalSI),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedContainerResourceConfig: runtimeapi.LinuxContainerResources{
+				CpuShares:        hostConfigCpuShares,
+				CpuQuota:         700000,
+				CpuPeriod:        122333,
+				CpuBvtWarpNs:     2,
+				OomScoreAdj:      500,
+				MemorySwappiness: &runtimeapi.Int64Value{int64(0)},
+			},
+		},
+		"pod with hostConfig cpuQuota": {
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:       "12345678",
+					Name:      "bar",
+					Namespace: "new",
+					Annotations: map[string]string{
+						sigmak8sapi.AnnotationPodAllocSpec: string(annotationWithCpuQuota),
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name:            "container-1",
+							Image:           "busybox",
+							ImagePullPolicy: v1.PullIfNotPresent,
+							Resources: v1.ResourceRequirements{
+								Requests: v1.ResourceList{
+									v1.ResourceCPU:    *resource.NewMilliQuantity(100, resource.DecimalSI),
+									v1.ResourceMemory: resource.MustParse("1Gi"),
+								},
+								Limits: v1.ResourceList{
+									v1.ResourceCPU:    *resource.NewMilliQuantity(100, resource.DecimalSI),
+									v1.ResourceMemory: resource.MustParse("1Gi"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedContainerResourceConfig: runtimeapi.LinuxContainerResources{
+				CpuShares:        5 * 1024,
+				CpuQuota:         hostConfigCpuQuota,
+				CpuPeriod:        122333,
+				CpuBvtWarpNs:     2,
+				OomScoreAdj:      500,
+				MemorySwappiness: &runtimeapi.Int64Value{int64(0)},
+			},
+		},
+		"pod with hostConfig cpuPeriod": {
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:       "12345678",
+					Name:      "bar",
+					Namespace: "new",
+					Annotations: map[string]string{
+						sigmak8sapi.AnnotationPodAllocSpec: string(annotationWithCpuPeriod),
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name:            "container-1",
+							Image:           "busybox",
+							ImagePullPolicy: v1.PullIfNotPresent,
+							Resources: v1.ResourceRequirements{
+								Requests: v1.ResourceList{
+									v1.ResourceMemory: resource.MustParse("1Gi"),
+								},
+								Limits: v1.ResourceList{
+									v1.ResourceMemory: resource.MustParse("1Gi"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedContainerResourceConfig: runtimeapi.LinuxContainerResources{
+				CpuShares:        5 * 1024,
+				CpuQuota:         700000,
+				CpuPeriod:        hostConfigCpuPeriod,
+				CpuBvtWarpNs:     2,
+				OomScoreAdj:      500,
+				MemorySwappiness: &runtimeapi.Int64Value{int64(0)},
+			},
+		},
+		"pod with hostConfig cpuPeriod2": {
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:       "12345678",
+					Name:      "bar",
+					Namespace: "new",
+					Annotations: map[string]string{
+						sigmak8sapi.AnnotationPodAllocSpec: string(annotationWithCpuPeriod),
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name:            "container-1",
+							Image:           "busybox",
+							ImagePullPolicy: v1.PullIfNotPresent,
+							Resources: v1.ResourceRequirements{
+								Requests: v1.ResourceList{
+									v1.ResourceCPU:    *resource.NewMilliQuantity(100, resource.DecimalSI),
+									v1.ResourceMemory: resource.MustParse("1Gi"),
+								},
+								Limits: v1.ResourceList{
+									v1.ResourceCPU:    *resource.NewMilliQuantity(100, resource.DecimalSI),
+									v1.ResourceMemory: resource.MustParse("1Gi"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedContainerResourceConfig: runtimeapi.LinuxContainerResources{
+				CpuShares:        5 * 1024,
+				CpuQuota:         hostConfigCpuPeriod * 100 / 1000,
+				CpuPeriod:        hostConfigCpuPeriod,
+				CpuBvtWarpNs:     2,
+				OomScoreAdj:      500,
+				MemorySwappiness: &runtimeapi.Int64Value{int64(0)},
+			},
+		},
+		"pod with hostConfig all": {
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:       "12345678",
+					Name:      "bar",
+					Namespace: "new",
+					Annotations: map[string]string{
+						sigmak8sapi.AnnotationPodAllocSpec: string(annotationWithAll),
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name:            "container-1",
+							Image:           "busybox",
+							ImagePullPolicy: v1.PullIfNotPresent,
+							Resources: v1.ResourceRequirements{
+								Requests: v1.ResourceList{
+									v1.ResourceCPU:    *resource.NewMilliQuantity(100, resource.DecimalSI),
+									v1.ResourceMemory: resource.MustParse("1Gi"),
+								},
+								Limits: v1.ResourceList{
+									v1.ResourceCPU:    *resource.NewMilliQuantity(100, resource.DecimalSI),
+									v1.ResourceMemory: resource.MustParse("1Gi"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedContainerResourceConfig: runtimeapi.LinuxContainerResources{
+				CpuShares:        hostConfigCpuShares,
+				CpuQuota:         hostConfigCpuQuota,
+				CpuPeriod:        hostConfigCpuPeriod,
+				CpuBvtWarpNs:     int64(hostConfigCpuBvtWarpNs),
+				OomScoreAdj:      hostConfigOomScoreAdj,
+				MemorySwap:       hostConfigMemorySwap,
+				MemorySwappiness: &runtimeapi.Int64Value{hostConfigMemorySwappiness},
+				PidsLimit:        int64(hostConfigPidsLimit),
+			},
+		},
+		"pod with hostConfig container name not exist": {
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:       "12345678",
+					Name:      "bar",
+					Namespace: "new",
+					Annotations: map[string]string{
+						sigmak8sapi.AnnotationPodAllocSpec: string(annotationWithContainerNotExist),
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name:            "container-1",
+							Image:           "busybox",
+							ImagePullPolicy: v1.PullIfNotPresent,
+							Resources: v1.ResourceRequirements{
+								Requests: v1.ResourceList{
+									v1.ResourceMemory: resource.MustParse("1Gi"),
+								},
+								Limits: v1.ResourceList{
+									v1.ResourceMemory: resource.MustParse("1Gi"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedContainerResourceConfig: runtimeapi.LinuxContainerResources{
+				CpuShares:    5 * 1024,
+				CpuQuota:     700000,
+				CpuPeriod:    122333,
+				CpuBvtWarpNs: 2,
+				OomScoreAdj:  500,
+			},
+		},
+		"pod with hostConfig invalid value": {
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					UID:       "12345678",
+					Name:      "bar",
+					Namespace: "new",
+					Annotations: map[string]string{
+						sigmak8sapi.AnnotationPodAllocSpec: string(annotationWithInvalidValue),
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name:            "container-1",
+							Image:           "busybox",
+							ImagePullPolicy: v1.PullIfNotPresent,
+							Resources: v1.ResourceRequirements{
+								Requests: v1.ResourceList{
+									v1.ResourceMemory: resource.MustParse("1Gi"),
+								},
+								Limits: v1.ResourceList{
+									v1.ResourceMemory: resource.MustParse("1Gi"),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedContainerResourceConfig: runtimeapi.LinuxContainerResources{
+				CpuShares:        5 * 1024,
+				CpuQuota:         700000,
+				CpuPeriod:        122333,
+				CpuBvtWarpNs:     2,
+				OomScoreAdj:      500,
+				MemorySwappiness: &runtimeapi.Int64Value{int64(0)},
+			},
+		},
+	} {
+		containerConfig := &runtimeapi.ContainerConfig{
+			Linux: &runtimeapi.LinuxContainerConfig{
+				Resources: &runtimeapi.LinuxContainerResources{
+					CpuShares:    5 * 1024,
+					CpuQuota:     700000,
+					CpuPeriod:    122333,
+					CpuBvtWarpNs: 2,
+					OomScoreAdj:  500,
+				},
+			},
+		}
+		container := &testCase.pod.Spec.Containers[0]
+		applyExtendContainerResource(testCase.pod, container, containerConfig.Linux, true)
+
+		if reflect.DeepEqual(containerConfig.Linux.Resources.MemorySwappiness, testCase.expectedContainerResourceConfig.MemorySwappiness) {
+			containerConfig.Linux.Resources.MemorySwappiness = nil
+			testCase.expectedContainerResourceConfig.MemorySwappiness = nil
+		} else {
+			t.Errorf("test case: %v, expected MemorySwapiness %#v, but got: %#v",
+				desc, testCase.expectedContainerResourceConfig.MemorySwappiness, containerConfig.Linux.Resources.MemorySwappiness)
+		}
+		if !reflect.DeepEqual(*containerConfig.Linux.Resources, testCase.expectedContainerResourceConfig) {
+			t.Errorf("test case: %v, expected Resources %#v, but got: %#v",
+				desc, testCase.expectedContainerResourceConfig, containerConfig.Linux.Resources)
+		}
+	}
+}

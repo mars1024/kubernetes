@@ -140,6 +140,11 @@ func (g *graphPopulator) updatePod(oldObj, obj interface{}) {
 		glog.V(5).Infof("updatePod %s/%s, no node", pod.Namespace, pod.Name)
 		return
 	}
+	if inPlaceControlPod(pod) {
+		glog.V(4).Infof("inPlaceUpdate %s/%s for node %s", pod.Namespace, pod.Name, pod.Spec.NodeName)
+		g.graph.AddPod(pod)
+		return
+	}
 	if oldPod, ok := oldObj.(*corev1.Pod); ok && oldPod != nil {
 		if (pod.Spec.NodeName == oldPod.Spec.NodeName) && (pod.UID == oldPod.UID) {
 			// Node and uid are unchanged, all object references in the pod spec are immutable

@@ -702,7 +702,7 @@ func TestValidatePod(t *testing.T) {
 					},
 				},
 			},
-			err: "can not UPDATE annotation pod.beta1.sigma.ali/alloc-spec due to only cpuIDs can update",
+			err: "can not UPDATE annotation pod.beta1.sigma.ali/alloc-spec due to only cpuIDs and cpuset field can be updated",
 		},
 		{
 			name:   "pod update with cpuids",
@@ -911,6 +911,314 @@ func TestValidatePod(t *testing.T) {
 				},
 			},
 			err: "",
+		},
+		{
+			name:   "pod update with removed cpuset field is allowd",
+			action: admission.Update,
+			pod: api.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "123",
+					Namespace: namespace,
+					Annotations: map[string]string{
+						sigmaapi.AnnotationPodInplaceUpdateState: sigmaapi.InplaceUpdateStateCreated,
+					},
+				},
+				Spec: api.PodSpec{
+					Containers: []api.Container{
+						{
+							Name: "name1",
+							Resources: api.ResourceRequirements{
+								Requests: api.ResourceList{
+									api.ResourceCPU: resource.MustParse("2"),
+								},
+							},
+						},
+					},
+				},
+			},
+			alloc: sigmaapi.AllocSpec{
+				Containers: []sigmaapi.Container{
+					{
+						Name: "name1",
+						Resource: sigmaapi.ResourceRequirements{
+							CPU: sigmaapi.CPUSpec{
+								CPUSet: &sigmaapi.CPUSetSpec{
+									SpreadStrategy: sigmaapi.SpreadStrategySameCoreFirst,
+									CPUIDs:         []int{1, 2},
+								},
+							},
+							GPU: sigmaapi.GPUSpec{
+								ShareMode: sigmaapi.GPUShareModeExclusive,
+							},
+						},
+					},
+				},
+			},
+			oldPod: &api.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "123",
+					Namespace:   namespace,
+					Annotations: map[string]string{},
+				},
+				Spec: api.PodSpec{
+					Containers: []api.Container{
+						{
+							Name: "name1",
+							Resources: api.ResourceRequirements{
+								Requests: api.ResourceList{
+									api.ResourceCPU: resource.MustParse("2"),
+								},
+							},
+						},
+					},
+				},
+			},
+			oldAlloc: &sigmaapi.AllocSpec{
+				Containers: []sigmaapi.Container{
+					{
+						Name: "name1",
+						Resource: sigmaapi.ResourceRequirements{
+							CPU: sigmaapi.CPUSpec{
+								CPUSet: nil,
+							},
+							GPU: sigmaapi.GPUSpec{
+								ShareMode: sigmaapi.GPUShareModeExclusive,
+							},
+						},
+					},
+				},
+			},
+			err: "",
+		},
+		{
+			name:   "pod update with added cpuset field is allowd",
+			action: admission.Update,
+			pod: api.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "123",
+					Namespace: namespace,
+					Annotations: map[string]string{
+						sigmaapi.AnnotationPodInplaceUpdateState: sigmaapi.InplaceUpdateStateCreated,
+					},
+				},
+				Spec: api.PodSpec{
+					Containers: []api.Container{
+						{
+							Name: "name1",
+							Resources: api.ResourceRequirements{
+								Requests: api.ResourceList{
+									api.ResourceCPU: resource.MustParse("2"),
+								},
+							},
+						},
+					},
+				},
+			},
+			alloc: sigmaapi.AllocSpec{
+				Containers: []sigmaapi.Container{
+					{
+						Name: "name1",
+						Resource: sigmaapi.ResourceRequirements{
+							CPU: sigmaapi.CPUSpec{
+								CPUSet: nil,
+							},
+							GPU: sigmaapi.GPUSpec{
+								ShareMode: sigmaapi.GPUShareModeExclusive,
+							},
+						},
+					},
+				},
+			},
+			oldPod: &api.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "123",
+					Namespace:   namespace,
+					Annotations: map[string]string{},
+				},
+				Spec: api.PodSpec{
+					Containers: []api.Container{
+						{
+							Name: "name1",
+							Resources: api.ResourceRequirements{
+								Requests: api.ResourceList{
+									api.ResourceCPU: resource.MustParse("2"),
+								},
+							},
+						},
+					},
+				},
+			},
+			oldAlloc: &sigmaapi.AllocSpec{
+				Containers: []sigmaapi.Container{
+					{
+						Name: "name1",
+						Resource: sigmaapi.ResourceRequirements{
+							CPU: sigmaapi.CPUSpec{
+								CPUSet: &sigmaapi.CPUSetSpec{
+									SpreadStrategy: sigmaapi.SpreadStrategySameCoreFirst,
+									CPUIDs:         []int{1, 2},
+								},
+							},
+							GPU: sigmaapi.GPUSpec{
+								ShareMode: sigmaapi.GPUShareModeExclusive,
+							},
+						},
+					},
+				},
+			},
+			err: "",
+		},
+		{
+			name:   "pod update with added cpuset field, but not in-place update is disallowd",
+			action: admission.Update,
+			pod: api.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "123",
+					Namespace:   namespace,
+					Annotations: map[string]string{},
+				},
+				Spec: api.PodSpec{
+					Containers: []api.Container{
+						{
+							Name: "name1",
+							Resources: api.ResourceRequirements{
+								Requests: api.ResourceList{
+									api.ResourceCPU: resource.MustParse("2"),
+								},
+							},
+						},
+					},
+				},
+			},
+			alloc: sigmaapi.AllocSpec{
+				Containers: []sigmaapi.Container{
+					{
+						Name: "name1",
+						Resource: sigmaapi.ResourceRequirements{
+							CPU: sigmaapi.CPUSpec{
+								CPUSet: nil,
+							},
+							GPU: sigmaapi.GPUSpec{
+								ShareMode: sigmaapi.GPUShareModeExclusive,
+							},
+						},
+					},
+				},
+			},
+			oldPod: &api.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "123",
+					Namespace:   namespace,
+					Annotations: map[string]string{},
+				},
+				Spec: api.PodSpec{
+					Containers: []api.Container{
+						{
+							Name: "name1",
+							Resources: api.ResourceRequirements{
+								Requests: api.ResourceList{
+									api.ResourceCPU: resource.MustParse("2"),
+								},
+							},
+						},
+					},
+				},
+			},
+			oldAlloc: &sigmaapi.AllocSpec{
+				Containers: []sigmaapi.Container{
+					{
+						Name: "name1",
+						Resource: sigmaapi.ResourceRequirements{
+							CPU: sigmaapi.CPUSpec{
+								CPUSet: &sigmaapi.CPUSetSpec{
+									SpreadStrategy: sigmaapi.SpreadStrategySameCoreFirst,
+									CPUIDs:         []int{1, 2},
+								},
+							},
+							GPU: sigmaapi.GPUSpec{
+								ShareMode: sigmaapi.GPUShareModeExclusive,
+							},
+						},
+					},
+				},
+			},
+			err: "can not UPDATE annotation pod.beta1.sigma.ali/alloc-spec",
+		},
+		{
+			name:   "pod update with not-cpuset filed removed is disallowed",
+			action: admission.Update,
+			pod: api.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "123",
+					Namespace:   namespace,
+					Annotations: map[string]string{},
+				},
+				Spec: api.PodSpec{
+					Containers: []api.Container{
+						{
+							Name: "name1",
+							Resources: api.ResourceRequirements{
+								Requests: api.ResourceList{
+									api.ResourceCPU: resource.MustParse("2"),
+								},
+							},
+						},
+					},
+				},
+			},
+			alloc: sigmaapi.AllocSpec{
+				Containers: []sigmaapi.Container{
+					{
+						Name: "name1",
+						Resource: sigmaapi.ResourceRequirements{
+							CPU: sigmaapi.CPUSpec{
+								CPUSet: &sigmaapi.CPUSetSpec{
+									SpreadStrategy: sigmaapi.SpreadStrategySameCoreFirst,
+									CPUIDs:         []int{1, 2},
+								},
+							},
+							GPU: sigmaapi.GPUSpec{
+								ShareMode: sigmaapi.GPUShareModeExclusive,
+							},
+						},
+					},
+				},
+			},
+			oldPod: &api.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "123",
+					Namespace:   namespace,
+					Annotations: map[string]string{},
+				},
+				Spec: api.PodSpec{
+					Containers: []api.Container{
+						{
+							Name: "name1",
+							Resources: api.ResourceRequirements{
+								Requests: api.ResourceList{
+									api.ResourceCPU: resource.MustParse("2"),
+								},
+							},
+						},
+					},
+				},
+			},
+			oldAlloc: &sigmaapi.AllocSpec{
+				Containers: []sigmaapi.Container{
+					{
+						Name: "name1",
+						Resource: sigmaapi.ResourceRequirements{
+							CPU: sigmaapi.CPUSpec{
+								CPUSet: &sigmaapi.CPUSetSpec{
+									SpreadStrategy: sigmaapi.SpreadStrategySameCoreFirst,
+									CPUIDs:         []int{1, 2},
+								},
+							},
+						},
+					},
+				},
+			},
+			err: "can not UPDATE annotation pod.beta1.sigma.ali/alloc-spec",
 		},
 	}
 	for i, tc := range tests {

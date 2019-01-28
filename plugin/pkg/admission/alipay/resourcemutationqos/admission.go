@@ -13,28 +13,28 @@ import (
 
 const (
 	// PluginName is the name for current plugin, it should be unique among all plugins.
-	PluginName = "AlipayResourceMutationQos"
+	PluginName = "AlipayResourceMutationQOS"
 )
 
 var (
-	_ admission.MutationInterface = &AlipayResourceMutationBurstable{}
+	_ admission.MutationInterface = &AlipayResourceMutationQOS{}
 )
 
 // Register is used to register current plugin to APIServer.
 func Register(plugins *admission.Plugins) {
 	plugins.Register(PluginName,
 		func(config io.Reader) (admission.Interface, error) {
-			return newAlipayResourceMutationBurstable(), nil
+			return newAlipayResourceMutationQOS(), nil
 		})
 }
 
-// AlipayResourceMutationBurstable is the main struct to mutate pod resource setting.
-type AlipayResourceMutationBurstable struct {
+// AlipayResourceMutationQOS is the main struct to mutate pod resource setting.
+type AlipayResourceMutationQOS struct {
 	*admission.Handler
 }
 
-func newAlipayResourceMutationBurstable() *AlipayResourceMutationBurstable {
-	return &AlipayResourceMutationBurstable{
+func newAlipayResourceMutationQOS() *AlipayResourceMutationQOS {
+	return &AlipayResourceMutationQOS{
 		Handler: admission.NewHandler(admission.Create),
 	}
 }
@@ -47,7 +47,7 @@ func newAlipayResourceMutationBurstable() *AlipayResourceMutationBurstable {
 // 3. SigmaBestEffort: for Job-type pods, this label must be passed in when creating pod
 //
 // Design doc: https://yuque.antfin-inc.com/sys/sigma3.x/ptavcw#s3ahqe.
-func (a *AlipayResourceMutationBurstable) Admit(attr admission.Attributes) (err error) {
+func (a *AlipayResourceMutationQOS) Admit(attr admission.Attributes) (err error) {
 	if shouldIgnore(attr) {
 		return nil
 	}

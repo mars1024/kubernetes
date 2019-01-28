@@ -8,7 +8,6 @@ import (
 	log "github.com/golang/glog"
 	"github.com/stretchr/testify/assert"
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
-	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apiserver/pkg/admission"
@@ -17,29 +16,29 @@ import (
 
 func TestResourceMutationBurstable(t *testing.T) {
 	testcases := []struct {
-		pod            *v1.Pod
-		isBurstablePod bool
-		description    string
+		pod         *core.Pod
+		qosType     sigmak8sapi.SigmaQOSClass
+		description string
 	}{
 		{
-			pod:            newQosPod(sigmak8sapi.SigmaQOSGuaranteed),
-			isBurstablePod: false,
-			description:    "cpushare pod without label should be added burstable label",
+			pod:         newQosPod(sigmak8sapi.SigmaQOSGuaranteed),
+			qosType:     sigmak8sapi.SigmaQOSGuaranteed,
+			description: "cpushare pod without label should be added burstable label",
 		},
 		{
-			pod:            newBurstablePodWithLabel(),
-			isBurstablePod: true,
-			description:    "cpushare pod with label should be kept as the same",
+			pod:         newBurstablePodWithLabel(),
+			qosType:     sigmak8sapi.SigmaQOSBurstable,
+			description: "cpushare pod with label should be kept as the same",
 		},
 		{
-			pod:            newBurstablePodWithoutLabel(),
-			isBurstablePod: true,
-			description:    "cpushare pod without label should be added burstable label",
+			pod:         newBurstablePodWithoutLabel(),
+			qosType:     sigmak8sapi.SigmaQOSBurstable,
+			description: "cpushare pod without label should be added burstable label",
 		},
 		{
-			pod:            newQosPod(sigmak8sapi.SigmaQOSBestEffort),
-			isBurstablePod: false,
-			description:    "best effort pod should not have sigma burstable label",
+			pod:         newQosPod(sigmak8sapi.SigmaQOSBestEffort),
+			qosType:     sigmak8sapi.SigmaQOSBestEffort,
+			description: "best effort pod should have sigma best-effort label",
 		},
 	}
 
@@ -55,27 +54,24 @@ func TestResourceMutationBurstable(t *testing.T) {
 
 		log.Infof("running case: %d", i)
 
-		if tcase.isBurstablePod {
-			assert.Equal(t, pod.Labels[sigmak8sapi.LabelPodQOSClass], string(sigmak8sapi.SigmaQOSBurstable), "sigma burstable pod should have the correct label after mutation")
-		} else {
-			assert.NotEqual(t, pod.Labels[sigmak8sapi.LabelPodQOSClass], string(sigmak8sapi.SigmaQOSBurstable), "sigma non-burstable pod should not have burstable label")
-		}
+		assert.Equal(t, pod.Labels[sigmak8sapi.LabelPodQOSClass], string(tcase.qosType),
+			fmt.Sprintf("sigma %s pod should have the correct label after mutation", string(tcase.qosType)))
 	}
 }
 
 // newBurstablePodWithLabel create a burstable pod, already with `sigmaBurstable` label set.
-func newBurstablePodWithLabel() *v1.Pod {
+func newBurstablePodWithLabel() *core.Pod {
 	pod := newQosPod(sigmak8sapi.SigmaQOSBurstable)
 	pod.Labels[sigmak8sapi.LabelPodQOSClass] = string(sigmak8sapi.SigmaQOSBurstable)
 
 	return pod
 }
 
-func newBurstablePodWithoutLabel() *v1.Pod {
+func newBurstablePodWithoutLabel() *core.Pod {
 	return newQosPod(sigmak8sapi.SigmaQOSBurstable)
 }
 
-func newQosPod(qos sigmak8sapi.SigmaQOSClass) *v1.Pod {
+func newQosPod(qos sigmak8sapi.SigmaQOSClass) *core.Pod {
 	pod := newPodWithResource(1000, 2000)
 
 	switch qos {
@@ -88,7 +84,7 @@ func newQosPod(qos sigmak8sapi.SigmaQOSClass) *v1.Pod {
 	return pod
 }
 
-func updateGuaranteedPodAllocSpec(pod *v1.Pod) error {
+func updateGuaranteedPodAllocSpec(pod *core.Pod) error {
 	allocSpec := sigmak8sapi.AllocSpec{}
 	err := json.Unmarshal([]byte(pod.Annotations[sigmak8sapi.AnnotationPodAllocSpec]), &allocSpec)
 	if err != nil {
@@ -108,15 +104,15 @@ func updateGuaranteedPodAllocSpec(pod *v1.Pod) error {
 	return nil
 }
 
-func newPodWithResource(cpuRequest, cpuLimit int64) *v1.Pod {
+func newPodWithResource(cpuRequest, cpuLimit int64) *core.Pod {
 	pod := newPod()
 	allocSpec := sigmak8sapi.AllocSpec{}
 	for i, c := range pod.Spec.Containers {
-		pod.Spec.Containers[i].Resources.Limits = map[v1.ResourceName]resource.Quantity{}
-		pod.Spec.Containers[i].Resources.Requests = map[v1.ResourceName]resource.Quantity{}
+		pod.Spec.Containers[i].Resources.Limits = map[core.ResourceName]resource.Quantity{}
+		pod.Spec.Containers[i].Resources.Requests = map[core.ResourceName]resource.Quantity{}
 
-		pod.Spec.Containers[i].Resources.Limits[v1.ResourceCPU] = *resource.NewMilliQuantity(cpuLimit, resource.DecimalSI)
-		pod.Spec.Containers[i].Resources.Requests[v1.ResourceCPU] = *resource.NewMilliQuantity(cpuRequest, resource.DecimalSI)
+		pod.Spec.Containers[i].Resources.Limits[core.ResourceCPU] = *resource.NewMilliQuantity(cpuLimit, resource.DecimalSI)
+		pod.Spec.Containers[i].Resources.Requests[core.ResourceCPU] = *resource.NewMilliQuantity(cpuRequest, resource.DecimalSI)
 		allocSpec.Containers = append(allocSpec.Containers, newAllocSpecContainer(c.Name))
 	}
 
@@ -126,16 +122,16 @@ func newPodWithResource(cpuRequest, cpuLimit int64) *v1.Pod {
 	return pod
 }
 
-func newPod() *v1.Pod {
-	return &v1.Pod{
+func newPod() *core.Pod {
+	return &core.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        "test-resource-mutation-burstable-pod",
 			Namespace:   metav1.NamespaceDefault,
 			Labels:      map[string]string{},
 			Annotations: map[string]string{},
 		},
-		Spec: v1.PodSpec{
-			Containers: []v1.Container{
+		Spec: core.PodSpec{
+			Containers: []core.Container{
 				{
 					Name:  "container-1",
 					Image: "image:1.0",

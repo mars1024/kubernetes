@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Alipay Authors. All Rights Reserved.
+Copyright 2019 The Alipay Authors. All Rights Reserved.
 */
 
 package apis
@@ -38,3 +38,8 @@ const (
 	// LabelPodAppEnv is the application environment for pod
 	LabelPodAppEnv = MetaAlipayPrefix + "/app-env"
 )
+
+// GenerateCustomLabelKey() generate a new label key use custom prefix and sub key.
+func GenerateCustomLabelKey(key string) string {
+	return CustomAlipayPrefix + "/" + key
+}

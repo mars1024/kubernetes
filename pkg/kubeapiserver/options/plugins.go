@@ -60,13 +60,13 @@ import (
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/plugin/pkg/admission/alipodinjectionpostschedule"
-	"k8s.io/kubernetes/plugin/pkg/admission/newalipodinjectionpreschedule"
 	"k8s.io/kubernetes/plugin/pkg/admission/alipodinjectionpreschedule"
 	"k8s.io/kubernetes/plugin/pkg/admission/alipodlifecyclehook"
 	"k8s.io/kubernetes/plugin/pkg/admission/armory"
 	"k8s.io/kubernetes/plugin/pkg/admission/auditdelete"
 	"k8s.io/kubernetes/plugin/pkg/admission/containerstate"
 	"k8s.io/kubernetes/plugin/pkg/admission/networkstatus"
+	"k8s.io/kubernetes/plugin/pkg/admission/newalipodinjectionpreschedule"
 	"k8s.io/kubernetes/plugin/pkg/admission/poddeletionflowcontrol"
 	"k8s.io/kubernetes/plugin/pkg/admission/sigmascheduling"
 
@@ -78,6 +78,7 @@ import (
 	alipaypodlocation "k8s.io/kubernetes/plugin/pkg/admission/alipay/podlocation"
 	alipaypodpreset "k8s.io/kubernetes/plugin/pkg/admission/alipay/podpreset"
 	alipayresource "k8s.io/kubernetes/plugin/pkg/admission/alipay/resource"
+	alipayresourcemutationbe "k8s.io/kubernetes/plugin/pkg/admission/alipay/resourcemutationbe"
 	alipaysetdefault "k8s.io/kubernetes/plugin/pkg/admission/alipay/setdefault"
 	alipaysidecar "k8s.io/kubernetes/plugin/pkg/admission/alipay/sidecar"
 	alipayzappinfo "k8s.io/kubernetes/plugin/pkg/admission/alipay/zappinfo"
@@ -118,28 +119,29 @@ var AllOrderedPlugins = []string{
 	deny.PluginName,                         // AlwaysDeny
 	auditdelete.PluginName,                  // NamespaceDelete
 
-	alipayappcert.PluginName,              // Alipay app cert
-	alipaysidecar.PluginName,              // Alipay Sidecar
-	armory.PluginName,                     // Armory
-	containerstate.PluginName,             // ContainerState
-	networkstatus.PluginName,              // NetworkStatus
-	alipodlifecyclehook.PluginName,        // AliPodLifeTimeHook
-	alipodinjectionpreschedule.PluginName, // AliPodInjectionPreSchedule
+	alipayappcert.PluginName,                 // Alipay app cert
+	alipaysidecar.PluginName,                 // Alipay Sidecar
+	armory.PluginName,                        // Armory
+	containerstate.PluginName,                // ContainerState
+	networkstatus.PluginName,                 // NetworkStatus
+	alipodlifecyclehook.PluginName,           // AliPodLifeTimeHook
+	alipodinjectionpreschedule.PluginName,    // AliPodInjectionPreSchedule
 	newalipodinjectionpreschedule.PluginName, // AliPodInjectionPreSchedule
 	// sigmascheduling must admit after alipodinjectionpreschedule
 	sigmascheduling.PluginName,             // SigmaScheduling
 	alipodinjectionpostschedule.PluginName, // AliPodInjectionPostSchedule
 	poddeletionflowcontrol.PluginName,      // PodDeletionFlowControl
 
-	alipaysetdefault.PluginName,      // Alipay SetDefault
-	alipaycmdb.PluginName,            // Alipay CMDB
-	alipayinclusterkube.PluginName,   // Alipay in-cluster kubernetes service
-	alipaypodlocation.PluginName,     // Alipay PodLocation
-	alipaypodpreset.PluginName,       // Alipay PodPreset
-	alipayzappinfo.PluginName,        // Alipay ZAppInfo
-	alipayresource.PluginName,        // Alipay resource validateion admission
-	alipaycpushare.PluginName,        // Alipay cpushare injection admission
-	alipayimagepullsecret.PluginName, // Alipay image pull secret injection admission
+	alipaysetdefault.PluginName,         // Alipay SetDefault
+	alipaycmdb.PluginName,               // Alipay CMDB
+	alipayinclusterkube.PluginName,      // Alipay in-cluster kubernetes service
+	alipaypodlocation.PluginName,        // Alipay PodLocation
+	alipaypodpreset.PluginName,          // Alipay PodPreset
+	alipayzappinfo.PluginName,           // Alipay ZAppInfo
+	alipayresource.PluginName,           // Alipay resource validation admission
+	alipaycpushare.PluginName,           // Alipay cpushare injection admission
+	alipayimagepullsecret.PluginName,    // Alipay image pull secret injection admission
+	alipayresourcemutationbe.PluginName, // Alipay resource mutation admission for best effort
 }
 
 // RegisterAllAdmissionPlugins registers all admission plugins and
@@ -195,6 +197,7 @@ func RegisterAllAdmissionPlugins(plugins *admission.Plugins) {
 	alipayresource.Register(plugins)
 	alipaycpushare.Register(plugins)
 	alipayappcert.Register(plugins)
+	alipayresourcemutationbe.Register(plugins)
 }
 
 // DefaultOffAdmissionPlugins get admission plugins off by default for kube-apiserver.

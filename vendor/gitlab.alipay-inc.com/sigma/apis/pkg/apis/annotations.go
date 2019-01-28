@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Alipay Authors. All Rights Reserved.
+Copyright 2019 The Alipay Authors. All Rights Reserved.
 */
 
 // This files contains all annotations used in alipay.com.

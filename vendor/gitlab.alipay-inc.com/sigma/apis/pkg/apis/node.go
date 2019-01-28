@@ -1,3 +1,7 @@
+/*
+Copyright 2019 The Alipay Authors. All Rights Reserved.
+*/
+
 package apis
 
 const (
@@ -14,7 +18,10 @@ const (
 	LabelUplinkSN       = MetaAlipayPrefix + "/uplink-sn"
 	LabelModel          = MetaAlipayPrefix + "/model"
 
-	// LabelIDCManagerState indicates node state in armory. e.g. IdcManagerState=READY 
+	// LabelColocationConfigName is the config name of colocation for node
+	LabelColocationConfigName = MetaAlipayPrefix + "/colocation-config-name"
+
+	// LabelIDCManagerState indicates node state in armory. e.g. IdcManagerState=READY
 	LabelIDCManagerState = MetaAlipayPrefix + "/idc-manager-state"
 )
 

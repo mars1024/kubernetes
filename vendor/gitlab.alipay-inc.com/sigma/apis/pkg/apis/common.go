@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Alipay Authors. All Rights Reserved.
+Copyright 2019 The Alipay Authors. All Rights Reserved.
 */
 
 package apis
@@ -15,5 +15,5 @@ const (
 	// MandatoryAlipayPrefix is special sub-domain for mandatory labels.
 	MandatoryAlipayPrefix string = "mandatory" + "." + AlipayGroupName
 	// NodeAlipayPrefix is Node labels/taint/annotations key prefix
-	NodeAlipayPrefix string = "node"  + "." + AlipayGroupName
+	NodeAlipayPrefix string = "node" + "." + AlipayGroupName
 )

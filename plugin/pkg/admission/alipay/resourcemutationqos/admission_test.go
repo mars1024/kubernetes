@@ -1,4 +1,4 @@
-package resourcemutationburstable
+package resourcemutationqos
 
 import (
 	"encoding/json"

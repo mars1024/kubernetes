@@ -79,7 +79,7 @@ import (
 	alipaypodpreset "k8s.io/kubernetes/plugin/pkg/admission/alipay/podpreset"
 	alipayresource "k8s.io/kubernetes/plugin/pkg/admission/alipay/resource"
 	alipayresourcemutationbe "k8s.io/kubernetes/plugin/pkg/admission/alipay/resourcemutationbe"
-	alipayresourcemutationburstable "k8s.io/kubernetes/plugin/pkg/admission/alipay/resourcemutationburstable"
+	alipayresourcemutationqos "k8s.io/kubernetes/plugin/pkg/admission/alipay/resourcemutationqos"
 	alipaysetdefault "k8s.io/kubernetes/plugin/pkg/admission/alipay/setdefault"
 	alipaysidecar "k8s.io/kubernetes/plugin/pkg/admission/alipay/sidecar"
 	alipayzappinfo "k8s.io/kubernetes/plugin/pkg/admission/alipay/zappinfo"
@@ -133,6 +133,7 @@ var AllOrderedPlugins = []string{
 	alipodinjectionpostschedule.PluginName, // AliPodInjectionPostSchedule
 	poddeletionflowcontrol.PluginName,      // PodDeletionFlowControl
 
+	alipayresourcemutationqos.PluginName, // Alipay resource mutation admission for burstable
 	alipaysetdefault.PluginName,         // Alipay SetDefault
 	alipaycmdb.PluginName,               // Alipay CMDB
 	alipayinclusterkube.PluginName,      // Alipay in-cluster kubernetes service
@@ -143,7 +144,6 @@ var AllOrderedPlugins = []string{
 	alipaycpushare.PluginName,           // Alipay cpushare injection admission
 	alipayimagepullsecret.PluginName,    // Alipay image pull secret injection admission
 	alipayresourcemutationbe.PluginName, // Alipay resource mutation admission for best effort
-	alipayresourcemutationburstable.PluginName, // Alipay resource mutation admission for burstable
 }
 
 // RegisterAllAdmissionPlugins registers all admission plugins and
@@ -189,6 +189,7 @@ func RegisterAllAdmissionPlugins(plugins *admission.Plugins) {
 	poddeletionflowcontrol.Register(plugins)
 
 	alipaysidecar.Register(plugins)
+	alipayresourcemutationqos.Register(plugins)
 	alipaysetdefault.Register(plugins)
 	alipaycmdb.Register(plugins)
 	alipayinclusterkube.Register(plugins)
@@ -200,7 +201,6 @@ func RegisterAllAdmissionPlugins(plugins *admission.Plugins) {
 	alipaycpushare.Register(plugins)
 	alipayappcert.Register(plugins)
 	alipayresourcemutationbe.Register(plugins)
-	alipayresourcemutationburstable.Register(plugins)
 }
 
 // DefaultOffAdmissionPlugins get admission plugins off by default for kube-apiserver.

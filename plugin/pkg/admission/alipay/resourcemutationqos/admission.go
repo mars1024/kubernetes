@@ -1,4 +1,4 @@
-package resourcemutationburstable
+package resourcemutationqos
 
 import (
 	"encoding/json"
@@ -7,13 +7,13 @@ import (
 
 	log "github.com/golang/glog"
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
-	"k8s.io/api/core/v1"
 	"k8s.io/apiserver/pkg/admission"
+	"k8s.io/kubernetes/pkg/apis/core"
 )
 
 const (
 	// PluginName is the name for current plugin, it should be unique among all plugins.
-	PluginName = "AlipayResourceMutationBurstable"
+	PluginName = "AlipayResourceMutationQos"
 )
 
 var (
@@ -39,13 +39,20 @@ func newAlipayResourceMutationBurstable() *AlipayResourceMutationBurstable {
 	}
 }
 
-// Admit adds pod `sigma.ali/qos` label for sigmaburstable pod if it's not alreay set.
+// Admit adds pod sigma QoS label, thus making sure all pods should have correct
+// sigmaQoS label.
+// In short, we propose three sigma qos level(which is independent from kubernetes qos):
+// 1. SigmaGuaranteed: default mode for pod which has cpuset containers
+// 2. SigmaBurstable: for pods with cpushare containers
+// 3. SigmaBestEffort: for Job-type pods, this label must be passed in when creating pod
+//
+// Design doc: https://yuque.antfin-inc.com/sys/sigma3.x/ptavcw#s3ahqe.
 func (a *AlipayResourceMutationBurstable) Admit(attr admission.Attributes) (err error) {
 	if shouldIgnore(attr) {
 		return nil
 	}
 
-	pod, ok := attr.GetObject().(*v1.Pod)
+	pod, ok := attr.GetObject().(*core.Pod)
 	if !ok {
 		return admission.NewForbidden(attr, fmt.Errorf("unexpected resource"))
 	}
@@ -56,7 +63,7 @@ func (a *AlipayResourceMutationBurstable) Admit(attr admission.Attributes) (err 
 	return nil
 }
 
-func isCPUSetPod(pod *v1.Pod) bool {
+func isCPUSetPod(pod *core.Pod) bool {
 	if pod.Annotations == nil {
 		return false
 	}
@@ -83,32 +90,35 @@ func isCPUSetPod(pod *v1.Pod) bool {
 	return false
 }
 
-func isCPUSharePod(pod *v1.Pod) bool {
+func isCPUSharePod(pod *core.Pod) bool {
 	return !isCPUSetPod(pod)
 }
 
-func mutatePodResource(pod *v1.Pod) error {
-	// pod alreay has expected label
-	if sigmak8sapi.GetPodQOSClass(pod) == sigmak8sapi.SigmaQOSBurstable {
+func mutatePodResource(pod *core.Pod) error {
+	// if pod has SigmaBestEffort qos label, do nothing
+	if pod.Labels[sigmak8sapi.LabelPodQOSClass] == string(sigmak8sapi.SigmaQOSBestEffort) {
 		return nil
 	}
 
-	if isCPUSharePod(pod) && !isSigmaBestEffortPod(pod) {
-		pod.Labels[sigmak8sapi.LabelPodQOSClass] = string(sigmak8sapi.SigmaQOSBurstable)
+	if isCPUSetPod(pod) {
+		// if it is a cpuset pod, make sure it has `sigma.ali/qos: SigmaGuaranteed` label
+		if pod.Labels[sigmak8sapi.LabelPodQOSClass] != string(sigmak8sapi.SigmaQOSGuaranteed) {
+			pod.Labels[sigmak8sapi.LabelPodQOSClass] = string(sigmak8sapi.SigmaQOSGuaranteed)
+		}
+
+	} else {
+		// this is a cpushare pod, make sure it has `sigma.ali/qos: SigmaBurstable` label
+		if pod.Labels[sigmak8sapi.LabelPodQOSClass] != string(sigmak8sapi.SigmaQOSBurstable) {
+			pod.Labels[sigmak8sapi.LabelPodQOSClass] = string(sigmak8sapi.SigmaQOSBurstable)
+		}
 	}
 
 	return nil
 }
 
-// isSigmaBestEffortPod
-// return true if podQOSClass == SigmaQOSBestEffort
-func isSigmaBestEffortPod(pod *v1.Pod) bool {
-	return sigmak8sapi.GetPodQOSClass(pod) == sigmak8sapi.SigmaQOSBestEffort
-}
-
 func shouldIgnore(a admission.Attributes) bool {
 	resource := a.GetResource().GroupResource()
-	if resource != v1.Resource("pods") {
+	if resource != core.Resource("pods") {
 		return true
 	}
 
@@ -116,7 +126,7 @@ func shouldIgnore(a admission.Attributes) bool {
 		return true
 	}
 
-	_, ok := a.GetObject().(*v1.Pod)
+	_, ok := a.GetObject().(*core.Pod)
 	if !ok {
 		log.Errorf("expected pod but got %s", a.GetKind().Kind)
 		return true

@@ -36,7 +36,8 @@ interval=10
 # set push_message to 0, not push message by dingTalk; when push_message is 1(default), push message by dingTalk when error.
 push_message=1
 
-# set check_debug to 0, stop sigma-slave ; when check_debug is 1(default), not kill sigma-slave when error.
+# set check_debug to 0, stop sigma-slave and stop tian_ji_start_file ;
+# when check_debug is 1(default), not kill sigma-slave and not stop tian_ji_start_file when error.
 check_debug=1
 
 # system inotify conf

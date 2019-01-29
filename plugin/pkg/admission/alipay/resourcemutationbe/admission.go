@@ -8,9 +8,9 @@ import (
 	log "github.com/golang/glog"
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	"gitlab.alipay-inc.com/sigma/apis/pkg/apis"
-	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apiserver/pkg/admission"
+	"k8s.io/kubernetes/pkg/apis/core"
 )
 
 const (
@@ -98,11 +98,13 @@ func newAlipayResourceMutationBestEffort() *AlipayResourceMutationBestEffort {
 // 1. Add extended resource with name: SigmaBEResourceName and value: cpu request.
 // 2. Unset cpu resource value.
 func (a *AlipayResourceMutationBestEffort) Admit(attr admission.Attributes) (err error) {
+	log.V(5).Infof("AlipayResourceMutationBestEffort.Admit()...")
 	if shouldIgnore(attr) {
 		return nil
 	}
 
-	pod, ok := attr.GetObject().(*v1.Pod)
+	log.V(5).Infof("shouldn't ignore, do admit")
+	pod, ok := attr.GetObject().(*core.Pod)
 	if !ok {
 		return admission.NewForbidden(attr, fmt.Errorf("unexpected resource"))
 	}
@@ -113,7 +115,7 @@ func (a *AlipayResourceMutationBestEffort) Admit(attr admission.Attributes) (err
 	return nil
 }
 
-func mutatePodResource(pod *v1.Pod) error {
+func mutatePodResource(pod *core.Pod) error {
 	allocSpec, err := podAllocSpec(pod)
 	if err != nil {
 		return err
@@ -130,6 +132,7 @@ func mutatePodResource(pod *v1.Pod) error {
 	// Mutate resources and cgroup values.
 	for i, c := range pod.Spec.Containers {
 		// Set best effort resource value.
+		log.V(5).Infof("mutate resource values container: %s", c.Name)
 		cpuRequestMilliValue := c.Resources.Requests.Cpu().MilliValue()
 		pod.Spec.Containers[i].Resources.Requests[apis.SigmaBEResourceName] =
 			*resource.NewMilliQuantity(cpuRequestMilliValue, resource.DecimalSI)
@@ -138,17 +141,16 @@ func mutatePodResource(pod *v1.Pod) error {
 			*resource.NewMilliQuantity(cpuLimitMilliValue, resource.DecimalSI)
 
 		// Unset cpu resource value.
-		pod.Spec.Containers[i].Resources.Requests[v1.ResourceCPU] =
+		pod.Spec.Containers[i].Resources.Requests[core.ResourceCPU] =
 			*resource.NewQuantity(0, resource.DecimalSI)
-		pod.Spec.Containers[i].Resources.Limits[v1.ResourceCPU] =
+		pod.Spec.Containers[i].Resources.Limits[core.ResourceCPU] =
 			*resource.NewQuantity(0, resource.DecimalSI)
 
 		// Mutate cgroup values in host config.
 		for i, ac := range allocSpec.Containers {
-			if ac.Name == c.Name {
+			if ac.Name != c.Name {
 				continue
 			}
-			log.Infof("mutate cgroup values in host config")
 			// Set cgroup parent.
 			allocSpec.Containers[i].HostConfig.CgroupParent = bestEffortCGroupParentName
 			allocSpec.Containers[i].HostConfig.CPUBvtWarpNs = bestEffortCPUBvtWarpNs
@@ -158,6 +160,8 @@ func mutatePodResource(pod *v1.Pod) error {
 			allocSpec.Containers[i].HostConfig.CpuShares =
 				MilliCPUToShares(cpuRequestMilliValue)
 			allocSpec.Containers[i].HostConfig.OomScoreAdj = bestEffortOOMScoreAdj
+			log.V(5).Infof("mutate cgroup values for container: %s with host config: %+v",
+				ac.Name, allocSpec.Containers[i].HostConfig)
 		}
 	}
 
@@ -165,6 +169,7 @@ func mutatePodResource(pod *v1.Pod) error {
 	if err != nil {
 		return err
 	}
+
 	pod.Annotations[sigmak8sapi.AnnotationPodAllocSpec] = string(data)
 
 	return nil
@@ -172,13 +177,19 @@ func mutatePodResource(pod *v1.Pod) error {
 
 // isSigmaBestEffortPod
 // return true if podQOSClass == SigmaQOSBestEffort
-func isSigmaBestEffortPod(pod *v1.Pod) bool {
-	return sigmak8sapi.GetPodQOSClass(pod) == sigmak8sapi.SigmaQOSBestEffort
+func isSigmaBestEffortPod(pod *core.Pod) bool {
+	if v, ok := pod.Labels[sigmak8sapi.LabelPodQOSClass]; ok {
+		if sigmak8sapi.SigmaQOSClass(v) == sigmak8sapi.SigmaQOSBestEffort {
+			log.V(5).Infof("this is a best effort request")
+			return true
+		}
+	}
+	return false
 }
 
 func shouldIgnore(a admission.Attributes) bool {
 	resource := a.GetResource().GroupResource()
-	if resource != v1.Resource("pods") {
+	if resource != core.Resource("pods") {
 		return true
 	}
 
@@ -186,7 +197,7 @@ func shouldIgnore(a admission.Attributes) bool {
 		return true
 	}
 
-	pod, ok := a.GetObject().(*v1.Pod)
+	pod, ok := a.GetObject().(*core.Pod)
 	if !ok {
 		log.Errorf("expected pod but got %s", a.GetKind().Kind)
 		return true
@@ -204,7 +215,7 @@ func shouldIgnore(a admission.Attributes) bool {
 	return false
 }
 
-func podAllocSpec(pod *v1.Pod) (*sigmak8sapi.AllocSpec, error) {
+func podAllocSpec(pod *core.Pod) (*sigmak8sapi.AllocSpec, error) {
 	if v, exists := pod.Annotations[sigmak8sapi.AnnotationPodAllocSpec]; exists {
 		var allocSpec *sigmak8sapi.AllocSpec
 		if err := json.Unmarshal([]byte(v), &allocSpec); err != nil {

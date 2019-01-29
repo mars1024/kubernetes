@@ -594,7 +594,7 @@ func addOverQuotaAffinity(config *pausePodConfig, nodeSeletor v1.NodeSelectorReq
 }
 
 func cleanJob(tc *testContext) {
-	//time.Sleep(3000*time.Second)
+ 	//time.Sleep(3000*time.Second)
 	if tc.globalRule != nil {
 		swarm.RemoveSigmaGlobal()
 	}

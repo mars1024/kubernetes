@@ -1,0 +1,84 @@
+{
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+        "name": "pod-base",
+        "labels": {
+            "sigma.ali/qos": "SigmaBestEffort"
+        }
+    },
+    "spec": {
+        "containers": [
+            {
+                "name": "c1",
+                "image": "reg.docker.alibaba-inc.com/ali/os:7u2",
+                "imagePullPolicy": "IfNotPresent",
+                "resources": {
+                    "requests": {
+                        "cpu": "300m",
+                        "ephemeral-storage": "1Gi",
+                        "memory": "512Mi"
+                    },
+                    "limits": {
+                        "cpu": "300m",
+                        "ephemeral-storage": "1Gi",
+                        "memory": "512Mi"
+                    }
+                }
+            },
+            {
+                "name": "c2",
+                "image": "reg.docker.alibaba-inc.com/ali/os:7u2",
+                "imagePullPolicy": "IfNotPresent",
+                "resources": {
+                    "requests": {
+                        "cpu": "4",
+                        "ephemeral-storage": "1Gi",
+                        "memory": "512Mi"
+                    },
+                    "limits": {
+                        "cpu": "4",
+                        "ephemeral-storage": "1Gi",
+                        "memory": "512Mi"
+                    }
+                }
+            },
+            {
+                "name": "c3",
+                "image": "reg.docker.alibaba-inc.com/ali/os:7u2",
+                "imagePullPolicy": "IfNotPresent",
+                "resources": {
+                    "requests": {
+                        "cpu": "10m",
+                        "ephemeral-storage": "1Gi",
+                        "memory": "512Mi"
+                    },
+                    "limits": {
+                        "cpu": "10m",
+                        "ephemeral-storage": "1Gi",
+                        "memory": "512Mi"
+                    }
+                }
+            },
+            {
+                "name": "c4",
+                "image": "reg.docker.alibaba-inc.com/ali/os:7u2",
+                "imagePullPolicy": "IfNotPresent",
+                "resources": {
+                    "requests": {
+                        "cpu": "1m",
+                        "ephemeral-storage": "1Gi",
+                        "memory": "512Mi"
+                    },
+                    "limits": {
+                        "cpu": "1m",
+                        "ephemeral-storage": "1Gi",
+                        "memory": "512Mi"
+                    }
+                }
+            }
+        ],
+        "restartPolicy": "Always",
+        "schedulerName": "default-scheduler"
+    }
+}

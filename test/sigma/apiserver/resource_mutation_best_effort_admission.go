@@ -75,11 +75,11 @@ var _ = Describe("[ant][kube-apiserver][admission][resource-mutation-best-effort
 				beRequest := c.Resources.Requests[apis.SigmaBEResourceName]
 				framework.Logf("beRequest.MilliValue(): %v", beRequest.MilliValue())
 				framework.Logf("milliCPU.Request: %v", milliCPU.Request)
-				Expect(beRequest.MilliValue()).To(Equal(milliCPU.Request),
+				Expect(beRequest.MilliValue()).To(Equal(milliCPU.Request*1000),
 					"best effort resource request should be equal to cpu request")
 
 				beLimit := c.Resources.Limits[apis.SigmaBEResourceName]
-				Expect(beLimit.MilliValue()).To(Equal(milliCPU.Limit),
+				Expect(beLimit.MilliValue()).To(Equal(milliCPU.Limit*1000),
 					"best effort limit should be equal to cpu limit")
 
 				// CPU value should be equal to zero.

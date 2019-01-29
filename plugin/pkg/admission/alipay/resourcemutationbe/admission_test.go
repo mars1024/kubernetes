@@ -149,10 +149,10 @@ func TestResourceMutationBE(t *testing.T) {
 				log.Infof("case[%d] check container: %s", i, name)
 				// Best effort value should be equal to cpu value.
 				beRequest := c.Resources.Requests[apis.SigmaBEResourceName]
-				assert.Equal(t, beRequest.MilliValue(), tc.cpuRequest,
+				assert.Equal(t, beRequest.MilliValue(), tc.cpuRequest*1000,
 					"best effort request should be equal to cpu request")
 				beLimit := c.Resources.Limits[apis.SigmaBEResourceName]
-				assert.Equal(t, beLimit.MilliValue(), tc.cpuLimit,
+				assert.Equal(t, beLimit.MilliValue(), tc.cpuLimit*1000,
 					"best effort limit should be equal to cpu limit")
 
 				// CPU value should be equal to zero.

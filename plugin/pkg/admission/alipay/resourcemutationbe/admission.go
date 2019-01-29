@@ -132,13 +132,15 @@ func mutatePodResource(pod *core.Pod) error {
 	// Mutate resources and cgroup values.
 	for i, c := range pod.Spec.Containers {
 		// Set best effort resource value.
+		// Now we use milli cpu to create extended resource,
+		// so value of extended resource is 1000x of cpu.
 		log.V(5).Infof("mutate resource values container: %s", c.Name)
 		cpuRequestMilliValue := c.Resources.Requests.Cpu().MilliValue()
 		pod.Spec.Containers[i].Resources.Requests[apis.SigmaBEResourceName] =
-			*resource.NewMilliQuantity(cpuRequestMilliValue, resource.DecimalSI)
+			*resource.NewQuantity(cpuRequestMilliValue, resource.DecimalSI)
 		cpuLimitMilliValue := c.Resources.Limits.Cpu().MilliValue()
 		pod.Spec.Containers[i].Resources.Limits[apis.SigmaBEResourceName] =
-			*resource.NewMilliQuantity(cpuLimitMilliValue, resource.DecimalSI)
+			*resource.NewQuantity(cpuLimitMilliValue, resource.DecimalSI)
 
 		// Unset cpu resource value.
 		pod.Spec.Containers[i].Resources.Requests[core.ResourceCPU] =

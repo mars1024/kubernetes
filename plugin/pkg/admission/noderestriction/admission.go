@@ -219,6 +219,18 @@ func (c *nodePlugin) admitPod(nodeName string, a admission.Attributes) error {
 		}
 		return nil
 
+	case admission.Update:
+		// require an existing pod
+		pod, ok := a.GetOldObject().(*api.Pod)
+		if !ok {
+			return admission.NewForbidden(a, fmt.Errorf("unexpected type %T", a.GetOldObject()))
+		}
+		// only allow a node to update pod bound to itself
+		if pod.Spec.NodeName != nodeName {
+			return admission.NewForbidden(a, fmt.Errorf("node %q can only update pod for pods with spec.nodeName set to itself", nodeName))
+		}
+		return nil
+
 	default:
 		return admission.NewForbidden(a, fmt.Errorf("unexpected operation %q", a.GetOperation()))
 	}

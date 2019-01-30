@@ -142,7 +142,7 @@ func (c *newaliPodInjectionPreSchedule) Admit(a admission.Attributes) error {
 	podLabelStage := pod.Labels[labelAppStage]
 
 	if getMainContainer(pod) == nil {
-		errors.NewBadRequest("Not found main container in pod")
+		return errors.NewBadRequest("Pod with dockervm must contains a container named 'main'.")
 	}
 	//glog.V(3).Infof("[newinjection] start load global rules")
 	// global配置

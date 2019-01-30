@@ -107,6 +107,8 @@ var _ = Describe("[ant][kube-apiserver][admission][resource-mutation-best-effort
 						resourcemutationbe.QuotaPeriod)
 					Expect(ac.HostConfig.CpuQuota).To(Equal(expectedCPUQuota),
 						"cpuquota should be equal to expected")
+					Expect(ac.Resource.CPU.BindingStrategy).To(Equal(sigmak8sapi.CPUBindStrategyAllCPUs),
+						"cpu binding strategy should be equal to expected")
 				}
 			}
 		}

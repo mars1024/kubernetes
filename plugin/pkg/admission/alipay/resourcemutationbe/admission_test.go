@@ -171,10 +171,13 @@ func TestResourceMutationBE(t *testing.T) {
 					}
 
 					log.Infof("host config of container[%s]: %+v", ac.Name, ac.HostConfig)
+					log.Infof("resource of container[%s]: %+v", ac.Name, ac.Resource)
 					assert.Equal(t, tc.expectedCPUShares, ac.HostConfig.CpuShares,
 						"cpushares should be equal to expected")
 					assert.Equal(t, tc.expectedCPUQuota, ac.HostConfig.CpuQuota,
 						"cpuquota should be equal to expected")
+					assert.Equal(t, sigmak8sapi.CPUBindStrategyAllCPUs, ac.Resource.CPU.BindingStrategy,
+						"cpu binding strategy should be equal to expected")
 				}
 			}
 		}

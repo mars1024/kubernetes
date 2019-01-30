@@ -164,6 +164,8 @@ func mutatePodResource(pod *core.Pod) error {
 			allocSpec.Containers[i].HostConfig.OomScoreAdj = bestEffortOOMScoreAdj
 			log.V(5).Infof("mutate cgroup values for container: %s with host config: %+v",
 				ac.Name, allocSpec.Containers[i].HostConfig)
+
+			allocSpec.Containers[i].Resource.CPU.BindingStrategy = sigmak8sapi.CPUBindStrategyAllCPUs
 		}
 	}
 

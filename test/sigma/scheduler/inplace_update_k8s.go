@@ -128,7 +128,7 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][inplace-update][Serial]", func() 
 	//    剩余的 cpu 额度 X2 = (1/4 * X)，memory 额度 Y2 = (1/4 * Y)，disk 额度 Z2 = (1/4 * Z)
 	// 3. 步骤 6 中，PodA 调度成功，且 Pod.Spec.NodeName = 此 Node，
 	//    剩余的 cpu 额度 X3 = (3/4 * X)，memory 额度 Y3 = (3/4 * Y)，disk 额度 Z3 = (3/4 * Z)
-	It("[smoke][p0][bvt] scheduler_inplace_update_001 A pod with cpu/mem/ephemeral-storage request should be scheduled on node with enough resource successfully. "+
+	It("[smoke][p0][bvt][ant] scheduler_inplace_update_001 A pod with cpu/mem/ephemeral-storage request should be scheduled on node with enough resource successfully. "+
 		"And should be updated successfully.", func() {
 		nodeName := GetNodeThatCanRunPod(f)
 		framework.Logf("get one node to schedule, nodeName: %s", nodeName)

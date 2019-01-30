@@ -594,7 +594,7 @@ func addOverQuotaAffinity(config *pausePodConfig, nodeSeletor v1.NodeSelectorReq
 }
 
 func cleanJob(tc *testContext) {
-	//time.Sleep(3000*time.Second)
+ 	//time.Sleep(3000*time.Second)
 	if tc.globalRule != nil {
 		swarm.RemoveSigmaGlobal()
 	}
@@ -617,7 +617,8 @@ func releaseResource(tc *testContext, caseIndexes []int) map[string]map[string]s
 		}
 		if p.pod != nil {
 			glog.Infof("k8s clean name: %s", p.pod.Name)
-			err := tc.cs.CoreV1().Pods(p.pod.Namespace).Delete(p.pod.Name, nil)
+			err := util.DeletePod(tc.cs, p.pod)
+			//err := tc.cs.CoreV1().Pods(p.pod.Namespace).Delete(p.pod.Name, nil)
 			Expect(err).ShouldNot(HaveOccurred(), fmt.Sprintf("name: %s, when delete, err: %v", p.pod.Name, err))
 			containerSnMap := hostSnToContainerSnSet[p.pod.Spec.NodeName]
 			if containerSnMap == nil {

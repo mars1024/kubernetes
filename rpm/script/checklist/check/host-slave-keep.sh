@@ -28,7 +28,9 @@ host_slave_keep_stop(){
     echo "shut down host-slave keep alive about sigma-slave"
     if [[ -e ${tian_ji_start_file} ]]
     then
-       chmod 400 ${tian_ji_start_file}
+       if [[ ${check_debug} -eq 0 ]]; then
+            chmod 400 ${tian_ji_start_file}
+       fi
     else
        echo "${tian_ji_start_file} not exist"
     fi

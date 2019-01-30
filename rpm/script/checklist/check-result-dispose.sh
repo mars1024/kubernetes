@@ -25,7 +25,7 @@ message_notify() {
     # replace '"' in message, to avoid message truncation
     info=$(echo $* | sed 's/"//g')
 
-    operator=$(yum history info t-sigma-slave | grep User  |awk 'NR==1' | awk '{print $3}' | egrep -o '[a-zA-Z|.]+')
+    operator=$(timeout 10 yum history info t-sigma-slave | grep User  |awk 'NR==1' | awk '{print $3}' | egrep -o '[a-zA-Z|.]+')
 
     # join together all message
     ct=" host: [${ip}](https://n.alibaba-inc.com/ops/info/host?host=${ip}) upgrade sigmalet to version :  ${sigma_slave_version} error \n: ${info} "

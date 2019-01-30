@@ -5,7 +5,8 @@
 # Create Date: 2018/12/26 20:57
 # Modify Author: yaowei.cyw@alibaba-inc.com
 # Modify Date: 2018/12/26 20:57
-# Function: check whether container num and state change  before and after rpm update (only running container)
+# Function: check whether container num decrease and exist container state change
+# before and after rpm update (only running 3.1 container)
 #================================================================
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 source ${DIR}/../check-result-dispose.sh
@@ -31,15 +32,21 @@ check_container_state_start(){
     START=$(date +%s)
     while [[ $(( $(date +%s) - START )) -lt ${check_time} ]]
     do
+        # only consider sigma 3.1 container, ignore 2.0 and pause container
         runtime=$(get_runtime)
+        if [[ ${runtime} == *pouch* ]]; then
+            label_filter="label=io.kubernetes.pouch.type=container"
+        else
+            label_filter="label=io.kubernetes.docker.type=container"
+        fi
 
         # get new container state
-        container_state_data=$( ${runtime} inspect  -f  "name={{.Name}};status={{.State.Status}};running={{.State.Running}};paused={{.State.Paused}};restarting={{.State.Restarting}};oomKilled={{.State.OOMKilled}};dead={{.State.Dead}};pid={{.State.Pid}};exitCode={{.State.ExitCode}};startedAt={{.State.StartedAt}};finishedAt={{.State.FinishedAt}}" `${runtime} ps -q`)
+        container_state_data=$( ${runtime} inspect  -f  "name={{.Name}};status={{.State.Status}};running={{.State.Running}};paused={{.State.Paused}};restarting={{.State.Restarting}};oomKilled={{.State.OOMKilled}};dead={{.State.Dead}};pid={{.State.Pid}};exitCode={{.State.ExitCode}};startedAt={{.State.StartedAt}};finishedAt={{.State.FinishedAt}}" `${runtime} ps -f "${label_filter}" -q`)
 
-        # check whether container  num change
+	    # check whether container num decrease
         before_count=$(< "${container_state_file}"  awk 'NR>1' | wc -l)
         after_count=$(echo "${container_state_data}" | wc -l)
-        if [[ "${before_count}" -ne "${after_count}" ]]; then
+        if [[ "${before_count}" -gt "${after_count}" ]]; then
              stop_all_check_and_sigma_slave "runtime event :\n
               container count change, before upgrade is ${before_count}, after upgrade is ${after_count}"
         fi
@@ -57,11 +64,10 @@ check_container_state_start(){
 
          old_container_state=$(cat "${container_state_file}" | grep ${container_name} | awk -F ";" '{ $1=""; print $0 }')
          echo "old container state is ${old_container_state}"
-
-         # if old container state not exist, which means this is a new container
+         # if old container state not exist, which means this is a new container,just log it
          if [[ -z "${old_container_state}" ]]; then
-              stop_all_check_and_sigma_slave "runtime event :\n
-              container ${container_name} not exist in before update"
+              echo "container ${container_name} not exist in before update"
+              continue
          fi
 
          # check container every state include Status, Running, restarting and so on
@@ -78,8 +84,8 @@ check_container_state_start(){
             fi
             ((i++))
          done
-
        done
+
        date
        sleep  ${interval}
     done

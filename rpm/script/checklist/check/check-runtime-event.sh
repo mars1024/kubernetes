@@ -42,7 +42,7 @@ check_runtime_event_start(){
     do
 
         # grep events which are we care
-        events=$(< "${event_file}"  grep -E 'container die|container oom|container restart|container stop|container kill|container exec_die|network disconnect|network destroy|volume destroy' \
+        events=$(< "${event_file}"  grep -E 'container die|container oom|container restart|container stop|container kill|network disconnect|network destroy|volume destroy' \
         | awk -F '(' '{print $1}' | awk '{ $1=""; print $0 }' | sort|uniq)
 
         if [[ -n "${events}" ]]; then

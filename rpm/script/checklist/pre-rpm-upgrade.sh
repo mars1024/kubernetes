@@ -32,9 +32,15 @@ storage_container_state() {
         return
     fi
 
+	# only consider sigma 3.1 container, ignore 2.0 and pause container
 	runtime=$(get_runtime)
+	if [[ ${runtime} == *pouch* ]]; then
+		label_filter="label=io.kubernetes.pouch.type=container"
+	else
+		label_filter="label=io.kubernetes.docker.type=container"
+	fi
 	container_state_file=${sigma_slave_check_dir}/container-state
-	container_state_data=$( ${runtime} inspect  -f  "name={{.Name}};status={{.State.Status}};running={{.State.Running}};paused={{.State.Paused}};restarting={{.State.Restarting}};oomKilled={{.State.OOMKilled}};dead={{.State.Dead}};pid={{.State.Pid}};exitCode={{.State.ExitCode}};startedAt={{.State.StartedAt}};finishedAt={{.State.FinishedAt}}" `${runtime} ps -q` )
+	container_state_data=$( ${runtime} inspect  -f  "name={{.Name}};status={{.State.Status}};running={{.State.Running}};paused={{.State.Paused}};restarting={{.State.Restarting}};oomKilled={{.State.OOMKilled}};dead={{.State.Dead}};pid={{.State.Pid}};exitCode={{.State.ExitCode}};startedAt={{.State.StartedAt}};finishedAt={{.State.FinishedAt}}" `${runtime} ps -f "${label_filter}" -q` )
 
 	date > "${container_state_file}"
 	echo "${container_state_data}" >> "${container_state_file}"
@@ -55,11 +61,11 @@ storage_container_exec() {
 	else
 		label_filter="label=io.kubernetes.docker.type=container"
 	fi
-	container_state_file=${sigma_slave_check_dir}/container-exec
+	container_exec_file=${sigma_slave_check_dir}/container-exec
 	container_ids=$(${runtime} ps -f "${label_filter}" -q)
 
 	echo "container ids ${container_ids}"
-	date > "${container_state_file}"
+	date > "${container_exec_file}"
 
 	for container_id in ${container_ids};
 	do
@@ -67,7 +73,7 @@ storage_container_exec() {
 		ret=$(${runtime} exec "${container_id}" date)
 		if [[ $? -eq 0 ]];
 		then
-			echo "${container_id}" >> "${container_state_file}"
+			echo "${container_id}" >> "${container_exec_file}"
 		fi
 	done
 }

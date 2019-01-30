@@ -14,6 +14,7 @@ import (
 	"k8s.io/kubernetes/pkg/apis/apps"
 	informers "k8s.io/kubernetes/pkg/client/informers/informers_generated/internalversion"
 	settingslisters "k8s.io/kubernetes/pkg/client/listers/core/internalversion"
+	statefulsetcontroller "k8s.io/kubernetes/pkg/controller/statefulset"
 	kubeapiserveradmission "k8s.io/kubernetes/pkg/kubeapiserver/admission"
 )
 
@@ -21,7 +22,6 @@ const (
 	// PluginName indicates name of admission plugin.
 	PluginName = "AuditDelete"
 
-	modeForStatefulSet = "statefulset.beta1.sigma.ali/mode"
 	enableCascadingDeletion = "sigma.ali/enable-cascading-deletion"
 )
 
@@ -97,7 +97,7 @@ func (p *auditDeletePlugin) Validate(a admission.Attributes) error {
 		if !ok {
 			return errors.NewBadRequest("Resource was marked with kind StatefulSet but was unable to be converted by AuditDelete")
 		}
-		if set.Labels[modeForStatefulSet] == "sigma" {
+		if set.Labels[statefulsetcontroller.ModeForStatefulSet] == "sigma" {
 			return p.validateWorkloadDeletion(objectMeta)
 		}
 	}

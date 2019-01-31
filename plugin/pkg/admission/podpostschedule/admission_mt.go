@@ -78,12 +78,15 @@ func (plugin *podPostSchedulePlugin) Admit(a admission.Attributes) error {
 		return nil
 	}
 
-	if _, exist := pod.Annotations[multitenancy.LabelPodTargetCell]; !exist && len(pod.Spec.NodeName) > 0 {
+	if _, exist := pod.Annotations[multitenancy.LabelCellName]; !exist && len(pod.Spec.NodeName) > 0 {
 		node, err := plugin.nodeLister.Get(pod.Spec.NodeName)
 		if err != nil {
 			return err
 		}
-		pod.Annotations[multitenancy.LabelPodTargetCell] = node.Labels[multitenancy.LabelCellFailureDomain]
+		nodeCellName, ok := node.Labels[multitenancy.LabelCellName]
+		if ok && len(nodeCellName) > 0 {
+			pod.Annotations[multitenancy.LabelCellName] = node.Labels[multitenancy.LabelCellName]
+		}
 	}
 
 	return nil

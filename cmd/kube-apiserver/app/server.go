@@ -101,6 +101,9 @@ import (
 	genericfilters "k8s.io/apiserver/pkg/server/filters"
 	multitenancyfilter "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/filter"
 	bucketingfilter "gitlab.alipay-inc.com/antcloud-aks/cafe-cluster-operator/pkg/apiserver/filter"
+	cafeadmission "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/admission"
+	cafeclientset "gitlab.alipay-inc.com/antcloud-aks/cafe-kubernetes-extension/pkg/client/clientset_generated/clientset"
+	cafeinformers "gitlab.alipay-inc.com/antcloud-aks/cafe-kubernetes-extension/pkg/client/informers_generated/externalversions"
 )
 
 const etcdRetryLimit = 60
@@ -639,6 +642,19 @@ func buildGenericConfig(
 	if err != nil {
 		lastErr = fmt.Errorf("failed to create admission plugin initializer: %v", err)
 		return
+	}
+
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		restConfigShallowCopy := *genericConfig.LoopbackClientConfig
+		restConfigShallowCopy.ContentType = "application/json"
+		cafeClient, err := cafeclientset.NewForConfig(&restConfigShallowCopy)
+		if err != nil {
+			lastErr = fmt.Errorf("failed to create cafe clientset: %v", err)
+			return
+		}
+		cafeSharedInformers := cafeinformers.NewSharedInformerFactory(cafeClient, 10*time.Minute)
+		cafePluginInitializer := cafeadmission.NewPluginInitializer(cafeClient, cafeSharedInformers, storageFactory)
+		pluginInitializers = append(pluginInitializers, cafePluginInitializer)
 	}
 
 	err = s.Admission.ApplyTo(

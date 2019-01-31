@@ -47,8 +47,9 @@ import (
 )
 
 const (
-	PluginName       = "ServiceNetAllocator"
-	LabelClusterName = "cloud.alipay.com/cluster-name"
+	PluginName                           = "ServiceNetAllocator"
+	AnnotationMCName                     = "aks.cafe.sofastack.io/mc"
+	AnnotationIgnoreServiceNetAllocation = "aks.cafe.sofastack.io/ignore-service-net"
 )
 
 // ServiceNodePort includes protocol and port number of a service NodePort.
@@ -130,9 +131,7 @@ func (s *serviceNetAllocatorPlugin) ValidateInitialization() error {
 
 // Admit allocates cluster ip and node port for services which need info.
 func (s *serviceNetAllocatorPlugin) Admit(a admission.Attributes) error {
-	if ignore, err := shouldIgnore(a); err != nil {
-		return err
-	} else if ignore {
+	if shouldIgnore(a) {
 		return nil
 	}
 
@@ -162,26 +161,55 @@ func (s *serviceNetAllocatorPlugin) Admit(a admission.Attributes) error {
 	}
 
 	// extract cluster name from service labels
-	clusterName := getServiceClusterName(service)
-	if len(clusterName) == 0 {
-		return errors.NewBadRequest("Service missing cluster name info")
-	}
-
-	clusters, err := s.lister.List(labels.Everything())
-	if err != nil {
-		return fmt.Errorf("failed to list clusters: %v", err)
-	}
-	var found bool
 	var minionCluster *v1alpha1.MinionCluster
-	for _, cluster := range clusters {
-		if cluster.Name != clusterName {
-			continue
+	clusterName := getServiceClusterName(service)
+	if len(clusterName) > 0 {
+		var err error
+		minionCluster, err = s.lister.Get(clusterName)
+		if err != nil {
+			return fmt.Errorf("no such minion cluster %v", clusterName)
 		}
-		found = true
-		minionCluster = cluster
-	}
-	if !found {
-		return fmt.Errorf("no such minion cluster %v", clusterName)
+	} else {
+		clusters, err := s.lister.List(labels.Everything())
+		if err != nil {
+			return fmt.Errorf("failed to list clusters: %v", err)
+		}
+		var foundLegacyCluster bool
+		for _, cluster := range clusters {
+			if service.Annotations[multitenancy.MultiTenancyAnnotationKeyTenantID] != cluster.Labels[v1alpha1.LegacyLabelTenantName] {
+				continue
+			}
+			if service.Annotations[multitenancy.MultiTenancyAnnotationKeyWorkspaceID] != cluster.Labels[v1alpha1.LegacyLabelWorkspaceName] {
+				continue
+			}
+			if service.Annotations[multitenancy.MultiTenancyAnnotationKeyClusterID] != cluster.Labels[v1alpha1.LegacyLabelClusterName] {
+				continue
+			}
+			foundLegacyCluster = true
+			minionCluster = cluster
+		}
+		var foundMinionCluster bool
+		for _, cluster := range clusters {
+			if service.Labels[v1alpha1.LabelTenantName] != cluster.Labels[v1alpha1.LabelTenantName] {
+				continue
+			}
+			if service.Labels[v1alpha1.LabelWorkspaceName] != cluster.Labels[v1alpha1.LabelWorkspaceName] {
+				continue
+			}
+			if service.Labels[v1alpha1.LabelClusterName] != cluster.Labels[v1alpha1.LabelClusterName] {
+				continue
+			}
+			foundMinionCluster = true
+			minionCluster = cluster
+		}
+
+		if !foundLegacyCluster && !foundMinionCluster {
+			return fmt.Errorf("no such minion cluster %v/%v/%v",
+				service.Annotations[multitenancy.MultiTenancyAnnotationKeyTenantID],
+				service.Annotations[multitenancy.MultiTenancyAnnotationKeyWorkspaceID],
+				service.Annotations[multitenancy.MultiTenancyAnnotationKeyClusterID],
+			)
+		}
 	}
 
 	switch a.GetOperation() {
@@ -210,20 +238,27 @@ func (s *serviceNetAllocatorPlugin) ShallowCopyWithTenant(info multitenancy.Tena
 	return &copied
 }
 
-func shouldIgnore(a admission.Attributes) (bool, error) {
+func shouldIgnore(a admission.Attributes) bool {
 	if a.GetResource().GroupResource() != api.Resource("services") {
-		return true, nil
+		return true
 	}
 	if len(a.GetSubresource()) != 0 {
-		return true, nil
+		return true
 	}
 
 	operation := a.GetOperation()
 	if operation != admission.Create && operation != admission.Update && operation != admission.Delete {
-		return true, nil
+		return true
+	}
+	if obj := a.GetObject(); obj != nil {
+		if svc, ok := obj.(*api.Service); ok {
+			if svc.Annotations[AnnotationIgnoreServiceNetAllocation] == "true" {
+				return true
+			}
+		}
 	}
 
-	return false, nil
+	return false
 }
 
 func (s *serviceNetAllocatorPlugin) handleServiceCreate(service *api.Service, cluster *v1alpha1.MinionCluster, dryRun bool) error {
@@ -543,7 +578,7 @@ func collectServiceNodePorts(service *api.Service) []int {
 }
 
 func getServiceClusterName(service *api.Service) string {
-	clusterName, ok := service.Labels[LabelClusterName]
+	clusterName, ok := service.Annotations[AnnotationMCName]
 	if !ok {
 		return ""
 	}

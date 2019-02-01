@@ -9,13 +9,18 @@ import (
 func (r RealPodControl) ShallowCopyWithTenant(tenant multitenancy.TenantInfo) interface{} {
 	copyRealPodControl := r
 	copyRealPodControl.KubeClient = r.KubeClient.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(clientset.Interface)
-	// TODO: multi tenancy event recorder
 	return copyRealPodControl
 }
 
 func (r RealRSControl) ShallowCopyWithTenant(tenant multitenancy.TenantInfo) interface{} {
 	copyRealRSControl := r
 	copyRealRSControl.KubeClient = r.KubeClient.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(clientset.Interface)
-	// TODO: multi tenancy event recorder
 	return copyRealRSControl
+}
+
+func (r RealControllerRevisionControl) ShallowCopyWithTenant(tenant multitenancy.TenantInfo) interface{} {
+	copyRealControllerRevisionControl := r
+	tenantClient := r.KubeClient.(multitenancymeta.TenantWise)
+	copyRealControllerRevisionControl.KubeClient = tenantClient.ShallowCopyWithTenant(tenant).(clientset.Interface)
+	return copyRealControllerRevisionControl
 }

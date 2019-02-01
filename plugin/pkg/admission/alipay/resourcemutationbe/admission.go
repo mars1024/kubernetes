@@ -28,7 +28,7 @@ const (
 	MilliCPUToCPU = 1000
 
 	// 100000 is equivalent to 100ms
-	QuotaPeriod    = 150000
+	QuotaPeriod    = 100000
 	MinQuotaPeriod = 1000
 )
 

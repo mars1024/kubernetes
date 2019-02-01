@@ -27,9 +27,11 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/controller/nodelifecycle"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
 	"net/http"
 
+	multitenancygarbagecollector "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/controller/garbagecollector"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
@@ -61,8 +63,6 @@ import (
 	"k8s.io/kubernetes/pkg/quota/generic"
 	quotainstall "k8s.io/kubernetes/pkg/quota/install"
 	"k8s.io/kubernetes/pkg/util/metrics"
-	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
-	multitenancygarbagecollector "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/controller/garbagecollector"
 )
 
 func startServiceController(ctx ControllerContext) (http.Handler, bool, error) {
@@ -122,6 +122,33 @@ func startNodeIpamController(ctx ControllerContext) (http.Handler, bool, error) 
 }
 
 func startNodeLifecycleController(ctx ControllerContext) (http.Handler, bool, error) {
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		lifecycleController, err := nodelifecycle.NewNodeLifecycleController(
+			ctx.InformerFactory.Coordination().V1beta1().Leases(),
+			ctx.InformerFactory.Core().V1().Pods(),
+			ctx.InformerFactory.Core().V1().Nodes(),
+			ctx.InformerFactory.Extensions().V1beta1().DaemonSets(),
+			ctx.Cloud,
+			ctx.ClientBuilder.ClientOrDie("node-controller"),
+			ctx.ComponentConfig.KubeCloudShared.NodeMonitorPeriod.Duration,
+			ctx.ComponentConfig.NodeLifecycleController.NodeStartupGracePeriod.Duration,
+			ctx.ComponentConfig.NodeLifecycleController.NodeMonitorGracePeriod.Duration,
+			ctx.ComponentConfig.NodeLifecycleController.PodEvictionTimeout.Duration,
+			ctx.ComponentConfig.NodeLifecycleController.NodeEvictionRate,
+			ctx.ComponentConfig.NodeLifecycleController.SecondaryNodeEvictionRate,
+			ctx.ComponentConfig.NodeLifecycleController.LargeClusterSizeThreshold,
+			ctx.ComponentConfig.NodeLifecycleController.UnhealthyZoneThreshold,
+			ctx.ComponentConfig.NodeLifecycleController.EnableTaintManager,
+			utilfeature.DefaultFeatureGate.Enabled(features.TaintBasedEvictions),
+			utilfeature.DefaultFeatureGate.Enabled(features.TaintNodesByCondition),
+		)
+		if err != nil {
+			return nil, true, err
+		}
+		go lifecycleController.Run(ctx.Stop)
+		return nil, true, nil
+	}
+
 	lifecycleController, err := lifecyclecontroller.NewNodeLifecycleController(
 		ctx.InformerFactory.Coordination().V1beta1().Leases(),
 		ctx.InformerFactory.Core().V1().Pods(),

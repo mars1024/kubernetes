@@ -28,7 +28,7 @@ const (
 	MilliCPUToCPU = 1000
 
 	// 100000 is equivalent to 100ms
-	QuotaPeriod    = 150000
+	QuotaPeriod    = 100000
 	MinQuotaPeriod = 1000
 )
 
@@ -132,13 +132,15 @@ func mutatePodResource(pod *core.Pod) error {
 	// Mutate resources and cgroup values.
 	for i, c := range pod.Spec.Containers {
 		// Set best effort resource value.
+		// Now we use milli cpu to create extended resource,
+		// so value of extended resource is 1000x of cpu.
 		log.V(5).Infof("mutate resource values container: %s", c.Name)
 		cpuRequestMilliValue := c.Resources.Requests.Cpu().MilliValue()
 		pod.Spec.Containers[i].Resources.Requests[apis.SigmaBEResourceName] =
-			*resource.NewMilliQuantity(cpuRequestMilliValue, resource.DecimalSI)
+			*resource.NewQuantity(cpuRequestMilliValue, resource.DecimalSI)
 		cpuLimitMilliValue := c.Resources.Limits.Cpu().MilliValue()
 		pod.Spec.Containers[i].Resources.Limits[apis.SigmaBEResourceName] =
-			*resource.NewMilliQuantity(cpuLimitMilliValue, resource.DecimalSI)
+			*resource.NewQuantity(cpuLimitMilliValue, resource.DecimalSI)
 
 		// Unset cpu resource value.
 		pod.Spec.Containers[i].Resources.Requests[core.ResourceCPU] =
@@ -162,6 +164,8 @@ func mutatePodResource(pod *core.Pod) error {
 			allocSpec.Containers[i].HostConfig.OomScoreAdj = bestEffortOOMScoreAdj
 			log.V(5).Infof("mutate cgroup values for container: %s with host config: %+v",
 				ac.Name, allocSpec.Containers[i].HostConfig)
+
+			allocSpec.Containers[i].Resource.CPU.BindingStrategy = sigmak8sapi.CPUBindStrategyAllCPUs
 		}
 	}
 

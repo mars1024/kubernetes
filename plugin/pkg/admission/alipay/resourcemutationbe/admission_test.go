@@ -81,7 +81,7 @@ func TestResourceMutationBE(t *testing.T) {
 					cpuRequest:        10,
 					cpuLimit:          20,
 					expectedCPUShares: 10,
-					expectedCPUQuota:  1500,
+					expectedCPUQuota:  1000,
 				},
 				"c2": testContainer{
 					cpuRequest:        1,
@@ -97,13 +97,13 @@ func TestResourceMutationBE(t *testing.T) {
 					cpuRequest:        1000,
 					cpuLimit:          2000,
 					expectedCPUShares: 1024,
-					expectedCPUQuota:  150000,
+					expectedCPUQuota:  100000,
 				},
 				"c2": testContainer{
 					cpuRequest:        100,
 					cpuLimit:          200,
 					expectedCPUShares: 102,
-					expectedCPUQuota:  15000,
+					expectedCPUQuota:  10000,
 				},
 			},
 		},
@@ -113,19 +113,19 @@ func TestResourceMutationBE(t *testing.T) {
 					cpuRequest:        1000,
 					cpuLimit:          2000,
 					expectedCPUShares: 1024,
-					expectedCPUQuota:  150000,
+					expectedCPUQuota:  100000,
 				},
 				"c2": testContainer{
 					cpuRequest:        2000,
 					cpuLimit:          2000,
 					expectedCPUShares: 2048,
-					expectedCPUQuota:  2 * 150000,
+					expectedCPUQuota:  2 * 100000,
 				},
 				"c3": testContainer{
 					cpuRequest:        10,
 					cpuLimit:          20,
 					expectedCPUShares: 10,
-					expectedCPUQuota:  1500,
+					expectedCPUQuota:  1000,
 				},
 			},
 		},
@@ -149,10 +149,10 @@ func TestResourceMutationBE(t *testing.T) {
 				log.Infof("case[%d] check container: %s", i, name)
 				// Best effort value should be equal to cpu value.
 				beRequest := c.Resources.Requests[apis.SigmaBEResourceName]
-				assert.Equal(t, beRequest.MilliValue(), tc.cpuRequest,
+				assert.Equal(t, beRequest.MilliValue(), tc.cpuRequest*1000,
 					"best effort request should be equal to cpu request")
 				beLimit := c.Resources.Limits[apis.SigmaBEResourceName]
-				assert.Equal(t, beLimit.MilliValue(), tc.cpuLimit,
+				assert.Equal(t, beLimit.MilliValue(), tc.cpuLimit*1000,
 					"best effort limit should be equal to cpu limit")
 
 				// CPU value should be equal to zero.
@@ -171,10 +171,13 @@ func TestResourceMutationBE(t *testing.T) {
 					}
 
 					log.Infof("host config of container[%s]: %+v", ac.Name, ac.HostConfig)
+					log.Infof("resource of container[%s]: %+v", ac.Name, ac.Resource)
 					assert.Equal(t, tc.expectedCPUShares, ac.HostConfig.CpuShares,
 						"cpushares should be equal to expected")
 					assert.Equal(t, tc.expectedCPUQuota, ac.HostConfig.CpuQuota,
 						"cpuquota should be equal to expected")
+					assert.Equal(t, sigmak8sapi.CPUBindStrategyAllCPUs, ac.Resource.CPU.BindingStrategy,
+						"cpu binding strategy should be equal to expected")
 				}
 			}
 		}

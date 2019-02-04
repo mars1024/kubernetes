@@ -41,7 +41,23 @@ import (
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	utiltrace "k8s.io/apiserver/pkg/util/trace"
 	"k8s.io/client-go/tools/cache"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
+
+var (
+	initCounter = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "apiserver_init_events_total",
+			Help: "Counter of init events processed in watchcache broken by resource type",
+		},
+		[]string{"resource"},
+	)
+)
+
+func init() {
+	prometheus.MustRegister(initCounter)
+}
 
 // Config contains the configuration for a given Cache.
 type Config struct {
@@ -942,6 +958,10 @@ func (c *cacheWatcher) process(initEvents []*watchCacheEvent, resourceVersion ui
 	startTime := time.Now()
 	for _, event := range initEvents {
 		c.sendWatchCacheEvent(event)
+	}
+	if len(initEvents) > 0 {
+		objType := reflect.TypeOf(initEvents[0].Object).String()
+		initCounter.WithLabelValues(objType).Add(float64(len(initEvents)))
 	}
 	processingTime := time.Since(startTime)
 	if processingTime > initProcessThreshold {

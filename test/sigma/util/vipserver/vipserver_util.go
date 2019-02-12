@@ -22,9 +22,10 @@ type Backends struct {
 	IPs []IPInfo `json:"ips"`
 }
 type IPInfo struct {
-	IP     string `json:"ip"`
-	Port   int    `json:"port"`
-	Weight int    `json:"weight"`
+	IP      string `json:"ip"`
+	Port    int    `json:"port"`
+	Weight  int    `json:"weight"`
+	Cluster string `json:"cluster"`
 }
 
 func GetBackends(domain string) (Backends, error) {

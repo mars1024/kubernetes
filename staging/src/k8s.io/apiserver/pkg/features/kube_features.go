@@ -86,6 +86,12 @@ const (
 	//
 	// Allow index labels and fields in apiserver, so that list operations get accelerated.
 	SelectorIndex utilfeature.Feature = "SelectorIndex"
+
+	// owner: @wojtek-t
+	// alpha: v1.15
+	//
+	// Enables support for watch bookmark events.
+	WatchBookmark utilfeature.Feature = "WatchBookmark"
 )
 
 func init() {
@@ -104,4 +110,5 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	APIListChunking:         {Default: true, PreRelease: utilfeature.Beta},
 	DryRun:                  {Default: false, PreRelease: utilfeature.Alpha},
 	SelectorIndex:           {Default: false, PreRelease: utilfeature.Alpha},
+	WatchBookmark:           {Default: false, PreRelease: utilfeature.Alpha},
 }

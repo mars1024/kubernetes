@@ -395,4 +395,48 @@ var _ = Describe("[sigma-controller][vipserver]", func() {
 		err = vipserverutil.WaitUntilBackendsCorrect(nil, domain, time.Second, 5*time.Minute)
 		Expect(err).NotTo(HaveOccurred(), "wait until backends correct failed")
 	})
+
+	It("[smoke][test-sync4] Test viperver sync pods with cluster [Slow][Serial]", func() {
+		By("create a vipserver service")
+		serviceFile := filepath.Join(util.TestDataDir, "vipserver-service.json")
+		serviceCfg, err := util.LoadServiceFromFile(serviceFile)
+		Expect(err).NotTo(HaveOccurred(), "load vipserver service failed")
+
+		domain := fmt.Sprintf("%v-sync-pods-with-cluster", f.Namespace.Name)
+		defer vipserverutil.RemoveDomain(domain)
+		uniqLabel := fmt.Sprintf("vipserver-test-%v", uuid.NewUUID())
+		serviceCfg.Spec.Selector = map[string]string{"usage": uniqLabel}
+		serviceCfg.Annotations = map[string]string{"sigma.ali/vipserver-domain": domain}
+		vipserverSvc, err := f.ClientSet.CoreV1().Services(f.Namespace.Name).Create(serviceCfg)
+		Expect(err).NotTo(HaveOccurred(), "create vipserver service failed")
+		defer util.WaitUntilServiceDeleted(f.ClientSet, f.Namespace.Name, vipserverSvc.Name)
+
+		By("create app deployment")
+		deployFile := filepath.Join(util.TestDataDir, "deploy-base.json")
+		deployCfg, err := util.LoadDeploymentFromFile(deployFile)
+		Expect(err).NotTo(HaveOccurred())
+
+		replicas := int32(1)
+		deployCfg.Spec.Replicas = &replicas
+		deployCfg.Spec.Selector.MatchLabels["usage"] = uniqLabel
+		deployCfg.Spec.Template.Annotations = map[string]string{"vipserver.alibaba-inc.com/cluster": "test"}
+		deployCfg.Spec.Template.Labels["usage"] = uniqLabel
+		deploy, err := f.ClientSet.ExtensionsV1beta1().Deployments(f.Namespace.Name).Create(deployCfg)
+		Expect(err).NotTo(HaveOccurred(), "create app deployment failed")
+		defer util.DeleteDeploymentPods(f.ClientSet, deploy.Namespace, deploy.Name)
+
+		By("wait until all pods running")
+		err = util.WaitDeploymentPodsRunning(f.ClientSet, deploy, int(replicas))
+		Expect(err).NotTo(HaveOccurred(), "wait for deployment pods running failed")
+
+		By("check is backends correct")
+		pods, err := util.ListDeploymentPods(f.ClientSet, deploy)
+		Expect(err).NotTo(HaveOccurred(), "get deployment pods failed")
+		err = vipserverutil.WaitUntilBackendsCorrect(pods, domain, time.Second, 5*time.Minute)
+		Expect(err).NotTo(HaveOccurred(), "wait until backends correct failed")
+
+		backends, err := vipserverutil.GetBackends(domain)
+		Expect(err).NotTo(HaveOccurred(), "get backends info failed")
+		Expect(backends.IPs[0].Cluster).Should(Equal("test"), "ip should be added to 'test' cluster")
+	})
 })

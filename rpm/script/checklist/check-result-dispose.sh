@@ -30,7 +30,7 @@ message_notify() {
     # join together all message
     ct=" host: [${ip}](https://n.alibaba-inc.com/ops/info/host?host=${ip}) upgrade sigmalet to version :  ${sigma_slave_version} error \n: ${info} "
     # send message by dingTalk
-    curl 'https://oapi.dingtalk.com/robot/send?access_token=1a7310b61c973a4129b203231c998654177cdc183c94db5f53f12d1242fd31db' \
+    curl "https://oapi.dingtalk.com/robot/send?access_token=${ding_token}" \
             -H 'Content-Type: application/json' \
             -d '{
                     "msgtype": "markdown",

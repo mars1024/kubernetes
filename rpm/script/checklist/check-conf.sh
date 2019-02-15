@@ -46,7 +46,8 @@ inotify_max_user_instances=8192
 inotify_max_user_watches=524288
 
 # dingTalk message receiver
-message_receiver=18268812036
+message_receiver=${message_receiver:-18268812036}
+ding_token=${ding_token:-1a7310b61c973a4129b203231c998654177cdc183c94db5f53f12d1242fd31db}
 
 # check result file, used to get check result
 check_result_file="check-result-file"

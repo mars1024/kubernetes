@@ -35,6 +35,11 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][cpushare][cpu]", func() {
 			//etcdNodeinfo := swarm.GetNode(node.Name)
 			//nodeToAllocatableMapCPU[node.Name] = int64(etcdNodeinfo.LocalInfo.CpuNum * 1000)
 			{
+				allocatable, found := node.Status.Allocatable[v1.ResourceCPU]
+				Expect(found).To(Equal(true))
+				nodeToAllocatableMapCPU[node.Name] = allocatable.Value()*1000
+			}
+			{
 				allocatable, found := node.Status.Allocatable[v1.ResourceMemory]
 				Expect(found).To(Equal(true))
 				nodeToAllocatableMapMem[node.Name] = allocatable.Value()

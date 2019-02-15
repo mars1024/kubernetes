@@ -73,8 +73,8 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][inplace-update][Serial]", func() 
 			}
 
 			nodesInfo[node.Name] = &nodeList.Items[i]
-			etcdNodeinfo := swarm.GetNode(node.Name)
-			nodeToAllocatableMapCPU[node.Name] = int64(etcdNodeinfo.LocalInfo.CpuNum * 1000)
+			//etcdNodeinfo := swarm.GetNode(node.Name)
+			//nodeToAllocatableMapCPU[node.Name] = int64(etcdNodeinfo.LocalInfo.CpuNum * 1000)
 			{
 				allocatable, found := node.Status.Allocatable[v1.ResourceMemory]
 				Expect(found).To(Equal(true))

@@ -16,8 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/uuid"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/test/e2e/framework"
-	"k8s.io/kubernetes/test/sigma/swarm"
-	"k8s.io/kubernetes/test/sigma/util"
+ 	"k8s.io/kubernetes/test/sigma/util"
 
 	// "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"

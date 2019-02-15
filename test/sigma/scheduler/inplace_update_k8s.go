@@ -15,8 +15,7 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 
 	"k8s.io/kubernetes/test/e2e/framework"
-	"k8s.io/kubernetes/test/sigma/swarm"
-	"k8s.io/kubernetes/test/sigma/util"
+ 	"k8s.io/kubernetes/test/sigma/util"
 )
 
 var _ = Describe("[sigma-3.1][sigma-scheduler][inplace-update][Serial]", func() {

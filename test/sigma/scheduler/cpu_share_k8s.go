@@ -11,8 +11,7 @@ import (
 	"k8s.io/api/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/test/e2e/framework"
-	"k8s.io/kubernetes/test/sigma/swarm"
-)
+ )
 
 var _ = Describe("[sigma-3.1][sigma-scheduler][cpushare][cpu]", func() {
 	var cs clientset.Interface

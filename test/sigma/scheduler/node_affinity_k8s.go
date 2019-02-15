@@ -14,8 +14,7 @@ import (
 	"k8s.io/kubernetes/test/sigma/util"
 
 	"gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
-	"k8s.io/kubernetes/test/sigma/swarm"
-)
+ )
 
 var _ = Describe("[sigma-3.1][sigma-scheduler][node-affinity]", func() {
 	var cs clientset.Interface

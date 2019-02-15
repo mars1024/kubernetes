@@ -270,15 +270,16 @@ func runAndKeepPodWithLabelAndGetNodeName(f *framework.Framework) (string, strin
 func GetNodeThatCanRunPod(f *framework.Framework) string {
 	By("Trying to launch a pod without a label to get a node which can launch it.")
 
-	// try loop to get a node to schedule
-	for i:=0; i<5; i++ {
+	//// try loop to get a node to schedule
+	//for i:=0; i<5; i++ {
 		node := runPodAndGetNodeName(f, pausePodConfig{Name: "without-label"})
-		if swarm.CheckNodeAvailable(node) == true {
-			return node
-		}
-	}
-
-	return ""
+		return node
+		//if swarm.CheckNodeAvailable(node) == true {
+		//	return node
+		//}
+	//}
+	//
+	//return node
 }
 
 func getNodeThatCanRunPodWithoutToleration(f *framework.Framework) string {

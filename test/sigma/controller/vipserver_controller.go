@@ -435,8 +435,15 @@ var _ = Describe("[sigma-controller][vipserver]", func() {
 		err = vipserverutil.WaitUntilBackendsCorrect(pods, domain, time.Second, 5*time.Minute)
 		Expect(err).NotTo(HaveOccurred(), "wait until backends correct failed")
 
-		backends, err := vipserverutil.GetBackends(domain)
-		Expect(err).NotTo(HaveOccurred(), "get backends info failed")
-		Expect(backends.IPs[0].Cluster).Should(Equal("test"), "ip should be added to 'test' cluster")
+		for i := 0; i < 10; i++ {
+			backends, err := vipserverutil.GetBackends(domain)
+			Expect(err).NotTo(HaveOccurred(), "get backends info failed")
+			if len(backends.IPs) == 1 {
+				Expect(backends.IPs[0].Cluster).Should(Equal("test"), "ip should be added to 'test' cluster")
+				break
+			} else {
+				time.Sleep(3 * time.Second)
+			}
+		}
 	})
 })

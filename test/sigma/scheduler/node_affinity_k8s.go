@@ -14,8 +14,7 @@ import (
 	"k8s.io/kubernetes/test/sigma/util"
 
 	"gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
-	"k8s.io/kubernetes/test/sigma/swarm"
-)
+ )
 
 var _ = Describe("[sigma-3.1][sigma-scheduler][node-affinity]", func() {
 	var cs clientset.Interface
@@ -37,8 +36,13 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][node-affinity]", func() {
 		for i, node := range nodeList.Items {
 			waitNodeResourceReleaseComplete(node.Name)
 			nodesInfo[node.Name] = &nodeList.Items[i]
-			etcdNodeinfo := swarm.GetNode(node.Name)
-			nodeToAllocatableMapCPU[node.Name] = int64(etcdNodeinfo.LocalInfo.CpuNum * 1000)
+			////etcdNodeinfo := swarm.GetNode(node.Name)
+			////nodeToAllocatableMapCPU[node.Name] = int64(etcdNodeinfo.LocalInfo.CpuNum * 1000)
+			{
+				allocatable, found := node.Status.Allocatable[v1.ResourceCPU]
+				Expect(found).To(Equal(true))
+				nodeToAllocatableMapCPU[node.Name] = allocatable.Value()*1000
+			}
 			{
 				allocatable, found := node.Status.Allocatable[v1.ResourceMemory]
 				Expect(found).To(Equal(true))

@@ -17,8 +17,7 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 
 	"k8s.io/kubernetes/test/e2e/framework"
-	"k8s.io/kubernetes/test/sigma/swarm"
-	"k8s.io/kubernetes/test/sigma/util"
+ 	"k8s.io/kubernetes/test/sigma/util"
 )
 
 var _ = Describe("[sigma-3.1][sigma-scheduler][resource][Serial]", func() {
@@ -53,8 +52,12 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][resource][Serial]", func() {
 			if !nodeReady {
 				continue
 			}
-			etcdNodeinfo := swarm.GetNode(node.Name)
-			nodeToAllocatableMapCPU[node.Name] = int64(etcdNodeinfo.LocalInfo.CpuNum * 1000)
+			//etcdNodeinfo := swarm.GetNode(node.Name)
+			{
+				allocatable, found := node.Status.Allocatable[v1.ResourceCPU]
+				Expect(found).To(Equal(true))
+				nodeToAllocatableMapCPU[node.Name] = allocatable.Value()*1000
+			}
 			{
 				allocatable, found := node.Status.Allocatable[v1.ResourceMemory]
 				Expect(found).To(Equal(true))
@@ -130,9 +133,9 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][resource][Serial]", func() {
 		framework.ExpectNodeHasLabel(cs, nodeName, sigmak8sapi.LabelMemOverQuota, "1.1")
 		defer framework.RemoveLabelOffNode(cs, nodeName, sigmak8sapi.LabelMemOverQuota)
 
-		// due to bug: 18296033, MUST also add overquota lable in sigma2.0
-		swarm.SetNodeOverQuota(nodeName, 2, 1.1)
-		defer swarm.SetNodeToNotOverQuota(nodeName)
+		//// due to bug: 18296033, MUST also add overquota lable in sigma2.0
+		//swarm.SetNodeOverQuota(nodeName, 2, 1.1)
+		//defer swarm.SetNodeToNotOverQuota(nodeName)
 
 		overQuotaTaint := v1.Taint{
 			Key:    sigmak8sapi.LabelEnableOverQuota,
@@ -482,9 +485,9 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][resource][Serial]", func() {
 		framework.ExpectNodeHasLabel(cs, nodeName, sigmak8sapi.LabelMemOverQuota, "1.1")
 		defer framework.RemoveLabelOffNode(cs, nodeName, sigmak8sapi.LabelMemOverQuota)
 
-		// due to bug: 18296033, MUST also add overquota lable in sigma2.0
-		swarm.SetNodeOverQuota(nodeName, 1.5, 1.1)
-		defer swarm.SetNodeToNotOverQuota(nodeName)
+		//// due to bug: 18296033, MUST also add overquota lable in sigma2.0
+		//swarm.SetNodeOverQuota(nodeName, 1.5, 1.1)
+		//defer swarm.SetNodeToNotOverQuota(nodeName)
 
 		overQuotaTaint := v1.Taint{
 			Key:    sigmak8sapi.LabelEnableOverQuota,

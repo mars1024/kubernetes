@@ -17,8 +17,7 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 
 	"k8s.io/kubernetes/test/e2e/framework"
-	"k8s.io/kubernetes/test/sigma/swarm"
-	"k8s.io/kubernetes/test/sigma/util"
+ 	"k8s.io/kubernetes/test/sigma/util"
 )
 
 type PodsToDelete struct {
@@ -81,8 +80,8 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][performance][Serial]", func() {
 			}
 
 			nodesInfo[node.Name] = &nodeList.Items[i]
-			etcdNodeinfo := swarm.GetNode(node.Name)
-			nodeToAllocatableMapCPU[node.Name] = int64(etcdNodeinfo.LocalInfo.CpuNum * 1000)
+			//etcdNodeinfo := swarm.GetNode(node.Name)
+			//nodeToAllocatableMapCPU[node.Name] = int64(etcdNodeinfo.LocalInfo.CpuNum * 1000)
 
 		}
 		pods, err := cs.CoreV1().Pods(metav1.NamespaceAll).List(metav1.ListOptions{})

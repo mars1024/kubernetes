@@ -27,7 +27,7 @@ BASE=$OLDPWD/..
 cd $BASE
 
 rm -fr $RPM_BUILD_ROOT
-mkdir -p $RPM_BUILD_ROOT/{usr/local/bin,/etc/kubernetes}
+mkdir -p $RPM_BUILD_ROOT/{usr/local/bin,/etc/kubernetes,/etc/kubernetes/check}
 mkdir -p $RPM_BUILD_ROOT/usr/libexec/kubernetes/kubelet-plugins/volume/exec/alipay~pouch-volume
 
 install -p -D -m 0755 rpm/sigma-slave $RPM_BUILD_ROOT/usr/local/bin/sigma-slave

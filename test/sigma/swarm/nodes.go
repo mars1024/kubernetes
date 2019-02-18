@@ -50,6 +50,7 @@ type LogicInfo struct {
 	MandatoryLabel        string            //"MandatoryLabel":"MixRun" //强制匹配标，最多只允许一个
 	MandatoryLabels       map[string]string //强制标，由boss强制必填的标签和用户自定义标签。
 	DiskLabels            map[string]map[string]string
+	IsMixrun              bool
 }
 
 type LocalInfo struct {
@@ -290,6 +291,29 @@ func CreateOrUpdateNodeLogicInfoSmName(nodeName, value string) error {
 	node.LogicInfo.SmName = value
 	updateNode(nodeName, node)
 
+	return nil
+}
+
+// CreateOrUpdateNodeMixrun updates sigma node support mixrun
+func CreateOrUpdateNodeMixrun(nodeName string) error {
+	node := GetNode(nodeName)
+	node.LogicInfo.IsMixrun = true
+	updateNode(nodeName, node)
+	return nil
+}
+
+// EnsureNodeHasLabels checks node isMixrun is expected
+func EnsureNodeUpdateMixrun(nodeName string, expectedMixrun bool) error {
+	node := GetNode(nodeName)
+	Expect(node.LogicInfo.IsMixrun).Should(Equal(expectedMixrun))
+	return nil
+}
+
+// DeleteNodeMixrun update sigma node mixrun not support mixrun
+func DeleteNodeMixrun(nodeName string) error {
+	node := GetNode(nodeName)
+	node.LogicInfo.IsMixrun = false
+	updateNode(nodeName, node)
 	return nil
 }
 

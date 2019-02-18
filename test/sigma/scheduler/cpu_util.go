@@ -756,14 +756,14 @@ func (tc *testContext) execTests(checkFuncList ...checkFunc) {
 		if tc.MemoryOverQuotaRatio == 0 {
 			tc.MemoryOverQuotaRatio = 1.0
 		}
-		swarm.SetNodeOverQuota(tc.nodeName, tc.CPUOverQuotaRatio, tc.MemoryOverQuotaRatio)
-		defer swarm.SetNodeToNotOverQuota(tc.nodeName)
+		//swarm.SetNodeOverQuota(tc.nodeName, tc.CPUOverQuotaRatio, tc.MemoryOverQuotaRatio)
+		//defer swarm.SetNodeToNotOverQuota(tc.nodeName)
 	} else {
 		// 只有 MemoryOverQuota， 没有 CPUOverQuota 时， CPUOverQuotaRatio = 1
 		if tc.MemoryOverQuotaRatio != 0 {
 			tc.CPUOverQuotaRatio = 1.0
-			swarm.SetNodeOverQuota(tc.nodeName, tc.CPUOverQuotaRatio, tc.MemoryOverQuotaRatio)
-			defer swarm.SetNodeToNotOverQuota(tc.nodeName)
+			//swarm.SetNodeOverQuota(tc.nodeName, tc.CPUOverQuotaRatio, tc.MemoryOverQuotaRatio)
+			//defer swarm.SetNodeToNotOverQuota(tc.nodeName)
 		}
 	}
 

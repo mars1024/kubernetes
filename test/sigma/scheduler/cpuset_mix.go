@@ -713,6 +713,7 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][smoke][cpuset]", func() {
 				affinityConfig:  map[string][]string{"ali.SpecifiedNcIps": {nodeIP}, "ali.CpuSetMode": {"mixrun"}},
 				shouldScheduled: true,
 				spreadStrategy:  "default",
+				mixrun:          true,
 			},
 			{
 				cpu:             requestedCPU,
@@ -757,6 +758,7 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][smoke][cpuset]", func() {
 			cs:        cs,
 			localInfo: localInfo,
 			f:         f,
+			nodeName:  nodeName,
 		}
 		testContext.execTests()
 	})

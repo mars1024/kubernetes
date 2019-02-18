@@ -64,6 +64,7 @@ type resourceCase struct {
 	mem                       int64
 	ethstorage                int64
 	cpushare                  bool
+	mixrun                    bool    // mixrun is only for ant sigma2
 	expectedAvailableResource []int64 // CPU/Memory/Disk
 	requestType               string  // "sigma" or "kubernetes"
 	shouldScheduled           bool
@@ -594,7 +595,7 @@ func addOverQuotaAffinity(config *pausePodConfig, nodeSeletor v1.NodeSelectorReq
 }
 
 func cleanJob(tc *testContext) {
- 	//time.Sleep(3000*time.Second)
+	//time.Sleep(3000*time.Second)
 	if tc.globalRule != nil {
 		swarm.RemoveSigmaGlobal()
 	}
@@ -792,6 +793,12 @@ func (tc *testContext) execTests(checkFuncList ...checkFunc) {
 				swarm.EnsureNodeHasLabels(nodeName, extLabels)
 				defer swarm.DeleteNodeLabels(nodeName, "CpuSetMode", "CpuShareOverQuota")
 			}
+			if test.mixrun && env.Tester == env.TesterAnt {
+				nodeName := strings.ToUpper(tc.nodeName)
+				swarm.CreateOrUpdateNodeMixrun(nodeName)
+				swarm.EnsureNodeUpdateMixrun(nodeName, test.mixrun)
+				defer swarm.DeleteNodeMixrun(nodeName)
+			}
 			createAndVerifySigmaCase(tc, i, test)
 		case requestTypeAntSigmaPreview:
 			if test.cpushare && env.Tester == env.TesterAnt {
@@ -806,6 +813,12 @@ func (tc *testContext) execTests(checkFuncList ...checkFunc) {
 				swarm.CreateOrUpdateNodeLabel(nodeName, extLabels)
 				swarm.EnsureNodeHasLabels(nodeName, extLabels)
 				defer swarm.DeleteNodeLabels(nodeName, "CpuSetMode", "CpuShareOverQuota")
+			}
+			if test.mixrun && env.Tester == env.TesterAnt {
+				nodeName := strings.ToUpper(tc.nodeName)
+				swarm.CreateOrUpdateNodeMixrun(nodeName)
+				swarm.EnsureNodeUpdateMixrun(nodeName, test.mixrun)
+				defer swarm.DeleteNodeMixrun(nodeName)
 			}
 			previewAndVerifySigmaCase(tc, i, test)
 		case requestTypeSigmaUpdate:

@@ -33,7 +33,7 @@ $workDir/bin/kube-apiserver \
     $etcdTlsOpts \
     $etcdServersOverridesOpts \
     --external-hostname=localhost \
-    --feature-gates=AllAlpha=false,CSINodeInfo=true,CSIDriverRegistry=true \
+    --feature-gates=AllAlpha=false,CSINodeInfo=true,CSIDriverRegistry=true,SelectorIndex=true \
     --insecure-bind-address=0.0.0.0 --insecure-port=8080 \
     --max-requests-inflight=3000 --max-mutating-requests-inflight=1000 \
     --request-timeout=300s \

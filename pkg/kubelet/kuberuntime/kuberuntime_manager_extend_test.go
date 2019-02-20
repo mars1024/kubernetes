@@ -17,6 +17,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
+	sigmautil "k8s.io/kubernetes/pkg/kubelet/sigma"
 )
 
 func TestSyncPodExtension(t *testing.T) {
@@ -607,7 +608,8 @@ func TestContainerChanged(t *testing.T) {
 				Resources: getResourceRequirements(getResourceList("8", "8Gi"), getResourceList("8", "8Gi")),
 			},
 			containerStatus: &kubecontainer.ContainerStatus{
-				Hash: 3911781334,
+				Hash:        3911781334,
+				HashVersion: sigmautil.VERSION_CURRENT,
 				Resources: &runtimeapi.LinuxContainerResources{
 					CpuShares:          4196,
 					MemoryLimitInBytes: 4294967296,
@@ -625,7 +627,8 @@ func TestContainerChanged(t *testing.T) {
 				Image: "imageNew",
 			},
 			containerStatus: &kubecontainer.ContainerStatus{
-				Hash: 2517316070,
+				Hash:        2517316070,
+				HashVersion: sigmautil.VERSION_CURRENT,
 			},
 			pod: &v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "foo-ns"},

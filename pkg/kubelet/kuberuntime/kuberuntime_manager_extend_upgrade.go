@@ -31,6 +31,7 @@ import (
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	"k8s.io/kubernetes/pkg/kubelet/events"
 	"k8s.io/kubernetes/pkg/kubelet/images"
+	sigmautil "k8s.io/kubernetes/pkg/kubelet/sigma"
 	"k8s.io/kubernetes/pkg/kubelet/util/format"
 )
 
@@ -154,15 +155,53 @@ type ContainerInfo struct {
 // 1. container spec hash is changed
 // 2. container is a dirty container: container's state is Created, and userinfo is on the disk.
 func (m *kubeGenericRuntimeManager) isContainerNeedUpgrade(pod *v1.Pod, container *v1.Container, containerStatus *kubecontainer.ContainerStatus) bool {
-	if containerStatus != nil {
-		if expectedHash, actualHash, needToRestart, _ := m.containerChanged(container, containerStatus, pod); needToRestart {
-			glog.V(4).Infof("Container spec hash changed (%d vs %d).", actualHash, expectedHash)
-			return true
-		}
+	// Container in DOCKER_VM mode can't be upgraded.
+	if sigmautil.IsPodDockerVMMode(pod) {
+		return false
 	}
 
-	if containerStatus != nil && m.isDirtyContainer(pod, container, containerStatus) {
+	if containerStatus == nil {
+		return false
+	}
+
+	if m.isDirtyContainer(pod, container, containerStatus) {
 		glog.V(4).Infof("Upgrade: Container %s is a dirty container.", container.Name)
+		return true
+	}
+
+	// Deal with high version.
+	result, err := sigmautil.CompareHashVersion(containerStatus.HashVersion, sigmautil.VERSION_CURRENT)
+	if err != nil {
+		glog.Errorf("Failed to compare %s vs %s, err: %v", containerStatus.HashVersion, sigmautil.VERSION_CURRENT, err)
+		return false
+	}
+
+	// result == 1 means container's hashVersion is higher. We compare image and env to check the need of upgrade.
+	// else we compare hash value.
+	if result == 1 {
+		// Container's image is changed.
+		if container.Image != containerStatus.Image && container.Image+":latest" != containerStatus.Image {
+			glog.V(0).Infof("Image changed: %s vs %s", container.Image, containerStatus.Image)
+			return true
+		}
+
+		// Env is changed
+		containerEnvMap := map[string]string{}
+
+		for _, containerEnv := range containerStatus.Envs {
+			containerEnvMap[containerEnv.Key] = containerEnv.Value
+		}
+
+		for _, env := range container.Env {
+			if containerEnvValue, exists := containerEnvMap[env.Name]; exists && containerEnvValue != env.Value {
+				glog.V(0).Infof("Env changed: %v vs %s", container.Env, containerStatus.Envs)
+				return true
+			}
+		}
+		// TODO: Support Command and Args changes.
+		// CRI doesn't support to get command and args for a container.
+	} else if expectedHash, actualHash, needToRestart, _ := m.containerChanged(container, containerStatus, pod); needToRestart {
+		glog.V(4).Infof("Container spec hash changed (%d vs %d).", expectedHash, actualHash)
 		return true
 	}
 

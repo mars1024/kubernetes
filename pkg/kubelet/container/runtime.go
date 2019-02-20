@@ -279,6 +279,8 @@ type Container struct {
 	// Hash of the container, used for comparison. Optional for containers
 	// not managed by kubelet.
 	Hash uint64
+	// HashVersion of hash func.
+	HashVersion string
 	// State is the state of the container.
 	State ContainerState
 }
@@ -324,6 +326,8 @@ type ContainerStatus struct {
 	ImageID string
 	// Hash of the container without resource value, used for comparison.
 	Hash uint64
+	// HashVersion of hash func.
+	HashVersion string
 	// Number of times that the container has been restarted.
 	RestartCount int
 	// A string explains why container is in such a status.
@@ -333,6 +337,12 @@ type ContainerStatus struct {
 	Message string
 	// Resource value of the container
 	Resources *runtimeapi.LinuxContainerResources
+	// Envs in container onfig.
+	Envs []*runtimeapi.KeyValue
+	// Command in container config.
+	Command []string
+	// Args in container config.
+	Args []string
 }
 
 // FindContainerStatusByName returns container status in the pod status with the given name.

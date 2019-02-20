@@ -37,6 +37,7 @@ import (
 	apitest "k8s.io/kubernetes/pkg/kubelet/apis/cri/testing"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	containertest "k8s.io/kubernetes/pkg/kubelet/container/testing"
+	sigmautil "k8s.io/kubernetes/pkg/kubelet/sigma"
 )
 
 var (
@@ -735,17 +736,20 @@ func makeBasePodAndStatus() (*v1.Pod, *kubecontainer.PodStatus) {
 			{
 				ID:   kubecontainer.ContainerID{ID: "id1"},
 				Name: "foo1", State: kubecontainer.ContainerStateRunning,
-				Hash: kubecontainer.HashContainer(&pod.Spec.Containers[0]),
+				Hash:        kubecontainer.HashContainer(&pod.Spec.Containers[0]),
+				HashVersion: sigmautil.VERSION_CURRENT,
 			},
 			{
-				ID:   kubecontainer.ContainerID{ID: "id2"},
+				ID:   kubecontainer.ContainerID{ID: sigmautil.VERSION_CURRENT},
 				Name: "foo2", State: kubecontainer.ContainerStateRunning,
-				Hash: kubecontainer.HashContainer(&pod.Spec.Containers[1]),
+				Hash:        kubecontainer.HashContainer(&pod.Spec.Containers[1]),
+				HashVersion: sigmautil.VERSION_CURRENT,
 			},
 			{
 				ID:   kubecontainer.ContainerID{ID: "id3"},
 				Name: "foo3", State: kubecontainer.ContainerStateRunning,
-				Hash: kubecontainer.HashContainer(&pod.Spec.Containers[2]),
+				Hash:        kubecontainer.HashContainer(&pod.Spec.Containers[2]),
+				HashVersion: sigmautil.VERSION_CURRENT,
 			},
 		},
 	}

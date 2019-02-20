@@ -48,4 +48,10 @@ const (
 
 	// qos of pod. label value is defined in qosclass
 	LabelPodQOSClass = "sigma.ali/qos"
+
+	// if true, user can modify /etc/hosts, /etc/resolv.conf and /etc/hostname in container .
+	LabelHostDNS = "ali.host.dns"
+
+	// the type of container.
+	LabelServerType = "com.alipay.acs.container.server_type"
 )

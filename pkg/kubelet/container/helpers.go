@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
+	sigmautil "k8s.io/kubernetes/pkg/kubelet/sigma"
 	"k8s.io/kubernetes/pkg/kubelet/util/format"
 	hashutil "k8s.io/kubernetes/pkg/util/hash"
 	"k8s.io/kubernetes/third_party/forked/golang/expansion"
@@ -96,10 +97,21 @@ func ShouldContainerBeRestarted(container *v1.Container, pod *v1.Pod, podStatus 
 	return true
 }
 
-// HashContainer returns the hash of the container. It is used to compare
-// the running container with its desired spec.
-// The changes of Resources, LivenessProbe, ReadinessProbe, ImagePullPolicy and Lifecycle won't trigger upgrade.
+// HashContainer is a convenient way to get a container's hash.
+// The hash is always caculated.
 func HashContainer(container *v1.Container) uint64 {
+	return HashContainerWithHashVersion(container, sigmautil.VERSION_CURRENT, nil)
+}
+
+// HashContainerWithHashVersion will calucate container's hash only if hashVersion matches,
+// or just returns container's hash value directly.
+// The changes of Resources, LivenessProbe, ReadinessProbe, ImagePullPolicy and Lifecycle won't trigger upgrade.
+func HashContainerWithHashVersion(container *v1.Container, hashVersion string, originHash *uint64) uint64 {
+	// Just return container's hash if container has a high version.
+	if hashVersion > sigmautil.VERSION_CURRENT && originHash != nil {
+		return *originHash
+	}
+
 	mungedContainer := *container
 	mungedContainer.Resources = v1.ResourceRequirements{}
 	mungedContainer.LivenessProbe = nil
@@ -107,7 +119,9 @@ func HashContainer(container *v1.Container) uint64 {
 	mungedContainer.Lifecycle = nil
 	mungedContainer.ImagePullPolicy = v1.PullPolicy("")
 	hash := fnv.New32a()
-	hashutil.DeepHashObject(hash, &mungedContainer)
+
+	decorateFunc := sigmautil.GetHashDecorateFunc(hashVersion)
+	hashutil.DeepHashObjectWithDecorator(hash, &mungedContainer, decorateFunc)
 	return uint64(hash.Sum32())
 }
 
@@ -234,12 +248,13 @@ func ConvertPodStatusToRunningPod(runtimeName string, podStatus *PodStatus) Pod 
 			continue
 		}
 		container := &Container{
-			ID:      containerStatus.ID,
-			Name:    containerStatus.Name,
-			Image:   containerStatus.Image,
-			ImageID: containerStatus.ImageID,
-			Hash:    containerStatus.Hash,
-			State:   containerStatus.State,
+			ID:          containerStatus.ID,
+			Name:        containerStatus.Name,
+			Image:       containerStatus.Image,
+			ImageID:     containerStatus.ImageID,
+			Hash:        containerStatus.Hash,
+			HashVersion: containerStatus.HashVersion,
+			State:       containerStatus.State,
 		}
 		runningPod.Containers = append(runningPod.Containers, container)
 	}

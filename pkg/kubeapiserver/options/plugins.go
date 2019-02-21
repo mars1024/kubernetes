@@ -88,7 +88,10 @@ import (
 	alipaysidecar "k8s.io/kubernetes/plugin/pkg/admission/alipay/sidecar"
 	alipayzappinfo "k8s.io/kubernetes/plugin/pkg/admission/alipay/zappinfo"
 
+	"gitlab.alipay-inc.com/antcloud-aks/cafe-kubernetes-extension/plugin/admission/clusterinjection"
+	"gitlab.alipay-inc.com/antcloud-aks/cafe-kubernetes-extension/plugin/admission/objectmetareconcile"
 	akspodpostschedule "k8s.io/kubernetes/plugin/pkg/admission/podpostschedule"
+	"k8s.io/kubernetes/plugin/pkg/admission/servicenetallocator"
 )
 
 // AllOrderedPlugins is the list of all the plugins in order.
@@ -155,8 +158,11 @@ var AllOrderedPlugins = []string{
 	alipayrouter.PluginName,               // Alipay router mutation admission for container router configuration.
 	alipayreadinessgate.PluginName,        // Alipay readiness fate mutation admission for pod condition.
 
-	akspodpostschedule.PluginName, // Alipay AntCloud PodPostSchedule
-	ase.PluginName,                // ASE
+	clusterinjection.PluginName,    // MinionClusterInjection
+	akspodpostschedule.PluginName,  // Alipay AntCloud PodPostSchedule
+	ase.PluginName,                 // ASE
+	servicenetallocator.PluginName, // ServiceNetAllocator
+	objectmetareconcile.PluginName, // ObjectMetaReconcile
 }
 
 // RegisterAllAdmissionPlugins registers all admission plugins and
@@ -219,8 +225,11 @@ func RegisterAllAdmissionPlugins(plugins *admission.Plugins) {
 	alipayrouter.Register(plugins)
 	alipayreadinessgate.Register(plugins)
 
+	clusterinjection.Register(plugins)
 	akspodpostschedule.Register(plugins)
 	ase.Register(plugins)
+	// alwasy keep it the last one in the list
+	objectmetareconcile.Register(plugins)
 }
 
 // DefaultOffAdmissionPlugins get admission plugins off by default for kube-apiserver.

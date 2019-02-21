@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"encoding/json"
+	"fmt"
 	"math/rand"
 	"strconv"
 	"time"
@@ -14,11 +15,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	clientset "k8s.io/client-go/kubernetes"
-
-	"fmt"
+	"k8s.io/kubernetes/test/sigma/env"
+	"k8s.io/kubernetes/test/sigma/swarm"
 
 	"k8s.io/kubernetes/test/e2e/framework"
- 	"k8s.io/kubernetes/test/sigma/util"
+	"k8s.io/kubernetes/test/sigma/util"
 )
 
 var _ = Describe("[sigma-3.1][sigma-scheduler][resource][Serial]", func() {
@@ -83,7 +84,7 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][resource][Serial]", func() {
 			{
 				allocatable, found := node.Status.Allocatable[v1.ResourceCPU]
 				Expect(found).To(Equal(true))
-				nodeToAllocatableMapCPU[node.Name] = allocatable.Value()*1000
+				nodeToAllocatableMapCPU[node.Name] = allocatable.Value() * 1000
 			}
 			{
 				allocatable, found := node.Status.Allocatable[v1.ResourceMemory]
@@ -359,15 +360,15 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][resource][Serial]", func() {
 			expectedScheduleResult bool
 		}{
 			{
-				cpu: *resource.NewMilliQuantity(podRequestCPU, "DecimalSI"),
+				cpu:                    *resource.NewMilliQuantity(podRequestCPU, "DecimalSI"),
 				expectedScheduleResult: true,
 			},
 			{
-				cpu: *resource.NewMilliQuantity(podRequestCPU, "DecimalSI"),
+				cpu:                    *resource.NewMilliQuantity(podRequestCPU, "DecimalSI"),
 				expectedScheduleResult: true,
 			},
 			{
-				cpu: *resource.NewMilliQuantity(podRequestCPU, "DecimalSI"),
+				cpu:                    *resource.NewMilliQuantity(podRequestCPU, "DecimalSI"),
 				expectedScheduleResult: false,
 			},
 		}
@@ -472,53 +473,112 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][resource][Serial]", func() {
 			key      v1.ResourceName
 			quantity string
 			ok       bool
+			isDel    bool
+			delIndex []int
 		}{
+			//index 0
 			{
 				key:      v1.ResourceName(exdResource),
 				quantity: "1",
 				ok:       true,
 			},
+			//index 1
 			{
 				key:      v1.ResourceName(exdResource),
 				quantity: "3",
 				ok:       false,
 			},
+			//index 2
+			{
+				key:      v1.ResourceName(exdResource),
+				quantity: "1",
+				ok:       true,
+			},
+			//index 3
+			{
+				key:      v1.ResourceName(exdResource),
+				quantity: "1",
+				ok:       false,
+			},
+			//index 4
+			{
+				isDel:    true,
+				delIndex: []int{0},
+			},
+			//index 5
+			{
+				key:      v1.ResourceName(exdResource),
+				quantity: "1",
+				ok:       true,
+			},
+			//index 6
+			{
+				isDel:    true,
+				delIndex: []int{2, 5},
+			},
+			//index 7
+			{
+				key:      v1.ResourceName(exdResource),
+				quantity: "2",
+				ok:       true,
+			},
+			//index 8
+			{
+				key:      v1.ResourceName(exdResource),
+				quantity: "1",
+				ok:       false,
+			},
+			//index 9: 删除余下的pod
+			{
+				isDel:    true,
+				delIndex: []int{7},
+			},
 		}
-
-		podsToDelete := make([]*v1.Pod, len(tests))
-		for _, test := range tests {
-
-			pod := createPausePod(f, pausePodConfig{
-				Name: "scheduler-" + string(uuid.NewUUID()),
-				Resources: &v1.ResourceRequirements{
-					Limits: v1.ResourceList{
-						v1.ResourceName(test.key): resource.MustParse(test.quantity),
+		testLabels := map[string]string{"a": "b"}
+		podsToDelete := make([]*v1.Pod, len(tests), len(tests))
+		for idx, test := range tests {
+			framework.Logf("exec case %d %+v", idx, test)
+			if !test.isDel {
+				//增加sigma2干扰
+				if env.Tester == env.TesterAnt {
+					swarm.CreateOrUpdateNodeLabel(nodeName, testLabels)
+					swarm.EnsureNodeHasLabels(nodeName, testLabels)
+					swarm.DeleteNodeLabels(nodeName, "a")
+				}
+				pod := createPausePod(f, pausePodConfig{
+					Name: "scheduler-" + string(uuid.NewUUID()),
+					Resources: &v1.ResourceRequirements{
+						Limits: v1.ResourceList{
+							v1.ResourceName(test.key): resource.MustParse(test.quantity),
+						},
+						Requests: v1.ResourceList{
+							v1.ResourceName(test.key): resource.MustParse(test.quantity),
+						},
 					},
-					Requests: v1.ResourceList{
-						v1.ResourceName(test.key): resource.MustParse(test.quantity),
-					},
-				},
-				Affinity: util.GetAffinityNodeSelectorRequirement(nodeAffinityKey, []string{nodeName}),
-			})
-
-			if test.ok == true {
-				By("expect pod to be scheduled successfully.")
-				err := framework.WaitTimeoutForPodRunningInNamespace(cs, pod.Name, pod.Namespace, waitForPodRunningTimeout)
-				podsToDelete = append(podsToDelete, pod)
-				Expect(err).NotTo(HaveOccurred())
+					Affinity: util.GetAffinityNodeSelectorRequirement(nodeAffinityKey, []string{nodeName}),
+				})
+				if test.ok == true {
+					By("expect pod to be scheduled successfully.")
+					err := framework.WaitTimeoutForPodRunningInNamespace(cs, pod.Name, pod.Namespace, waitForPodRunningTimeout)
+					//					podsToDelete = append(podsToDelete, pod)
+					podsToDelete[idx] = pod
+					Expect(err).NotTo(HaveOccurred())
+				} else {
+					By("expect pod failed to be scheduled .")
+					//podsToDelete = append(podsToDelete, pod)
+					podsToDelete[idx] = pod
+					err := framework.WaitForPodNameUnschedulableInNamespace(f.ClientSet, pod.Name, f.Namespace.Name)
+					Expect(err).To(BeNil(), "expect err to be nil, got %s", err)
+				}
 			} else {
-
-				By("expect pod failed to be scheduled .")
-				podsToDelete = append(podsToDelete, pod)
-				err := framework.WaitForPodNameUnschedulableInNamespace(f.ClientSet, pod.Name, f.Namespace.Name)
-				Expect(err).To(BeNil(), "expect err to be nil, got %s", err)
+				for _, podIndex := range test.delIndex {
+					pod := podsToDelete[podIndex]
+					if pod == nil {
+						continue
+					}
+					util.DeletePod(f.ClientSet, pod)
+				}
 			}
-		}
-		for _, pod := range podsToDelete {
-			if pod == nil {
-				continue
-			}
-			util.DeletePod(f.ClientSet, pod)
 		}
 	})
 

@@ -14,7 +14,7 @@ import (
 	"k8s.io/kubernetes/pkg/apis/core"
 )
 
-func TestResourceMutationBurstable(t *testing.T) {
+func TestResourceMutationQOS(t *testing.T) {
 	testcases := []struct {
 		pod         *core.Pod
 		qosType     sigmak8sapi.SigmaQOSClass
@@ -48,7 +48,7 @@ func TestResourceMutationBurstable(t *testing.T) {
 			pod, nil, core.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name,
 			core.Resource("pods").WithVersion("version"), "", admission.Create, false, nil)
 
-		handler := newAlipayResourceMutationBurstable()
+		handler := newAlipayResourceMutationQOS()
 		err := handler.Admit(attr)
 		assert.Nil(t, err)
 

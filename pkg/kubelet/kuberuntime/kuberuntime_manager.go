@@ -727,15 +727,24 @@ func (m *kubeGenericRuntimeManager) computePodActions(pod *v1.Pod, podStatus *ku
 
 		// Upgrade the container which should be upgraded
 		if containerStatus != nil && m.isContainerNeedUpgrade(pod, &container, containerStatus) {
-			if !utilfeature.DefaultFeatureGate.Enabled(features.IgnoreProtectionFinalizer) && hasProtectFinalizer {
-				glog.V(3).Infof("pod %s has protection finalizer, could not upgrade it", format.Pod(pod))
+			if utilfeature.DefaultFeatureGate.Enabled(features.IgnoreProtectionFinalizer) || !hasProtectFinalizer {
+				changes.ContainersToUpgrade[containerStatus.ID] = containerOperationInfo{
+					name:      containerStatus.Name,
+					container: &pod.Spec.Containers[idx],
+					message:   fmt.Sprintf("container %s needs to be upgraded", container.Name),
+				}
 				continue
 			}
-			changes.ContainersToUpgrade[containerStatus.ID] = containerOperationInfo{
+		}
+
+		// Update the container which should be Updated
+		if containerStatus != nil && m.isContainerNeedUpdate(pod, &container, containerStatus) {
+			changes.ContainersToUpdate[containerStatus.ID] = containerOperationInfo{
 				name:      containerStatus.Name,
 				container: &pod.Spec.Containers[idx],
-				message:   fmt.Sprintf("container %s needs to be upgraded", container.Name),
+				message:   fmt.Sprintf("container %s resource requirement changed", container.Name),
 			}
+
 			continue
 		}
 
@@ -791,25 +800,12 @@ func (m *kubeGenericRuntimeManager) computePodActions(pod *v1.Pod, podStatus *ku
 		// The container is running, but kill the container if any of the following condition is met.
 		reason := ""
 		restart := shouldRestartOnFailure(pod)
-		expectedHash, actualHash, needToRestart, needToResize := m.containerChanged(&container, containerStatus, pod)
-		if needToRestart {
-			reason = fmt.Sprintf("Container spec hash changed (%d vs %d).", actualHash, expectedHash)
-			// Restart regardless of the restart policy because the container
-			// spec changed.
-			restart = true
-		} else if liveness, found := m.livenessManager.Get(containerStatus.ID); found && liveness == proberesults.Failure {
+		if liveness, found := m.livenessManager.Get(containerStatus.ID); found && liveness == proberesults.Failure {
 			// If the container failed the liveness probe, we should kill it.
 			reason = "Container failed liveness probe."
 		} else {
 			// Keep the container.
 			keepCount += 1
-			if needToResize {
-				changes.ContainersToUpdate[containerStatus.ID] = containerOperationInfo{
-					name:      containerStatus.Name,
-					container: &pod.Spec.Containers[idx],
-					message:   fmt.Sprintf("container %s resource requirement changed", container.Name),
-				}
-			}
 			continue
 		}
 
@@ -832,9 +828,9 @@ func (m *kubeGenericRuntimeManager) computePodActions(pod *v1.Pod, podStatus *ku
 
 	if keepCount == 0 && len(changes.ContainersToStart) == 0 && len(changes.ContainersToUpgrade) == 0 &&
 		len(changes.ContainersToKillBecauseDesireState) == 0 && len(changes.ContainersToStartBecauseDesireState) == 0 &&
-		len(changes.ContainersToStartBecausePause) == 0  && len(changes.ContainersToSuspend) == 0 &&
+		len(changes.ContainersToStartBecausePause) == 0 && len(changes.ContainersToSuspend) == 0 &&
 		len(changes.ContainersToUnsuspend) == 0 {
-		changes.KillPod = true
+		glog.Warningf("All containers are dead and no action is generated for pod %s", format.Pod(pod))
 	}
 
 	return changes

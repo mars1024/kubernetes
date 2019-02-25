@@ -2,11 +2,12 @@ package kuberuntime
 
 import (
 	"fmt"
-	"k8s.io/kubernetes/pkg/kubelet/images"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"k8s.io/kubernetes/pkg/kubelet/images"
 
 	"github.com/golang/glog"
 	"google.golang.org/grpc/status"
@@ -586,4 +587,14 @@ func wantsContainerToDesiredState(containerDesiredState sigmak8sapi.ContainerSta
 		return state == cstate
 	}
 	return false
+}
+
+//isContainerNeedUpdate return whether a container should be updated.
+func (m *kubeGenericRuntimeManager) isContainerNeedUpdate(pod *v1.Pod, container *v1.Container, containerStatus *kubecontainer.ContainerStatus) bool {
+	if containerStatus == nil {
+		return false
+	}
+
+	_, _, _, needToUpdate := m.containerChanged(container, containerStatus, pod)
+	return needToUpdate
 }

@@ -1,25 +1,25 @@
 package nodestatus
 
-
 import (
-	"testing"
 	"encoding/json"
-	"os"
-	"net"
 	"fmt"
-	"k8s.io/api/core/v1"
-	"github.com/stretchr/testify/assert"
-	"k8s.io/kubernetes/staging/src/k8s.io/apimachinery/pkg/util/diff"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	apiequality "k8s.io/apimachinery/pkg/api/equality"
-	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
-	cadvisorapi "github.com/google/cadvisor/info/v1"
+	"net"
+	"os"
+	"testing"
 
+	cadvisorapi "github.com/google/cadvisor/info/v1"
+	"github.com/stretchr/testify/assert"
+	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
+	"k8s.io/api/core/v1"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/kubernetes/staging/src/k8s.io/apimachinery/pkg/util/diff"
 )
 
 const (
 	testKubeletHostIP = "127.0.0.1"
 )
+
 func TestSetNodeLocalInfo(t *testing.T) {
 	newMachineInfo := func(numCores int, topology []cadvisorapi.Node) *cadvisorapi.MachineInfo {
 		return &cadvisorapi.MachineInfo{
@@ -106,10 +106,13 @@ func TestSetNodeLocalInfo(t *testing.T) {
 			machineInfoFunc := func() (*cadvisorapi.MachineInfo, error) {
 				return testCase.machineInfo, nil
 			}
+			rootDirGetFunc := func() string {
+				return ""
+			}
 			actualNode := &v1.Node{}
 
 			// construct setter
-			setter := LocalInfo(machineInfoFunc)
+			setter := LocalInfo(machineInfoFunc, rootDirGetFunc)
 			err := setter(actualNode)
 
 			assert.True(t, len(actualNode.Annotations) > 0, "annotation should have 1 element at least")
@@ -125,7 +128,6 @@ func TestSetNodeLocalInfo(t *testing.T) {
 		})
 	}
 }
-
 
 func TestSetNodeAddressWithoutCloudProvider(t *testing.T) {
 	hostname, err := os.Hostname()
@@ -194,8 +196,6 @@ func TestSetNodeAddressWithoutCloudProvider(t *testing.T) {
 		},
 	}
 
-
-
 	for _, test := range tests {
 		t.Run(test.testName, func(t *testing.T) {
 			// construct setter
@@ -209,7 +209,7 @@ func TestSetNodeAddressWithoutCloudProvider(t *testing.T) {
 
 			// call setter on existing node
 			err := setter(&test.existingNode)
-			assert.NoError(t,err)
+			assert.NoError(t, err)
 			if test.success {
 				assert.True(t, apiequality.Semantic.DeepEqual(test.expectedAddresses, test.existingNode.Status.Addresses),
 					"%s", diff.ObjectDiff(test.expectedAddresses, test.existingNode.Status.Addresses))

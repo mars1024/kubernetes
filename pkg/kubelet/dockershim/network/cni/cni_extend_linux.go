@@ -9,6 +9,8 @@ import (
 
 	"strings"
 
+	"os"
+
 	"github.com/golang/glog"
 	"golang.org/x/exp/inotify"
 	"k8s.io/api/core/v1"
@@ -147,9 +149,17 @@ func updateCNIConf(cniServiceAddress, confDir string) error {
 		return err
 	}
 
-	err = ioutil.WriteFile(network.confFileName, fileContext, 0644)
+	tmpConfFileName := network.confFileName + ".tmp"
+	err = ioutil.WriteFile(tmpConfFileName, fileContext, 0644)
 	if err != nil {
 		glog.Errorf("write cni conf file err: %v", err)
+		return err
+	}
+	defer os.Remove(tmpConfFileName)
+
+	err = os.Rename(tmpConfFileName, network.confFileName)
+	if err != nil {
+		glog.Errorf("rename %q to %q err %v", tmpConfFileName, network.confFileName, err)
 		return err
 	}
 	return nil

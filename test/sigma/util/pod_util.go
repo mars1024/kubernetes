@@ -78,9 +78,13 @@ func DeletePod(client clientset.Interface, pod *v1.Pod) error {
 	timeout := 5 * time.Minute
 	t := time.Now()
 	for {
-		_, err := client.CoreV1().Pods(pod.Namespace).Get(pod.Name, metav1.GetOptions{})
+		newPod, err := client.CoreV1().Pods(pod.Namespace).Get(pod.Name, metav1.GetOptions{})
 		if err != nil && strings.Contains(err.Error(), "not found") {
 			framework.Logf("pod %s has been removed", pod.Name)
+			return nil
+		}
+		if newPod.DeletionTimestamp != nil {
+			framework.Logf("pod %s has been marked as deleted",newPod.Name)
 			return nil
 		}
 		if time.Since(t) >= timeout {

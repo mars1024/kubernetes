@@ -6,8 +6,9 @@ import (
 
 	"github.com/golang/glog"
 	"k8s.io/apiserver/pkg/admission"
-
 	"k8s.io/kubernetes/pkg/apis/core"
+
+	sigmabe "k8s.io/kubernetes/plugin/pkg/admission/alipay/resourcemutationbe"
 )
 
 const (
@@ -60,7 +61,9 @@ func (a *AlipayResourceAdmission) Validate(attr admission.Attributes) (err error
 func validatePodResource(pod *core.Pod) error {
 	for _, c := range pod.Spec.Containers {
 		// expect cpu.limit is greater than zero
-		if c.Resources.Limits.Cpu().IsZero() {
+		// ignore sigma best effort container here.
+		if c.Resources.Limits.Cpu().IsZero() &&
+			!sigmabe.IsSigmaBestEffortPod(pod) {
 			return fmt.Errorf("container %s cpu limit should greater than 0", c.Name)
 		}
 

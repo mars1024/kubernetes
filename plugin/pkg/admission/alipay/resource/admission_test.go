@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apiserver/pkg/admission"
@@ -22,6 +23,7 @@ func TestResourceValidate(t *testing.T) {
 		storageLimit   int64
 		storageRequest int64
 		isValid        bool
+		isSigmaBE      bool
 	}{
 		{
 			cpuLimit:       0,
@@ -31,6 +33,7 @@ func TestResourceValidate(t *testing.T) {
 			storageLimit:   0,
 			storageRequest: 0,
 			isValid:        false,
+			isSigmaBE:      false,
 		},
 		// request can equal to limit
 		{
@@ -91,6 +94,7 @@ func TestResourceValidate(t *testing.T) {
 			storageLimit:   10 * 1024 * 1024 * 1024, // 10G
 			storageRequest: 10 * 1024 * 1024 * 1024, // 10G
 			isValid:        false,
+			isSigmaBE:      false,
 		},
 		// cpu request can be zero
 		{
@@ -122,10 +126,26 @@ func TestResourceValidate(t *testing.T) {
 			storageRequest: 5 * 1024 * 1024 * 1024,  // 5G
 			isValid:        false,
 		},
+		// cpu limit can be zero if this is a sigma best effort pod
+		{
+			cpuLimit:       0,                       // 0 core
+			cpuRequest:     0,                       // 0 core
+			memoryLimit:    1 * 1024 * 1024 * 1024,  // 1G
+			memoryRequest:  1 * 1024 * 1024 * 1024,  // 1G
+			storageLimit:   10 * 1024 * 1024 * 1024, // 10G
+			storageRequest: 10 * 1024 * 1024 * 1024, // 10G
+			isValid:        true,
+			isSigmaBE:      true,
+		},
 	}
 
 	for _, testcase := range testcases {
 		pod := newPodWithResource(testcase.cpuRequest, testcase.cpuLimit, testcase.memoryRequest, testcase.memoryLimit, testcase.storageRequest, testcase.storageLimit)
+
+		if testcase.isSigmaBE {
+			pod.Labels[sigmak8sapi.LabelPodQOSClass] = string(sigmak8sapi.SigmaQOSBestEffort)
+		}
+
 		attr := admission.NewAttributesRecord(pod, nil, core.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, core.Resource("pods").WithVersion("version"), "", admission.Create, false, nil)
 		handler := newAlipayResourceAdmission()
 		err := handler.Validate(attr)
@@ -164,6 +184,7 @@ func newPod() *core.Pod {
 			Name:        "test-setdefault-pod",
 			Namespace:   metav1.NamespaceDefault,
 			Annotations: map[string]string{},
+			Labels:      map[string]string{},
 		},
 		Spec: core.PodSpec{
 			Containers: []core.Container{

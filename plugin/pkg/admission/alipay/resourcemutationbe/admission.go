@@ -179,9 +179,9 @@ func mutatePodResource(pod *core.Pod) error {
 	return nil
 }
 
-// isSigmaBestEffortPod
+// IsSigmaBestEffortPod
 // return true if podQOSClass == SigmaQOSBestEffort
-func isSigmaBestEffortPod(pod *core.Pod) bool {
+func IsSigmaBestEffortPod(pod *core.Pod) bool {
 	if v, ok := pod.Labels[sigmak8sapi.LabelPodQOSClass]; ok {
 		if sigmak8sapi.SigmaQOSClass(v) == sigmak8sapi.SigmaQOSBestEffort {
 			log.V(5).Infof("this is a best effort request")
@@ -212,7 +212,7 @@ func shouldIgnore(a admission.Attributes) bool {
 		return true
 	}
 
-	if !isSigmaBestEffortPod(pod) {
+	if !IsSigmaBestEffortPod(pod) {
 		// only admit sigma best effort pod.
 		return true
 	}

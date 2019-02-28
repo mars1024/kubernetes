@@ -71,7 +71,6 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/configmap"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	"k8s.io/kubernetes/pkg/kubelet/dockershim"
-	"k8s.io/kubernetes/pkg/kubelet/dockershim/network/cni"
 	dockerremote "k8s.io/kubernetes/pkg/kubelet/dockershim/remote"
 	"k8s.io/kubernetes/pkg/kubelet/events"
 	"k8s.io/kubernetes/pkg/kubelet/eviction"
@@ -621,8 +620,8 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		MTU:                int(crOptions.NetworkPluginMTU),
 	}
 
-	cniPlugins := cni.ProbeNetworkPlugins(crOptions.CNIConfDir, cni.SplitDirs(crOptions.CNIBinDir))
-	cni.UpdateCNIServiceAddress(cniPlugins, crOptions.NetworkPluginName, kubeDeps.KubeClient)
+	//cniPlugins := cni.ProbeNetworkPlugins(crOptions.CNIConfDir, cni.SplitDirs(crOptions.CNIBinDir))
+	//cni.UpdateCNIServiceAddress(cniPlugins, crOptions.NetworkPluginName, kubeDeps.KubeClient)
 
 	klet.resourceAnalyzer = serverstats.NewResourceAnalyzer(klet, kubeCfg.VolumeStatsAggPeriod.Duration)
 

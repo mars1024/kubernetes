@@ -38,3 +38,27 @@ func IsInplaceUpdateAccepted(pod *v1.Pod) bool {
 
 	return false
 }
+
+// IsPodHostDNSMode will return true if a pod is HostDNS mode.
+// HostDNS mode means user can modify /etc/hosts, /etc/hostname, /etc/resolve.conf as physical machine.
+func IsPodHostDNSMode(pod *v1.Pod) bool {
+	if pod == nil || len(pod.Labels) == 0 {
+		return false
+	}
+
+	if pod.Labels[sigmak8sapi.LabelHostDNS] == "true" ||
+		pod.Labels[sigmak8sapi.LabelServerType] == sigmak8sapi.PodLabelDockerVM {
+		return true
+	}
+
+	return false
+}
+
+// IsPodDockerVMMode returns whether a pod is DockerVM or not.
+func IsPodDockerVMMode(pod *v1.Pod) bool {
+	if pod == nil || len(pod.Labels) == 0 {
+		return false
+	}
+
+	return pod.Labels[sigmak8sapi.LabelServerType] == sigmak8sapi.PodLabelDockerVM
+}

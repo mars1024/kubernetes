@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
+	sigmautil "k8s.io/kubernetes/pkg/kubelet/sigma"
 )
 
 func TestContainerLabels(t *testing.T) {
@@ -215,6 +216,7 @@ func TestContainerAnnotations(t *testing.T) {
 		PodDeletionGracePeriod:    pod.DeletionGracePeriodSeconds,
 		PodTerminationGracePeriod: pod.Spec.TerminationGracePeriodSeconds,
 		Hash:                   kubecontainer.HashContainer(container),
+		HashVersion:            sigmautil.VERSION_CURRENT,
 		RestartCount:           restartCount,
 		TerminationMessagePath: container.TerminationMessagePath,
 		PreStopHandler:         container.Lifecycle.PreStop,

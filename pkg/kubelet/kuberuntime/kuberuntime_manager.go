@@ -489,7 +489,7 @@ func (m *kubeGenericRuntimeManager) containerChanged(container *v1.Container, co
 	needToRestart := false
 	needToResize := false
 
-	expectedHash := kubecontainer.HashContainer(container)
+	expectedHash := kubecontainer.HashContainerWithHashVersion(container, containerStatus.HashVersion, &containerStatus.Hash)
 	needToRestart = containerStatus.Hash != expectedHash
 	if needToRestart == false {
 		newResources := m.generateLinuxContainerResources(container, pod)

@@ -592,3 +592,60 @@ func TestHashContainer(t *testing.T) {
 		}
 	}
 }
+
+func TestHashContainerWithHashVersion(t *testing.T) {
+	var hashInstance uint64 = 12345678
+	var privilegedTrue = true
+	var privilegedFalse = false
+	tests := []struct {
+		container         *v1.Container
+		modifiedContainer *v1.Container
+		hashVersion       string
+		originHash        uint64
+		hashChanged       bool
+		message           string
+	}{
+		{
+			container: &v1.Container{
+				Name:  "fooContainer",
+				Image: "testImage:v1",
+			},
+			modifiedContainer: &v1.Container{
+				Name:  "fooContainer",
+				Image: "testImage:v2",
+			},
+			hashVersion: "100.0.0",
+			originHash:  hashInstance,
+			hashChanged: false,
+			message:     "Image changed and hashVersion is high, expect hash changed",
+		},
+		{
+			container: &v1.Container{
+				Name:            "fooContainer",
+				Image:           "testImage:v1",
+				SecurityContext: &v1.SecurityContext{Privileged: &privilegedTrue},
+			},
+			modifiedContainer: &v1.Container{
+				Name:            "fooContainer",
+				Image:           "testImage:v1",
+				SecurityContext: &v1.SecurityContext{Privileged: &privilegedFalse},
+			},
+			hashVersion: "100.0.0",
+			originHash:  hashInstance,
+			hashChanged: false,
+			message:     "Privileged changed and hashVersion is high, expect hash not changed",
+		},
+	}
+
+	for _, tt := range tests {
+		cHash := HashContainerWithHashVersion(tt.container, tt.hashVersion, &hashInstance)
+		mHash := HashContainerWithHashVersion(tt.modifiedContainer, tt.hashVersion, &hashInstance)
+		if tt.hashChanged && cHash == mHash {
+			t.Errorf("Test case, %q: unexpect hash got", tt.message)
+		}
+
+		if !tt.hashChanged && cHash != mHash {
+			t.Errorf("Test case, %q: unexpect hash got", tt.message)
+		}
+	}
+}

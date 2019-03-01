@@ -22,6 +22,8 @@ import (
 	"github.com/davecgh/go-spew/spew"
 )
 
+type DecorateFunc func(string) string
+
 // DeepHashObject writes specified object to hash using the spew library
 // which follows pointers and prints actual values of the nested objects
 // ensuring the hash does not change when a pointer changes.
@@ -34,4 +36,26 @@ func DeepHashObject(hasher hash.Hash, objectToWrite interface{}) {
 		SpewKeys:       true,
 	}
 	printer.Fprintf(hasher, "%#v", objectToWrite)
+}
+
+// DeepHashObjectWithDecorator support decrateFunc which can modify object spec string.
+func DeepHashObjectWithDecorator(hasher hash.Hash, objectToWrite interface{}, decorateFunc DecorateFunc) {
+	hasher.Reset()
+	printer := spew.ConfigState{
+		Indent:         " ",
+		SortKeys:       true,
+		DisableMethods: true,
+		SpewKeys:       true,
+	}
+
+	objGoString := printer.Sprintf("%#v", objectToWrite)
+
+	decoratedObjGoString := ""
+	if decorateFunc != nil {
+		decoratedObjGoString = decorateFunc(objGoString)
+	} else {
+		decoratedObjGoString = objGoString
+	}
+
+	printer.Fprint(hasher, decoratedObjGoString)
 }

@@ -71,7 +71,7 @@ func CreatePod(client clientset.Interface, pod *v1.Pod, namespace string) (*v1.P
 
 // DeletePod delete pod by using k8s api, and check whether pod is really deleted within the timeout.
 func DeletePod(client clientset.Interface, pod *v1.Pod) error {
-	err := client.CoreV1().Pods(pod.Namespace).Delete(pod.Name, &metav1.DeleteOptions{})
+	err := client.CoreV1().Pods(pod.Namespace).Delete(pod.Name, metav1.NewDeleteOptions(5))
 	if err != nil {
 		return err
 	}

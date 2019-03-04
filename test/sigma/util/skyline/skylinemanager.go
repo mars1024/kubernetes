@@ -110,11 +110,8 @@ const (
 	RETRY_INTERVAL_INCREMENT = 10
 )
 
-// 通用的http-post
+// 通用的 http-post
 func (skyline *SkylineManager) httpRequestToSky(url string, body []byte) (*Result, error) {
-	glog.Infof("skylineHttpRequestToSky. request body: %s", string(body))
-	//fmt.Println(fmt.Sprintf("skylineHttpRequestToSky. request body: %s", string(body)))
-
 	resByte, rErr := httpPostJsonWithHeadersWithTime(url, body, nil, nil, DEFAULT_DIAL_TIMEOUT, DEFAULT_END2END_TIMEOUT)
 	if rErr != nil {
 		glog.Errorf("httpRequestToSky failed: %s", rErr.Error())
@@ -126,9 +123,6 @@ func (skyline *SkylineManager) httpRequestToSky(url string, body []byte) (*Resul
 		glog.Errorf("skylineHttpRequestToSkyUnmarshal failed: %s", pErr.Error())
 		return nil, pErr
 	}
-	glog.Infof("skylineHttpRequestToSky success. response: %s", string(resByte))
-	//fmt.Println(fmt.Sprintf("skylineHttpRequestToSky success. response: %s", string(resByte)))
-
 	return result, nil
 }
 

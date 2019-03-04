@@ -1,7 +1,6 @@
 package swarm
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -73,8 +72,6 @@ func getSchedulerInfos(site string) []*schedulerAddressInfo {
 		}
 		siteToMap[site] = append(siteToMap[site], &schedulerAddressInfo{HostIp: hostAndPort[0], Port: hostAndPort[1]})
 	}
-	schedulerInfoBytes, _ := json.Marshal(siteToMap)
-	framework.Logf("getSchedulerInfo:%s, etcdEndPoints:%s", string(schedulerInfoBytes), getEtcdEndpoints())
 	return siteToMap[site]
 }
 

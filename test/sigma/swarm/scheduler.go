@@ -16,10 +16,10 @@ import (
 	"k8s.io/kubernetes/test/sigma/util"
 )
 
-// 做一个cache 避免每次都去armory获取
+// 做一个 cache 避免每次都去 armory 获取
 var maps = &sync.Map{}
 
-// 做一个cache 生命周期是每一次跑case
+// 做一个 cache 生命周期是每一次跑 case
 // 机房->真实可调度的机器列表
 var schedulerInfoMap = &sync.Map{}
 
@@ -45,10 +45,11 @@ func GetHostPod(hostSn string) map[string]*sigma.AllocPlan {
 	}
 
 	if schedulerInfo, err := getSchedulerInfo(site); err == nil {
-		url := fmt.Sprintf("http://%s:%s/host/%s/pod", schedulerInfo.HostIp, schedulerInfo.Port, hostSn)
+		url := fmt.Sprintf("http://%s:%s/host/%s/pod",
+			schedulerInfo.HostIp, schedulerInfo.Port, hostSn)
 		res, err := http.Get(url)
 		if err != nil {
-			framework.Logf("GetHostPod url:%s, err:%v", url, err)
+			framework.Logf("GetHostPod url: %s, err: %v", url, err)
 			return nil
 		}
 
@@ -58,7 +59,8 @@ func GetHostPod(hostSn string) map[string]*sigma.AllocPlan {
 		}
 		var allocPlans map[string]*sigma.AllocPlan
 		err = json.Unmarshal(bodys, &allocPlans)
-		framework.Logf("GetHostPod url:%s, hostSn:%s, podSize:%d, err:%v", url, hostSn, len(allocPlans), err)
+		framework.Logf("GetHostPod url: %s, hostSn: %s, podSize: %d, err: %v",
+			url, hostSn, len(allocPlans), err)
 		if len(allocPlans) > 0 {
 			filterAllocPlans := map[string]*sigma.AllocPlan{}
 			for key, allocPlan := range allocPlans {
@@ -70,7 +72,7 @@ func GetHostPod(hostSn string) map[string]*sigma.AllocPlan {
 		}
 		return allocPlans
 	} else {
-		framework.Logf("query schedulerInfo by site:%s failed", site)
+		framework.Logf("query schedulerInfo by site: %s failed", site)
 		return nil
 	}
 }
@@ -114,7 +116,8 @@ func checkHostIsLeader(schedulerAddressInfo *schedulerAddressInfo) bool {
 	c := &http.Client{
 		Timeout: 5 * time.Second,
 	}
-	rep, err := c.Get(fmt.Sprintf("http://%s:%s/leader", schedulerAddressInfo.HostIp, schedulerAddressInfo.Port))
+	rep, err := c.Get(fmt.Sprintf("http://%s:%s/leader",
+		schedulerAddressInfo.HostIp, schedulerAddressInfo.Port))
 	if err != nil {
 		return false
 	}

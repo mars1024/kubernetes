@@ -15,7 +15,7 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 
 	"k8s.io/kubernetes/test/e2e/framework"
- 	"k8s.io/kubernetes/test/sigma/util"
+	"k8s.io/kubernetes/test/sigma/util"
 )
 
 var _ = Describe("[sigma-3.1][sigma-scheduler][inplace-update][Serial]", func() {
@@ -55,11 +55,6 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][inplace-update][Serial]", func() 
 		Expect(err).NotTo(HaveOccurred())
 
 		for i, node := range nodeList.Items {
-			framework.Logf("logging pods the kubelet thinks is on node %s before test", node.Name)
-			framework.PrintAllKubeletPods(cs, node.Name)
-			waitNodeResourceReleaseComplete(node.Name)
-
-			framework.Logf("calculate the available resource of node: %s", node.Name)
 			nodeReady := false
 			for _, condition := range node.Status.Conditions {
 				if condition.Type == v1.NodeReady && condition.Status == v1.ConditionTrue {
@@ -72,12 +67,10 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][inplace-update][Serial]", func() 
 			}
 
 			nodesInfo[node.Name] = &nodeList.Items[i]
-			//etcdNodeinfo := swarm.GetNode(node.Name)
-			//nodeToAllocatableMapCPU[node.Name] = int64(etcdNodeinfo.LocalInfo.CpuNum * 1000)
 			{
 				allocatable, found := node.Status.Allocatable[v1.ResourceCPU]
 				Expect(found).To(Equal(true))
-				nodeToAllocatableMapCPU[node.Name] = allocatable.Value()*1000
+				nodeToAllocatableMapCPU[node.Name] = allocatable.Value() * 1000
 			}
 			{
 				allocatable, found := node.Status.Allocatable[v1.ResourceMemory]
@@ -90,6 +83,7 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][inplace-update][Serial]", func() 
 				nodeToAllocatableMapEphemeralStorage[node.Name] = allocatable.Value()
 			}
 		}
+
 		pods, err := cs.CoreV1().Pods(metav1.NamespaceAll).List(metav1.ListOptions{})
 		framework.ExpectNoError(err)
 		for _, pod := range pods.Items {
@@ -156,24 +150,23 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][inplace-update][Serial]", func() 
 		podDisk2 := allocatableDisk * 75 / 100
 
 		By("Request a pod with CPU/Memory/EphemeralStorage.")
-
 		podsToDelete := []*v1.Pod{}
 		resourceList1 := v1.ResourceList{
-			v1.ResourceCPU:              *resource.NewMilliQuantity(podCPU1, "DecimalSI"),
-			v1.ResourceMemory:           *resource.NewQuantity(podMemory1, "DecimalSI"),
-			v1.ResourceEphemeralStorage: *resource.NewQuantity(podDisk1, "DecimalSI"),
+			v1.ResourceCPU:              *resource.NewMilliQuantity(podCPU1, resource.DecimalSI),
+			v1.ResourceMemory:           *resource.NewQuantity(podMemory1, resource.BinarySI),
+			v1.ResourceEphemeralStorage: *resource.NewQuantity(podDisk1, resource.BinarySI),
 		}
 
 		// 50% node resource
-		resourceRequirements1 := &v1.ResourceRequirements{
+		resourceRequirements1 := v1.ResourceRequirements{
 			Limits:   resourceList1,
 			Requests: resourceList1,
 		}
 
 		resourceList2 := v1.ResourceList{
-			v1.ResourceCPU:              *resource.NewMilliQuantity(podCPU2, "DecimalSI"),
-			v1.ResourceMemory:           *resource.NewQuantity(podMemory2, "DecimalSI"),
-			v1.ResourceEphemeralStorage: *resource.NewQuantity(podDisk2, "DecimalSI"),
+			v1.ResourceCPU:              *resource.NewMilliQuantity(podCPU2, resource.DecimalSI),
+			v1.ResourceMemory:           *resource.NewQuantity(podMemory2, resource.BinarySI),
+			v1.ResourceEphemeralStorage: *resource.NewQuantity(podDisk2, resource.BinarySI),
 		}
 
 		// 75% node resource
@@ -183,9 +176,9 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][inplace-update][Serial]", func() 
 		}
 
 		resourceList3 := v1.ResourceList{
-			v1.ResourceCPU:              *resource.NewMilliQuantity(allocatableCPU, "DecimalSI"),
-			v1.ResourceMemory:           *resource.NewQuantity(allocatableMemory, "DecimalSI"),
-			v1.ResourceEphemeralStorage: *resource.NewQuantity(allocatableDisk, "DecimalSI"),
+			v1.ResourceCPU:              *resource.NewMilliQuantity(allocatableCPU, resource.DecimalSI),
+			v1.ResourceMemory:           *resource.NewQuantity(allocatableMemory, resource.BinarySI),
+			v1.ResourceEphemeralStorage: *resource.NewQuantity(allocatableDisk, resource.BinarySI),
 		}
 
 		// 100% node resource
@@ -194,10 +187,10 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][inplace-update][Serial]", func() 
 			Requests: resourceList3,
 		}
 
-		name := "inplace-update-1-" + string(uuid.NewUUID()) + "-1"
+		name := "inplace-update-" + string(uuid.NewUUID()) + "-1"
 		pod := createPausePod(f, pausePodConfig{
 			Name:      name,
-			Resources: resourceRequirements1,
+			Resources: &resourceRequirements1,
 			Annotations: map[string]string{
 				sigmak8sapi.AnnotationPodAllocSpec: formatAllocSpecStringWithSpreadStrategy(
 					name, sigmak8sapi.SpreadStrategySameCoreFirst),
@@ -205,19 +198,19 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][inplace-update][Serial]", func() 
 			Affinity: util.GetAffinityNodeSelectorRequirement(nodeAffinityKey, []string{nodeName}),
 		})
 
-		framework.Logf("Case, expect pod to be scheduled successfully.")
+		framework.Logf("expect pod-1 to be scheduled successfully.")
 		err := framework.WaitTimeoutForPodRunningInNamespace(cs, pod.Name, pod.Namespace, waitForPodRunningTimeout)
 		podsToDelete = append(podsToDelete, pod)
 		Expect(err).NotTo(HaveOccurred())
 
 		doUpdateWithNewResource(cs, pod, resourceRequirements2)
 		doUpdateWithNewResource(cs, pod, resourceRequirements3)
-		doUpdateWithNewResource(cs, pod, *resourceRequirements1)
+		doUpdateWithNewResource(cs, pod, resourceRequirements1)
 
-		name = "inplace-update-1-" + string(uuid.NewUUID()) + "-2"
+		name = "inplace-update-" + string(uuid.NewUUID()) + "-2"
 		pod2 := createPausePod(f, pausePodConfig{
 			Name:      name,
-			Resources: resourceRequirements1,
+			Resources: &resourceRequirements1,
 			Annotations: map[string]string{
 				sigmak8sapi.AnnotationPodAllocSpec: formatAllocSpecStringWithSpreadStrategy(
 					name, sigmak8sapi.SpreadStrategySameCoreFirst),
@@ -225,7 +218,7 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][inplace-update][Serial]", func() 
 			Affinity: util.GetAffinityNodeSelectorRequirement(nodeAffinityKey, []string{nodeName}),
 		})
 
-		framework.Logf("expect the second pod to be scheduled successfully.")
+		framework.Logf("expect the pod-2 to be scheduled successfully.")
 		err = framework.WaitTimeoutForPodRunningInNamespace(cs, pod2.Name, pod2.Namespace, waitForPodRunningTimeout)
 		podsToDelete = append(podsToDelete, pod2)
 		Expect(err).NotTo(HaveOccurred())
@@ -253,14 +246,16 @@ func doUpdateWithNewResource(client clientset.Interface, pod *v1.Pod, resource v
 
 	pod.Annotations[sigmak8sapi.AnnotationPodInplaceUpdateState] =
 		sigmak8sapi.InplaceUpdateStateCreated
+
 	pod.Spec.Containers[0].Resources = resource
+	framework.Logf("doUpdateWithNewResource, resource: %+v", resource)
 
 	_, err = client.CoreV1().Pods(pod.Namespace).Update(pod)
 	if err != nil {
 		Expect(err).NotTo(HaveOccurred(), "update pod should succeed")
 	}
 
-	err = wait.PollImmediate(3*time.Second, 5*time.Minute, checkInplaceUpdateIsAccepted(client, pod))
+	err = wait.PollImmediate(5*time.Second, 5*time.Minute, checkInplaceUpdateIsAccepted(client, pod))
 	Expect(err).NotTo(HaveOccurred(), "inplace update should succeed")
 }
 

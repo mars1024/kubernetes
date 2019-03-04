@@ -59,6 +59,10 @@ func makeExpectedConfig(m *kubeGenericRuntimeManager, pod *v1.Pod, containerInde
 		Linux:       m.generateLinuxContainerConfig(container, pod, new(int64), ""),
 		Envs:        envs,
 	}
+
+	if !(container.SecurityContext != nil && container.SecurityContext.Privileged != nil && *container.SecurityContext.Privileged == true) {
+		expectedConfig.Labels[containerPouchSupportCgroupLabel] = "true"
+	}
 	return expectedConfig
 }
 

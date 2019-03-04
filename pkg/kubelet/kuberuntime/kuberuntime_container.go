@@ -331,6 +331,11 @@ func (m *kubeGenericRuntimeManager) generateContainerConfig(container *v1.Contai
 		})
 	}
 
+	// Support modifying cgroup in container if privileged is false or undefined.
+	if !(container.SecurityContext != nil && container.SecurityContext.Privileged != nil && *container.SecurityContext.Privileged == true) {
+		config.Labels[containerPouchSupportCgroupLabel] = "true"
+	}
+
 	// Add network env on sigmalet side.
 	// See: https://yuque.antfin-inc.com/sys/sigma3.x/tgpuxq
 	// The network can't be changed in pod's lifecycle.

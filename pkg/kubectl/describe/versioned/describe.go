@@ -34,6 +34,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2beta2 "k8s.io/api/autoscaling/v2beta2"
+	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	batchv1beta1 "k8s.io/api/batch/v1beta1"
 	certificatesv1beta1 "k8s.io/api/certificates/v1beta1"
@@ -74,6 +75,9 @@ import (
 	resourcehelper "k8s.io/kubernetes/pkg/kubectl/util/resource"
 	"k8s.io/kubernetes/pkg/kubectl/util/slice"
 	storageutil "k8s.io/kubernetes/pkg/kubectl/util/storage"
+	apicorev1 "k8s.io/api/core/v1"
+	"k8s.io/kubernetes/pkg/apis/autoscaling"
+	"k8s.io/apimachinery/pkg/util/json"
 )
 
 // Each level has 2 spaces for PrefixWriter
@@ -3074,20 +3078,31 @@ type HorizontalPodAutoscalerDescriber struct {
 }
 
 func (d *HorizontalPodAutoscalerDescriber) Describe(namespace, name string, describerSettings describe.DescriberSettings) (string, error) {
-	hpa, err := d.client.AutoscalingV2beta2().HorizontalPodAutoscalers(namespace).Get(name, metav1.GetOptions{})
-	if err != nil {
-		return "", err
-	}
-
 	var events *corev1.EventList
-	if describerSettings.ShowEvents {
-		events, _ = d.client.CoreV1().Events(namespace).Search(scheme.Scheme, hpa)
+
+	// autoscaling/v2beta2 is introduced since v1.12 and autoscaling/v1 does not have full backward compatibility
+	// with autoscaling/v2beta2, so describer will try to get and describe hpa v2beta2 object firstly, if it fails,
+	// describer will fall back to do with hpa v1 object
+	hpaV2beta2, err := d.client.AutoscalingV2beta2().HorizontalPodAutoscalers(namespace).Get(name, metav1.GetOptions{})
+	if err == nil {
+		if describerSettings.ShowEvents {
+			events, _ = d.client.CoreV1().Events(namespace).Search(scheme.Scheme, hpaV2beta2)
+		}
+		return describeHorizontalPodAutoscalerV2beta2(hpaV2beta2, events, d)
 	}
 
-	return describeHorizontalPodAutoscaler(hpa, events, d)
+	hpaV1, err := d.client.AutoscalingV1().HorizontalPodAutoscalers(namespace).Get(name, metav1.GetOptions{})
+	if err == nil {
+		if describerSettings.ShowEvents {
+			events, _ = d.client.CoreV1().Events(namespace).Search(scheme.Scheme, hpaV1)
+		}
+		return describeHorizontalPodAutoscalerV1(hpaV1, events, d)
+	}
+
+	return "", err
 }
 
-func describeHorizontalPodAutoscaler(hpa *autoscalingv2beta2.HorizontalPodAutoscaler, events *corev1.EventList, d *HorizontalPodAutoscalerDescriber) (string, error) {
+func describeHorizontalPodAutoscalerV2beta2(hpa *autoscalingv2beta2.HorizontalPodAutoscaler, events *corev1.EventList, d *HorizontalPodAutoscalerDescriber) (string, error) {
 	return tabbedString(func(out io.Writer) error {
 		w := NewPrefixWriter(out)
 		w.Write(LEVEL_0, "Name:\t%s\n", hpa.Name)
@@ -3176,6 +3191,158 @@ func describeHorizontalPodAutoscaler(hpa *autoscalingv2beta2.HorizontalPodAutosc
 			w.Write(LEVEL_1, "Type\tStatus\tReason\tMessage\n")
 			w.Write(LEVEL_1, "----\t------\t------\t-------\n")
 			for _, c := range hpa.Status.Conditions {
+				w.Write(LEVEL_1, "%v\t%v\t%v\t%v\n", c.Type, c.Status, c.Reason, c.Message)
+			}
+		}
+
+		if events != nil {
+			DescribeEvents(events, w)
+		}
+
+		return nil
+	})
+}
+
+func describeHorizontalPodAutoscalerV1(hpa *autoscalingv1.HorizontalPodAutoscaler, events *corev1.EventList, d *HorizontalPodAutoscalerDescriber) (string, error) {
+	return tabbedString(func(out io.Writer) error {
+		w := NewPrefixWriter(out)
+		w.Write(LEVEL_0, "Name:\t%s\n", hpa.Name)
+		w.Write(LEVEL_0, "Namespace:\t%s\n", hpa.Namespace)
+		printLabelsMultiline(w, "Labels", hpa.Labels)
+		printAnnotationsMultiline(w, "Annotations", hpa.Annotations)
+		w.Write(LEVEL_0, "CreationTimestamp:\t%s\n", hpa.CreationTimestamp.Time.Format(time.RFC1123Z))
+		w.Write(LEVEL_0, "Reference:\t%s/%s\n",
+			hpa.Spec.ScaleTargetRef.Kind,
+			hpa.Spec.ScaleTargetRef.Name)
+		w.Write(LEVEL_0, "Metrics:\t( current / target )\n")
+
+		var metrics []autoscalingv1.MetricSpec
+		if hpa.Spec.TargetCPUUtilizationPercentage != nil {
+			metrics = []autoscalingv1.MetricSpec{
+				{
+					Type: autoscalingv1.ResourceMetricSourceType,
+					Resource: &autoscalingv1.ResourceMetricSource{
+						Name:                     apicorev1.ResourceCPU,
+						TargetAverageUtilization: new(int32),
+					},
+				},
+			}
+			*metrics[0].Resource.TargetAverageUtilization = *hpa.Spec.TargetCPUUtilizationPercentage
+		}
+		if otherMetricsEnc, hasOtherMetrics := hpa.Annotations[autoscaling.MetricSpecsAnnotation]; hasOtherMetrics {
+			var otherMetrics []autoscalingv1.MetricSpec
+			if err := json.Unmarshal([]byte(otherMetricsEnc), &otherMetrics); err != nil {
+				return err
+			}
+			metrics = append(otherMetrics, metrics...)
+		}
+		if len(metrics) == 0 {
+			metrics = []autoscalingv1.MetricSpec{
+				{
+					Type: autoscalingv1.ResourceMetricSourceType,
+					Resource: &autoscalingv1.ResourceMetricSource{
+						Name:                     apicorev1.ResourceCPU,
+						TargetAverageUtilization: new(int32),
+					},
+				},
+			}
+			*metrics[0].Resource.TargetAverageUtilization = autoscaling.DefaultCPUUtilization
+		}
+
+		var currentMetrics []autoscalingv1.MetricStatus
+		if hpa.Status.CurrentCPUUtilizationPercentage != nil {
+			currentMetrics = []autoscalingv1.MetricStatus{
+				{
+					Type: autoscalingv1.ResourceMetricSourceType,
+					Resource: &autoscalingv1.ResourceMetricStatus{
+						Name:                      apicorev1.ResourceCPU,
+						CurrentAverageUtilization: new(int32),
+					},
+				},
+			}
+			*currentMetrics[0].Resource.CurrentAverageUtilization = *hpa.Status.CurrentCPUUtilizationPercentage
+		}
+		if currentMetricsEnc, hasCurrentMetrics := hpa.Annotations[autoscaling.MetricStatusesAnnotation]; hasCurrentMetrics {
+			if err := json.Unmarshal([]byte(currentMetricsEnc), &currentMetrics); err != nil {
+				return err
+			}
+		}
+
+		var currentConditions []autoscalingv1.HorizontalPodAutoscalerCondition
+		if currentConditionsEnc, hasCurrentConditions := hpa.Annotations[autoscaling.HorizontalPodAutoscalerConditionsAnnotation]; hasCurrentConditions {
+			if err := json.Unmarshal([]byte(currentConditionsEnc), &currentConditions); err != nil {
+				return err
+			}
+		}
+
+		for i, metric := range metrics {
+			switch metric.Type {
+			case autoscalingv1.ExternalMetricSourceType:
+				if metric.External.TargetAverageValue != nil {
+					current := "<unknown>"
+					if len(currentMetrics) > i && currentMetrics[i].External != nil &&
+						&currentMetrics[i].External.CurrentAverageValue != nil {
+						current = currentMetrics[i].External.CurrentAverageValue.String()
+					}
+					w.Write(LEVEL_1, "%q (target average value):\t%s / %s\n", metric.External.MetricName, current, metric.External.TargetAverageValue.String())
+				} else {
+					current := "<unknown>"
+					if len(currentMetrics) > i && currentMetrics[i].External != nil {
+						current = currentMetrics[i].External.CurrentValue.String()
+					}
+					w.Write(LEVEL_1, "%q (target value):\t%s / %s\n", metric.External.MetricName, current, metric.External.TargetValue.String())
+
+				}
+			case autoscalingv1.PodsMetricSourceType:
+				current := "<unknown>"
+				if len(currentMetrics) > i && currentMetrics[i].Pods != nil {
+					current = currentMetrics[i].Pods.CurrentAverageValue.String()
+				}
+				w.Write(LEVEL_1, "%q on pods:\t%s / %s\n", metric.Pods.MetricName, current, metric.Pods.TargetAverageValue.String())
+			case autoscalingv1.ObjectMetricSourceType:
+				current := "<unknown>"
+				if len(currentMetrics) > i && currentMetrics[i].Object != nil {
+					current = currentMetrics[i].Object.CurrentValue.String()
+				}
+				w.Write(LEVEL_1, "%q on %s/%s:\t%s / %s\n", metric.Object.MetricName, metric.Object.Target.Kind, metric.Object.Target.Name, current, metric.Object.TargetValue.String())
+			case autoscalingv1.ResourceMetricSourceType:
+				w.Write(LEVEL_1, "resource %s on pods", string(metric.Resource.Name))
+				if metric.Resource.TargetAverageValue != nil {
+					current := "<unknown>"
+					if len(currentMetrics) > i && currentMetrics[i].Resource != nil {
+						current = currentMetrics[i].Resource.CurrentAverageValue.String()
+					}
+					w.Write(LEVEL_0, ":\t%s / %s\n", current, metric.Resource.TargetAverageValue.String())
+				} else {
+					current := "<unknown>"
+					if len(currentMetrics) > i && currentMetrics[i].Resource != nil && currentMetrics[i].Resource.CurrentAverageUtilization != nil {
+						current = fmt.Sprintf("%d%% (%s)", *currentMetrics[i].Resource.CurrentAverageUtilization, currentMetrics[i].Resource.CurrentAverageValue.String())
+					}
+
+					target := "<auto>"
+					if metric.Resource.TargetAverageUtilization != nil {
+						target = fmt.Sprintf("%d%%", *metric.Resource.TargetAverageUtilization)
+					}
+					w.Write(LEVEL_1, "(as a percentage of request):\t%s / %s\n", current, target)
+				}
+			default:
+				w.Write(LEVEL_1, "<unknown metric type %q>", string(metric.Type))
+			}
+		}
+		minReplicas := "<unset>"
+		if hpa.Spec.MinReplicas != nil {
+			minReplicas = fmt.Sprintf("%d", *hpa.Spec.MinReplicas)
+		}
+		w.Write(LEVEL_0, "Min replicas:\t%s\n", minReplicas)
+		w.Write(LEVEL_0, "Max replicas:\t%d\n", hpa.Spec.MaxReplicas)
+		w.Write(LEVEL_0, "%s pods:\t", hpa.Spec.ScaleTargetRef.Kind)
+		w.Write(LEVEL_0, "%d current / %d desired\n", hpa.Status.CurrentReplicas, hpa.Status.DesiredReplicas)
+
+		if len(currentConditions) > 0 {
+			w.Write(LEVEL_0, "Conditions:\n")
+			w.Write(LEVEL_1, "Type\tStatus\tReason\tMessage\n")
+			w.Write(LEVEL_1, "----\t------\t------\t-------\n")
+			for _, c := range currentConditions {
 				w.Write(LEVEL_1, "%v\t%v\t%v\t%v\n", c.Type, c.Status, c.Reason, c.Message)
 			}
 		}

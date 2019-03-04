@@ -27,6 +27,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2beta2 "k8s.io/api/autoscaling/v2beta2"
+	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	"k8s.io/api/core/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -41,6 +42,9 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/kubernetes/pkg/kubectl/describe"
 	utilpointer "k8s.io/utils/pointer"
+	"k8s.io/kubernetes/pkg/apis/autoscaling"
+
+	"encoding/json"
 )
 
 type describeClient struct {
@@ -452,7 +456,7 @@ func TestPodDescribeResultsSorted(t *testing.T) {
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	VerifyDatesInOrder(out, "\n" /* rowDelimiter */, "\t" /* columnDelimiter */, t)
+	VerifyDatesInOrder(out, "\n" /* rowDelimiter */ , "\t" /* columnDelimiter */ , t)
 }
 
 // VerifyDatesInOrder checks the start of each line for a RFC1123Z date
@@ -1629,8 +1633,9 @@ func TestDescribeHorizontalPodAutoscaler(t *testing.T) {
 		t.Errorf("unable to parse label selector: %v", err)
 	}
 	tests := []struct {
-		name string
-		hpa  autoscalingv2beta2.HorizontalPodAutoscaler
+		name       string
+		hpaV2beta2 autoscalingv2beta2.HorizontalPodAutoscaler
+		hpaV1      autoscalingv1.HorizontalPodAutoscaler
 	}{
 		{
 			"minReplicas unset",
@@ -1643,6 +1648,19 @@ func TestDescribeHorizontalPodAutoscaler(t *testing.T) {
 					MaxReplicas: 10,
 				},
 				Status: autoscalingv2beta2.HorizontalPodAutoscalerStatus{
+					CurrentReplicas: 4,
+					DesiredReplicas: 5,
+				},
+			},
+			autoscalingv1.HorizontalPodAutoscaler{
+				Spec: autoscalingv1.HorizontalPodAutoscalerSpec{
+					ScaleTargetRef: autoscalingv1.CrossVersionObjectReference{
+						Name: "some-rc",
+						Kind: "ReplicationController",
+					},
+					MaxReplicas: 10,
+				},
+				Status: autoscalingv1.HorizontalPodAutoscalerStatus{
 					CurrentReplicas: 4,
 					DesiredReplicas: 5,
 				},
@@ -1675,6 +1693,26 @@ func TestDescribeHorizontalPodAutoscaler(t *testing.T) {
 					},
 				},
 				Status: autoscalingv2beta2.HorizontalPodAutoscalerStatus{
+					CurrentReplicas: 4,
+					DesiredReplicas: 5,
+				},
+			},
+			autoscalingv1.HorizontalPodAutoscaler{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						autoscaling.MetricSpecsAnnotation: "[{\"type\":\"External\",\"external\":{\"metricName\":\"some-external-metric\",\"metricSelector\":{\"matchLabels\":{\"label\":\"value\"}},\"targetAverageValue\":\"100m\"}}]",
+					},
+				},
+				Spec: autoscalingv1.HorizontalPodAutoscalerSpec{
+					ScaleTargetRef: autoscalingv1.CrossVersionObjectReference{
+						Name: "some-rc",
+						Kind: "ReplicationController",
+					},
+					MinReplicas:                    &minReplicasVal,
+					MaxReplicas:                    10,
+					TargetCPUUtilizationPercentage: nil,
+				},
+				Status: autoscalingv1.HorizontalPodAutoscalerStatus{
 					CurrentReplicas: 4,
 					DesiredReplicas: 5,
 				},
@@ -1725,6 +1763,26 @@ func TestDescribeHorizontalPodAutoscaler(t *testing.T) {
 					},
 				},
 			},
+			autoscalingv1.HorizontalPodAutoscaler{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						autoscaling.MetricSpecsAnnotation:    "[{\"type\":\"External\",\"external\":{\"metricName\":\"some-external-metric\",\"metricSelector\":{\"matchLabels\":{\"label\":\"value\"}},\"targetAverageValue\":\"100m\"}}]",
+						autoscaling.MetricStatusesAnnotation: "[{\"type\":\"External\",\"external\":{\"metricName\":\"some-external-metric\",\"metricSelector\":{\"matchLabels\":{\"label\":\"value\"}},\"currentValue\":\"0\",\"currentAverageValue\":\"50m\"}}]",
+					},
+				},
+				Spec: autoscalingv1.HorizontalPodAutoscalerSpec{
+					ScaleTargetRef: autoscalingv1.CrossVersionObjectReference{
+						Kind: "ReplicationController",
+						Name: "some-rc",
+					},
+					MinReplicas: &minReplicasVal,
+					MaxReplicas: 10,
+				},
+				Status: autoscalingv1.HorizontalPodAutoscalerStatus{
+					CurrentReplicas: 4,
+					DesiredReplicas: 5,
+				},
+			},
 		},
 		{
 			"external source type, target value (no current)",
@@ -1753,6 +1811,25 @@ func TestDescribeHorizontalPodAutoscaler(t *testing.T) {
 					},
 				},
 				Status: autoscalingv2beta2.HorizontalPodAutoscalerStatus{
+					CurrentReplicas: 4,
+					DesiredReplicas: 5,
+				},
+			},
+			autoscalingv1.HorizontalPodAutoscaler{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						autoscaling.MetricSpecsAnnotation: "[{\"type\":\"External\",\"external\":{\"metricName\":\"some-external-metric\",\"metricSelector\":{\"matchLabels\":{\"label\":\"value\"}},\"targetValue\":\"100m\"}}]",
+					},
+				},
+				Spec: autoscalingv1.HorizontalPodAutoscalerSpec{
+					ScaleTargetRef: autoscalingv1.CrossVersionObjectReference{
+						Kind: "ReplicationController",
+						Name: "some-rc",
+					},
+					MinReplicas: &minReplicasVal,
+					MaxReplicas: 10,
+				},
+				Status: autoscalingv1.HorizontalPodAutoscalerStatus{
 					CurrentReplicas: 4,
 					DesiredReplicas: 5,
 				},
@@ -1803,6 +1880,26 @@ func TestDescribeHorizontalPodAutoscaler(t *testing.T) {
 					},
 				},
 			},
+			autoscalingv1.HorizontalPodAutoscaler{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						autoscaling.MetricSpecsAnnotation:    "[{\"type\":\"External\",\"external\":{\"metricName\":\"some-external-metric\",\"metricSelector\":{\"matchLabels\":{\"label\":\"value\"}},\"targetValue\":\"100m\"}}]",
+						autoscaling.MetricStatusesAnnotation: "[{\"type\":\"External\",\"external\":{\"metricName\":\"some-external-metric\",\"metricSelector\":{\"matchLabels\":{\"label\":\"value\"}},\"currentValue\":\"50m\"}}]",
+					},
+				},
+				Spec: autoscalingv1.HorizontalPodAutoscalerSpec{
+					ScaleTargetRef: autoscalingv1.CrossVersionObjectReference{
+						Kind: "ReplicationController",
+						Name: "some-rc",
+					},
+					MinReplicas: &minReplicasVal,
+					MaxReplicas: 10,
+				},
+				Status: autoscalingv1.HorizontalPodAutoscalerStatus{
+					CurrentReplicas: 4,
+					DesiredReplicas: 5,
+				},
+			},
 		},
 		{
 			"pods source type (no current)",
@@ -1830,6 +1927,25 @@ func TestDescribeHorizontalPodAutoscaler(t *testing.T) {
 					},
 				},
 				Status: autoscalingv2beta2.HorizontalPodAutoscalerStatus{
+					CurrentReplicas: 4,
+					DesiredReplicas: 5,
+				},
+			},
+			autoscalingv1.HorizontalPodAutoscaler{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						autoscaling.MetricSpecsAnnotation: "[{\"type\":\"Pods\",\"pods\":{\"metricName\":\"some-pods-metric\",\"targetAverageValue\":\"100m\"}}]",
+					},
+				},
+				Spec: autoscalingv1.HorizontalPodAutoscalerSpec{
+					ScaleTargetRef: autoscalingv1.CrossVersionObjectReference{
+						Kind: "ReplicationController",
+						Name: "some-rc",
+					},
+					MinReplicas: &minReplicasVal,
+					MaxReplicas: 10,
+				},
+				Status: autoscalingv1.HorizontalPodAutoscalerStatus{
 					CurrentReplicas: 4,
 					DesiredReplicas: 5,
 				},
@@ -1878,6 +1994,26 @@ func TestDescribeHorizontalPodAutoscaler(t *testing.T) {
 					},
 				},
 			},
+			autoscalingv1.HorizontalPodAutoscaler{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						autoscaling.MetricSpecsAnnotation:    "[{\"type\":\"Pods\",\"pods\":{\"metricName\":\"some-pods-metric\",\"targetAverageValue\":\"100m\"}}]",
+						autoscaling.MetricStatusesAnnotation: "[{\"type\":\"Pods\",\"pods\":{\"metricName\":\"some-pods-metric\",\"currentAverageValue\":\"50m\"}}]",
+					},
+				},
+				Spec: autoscalingv1.HorizontalPodAutoscalerSpec{
+					ScaleTargetRef: autoscalingv1.CrossVersionObjectReference{
+						Kind: "ReplicationController",
+						Name: "some-rc",
+					},
+					MinReplicas: &minReplicasVal,
+					MaxReplicas: 10,
+				},
+				Status: autoscalingv1.HorizontalPodAutoscalerStatus{
+					CurrentReplicas: 4,
+					DesiredReplicas: 5,
+				},
+			},
 		},
 		{
 			"object source type target average value (no current)",
@@ -1909,6 +2045,25 @@ func TestDescribeHorizontalPodAutoscaler(t *testing.T) {
 					},
 				},
 				Status: autoscalingv2beta2.HorizontalPodAutoscalerStatus{
+					CurrentReplicas: 4,
+					DesiredReplicas: 5,
+				},
+			},
+			autoscalingv1.HorizontalPodAutoscaler{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						autoscaling.MetricSpecsAnnotation: "[{\"type\":\"Object\",\"object\":{\"target\":{\"kind\":\"Service\",\"name\":\"some-service\"},\"metricName\":\"some-service-metric\",\"targetValue\":\"0\",\"averageValue\":\"100m\"}}]",
+					},
+				},
+				Spec: autoscalingv1.HorizontalPodAutoscalerSpec{
+					ScaleTargetRef: autoscalingv1.CrossVersionObjectReference{
+						Kind: "ReplicationController",
+						Name: "some-rc",
+					},
+					MinReplicas: &minReplicasVal,
+					MaxReplicas: 10,
+				},
+				Status: autoscalingv1.HorizontalPodAutoscalerStatus{
 					CurrentReplicas: 4,
 					DesiredReplicas: 5,
 				},
@@ -1965,6 +2120,26 @@ func TestDescribeHorizontalPodAutoscaler(t *testing.T) {
 					},
 				},
 			},
+			autoscalingv1.HorizontalPodAutoscaler{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						autoscaling.MetricSpecsAnnotation:    "[{\"type\":\"Object\",\"object\":{\"target\":{\"kind\":\"Service\",\"name\":\"some-service\"},\"metricName\":\"some-service-metric\",\"targetValue\":\"0\",\"averageValue\":\"100m\"}}]",
+						autoscaling.MetricStatusesAnnotation: "[{\"type\":\"Object\",\"object\":{\"target\":{\"kind\":\"Service\",\"name\":\"some-service\"},\"metricName\":\"some-service-metric\",\"currentValue\":\"0\",\"averageValue\":\"50m\"}}]",
+					},
+				},
+				Spec: autoscalingv1.HorizontalPodAutoscalerSpec{
+					ScaleTargetRef: autoscalingv1.CrossVersionObjectReference{
+						Kind: "ReplicationController",
+						Name: "some-rc",
+					},
+					MinReplicas: &minReplicasVal,
+					MaxReplicas: 10,
+				},
+				Status: autoscalingv1.HorizontalPodAutoscalerStatus{
+					CurrentReplicas: 4,
+					DesiredReplicas: 5,
+				},
+			},
 		},
 		{
 			"object source type target value (no current)",
@@ -1996,6 +2171,25 @@ func TestDescribeHorizontalPodAutoscaler(t *testing.T) {
 					},
 				},
 				Status: autoscalingv2beta2.HorizontalPodAutoscalerStatus{
+					CurrentReplicas: 4,
+					DesiredReplicas: 5,
+				},
+			},
+			autoscalingv1.HorizontalPodAutoscaler{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						autoscaling.MetricSpecsAnnotation: "[{\"type\":\"Object\",\"object\":{\"target\":{\"kind\":\"Service\",\"name\":\"some-service\"},\"metricName\":\"some-service-metric\",\"targetValue\":\"100m\"}}]",
+					},
+				},
+				Spec: autoscalingv1.HorizontalPodAutoscalerSpec{
+					ScaleTargetRef: autoscalingv1.CrossVersionObjectReference{
+						Kind: "ReplicationController",
+						Name: "some-rc",
+					},
+					MinReplicas: &minReplicasVal,
+					MaxReplicas: 10,
+				},
+				Status: autoscalingv1.HorizontalPodAutoscalerStatus{
 					CurrentReplicas: 4,
 					DesiredReplicas: 5,
 				},
@@ -2052,6 +2246,26 @@ func TestDescribeHorizontalPodAutoscaler(t *testing.T) {
 					},
 				},
 			},
+			autoscalingv1.HorizontalPodAutoscaler{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						autoscaling.MetricSpecsAnnotation:    "[{\"type\":\"Object\",\"object\":{\"target\":{\"kind\":\"Service\",\"name\":\"some-service\"},\"metricName\":\"some-service-metric\",\"targetValue\":\"100m\"}}]",
+						autoscaling.MetricStatusesAnnotation: "[{\"type\":\"Object\",\"object\":{\"target\":{\"kind\":\"Service\",\"name\":\"some-service\"},\"metricName\":\"some-service-metric\",\"currentValue\":\"50m\"}}]",
+					},
+				},
+				Spec: autoscalingv1.HorizontalPodAutoscalerSpec{
+					ScaleTargetRef: autoscalingv1.CrossVersionObjectReference{
+						Kind: "ReplicationController",
+						Name: "some-rc",
+					},
+					MinReplicas: &minReplicasVal,
+					MaxReplicas: 10,
+				},
+				Status: autoscalingv1.HorizontalPodAutoscalerStatus{
+					CurrentReplicas: 4,
+					DesiredReplicas: 5,
+				},
+			},
 		},
 		{
 			"resource source type, target average value (no current)",
@@ -2077,6 +2291,25 @@ func TestDescribeHorizontalPodAutoscaler(t *testing.T) {
 					},
 				},
 				Status: autoscalingv2beta2.HorizontalPodAutoscalerStatus{
+					CurrentReplicas: 4,
+					DesiredReplicas: 5,
+				},
+			},
+			autoscalingv1.HorizontalPodAutoscaler{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						autoscaling.MetricSpecsAnnotation: "[{\"type\":\"Resource\",\"resource\":{\"name\":\"cpu\",\"targetAverageValue\":\"100m\"}}]",
+					},
+				},
+				Spec: autoscalingv1.HorizontalPodAutoscalerSpec{
+					ScaleTargetRef: autoscalingv1.CrossVersionObjectReference{
+						Kind: "ReplicationController",
+						Name: "some-rc",
+					},
+					MinReplicas: &minReplicasVal,
+					MaxReplicas: 10,
+				},
+				Status: autoscalingv1.HorizontalPodAutoscalerStatus{
 					CurrentReplicas: 4,
 					DesiredReplicas: 5,
 				},
@@ -2121,6 +2354,26 @@ func TestDescribeHorizontalPodAutoscaler(t *testing.T) {
 					},
 				},
 			},
+			autoscalingv1.HorizontalPodAutoscaler{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						autoscaling.MetricSpecsAnnotation:    "[{\"type\":\"Resource\",\"resource\":{\"name\":\"cpu\",\"targetAverageValue\":\"100m\"}}]",
+						autoscaling.MetricStatusesAnnotation: "[{\"type\":\"Resource\",\"resource\":{\"name\":\"cpu\",\"currentAverageValue\":\"50m\"}}]",
+					},
+				},
+				Spec: autoscalingv1.HorizontalPodAutoscalerSpec{
+					ScaleTargetRef: autoscalingv1.CrossVersionObjectReference{
+						Kind: "ReplicationController",
+						Name: "some-rc",
+					},
+					MinReplicas: &minReplicasVal,
+					MaxReplicas: 10,
+				},
+				Status: autoscalingv1.HorizontalPodAutoscalerStatus{
+					CurrentReplicas: 4,
+					DesiredReplicas: 5,
+				},
+			},
 		},
 		{
 			"resource source type, target utilization (no current)",
@@ -2146,6 +2399,21 @@ func TestDescribeHorizontalPodAutoscaler(t *testing.T) {
 					},
 				},
 				Status: autoscalingv2beta2.HorizontalPodAutoscalerStatus{
+					CurrentReplicas: 4,
+					DesiredReplicas: 5,
+				},
+			},
+			autoscalingv1.HorizontalPodAutoscaler{
+				Spec: autoscalingv1.HorizontalPodAutoscalerSpec{
+					ScaleTargetRef: autoscalingv1.CrossVersionObjectReference{
+						Kind: "ReplicationController",
+						Name: "some-rc",
+					},
+					MinReplicas:                    &minReplicasVal,
+					MaxReplicas:                    10,
+					TargetCPUUtilizationPercentage: &targetUtilizationVal,
+				},
+				Status: autoscalingv1.HorizontalPodAutoscalerStatus{
 					CurrentReplicas: 4,
 					DesiredReplicas: 5,
 				},
@@ -2189,6 +2457,27 @@ func TestDescribeHorizontalPodAutoscaler(t *testing.T) {
 							},
 						},
 					},
+				},
+			},
+			autoscalingv1.HorizontalPodAutoscaler{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						autoscaling.MetricStatusesAnnotation: "[{\"type\":\"Resource\",\"resource\":{\"name\":\"cpu\",\"currentAverageUtilization\":50,\"currentAverageValue\":\"40m\"}}]",
+					},
+				},
+				Spec: autoscalingv1.HorizontalPodAutoscalerSpec{
+					ScaleTargetRef: autoscalingv1.CrossVersionObjectReference{
+						Kind: "ReplicationController",
+						Name: "some-rc",
+					},
+					MinReplicas:                    &minReplicasVal,
+					MaxReplicas:                    10,
+					TargetCPUUtilizationPercentage: &targetUtilizationVal,
+				},
+				Status: autoscalingv1.HorizontalPodAutoscalerStatus{
+					CurrentReplicas:                 4,
+					DesiredReplicas:                 5,
+					CurrentCPUUtilizationPercentage: &currentUtilizationVal,
 				},
 			},
 		},
@@ -2267,27 +2556,126 @@ func TestDescribeHorizontalPodAutoscaler(t *testing.T) {
 					},
 				},
 			},
+			autoscalingv1.HorizontalPodAutoscaler{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						autoscaling.MetricSpecsAnnotation:    "[{\"type\":\"Pods\",\"pods\":{\"metricName\":\"some-pods-metric\",\"targetAverageValue\":\"100m\"}},{\"type\":\"Pods\",\"pods\":{\"metricName\":\"other-pods-metric\",\"targetAverageValue\":\"400m\"}}]",
+						autoscaling.MetricStatusesAnnotation: "[{\"type\":\"Pods\",\"pods\":{\"metricName\":\"some-pods-metric\",\"currentAverageValue\":\"50m\"}},{\"type\":\"Resource\",\"resource\":{\"name\":\"cpu\",\"currentAverageUtilization\":50,\"currentAverageValue\":\"40m\"}}]",
+					},
+				},
+				Spec: autoscalingv1.HorizontalPodAutoscalerSpec{
+					ScaleTargetRef: autoscalingv1.CrossVersionObjectReference{
+						Kind: "ReplicationController",
+						Name: "some-rc",
+					},
+					MinReplicas:                    &minReplicasVal,
+					MaxReplicas:                    10,
+					TargetCPUUtilizationPercentage: &targetUtilizationVal,
+				},
+				Status: autoscalingv1.HorizontalPodAutoscalerStatus{
+					CurrentReplicas:                 4,
+					DesiredReplicas:                 5,
+					CurrentCPUUtilizationPercentage: &currentUtilizationVal,
+				},
+			},
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			test.hpa.ObjectMeta = metav1.ObjectMeta{
+			test.hpaV2beta2.ObjectMeta = metav1.ObjectMeta{
 				Name:      "bar",
 				Namespace: "foo",
 			}
-			fake := fake.NewSimpleClientset(&test.hpa)
-			desc := HorizontalPodAutoscalerDescriber{fake}
-			str, err := desc.Describe("foo", "bar", describe.DescriberSettings{ShowEvents: true})
+			fakeV2beta2 := fake.NewSimpleClientset(&test.hpaV2beta2)
+			descV2beta2 := HorizontalPodAutoscalerDescriber{fakeV2beta2}
+			strV2beta2, err := descV2beta2.Describe("foo", "bar", describe.DescriberSettings{ShowEvents: true})
 			if err != nil {
-				t.Errorf("Unexpected error for test %s: %v", test.name, err)
+				t.Errorf("Unexpected error for test %s v2beta2: %v", test.name, err)
 			}
-			if str == "" {
-				t.Errorf("Unexpected empty string for test %s.  Expected HPA Describer output", test.name)
+			if strV2beta2 == "" {
+				t.Errorf("Unexpected empty string for test %s.  Expected HPA Describer v2beta2 output", test.name)
 			}
-			t.Logf("Description for %q:\n%s", test.name, str)
+			t.Logf("Description for %q v2beta2 :\n%s", test.name, strV2beta2)
+
+			test.hpaV1.ObjectMeta = metav1.ObjectMeta{
+				Name:      "bar",
+				Namespace: "foo",
+			}
+			fakeV1 := fake.NewSimpleClientset(&test.hpaV1)
+			descV1 := HorizontalPodAutoscalerDescriber{fakeV1}
+			strV1, err := descV1.Describe("foo", "bar", describe.DescriberSettings{ShowEvents: true})
+			if err != nil {
+				t.Errorf("Unexpected error for test %s v1: %v", test.name, err)
+			}
+			if strV1 == "" {
+				t.Errorf("Unexpected empty string for test %s.  Expected HPA Describer v1 output", test.name)
+			}
+			t.Logf("Description for %q v1 :\n%s", test.name, strV1)
 		})
 	}
+}
+
+func TestBruce(t *testing.T) {
+	//metricLabelSelector, _ := metav1.ParseToLabelSelector("label=value")
+	//targetUtilizationVal := int32(80)
+	currentUtilizationVal := int32(50)
+
+	status := []autoscalingv1.MetricStatus{
+		{
+			Type: autoscalingv1.PodsMetricSourceType,
+			Pods: &autoscalingv1.PodsMetricStatus{
+				MetricName:          "some-pods-metric",
+				CurrentAverageValue: *resource.NewMilliQuantity(50, resource.DecimalSI),
+			},
+		},
+		{
+			Type: autoscalingv1.ResourceMetricSourceType,
+			Resource: &autoscalingv1.ResourceMetricStatus{
+				Name:                      corev1.ResourceCPU,
+				CurrentAverageValue:       *resource.NewMilliQuantity(40, resource.DecimalSI),
+				CurrentAverageUtilization: &currentUtilizationVal,
+			},
+		},
+	}
+
+	b, _ := json.Marshal(status)
+	t.Logf("%q", string(b))
+
+	var otherStatus []autoscalingv1.MetricStatus
+	if err := json.Unmarshal([]byte(b), &otherStatus); err != nil {
+		t.Errorf("fails : %v", err)
+	}
+
+	t.Logf("%+v", otherStatus)
+
+	/*	specs := []autoscalingv1.MetricSpec{
+			{
+				Type: autoscalingv1.PodsMetricSourceType,
+				Pods: &autoscalingv1.PodsMetricSource{
+					MetricName:         "some-pods-metric",
+					TargetAverageValue: *resource.NewMilliQuantity(100, resource.DecimalSI),
+				},
+			},
+			{
+				Type: autoscalingv1.PodsMetricSourceType,
+				Pods: &autoscalingv1.PodsMetricSource{
+					MetricName:         "other-pods-metric",
+					TargetAverageValue: *resource.NewMilliQuantity(400, resource.DecimalSI),
+				},
+			},
+		}
+
+		b, _ := json.Marshal(specs)
+		t.Logf("%q", string(b))
+
+		var otherSpecs []autoscalingv1.MetricSpec
+		if err := json.Unmarshal([]byte(b), &otherSpecs); err != nil {
+			t.Errorf("fails : %v", err)
+		}
+
+		t.Logf("%+v", otherSpecs)*/
+
 }
 
 func TestDescribeEvents(t *testing.T) {

@@ -1,4 +1,4 @@
-// +build !linux,!cgo
+// +build !linux,!windows linux,!cgo
 
 /*
 Copyright 2019 Alipay.

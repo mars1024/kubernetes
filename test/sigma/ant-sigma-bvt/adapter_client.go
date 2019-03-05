@@ -18,11 +18,11 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/samalba/dockerclient"
 	"k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/sigma/swarm"
 	"k8s.io/kubernetes/test/sigma/util"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type AdapterServer struct {
@@ -64,12 +64,10 @@ func (s *AdapterServer) NewHttpClient() (*http.Client, error) {
 			InsecureSkipVerify: true,
 		},
 		Dial: (&net.Dialer{
-			Timeout:   30 * time.Second,
-			KeepAlive: 30 * time.Second,
+			Timeout:   60 * time.Second,
+			KeepAlive: 60 * time.Second,
 		}).Dial,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ResponseHeaderTimeout: 10 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
+		TLSHandshakeTimeout: 60 * time.Second,
 	}
 	client.Transport = tr
 	return client, nil

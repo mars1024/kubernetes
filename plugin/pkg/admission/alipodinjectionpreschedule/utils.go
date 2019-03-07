@@ -80,10 +80,10 @@ func addContainerEnvWithOverwrite(container *api.Container, key, value string) {
 	if container == nil {
 		return
 	}
-	for _, e := range container.Env {
+	for i, e := range container.Env {
 		if e.Name == key {
-			e.Value = value
-			break
+			container.Env[i].Value = value
+			return
 		}
 	}
 	container.Env = append(container.Env, api.EnvVar{

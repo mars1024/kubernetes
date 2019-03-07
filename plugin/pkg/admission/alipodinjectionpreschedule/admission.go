@@ -90,7 +90,7 @@ func (c *aliPodInjectionPreSchedule) Admit(a admission.Attributes) error {
 
 	//glog.V(3).Infof("aliPodInjectionPreSchedule preStart to admit %s, operation: %v, subresource: %v, pod: %v", key, a.GetOperation(), a.GetSubresource(), dumpJson(pod))
 
-	if len(a.GetSubresource()) != 0 || a.GetOperation() != admission.Create || a.GetOperation() != admission.Update {
+	if len(a.GetSubresource()) != 0 || (a.GetOperation() != admission.Create && a.GetOperation() != admission.Update) {
 		return nil
 	}
 

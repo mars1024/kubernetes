@@ -595,6 +595,10 @@ func (m *kubeGenericRuntimeManager) isContainerNeedUpdate(pod *v1.Pod, container
 		return false
 	}
 
+	if !sigmautil.IsInplaceUpdateAccepted(pod) {
+		return false
+	}
+
 	_, _, _, needToUpdate := m.containerChanged(container, containerStatus, pod)
 	return needToUpdate
 }

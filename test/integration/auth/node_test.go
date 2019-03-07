@@ -18,8 +18,8 @@ package auth
 
 import (
 	"fmt"
-	"net/http"
-	"net/http/httptest"
+	"io/ioutil"
+	"strings"
 	"testing"
 	"time"
 
@@ -29,35 +29,20 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/apiserver/pkg/authentication/request/bearertoken"
-	"k8s.io/apiserver/pkg/authentication/token/tokenfile"
-	"k8s.io/apiserver/pkg/authentication/user"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	utilfeaturetesting "k8s.io/apiserver/pkg/util/feature/testing"
-	versionedinformers "k8s.io/client-go/informers"
 	externalclientset "k8s.io/client-go/kubernetes"
-	restclient "k8s.io/client-go/rest"
-	"k8s.io/kubernetes/pkg/api/legacyscheme"
+	kubeapiservertesting "k8s.io/kubernetes/cmd/kube-apiserver/app/testing"
 	"k8s.io/kubernetes/pkg/apis/coordination"
 	api "k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/apis/policy"
-	"k8s.io/kubernetes/pkg/auth/nodeidentifier"
 	clientset "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	"k8s.io/kubernetes/pkg/features"
-	"k8s.io/kubernetes/pkg/kubeapiserver/authorizer"
-	"k8s.io/kubernetes/plugin/pkg/admission/noderestriction"
 	"k8s.io/kubernetes/test/integration/framework"
 	"k8s.io/utils/pointer"
 )
 
 func TestNodeAuthorizer(t *testing.T) {
-	// Start the server so we know the address
-	h := &framework.MasterHolder{Initialized: make(chan struct{})}
-	apiServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		<-h.Initialized
-		h.M.GenericAPIServer.Handler.ServeHTTP(w, req)
-	}))
-
 	const (
 		// Define credentials
 		tokenMaster      = "master-token"
@@ -65,18 +50,6 @@ func TestNodeAuthorizer(t *testing.T) {
 		tokenNode1       = "node1-token"
 		tokenNode2       = "node2-token"
 	)
-
-	authenticator := bearertoken.New(tokenfile.New(map[string]*user.DefaultInfo{
-		tokenMaster:      {Name: "admin", Groups: []string{"system:masters"}},
-		tokenNodeUnknown: {Name: "unknown", Groups: []string{"system:nodes"}},
-		tokenNode1:       {Name: "system:node:node1", Groups: []string{"system:nodes"}},
-		tokenNode2:       {Name: "system:node:node2", Groups: []string{"system:nodes"}},
-	}))
-
-	// Build client config, clientset, and informers
-	clientConfig := &restclient.Config{Host: apiServer.URL, ContentConfig: restclient.ContentConfig{NegotiatedSerializer: legacyscheme.Codecs}}
-	superuserClient, superuserClientExternal := clientsetForToken(tokenMaster, clientConfig)
-	versionedInformerFactory := versionedinformers.NewSharedInformerFactory(superuserClientExternal, time.Minute)
 
 	// Enabled CSIPersistentVolume feature at startup so volumeattachments get watched
 	defer utilfeaturetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.CSIPersistentVolume, true)()
@@ -87,36 +60,31 @@ func TestNodeAuthorizer(t *testing.T) {
 	// Enable NodeLease feature so that nodes can create leases
 	defer utilfeaturetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.NodeLease, true)()
 
-	// Set up Node+RBAC authorizer
-	authorizerConfig := &authorizer.AuthorizationConfig{
-		AuthorizationModes:       []string{"Node", "RBAC"},
-		VersionedInformerFactory: versionedInformerFactory,
-	}
-	nodeRBACAuthorizer, _, err := authorizerConfig.New()
+	tokenFile, err := ioutil.TempFile("", "kubeconfig")
 	if err != nil {
 		t.Fatal(err)
 	}
+	tokenFile.WriteString(strings.Join([]string{
+		fmt.Sprintf(`%s,admin,uid1,"system:masters"`, tokenMaster),
+		fmt.Sprintf(`%s,unknown,uid2,"system:nodes"`, tokenNodeUnknown),
+		fmt.Sprintf(`%s,system:node:node1,uid3,"system:nodes"`, tokenNode1),
+		fmt.Sprintf(`%s,system:node:node2,uid4,"system:nodes"`, tokenNode2),
+	}, "\n"))
+	tokenFile.Close()
 
-	// Set up NodeRestriction admission
-	nodeRestrictionAdmission := noderestriction.NewPlugin(nodeidentifier.NewDefaultNodeIdentifier())
-	nodeRestrictionAdmission.SetExternalKubeInformerFactory(versionedInformerFactory)
-	if err := nodeRestrictionAdmission.ValidateInitialization(); err != nil {
-		t.Fatal(err)
-	}
+	server := kubeapiservertesting.StartTestServerOrDie(t, nil, []string{
+		"--authorization-mode", "Node,RBAC",
+		"--token-auth-file", tokenFile.Name(),
+		"--enable-admission-plugins", "NodeRestriction",
+		// The "default" SA is not installed, causing the ServiceAccount plugin to retry for ~1s per
+		// API request.
+		"--disable-admission-plugins", "ServiceAccount,TaintNodesByCondition",
+	}, framework.SharedEtcd())
+	defer server.TearDownFn()
 
-	// Start the server
-	masterConfig := framework.NewIntegrationTestMasterConfig()
-	masterConfig.GenericConfig.Authentication.Authenticator = authenticator
-	masterConfig.GenericConfig.Authorization.Authorizer = nodeRBACAuthorizer
-	masterConfig.GenericConfig.AdmissionControl = nodeRestrictionAdmission
-
-	_, _, closeFn := framework.RunAMasterUsingServer(masterConfig, apiServer, h)
-	defer closeFn()
-
-	// Start the informers
-	stopCh := make(chan struct{})
-	defer close(stopCh)
-	versionedInformerFactory.Start(stopCh)
+	// Build client config and superuser clientset
+	clientConfig := server.ClientConfig
+	superuserClient, superuserClientExternal := clientsetForToken(tokenMaster, clientConfig)
 
 	// Wait for a healthy server
 	for {

@@ -7,6 +7,7 @@ import (
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	api "k8s.io/kubernetes/pkg/apis/core"
 )
 
@@ -89,6 +90,30 @@ func addContainerEnvWithOverwrite(container *api.Container, key, value string) {
 		Name:  key,
 		Value: value,
 	})
+}
+
+func addPodVolumeNoOverwrite(pod *api.Pod, volume api.Volume) {
+	for _, v := range pod.Spec.Volumes {
+		if v.Name == volume.Name {
+			return
+		}
+	}
+	pod.Spec.Volumes = append(pod.Spec.Volumes, volume)
+}
+func addContainerVolumeMountsNoOverwrite(container *api.Container, volumeName string, paths []string, readOnly bool) {
+	existingPaths := sets.String{}
+	for _, vm := range container.VolumeMounts {
+		existingPaths.Insert(vm.MountPath)
+	}
+	for _, path := range paths {
+		if !existingPaths.Has(path) {
+			container.VolumeMounts = append(container.VolumeMounts, api.VolumeMount{
+				Name:      volumeName,
+				MountPath: path,
+				ReadOnly: readOnly,
+			})
+		}
+	}
 }
 
 func getAffinityRequiredNodeSelector(pod *api.Pod) *api.NodeSelector {

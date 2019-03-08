@@ -27,7 +27,7 @@ func inPlaceControlPod(pod *corev1.Pod) bool {
 	}
 
 	for _, ownerReference := range ownerReferences {
-		if *ownerReference.Controller && ownerReference.Kind == "InPlaceSet" {
+		if (ownerReference.Controller != nil && *ownerReference.Controller) && ownerReference.Kind == "InPlaceSet" {
 			return true
 		}
 	}

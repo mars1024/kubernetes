@@ -177,23 +177,23 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][resource][Serial]", func() {
 			expectedScheduleResult    bool
 		}{
 			{
-				cpu:                       *resource.NewMilliQuantity(pod1CPU, "DecimalSI"),
-				mem:                       *resource.NewQuantity(pod1Memory, "DecimalSI"),
-				ethstorage:                *resource.NewQuantity(pod1Disk, "DecimalSI"),
+				cpu:                       *resource.NewMilliQuantity(pod1CPU, resource.DecimalSI),
+				mem:                       *resource.NewQuantity(pod1Memory, resource.DecimalSI),
+				ethstorage:                *resource.NewQuantity(pod1Disk, resource.DecimalSI),
 				expectedAvailableResource: []int64{pod2CPU, pod2Memory, pod2Disk},
 				expectedScheduleResult:    true,
 			},
 			{
-				cpu:                       *resource.NewMilliQuantity(pod2CPU, "DecimalSI"),
-				mem:                       *resource.NewQuantity(pod2Memory, "DecimalSI"),
-				ethstorage:                *resource.NewQuantity(pod2Disk, "DecimalSI"),
+				cpu:                       *resource.NewMilliQuantity(pod2CPU, resource.DecimalSI),
+				mem:                       *resource.NewQuantity(pod2Memory, resource.DecimalSI),
+				ethstorage:                *resource.NewQuantity(pod2Disk, resource.DecimalSI),
 				expectedAvailableResource: []int64{0, 0, 0},
 				expectedScheduleResult:    true,
 			},
 			{
-				cpu:                       *resource.NewMilliQuantity(pod2CPU, "DecimalSI"),
-				mem:                       *resource.NewQuantity(pod2Memory, "DecimalSI"),
-				ethstorage:                *resource.NewQuantity(pod2Disk, "DecimalSI"),
+				cpu:                       *resource.NewMilliQuantity(pod2CPU, resource.DecimalSI),
+				mem:                       *resource.NewQuantity(pod2Memory, resource.DecimalSI),
+				ethstorage:                *resource.NewQuantity(pod2Disk, resource.DecimalSI),
 				expectedAvailableResource: []int64{0, 0, 0},
 				expectedScheduleResult:    false,
 			},
@@ -360,15 +360,15 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][resource][Serial]", func() {
 			expectedScheduleResult bool
 		}{
 			{
-				cpu:                    *resource.NewMilliQuantity(podRequestCPU, "DecimalSI"),
+				cpu:                    *resource.NewMilliQuantity(podRequestCPU, resource.DecimalSI),
 				expectedScheduleResult: true,
 			},
 			{
-				cpu:                    *resource.NewMilliQuantity(podRequestCPU, "DecimalSI"),
+				cpu:                    *resource.NewMilliQuantity(podRequestCPU, resource.DecimalSI),
 				expectedScheduleResult: true,
 			},
 			{
-				cpu:                    *resource.NewMilliQuantity(podRequestCPU, "DecimalSI"),
+				cpu:                    *resource.NewMilliQuantity(podRequestCPU, resource.DecimalSI),
 				expectedScheduleResult: false,
 			},
 		}

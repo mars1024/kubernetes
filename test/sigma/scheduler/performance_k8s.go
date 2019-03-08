@@ -17,7 +17,7 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 
 	"k8s.io/kubernetes/test/e2e/framework"
- 	"k8s.io/kubernetes/test/sigma/util"
+	"k8s.io/kubernetes/test/sigma/util"
 )
 
 type PodsToDelete struct {
@@ -203,10 +203,10 @@ func createPausePodsAndAddItToMap(f *framework.Framework, podName, nodeName, nod
 		Name: podName,
 		Resources: &v1.ResourceRequirements{
 			Limits: v1.ResourceList{
-				v1.ResourceCPU: *resource.NewMilliQuantity(podCPU, "DecimalSI"),
+				v1.ResourceCPU: *resource.NewMilliQuantity(podCPU, resource.DecimalSI),
 			},
 			Requests: v1.ResourceList{
-				v1.ResourceCPU: *resource.NewMilliQuantity(podCPU, "DecimalSI"),
+				v1.ResourceCPU: *resource.NewMilliQuantity(podCPU, resource.DecimalSI),
 			},
 		},
 		Annotations: map[string]string{

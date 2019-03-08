@@ -52,7 +52,7 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][cpuset][cpu]", func() {
 			{
 				allocatable, found := node.Status.Allocatable[v1.ResourceCPU]
 				Expect(found).To(Equal(true))
-				nodeToAllocatableMapCPU[node.Name] = allocatable.Value()*1000
+				nodeToAllocatableMapCPU[node.Name] = allocatable.Value() * 1000
 			}
 			{
 				allocatable, found := node.Status.Allocatable[v1.ResourceMemory]
@@ -221,7 +221,7 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][cpuset][cpu]", func() {
 					},
 					Resources: &v1.ResourceRequirements{
 						Requests: v1.ResourceList{
-							v1.ResourceCPU: *resource.NewQuantity(test.CPURequest, "DecimalSI"),
+							v1.ResourceCPU: *resource.NewQuantity(test.CPURequest, resource.DecimalSI),
 						},
 					},
 					Affinity: util.GetAffinityNodeSelectorRequirement(nodeAffinityKey, []string{nodeName}),

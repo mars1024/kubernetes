@@ -185,10 +185,10 @@ var _ = SIGDescribe("SchedulerPredicates [Serial]", func() {
 					Labels: map[string]string{"name": ""},
 					Resources: &v1.ResourceRequirements{
 						Limits: v1.ResourceList{
-							v1.ResourceEphemeralStorage: *resource.NewMilliQuantity(milliEphemeralStoragePerPod, "DecimalSI"),
+							v1.ResourceEphemeralStorage: *resource.NewMilliQuantity(milliEphemeralStoragePerPod, resource.DecimalSI),
 						},
 						Requests: v1.ResourceList{
-							v1.ResourceEphemeralStorage: *resource.NewMilliQuantity(milliEphemeralStoragePerPod, "DecimalSI"),
+							v1.ResourceEphemeralStorage: *resource.NewMilliQuantity(milliEphemeralStoragePerPod, resource.DecimalSI),
 						},
 					},
 				}), true, framework.Logf))
@@ -199,7 +199,7 @@ var _ = SIGDescribe("SchedulerPredicates [Serial]", func() {
 			Labels: map[string]string{"name": "additional"},
 			Resources: &v1.ResourceRequirements{
 				Limits: v1.ResourceList{
-					v1.ResourceEphemeralStorage: *resource.NewMilliQuantity(milliEphemeralStoragePerPod, "DecimalSI"),
+					v1.ResourceEphemeralStorage: *resource.NewMilliQuantity(milliEphemeralStoragePerPod, resource.DecimalSI),
 				},
 			},
 		}
@@ -275,10 +275,10 @@ var _ = SIGDescribe("SchedulerPredicates [Serial]", func() {
 				Name: "filler-pod-" + string(uuid.NewUUID()),
 				Resources: &v1.ResourceRequirements{
 					Limits: v1.ResourceList{
-						v1.ResourceCPU: *resource.NewMilliQuantity(requestedCPU, "DecimalSI"),
+						v1.ResourceCPU: *resource.NewMilliQuantity(requestedCPU, resource.DecimalSI),
 					},
 					Requests: v1.ResourceList{
-						v1.ResourceCPU: *resource.NewMilliQuantity(requestedCPU, "DecimalSI"),
+						v1.ResourceCPU: *resource.NewMilliQuantity(requestedCPU, resource.DecimalSI),
 					},
 				},
 				Affinity: &v1.Affinity{
@@ -314,7 +314,7 @@ var _ = SIGDescribe("SchedulerPredicates [Serial]", func() {
 			Labels: map[string]string{"name": "additional"},
 			Resources: &v1.ResourceRequirements{
 				Limits: v1.ResourceList{
-					v1.ResourceCPU: *resource.NewMilliQuantity(nodeMaxAllocatable*5/10, "DecimalSI"),
+					v1.ResourceCPU: *resource.NewMilliQuantity(nodeMaxAllocatable*5/10, resource.DecimalSI),
 				},
 			},
 		}

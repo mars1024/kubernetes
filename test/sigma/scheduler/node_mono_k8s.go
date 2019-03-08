@@ -14,7 +14,7 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/sigma/env"
- 	"k8s.io/kubernetes/test/sigma/util"
+	"k8s.io/kubernetes/test/sigma/util"
 )
 
 var _ = Describe("[sigma-3.1][sigma-scheduler][node-mono][Serial]", func() {
@@ -43,7 +43,7 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][node-mono][Serial]", func() {
 			{
 				allocatable, found := node.Status.Allocatable[v1.ResourceCPU]
 				Expect(found).To(Equal(true))
-				nodeToAllocatableMapCPU[node.Name] = allocatable.Value()*1000
+				nodeToAllocatableMapCPU[node.Name] = allocatable.Value() * 1000
 			}
 			{
 				allocatable, found := node.Status.Allocatable[v1.ResourceMemory]
@@ -144,10 +144,10 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][node-mono][Serial]", func() {
 			},
 			Resources: &v1.ResourceRequirements{
 				Limits: v1.ResourceList{
-					v1.ResourceCPU: *resource.NewMilliQuantity(AllocatableMapCPU, "DecimalSI"),
+					v1.ResourceCPU: *resource.NewMilliQuantity(AllocatableMapCPU, resource.DecimalSI),
 				},
 				Requests: v1.ResourceList{
-					v1.ResourceCPU: *resource.NewMilliQuantity(AllocatableMapCPU, "DecimalSI"),
+					v1.ResourceCPU: *resource.NewMilliQuantity(AllocatableMapCPU, resource.DecimalSI),
 				},
 			},
 		})

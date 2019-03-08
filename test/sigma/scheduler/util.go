@@ -199,6 +199,17 @@ func getRequestedCPU(pod v1.Pod) int64 {
 	return result
 }
 
+func getRequestedColocationCPU(pod v1.Pod) int64 {
+	var result int64
+	for _, container := range pod.Spec.Containers {
+		value, found := container.Resources.Requests[alipaysigmak8sapi.SigmaBEResourceName]
+		if found {
+			result += value.Value()
+		}
+	}
+	return result
+}
+
 func getRequestedMem(pod v1.Pod) int64 {
 	var result int64
 	for _, container := range pod.Spec.Containers {
@@ -305,6 +316,17 @@ func runAndKeepPodWithLabelAndGetNodeName(f *framework.Framework) (string, strin
 func GetNodeThatCanRunPod(f *framework.Framework) string {
 	By("Trying to launch a pod without a label to get a node which can launch it.")
 	return runPodAndGetNodeName(f, pausePodConfig{Name: dafaultPausePod})
+}
+
+// GetNodeThatCanRunConlocationPod return a node name that can run colocation pod.
+func GetNodeThatCanRunColocationPod(f *framework.Framework) string {
+	By("Trying to launch a pod without a label to get a colocation node which can launch it.")
+	return runPodAndGetNodeName(f, pausePodConfig{
+		Name: dafaultPausePod,
+		Labels: map[string]string{
+			sigmak8sapi.LabelPodQOSClass: string(sigmak8sapi.SigmaQOSBestEffort),
+		},
+	})
 }
 
 func getNodeThatCanRunPodWithoutToleration(f *framework.Framework) string {
@@ -567,11 +589,33 @@ func WaitSchedulerAllocPlanClean(f *framework.Framework) error {
 	return nil
 }
 
-// the same fuction as in framwork, except that skip the taint node check.
+// the same function as in framework, except that skip the taint node check.
 func getMasterAndWorkerNodesOrDie(c clientset.Interface) (sets.String, *v1.NodeList) {
 	nodes := &v1.NodeList{}
 	masters := sets.NewString()
 	all, err := c.CoreV1().Nodes().List(metav1.ListOptions{})
+	Expect(err).To(BeNil())
+	for _, n := range all.Items {
+		if system.IsMasterNode(n.Name) {
+			masters.Insert(n.Name)
+		} else if isNodeSchedulable(&n) {
+			nodes.Items = append(nodes.Items, n)
+		}
+	}
+	return masters, nodes
+}
+
+// the same function as in framework, except that skip the taint node check.
+func getMasterAndColocationWorkerNodesOrDie(c clientset.Interface) (sets.String, *v1.NodeList) {
+	nodes := &v1.NodeList{}
+	masters := sets.NewString()
+	labelsMap := map[string]string{
+		alipaysigmak8sapi.LabelIsColocation: "true",
+	}
+	selector := labels.SelectorFromSet(labels.Set(labelsMap))
+	all, err := c.CoreV1().Nodes().List(metav1.ListOptions{
+		LabelSelector: selector.String(),
+	})
 	Expect(err).To(BeNil())
 	for _, n := range all.Items {
 		if system.IsMasterNode(n.Name) {

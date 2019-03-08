@@ -117,9 +117,6 @@ func (ds *dockerService) updateContainerHostInfo(podSandboxID, podContainerID st
 			podContainerID, containerInfo)
 	}
 
-	// Get hostname.
-	hostname := sandboxContainerInfo.Config.Hostname
-
 	// Update /etc/resolv.conf file
 	if err := updateContainerResolv(podContainerID, sandboxContainerInfo); err != nil {
 		return fmt.Errorf("failed to update resolv file of container: %s, error: %v", podContainerID, err)
@@ -131,7 +128,7 @@ func (ds *dockerService) updateContainerHostInfo(podSandboxID, podContainerID st
 	}
 
 	// Update /etc/hosts file
-	if err := updateContainerHosts(podContainerID, hostname, containerInfo); err != nil {
+	if err := updateContainerHosts(podContainerID, containerInfo); err != nil {
 		return fmt.Errorf("failed to update hosts file of container: %s, error: %v", podContainerID, err)
 	}
 
@@ -200,54 +197,26 @@ func UpdateContainerExtraResources(resources *runtimeapi.LinuxContainerResources
 	return nil
 }
 
-// updateContainerHosts merge host's host items and pod's validate host items and copy them into container.
-func updateContainerHosts(podContainerID, hostname string, containerInfo *dockertypes.ContainerJSON) error {
-	// containerHosts = hostHosts + validated podHosts
-	hostHostsPath := "/etc/hosts"
-	podHostsPath := ""
-
-	// Get pod hosts file path from mounts.
-	// podHostsPath: /home/t4/sigma-slave/pods/b80da239-eefb-11e8-8729-02420ba6b278/etc-hosts
-	// The reason we don't use HostsPath in containerinfo: containerInfo.ContainerJSONBase.HostsPath is "" here when container is created.
+// updateContainerHosts copy etc-host which is prepared by kubelet  into container.
+func updateContainerHosts(podContainerID string, containerInfo *dockertypes.ContainerJSON) error {
+	hostsPath := ""
 	for _, mount := range containerInfo.Mounts {
-		if mount.Destination == hostHostsPath {
-			podHostsPath = mount.Source
-			break
+		if mount.Destination == "/etc/hosts" {
+			hostsPath = mount.Source
 		}
 	}
-	if podHostsPath == "" {
-		return fmt.Errorf("failed to get pod hosts file path from container's mount, container: %v", containerInfo)
+
+	if len(hostsPath) == 0 {
+		return fmt.Errorf("Invalid hostsPath")
 	}
 
-	containerHostsPathTmp := podHostsPath + "_tmp"
+	// Deal with /etc/hosts
+	destPath := "/etc/hosts"
 
-	var buffer bytes.Buffer
-	// Write host hosts into buffer.
-	hostHosts, err := getHostHosts(hostHostsPath)
+	err := copyFileToContainer(hostsPath, destPath, podContainerID)
 	if err != nil {
 		return err
 	}
-	buffer.WriteString(hostHosts)
-	// Write pod's valid hosts into buffer.
-	podValidHosts, err := getPodValidHosts(podHostsPath, hostname)
-	if err != nil {
-		return err
-	}
-	buffer.WriteString(podValidHosts)
-
-	// Now buffer has the full host items.
-	// Write buffer into container hosts temp file.
-	err = ioutil.WriteFile(containerHostsPathTmp, buffer.Bytes(), 0644)
-	if err != nil {
-		return fmt.Errorf("failed to write temperory hosts file: %s", containerHostsPathTmp)
-	}
-
-	// Copy hosts file into container with "docker cp" command.
-	err = copyFileToContainer(containerHostsPathTmp, hostHostsPath, podContainerID)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 

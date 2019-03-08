@@ -60,7 +60,14 @@ func doHostnameTestCase(f *framework.Framework, testCase *hostnameTestCase) {
 
 	// Step5: Stop all cotnainers in pod(include pause container).
 	By("Restart all containers")
-	stopCommand := fmt.Sprintf("cmd://docker(stop $(docker ps | grep %s | awk '{print $1}'))", string(getPod.UID))
+	runtimeType, err := util.GetContainerDType(hostIP)
+	Expect(err).NotTo(HaveOccurred(), "get runtime type error")
+	stopCommand := ""
+	if runtimeType == util.ContainerdTypeDocker {
+		stopCommand = fmt.Sprintf("cmd://docker(stop $(docker ps | grep %s | awk '{print $1}'))", string(getPod.UID))
+	} else {
+		stopCommand = fmt.Sprintf("cmd://pouch(stop $(pouch ps | grep %s | awk '{print $1}'))", string(getPod.UID))
+	}
 	_, err = util.ResponseFromStarAgentTask(stopCommand, hostIP, hostSn)
 	Expect(err).NotTo(HaveOccurred(), "stop container failed")
 

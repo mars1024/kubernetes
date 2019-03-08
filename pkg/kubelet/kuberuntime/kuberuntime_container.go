@@ -336,6 +336,11 @@ func (m *kubeGenericRuntimeManager) generateContainerConfig(container *v1.Contai
 		config.Labels[containerPouchSupportCgroupLabel] = "true"
 	}
 
+	isHostDNS := sigmautil.IsPodHostDNSMode(pod)
+        if isHostDNS {
+                config.Labels[containerPouchCopyPodHostsLabel] = "true"
+        }
+
 	// Add network env on sigmalet side.
 	// See: https://yuque.antfin-inc.com/sys/sigma3.x/tgpuxq
 	// The network can't be changed in pod's lifecycle.

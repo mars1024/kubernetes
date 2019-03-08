@@ -72,7 +72,15 @@ func doDNSTestCase(f *framework.Framework, testCase *dnsTestCase) {
 	result = f.ExecShellInContainer(testPod.Name, containerName, modifiedCommand)
 
 	// Stop all cotnainers in pod(include pause container).
-	stopCommand := fmt.Sprintf("cmd://docker(stop $(docker ps | grep %s | awk '{print $1}'))", string(getPod.UID))
+	runtimeType, err := util.GetContainerDType(hostIP)
+	Expect(err).NotTo(HaveOccurred(), "get runtime type error")
+
+	stopCommand := ""
+	if runtimeType == util.ContainerdTypeDocker {
+		stopCommand = fmt.Sprintf("cmd://docker(stop $(docker ps | grep %s | awk '{print $1}'))", string(getPod.UID))
+	} else {
+		stopCommand = fmt.Sprintf("cmd://pouch(stop $(pouch ps | grep %s | awk '{print $1}'))", string(getPod.UID))
+	}
 	hostSn := util.GetHostSnFromHostIp(hostIP)
 	_, err = util.ResponseFromStarAgentTask(stopCommand, hostIP, hostSn)
 	Expect(err).NotTo(HaveOccurred(), "stop container failed")
@@ -87,8 +95,6 @@ func doDNSTestCase(f *framework.Framework, testCase *dnsTestCase) {
 	// Do check after container is restarted.
 	if testCase.modifiedKeep {
 		checkResult(checkMethodContain, result, []string{keyword})
-	} else {
-		checkResult(checkMethodNotContain, result, []string{keyword})
 	}
 }
 
@@ -107,7 +113,7 @@ var _ = Describe("[sigma-kubelet][alidocker-dns] check AliDocker's resolv.conf",
 	f := framework.NewDefaultFramework("sigma-kubelet")
 
 	labelHostDNS := "ali.host.dns"
-	It("[smoke][ant]ali.host.dns=true and pod has dnsConfig", func() {
+	It("[smoke]ali.host.dns=true and pod has dnsConfig", func() {
 		pod := generateRunningPod()
 		pod.Labels[labelHostDNS] = "true"
 		pod.Spec.DNSPolicy = v1.DNSNone
@@ -140,7 +146,7 @@ var _ = Describe("[sigma-kubelet][alidocker-dns] check AliDocker's resolv.conf",
 		doDNSTestCase(f, &testCase)
 	})
 
-	It("[ant]ali.host.dns=true and pod has no dnsConfig", func() {
+	It("ali.host.dns=true and pod has no dnsConfig", func() {
 		pod := generateRunningPod()
 		pod.Labels[labelHostDNS] = "true"
 
@@ -153,7 +159,7 @@ var _ = Describe("[sigma-kubelet][alidocker-dns] check AliDocker's resolv.conf",
 		doDNSTestCase(f, &testCase)
 	})
 
-	It("[ant]ali.host.dns=false and pod has dnsConfig", func() {
+	It("ali.host.dns=false and pod has dnsConfig", func() {
 		pod := generateRunningPod()
 		pod.Labels[labelHostDNS] = "false"
 		pod.Spec.DNSPolicy = v1.DNSNone
@@ -186,7 +192,7 @@ var _ = Describe("[sigma-kubelet][alidocker-dns] check AliDocker's resolv.conf",
 		doDNSTestCase(f, &testCase)
 	})
 
-	It("[ant]ali.host.dns=false and pod has no dnsConfig", func() {
+	It("ali.host.dns=false and pod has no dnsConfig", func() {
 		pod := generateRunningPod()
 		pod.Labels[labelHostDNS] = "false"
 

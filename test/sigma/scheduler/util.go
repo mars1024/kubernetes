@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
@@ -24,6 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
+	alipaysigmak8sapi "gitlab.alipay-inc.com/sigma/apis/pkg/apis"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/kubernetes/pkg/util/system"
 	"k8s.io/kubernetes/test/sigma/env"
@@ -36,7 +38,10 @@ var masterNodes sets.String
 // the timeout of waiting for pod running.
 var waitForPodRunningTimeout = 5 * time.Minute
 
-const containerPrefix = "container-"
+const (
+	dafaultPausePod = "default-pause-pod"
+	containerPrefix = "container-"
+)
 
 type pausePodConfig struct {
 	Name                              string
@@ -77,6 +82,15 @@ func initPausePod(f *framework.Framework, conf pausePodConfig) *v1.Pod {
 		conf.Labels[sigmak8sapi.LabelDeployUnit] = "scheduler-e2e-depoly-unit"
 	}
 
+	if conf.Annotations == nil {
+		conf.Annotations = make(map[string]string)
+	}
+
+	if _, ok := conf.Annotations[alipaysigmak8sapi.AnnotationZappinfo]; !ok {
+		conf.Annotations[alipaysigmak8sapi.AnnotationZappinfo] =
+			`{"spec":{"appName":"scheduler-e2e-app-name","zone":"GZ00B","serverType":"DOCKER","fqdn":""},"status":{"registered":true}}`
+	}
+
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            conf.Name,
@@ -115,6 +129,27 @@ func initPausePod(f *framework.Framework, conf pausePodConfig) *v1.Pod {
 			Resources: r,
 		}
 		pod.Spec.Containers = append(pod.Spec.Containers, c)
+	}
+
+	resourceRequests := v1.ResourceList{
+		v1.ResourceCPU:              *resource.NewMilliQuantity(10, resource.DecimalSI),
+		v1.ResourceMemory:           *resource.NewQuantity(1024*1024*512, resource.BinarySI),
+		v1.ResourceEphemeralStorage: *resource.NewQuantity(1024*1024*1024, resource.BinarySI),
+	}
+
+	resourceLimits := v1.ResourceList{
+		v1.ResourceCPU:              *resource.NewMilliQuantity(10, resource.DecimalSI),
+		v1.ResourceMemory:           *resource.NewQuantity(1024*1024*512, resource.BinarySI),
+		v1.ResourceEphemeralStorage: *resource.NewQuantity(1024*1024*1024, resource.BinarySI),
+	}
+
+	dafaultResourceRequirements := v1.ResourceRequirements{
+		Limits:   resourceLimits,
+		Requests: resourceRequests,
+	}
+
+	if pod.Name == dafaultPausePod {
+		pod.Spec.Containers[0].Resources = dafaultResourceRequirements
 	}
 
 	if env.GetTester() == env.TesterJituan {
@@ -160,6 +195,17 @@ func getRequestedCPU(pod v1.Pod) int64 {
 	var result int64
 	for _, container := range pod.Spec.Containers {
 		result += container.Resources.Requests.Cpu().MilliValue()
+	}
+	return result
+}
+
+func getRequestedColocationCPU(pod v1.Pod) int64 {
+	var result int64
+	for _, container := range pod.Spec.Containers {
+		value, found := container.Resources.Requests[alipaysigmak8sapi.SigmaBEResourceName]
+		if found {
+			result += value.Value()
+		}
 	}
 	return result
 }
@@ -266,20 +312,21 @@ func runAndKeepPodWithLabelAndGetNodeName(f *framework.Framework) (string, strin
 	return pod.Spec.NodeName, pod.Name
 }
 
-// GetNodeThatCanRunPod return a nodename that can run pod.
+// GetNodeThatCanRunPod return a node name that can run pod.
 func GetNodeThatCanRunPod(f *framework.Framework) string {
 	By("Trying to launch a pod without a label to get a node which can launch it.")
+	return runPodAndGetNodeName(f, pausePodConfig{Name: dafaultPausePod})
+}
 
-	//// try loop to get a node to schedule
-	//for i:=0; i<5; i++ {
-		node := runPodAndGetNodeName(f, pausePodConfig{Name: "without-label"})
-		return node
-		//if swarm.CheckNodeAvailable(node) == true {
-		//	return node
-		//}
-	//}
-	//
-	//return node
+// GetNodeThatCanRunConlocationPod return a node name that can run colocation pod.
+func GetNodeThatCanRunColocationPod(f *framework.Framework) string {
+	By("Trying to launch a pod without a label to get a colocation node which can launch it.")
+	return runPodAndGetNodeName(f, pausePodConfig{
+		Name: dafaultPausePod,
+		Labels: map[string]string{
+			sigmak8sapi.LabelPodQOSClass: string(sigmak8sapi.SigmaQOSBestEffort),
+		},
+	})
 }
 
 func getNodeThatCanRunPodWithoutToleration(f *framework.Framework) string {
@@ -542,11 +589,33 @@ func WaitSchedulerAllocPlanClean(f *framework.Framework) error {
 	return nil
 }
 
-// the same fuction as in framwork, except that skip the taint node check.
+// the same function as in framework, except that skip the taint node check.
 func getMasterAndWorkerNodesOrDie(c clientset.Interface) (sets.String, *v1.NodeList) {
 	nodes := &v1.NodeList{}
 	masters := sets.NewString()
 	all, err := c.CoreV1().Nodes().List(metav1.ListOptions{})
+	Expect(err).To(BeNil())
+	for _, n := range all.Items {
+		if system.IsMasterNode(n.Name) {
+			masters.Insert(n.Name)
+		} else if isNodeSchedulable(&n) {
+			nodes.Items = append(nodes.Items, n)
+		}
+	}
+	return masters, nodes
+}
+
+// the same function as in framework, except that skip the taint node check.
+func getMasterAndColocationWorkerNodesOrDie(c clientset.Interface) (sets.String, *v1.NodeList) {
+	nodes := &v1.NodeList{}
+	masters := sets.NewString()
+	labelsMap := map[string]string{
+		alipaysigmak8sapi.LabelIsColocation: "true",
+	}
+	selector := labels.SelectorFromSet(labels.Set(labelsMap))
+	all, err := c.CoreV1().Nodes().List(metav1.ListOptions{
+		LabelSelector: selector.String(),
+	})
 	Expect(err).To(BeNil())
 	for _, n := range all.Items {
 		if system.IsMasterNode(n.Name) {

@@ -17,6 +17,7 @@ import (
 	antsigma "gitlab.alibaba-inc.com/sigma/sigma-ant-api/sigma"
 	"gitlab.alibaba-inc.com/sigma/sigma-api/sigma/v3"
 	"gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
+	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -64,7 +65,7 @@ type resourceCase struct {
 	mem                       int64
 	ethstorage                int64
 	cpushare                  bool
-	mixrun                    bool    // mixrun is only for ant sigma2
+	colocation                bool
 	expectedAvailableResource []int64 // CPU/Memory/Disk
 	requestType               string  // "sigma" or "kubernetes"
 	shouldScheduled           bool
@@ -312,6 +313,10 @@ func createAndVerifySigmaCase(tc *testContext, caseIndex int, test resourceCase)
 		}
 	}
 
+	if test.colocation && env.Tester == env.TesterAnt {
+		config.Labels["ali.CpuSetMode"] = "mixrun"
+	}
+
 	option, _ := swarm.CreateContainerWithOption(config)
 	if tc.resourceToDelete == nil {
 		tc.resourceToDelete = map[int]*resourceItem{}
@@ -430,19 +435,26 @@ func createAndVerifyK8sPod(tc *testContext, caseIndex int, test resourceCase) {
 	var allocSpecRequest = &api.AllocSpec{}
 	setAllocSpecRequest := false
 
+	if test.colocation {
+		if test.labels == nil {
+			test.labels = make(map[string]string)
+		}
+		test.labels[sigmak8sapi.LabelPodQOSClass] = string(sigmak8sapi.SigmaQOSBestEffort)
+	}
+
 	config := &pausePodConfig{
 		Labels: test.labels,
 		Name:   "scheduler-" + strconv.Itoa(caseIndex) + "-" + string(uuid.NewUUID()),
 		Resources: &v1.ResourceRequirements{
 			Limits: v1.ResourceList{
-				v1.ResourceCPU:              *resource.NewMilliQuantity(test.cpu, "DecimalSI"),
-				v1.ResourceMemory:           *resource.NewQuantity(test.mem, "DecimalSI"),
-				v1.ResourceEphemeralStorage: *resource.NewQuantity(test.ethstorage, "DecimalSI"),
+				v1.ResourceCPU:              *resource.NewMilliQuantity(test.cpu, resource.DecimalSI),
+				v1.ResourceMemory:           *resource.NewQuantity(test.mem, resource.BinarySI),
+				v1.ResourceEphemeralStorage: *resource.NewQuantity(test.ethstorage, resource.BinarySI),
 			},
 			Requests: v1.ResourceList{
-				v1.ResourceCPU:              *resource.NewMilliQuantity(test.cpu, "DecimalSI"),
-				v1.ResourceMemory:           *resource.NewQuantity(test.mem, "DecimalSI"),
-				v1.ResourceEphemeralStorage: *resource.NewQuantity(test.ethstorage, "DecimalSI"),
+				v1.ResourceCPU:              *resource.NewMilliQuantity(test.cpu, resource.DecimalSI),
+				v1.ResourceMemory:           *resource.NewQuantity(test.mem, resource.BinarySI),
+				v1.ResourceEphemeralStorage: *resource.NewQuantity(test.ethstorage, resource.BinarySI),
 			},
 		},
 	}
@@ -798,12 +810,6 @@ func (tc *testContext) execTests(checkFuncList ...checkFunc) {
 				swarm.EnsureNodeHasLabels(nodeName, extLabels)
 				defer swarm.DeleteNodeLabels(nodeName, "CpuSetMode", "CpuShareOverQuota")
 			}
-			if test.mixrun && env.Tester == env.TesterAnt {
-				nodeName := strings.ToUpper(tc.nodeName)
-				swarm.CreateOrUpdateNodeMixrun(nodeName)
-				swarm.EnsureNodeUpdateMixrun(nodeName, test.mixrun)
-				defer swarm.DeleteNodeMixrun(nodeName)
-			}
 			createAndVerifySigmaCase(tc, i, test)
 		case requestTypeAntSigmaPreview:
 			if test.cpushare && env.Tester == env.TesterAnt {
@@ -818,12 +824,6 @@ func (tc *testContext) execTests(checkFuncList ...checkFunc) {
 				swarm.CreateOrUpdateNodeLabel(nodeName, extLabels)
 				swarm.EnsureNodeHasLabels(nodeName, extLabels)
 				defer swarm.DeleteNodeLabels(nodeName, "CpuSetMode", "CpuShareOverQuota")
-			}
-			if test.mixrun && env.Tester == env.TesterAnt {
-				nodeName := strings.ToUpper(tc.nodeName)
-				swarm.CreateOrUpdateNodeMixrun(nodeName)
-				swarm.EnsureNodeUpdateMixrun(nodeName, test.mixrun)
-				defer swarm.DeleteNodeMixrun(nodeName)
 			}
 			previewAndVerifySigmaCase(tc, i, test)
 		case requestTypeSigmaUpdate:

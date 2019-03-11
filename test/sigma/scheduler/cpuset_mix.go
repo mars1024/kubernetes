@@ -666,26 +666,31 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][smoke][cpuset]", func() {
 			checkHostCPUIdNotDuplicated,
 		)
 	})
-	// case描述：非超卖场景下的cpu分配k8s，sigma2.0 mixrun混合组合
+	// case描述：非超卖场景下的cpu分配k8s，sigma2.0 colocation 混合组合
 	// 用于：验证sigma和k8s之间的cpu分配的正确性
 	// 步骤 要求机器初始状态为空，每个容器分配的cpu个数不能低于2个，否则这个case会验证失败
-	// 1.  整机核 sigma mixrun（预期成功）
+	// 1.  整机核 sigma colocation（预期成功）
 	// 2.  1/2整机核 sigma default（预期成功）
 	// 3.  整机核 sigma default（预期失败）
 	// 4.  整机核 k8s （预期失败）
 	// 5.  1/2整机核 k8s sameCoreFirst（预期成功）
 
 	// 验证结果
-	// 1. mixrun容器创建成功
+	// 1. colocation 容器创建成功
 	// 2. 可继续分配普通的容器
 	// 5. 可以继续分配k8s容器
-	It("[ant] cpuset_mix_007: Pod with mixrun case.", func() {
+	It("[ant] cpuset_mix_007: Pod with colocation case.", func() {
 		framework.WaitForStableCluster(cs, masterNodes)
 
 		nodeName := GetNodeThatCanRunPod(f)
 		Expect(nodeName).ToNot(BeNil())
 
 		framework.Logf("get one node to schedule, nodeName: %s", nodeName)
+
+		nodeNameUpper := strings.ToUpper(nodeName)
+		swarm.CreateOrUpdateNodeColocation(nodeNameUpper)
+		swarm.EnsureNodeUpdateColocation(nodeNameUpper, true)
+		defer swarm.DeleteNodeColocation(nodeNameUpper)
 
 		AllocatableCPU := nodeToAllocatableMapCPU[nodeName]
 		AllocatableMemory := nodeToAllocatableMapMem[nodeName]
@@ -710,10 +715,10 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][smoke][cpuset]", func() {
 				mem:             requestedMemory,
 				ethstorage:      requestedDisk,
 				requestType:     requestTypeSigma,
-				affinityConfig:  map[string][]string{"ali.SpecifiedNcIps": {nodeIP}, "ali.CpuSetMode": {"mixrun"}},
+				affinityConfig:  map[string][]string{"ali.SpecifiedNcIps": {nodeIP}},
 				shouldScheduled: true,
 				spreadStrategy:  "default",
-				mixrun:          true,
+				colocation:      true,
 			},
 			{
 				cpu:             requestedCPU,

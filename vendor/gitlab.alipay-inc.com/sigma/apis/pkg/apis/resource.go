@@ -6,7 +6,15 @@ package apis
 
 const (
 	// Sigma best effort resource name which used as extended resource.
-	SigmaBEResourceName = "resource.sigma.ali/running-cpu-quota"
+	SigmaBEResourceName     = "resource.sigma.ali/running-cpu-quota"
+	ResourceConfigNamespace = "resource-system"
+	ResourceConfigDataKey   = "config"
+)
+
+const (
+	CGROUP_PARENT_OFFLINE = "sigma-stream"
+	CGROUP_PARENT_ONLINE  = "sigma"
+	CGROUP_PARENT_SYS     = "system-agent"
 )
 
 const (
@@ -19,7 +27,7 @@ const (
 	CPUCAT_RESCTRL_ISOLATION = "CPUCatResctrlIsolation"
 )
 
-type ColocationConfig struct {
+type ResourceConfig struct {
 	Version   string      `json:"version"`
 	Residents []*Resident `json:"residents"`
 }
@@ -31,13 +39,14 @@ type Resident struct {
 }
 
 type Isolation struct {
-	CPUCgroupIsolation     *CPUCgroupIsolation     `json:"cpuCgroupIsolation"`
-	MemoryCgroupIsolation  *MemoryCgroupIsolation  `json:"memoryCgroupIsolation"`
-	NetAisIsolation        *NetAisIsolation        `json:"netAisIsolation"`
-	NetCgroupIsolation     *NetCgroupIsolation     `json:"netCgroupIsolation"`
-	BlkIOCgroupIsolation   *BlkIOCgroupIsolation   `json:"blkIOCgroupIsolation"`
-	CPUCatCgroupIsolation  *CPUCatCgroupIsolation  `json:"cpuCatCgroupIsolation"`
-	CPUCatResctrlIsolation *CPUCatResctrlIsolation `json:"cpuCatResctrlIsolation"`
+	CPUCgroupIsolation           *CPUCgroupIsolation           `json:"cpuCgroupIsolation"`
+	MemoryCgroupIsolation        *MemoryCgroupIsolation        `json:"memoryCgroupIsolation"`
+	NetAisIsolation              *NetAisIsolation              `json:"netAisIsolation"`
+	NetCgroupIsolation           *NetCgroupIsolation           `json:"netCgroupIsolation"`
+	BlkIOCgroupIsolation         *BlkIOCgroupIsolation         `json:"blkIOCgroupIsolation"`
+	BlkIOCgroupBufferedIsolation *BlkIOCgroupBufferedIsolation `json:"blkIOCgroupBufferedIsolation"`
+	CPUCatCgroupIsolation        *CPUCatCgroupIsolation        `json:"cpuCatCgroupIsolation"`
+	CPUCatResctrlIsolation       *CPUCatResctrlIsolation       `json:"cpuCatResctrlIsolation"`
 }
 
 type CPUCgroupIsolation struct {
@@ -66,10 +75,13 @@ type NetCgroupIsolation struct {
 }
 
 type BlkIOCgroupIsolation struct {
-	ReadBPS             int64 `json:"readBPS"`
-	WriteBPS            int64 `json:"writeBPS"`
-	ReadIOPS            int64 `json:"readIOPS"`
-	WriteIOPS           int64 `json:"writeIOPS"`
+	ReadBPS   int64 `json:"readBPS"`
+	WriteBPS  int64 `json:"writeBPS"`
+	ReadIOPS  int64 `json:"readIOPS"`
+	WriteIOPS int64 `json:"writeIOPS"`
+}
+
+type BlkIOCgroupBufferedIsolation struct {
 	BufferedWriteSwitch bool  `json:"bufferedWriteSwitch"`
 	BufferedWriteBPS    int64 `json:"bufferedWriteBPS"`
 }

@@ -16,7 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/uuid"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/test/e2e/framework"
- 	"k8s.io/kubernetes/test/sigma/util"
+	"k8s.io/kubernetes/test/sigma/util"
 
 	// "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
@@ -49,7 +49,7 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][cpuset][cpu]", func() {
 			{
 				allocatable, found := node.Status.Allocatable[v1.ResourceCPU]
 				Expect(found).To(Equal(true))
-				nodeToAllocatableMapCPU[node.Name] = allocatable.Value()*1000
+				nodeToAllocatableMapCPU[node.Name] = allocatable.Value() * 1000
 			}
 			{
 				allocatable, found := node.Status.Allocatable[v1.ResourceMemory]
@@ -227,7 +227,7 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][cpuset][cpu]", func() {
 					framework.Logf("Case[%d]Container[%d], usedCPURequest: %d", i, j, usedCPURequest)
 					r := v1.ResourceRequirements{
 						Requests: v1.ResourceList{
-							v1.ResourceCPU: *resource.NewQuantity(usedCPURequest, "DecimalSI"),
+							v1.ResourceCPU: *resource.NewQuantity(usedCPURequest, resource.DecimalSI),
 						},
 					}
 

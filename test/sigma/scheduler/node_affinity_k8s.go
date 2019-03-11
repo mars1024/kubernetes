@@ -14,7 +14,7 @@ import (
 	"k8s.io/kubernetes/test/sigma/util"
 
 	"gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
- )
+)
 
 var _ = Describe("[sigma-3.1][sigma-scheduler][node-affinity]", func() {
 	var cs clientset.Interface
@@ -41,7 +41,7 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][node-affinity]", func() {
 			{
 				allocatable, found := node.Status.Allocatable[v1.ResourceCPU]
 				Expect(found).To(Equal(true))
-				nodeToAllocatableMapCPU[node.Name] = allocatable.Value()*1000
+				nodeToAllocatableMapCPU[node.Name] = allocatable.Value() * 1000
 			}
 			{
 				allocatable, found := node.Status.Allocatable[v1.ResourceMemory]
@@ -155,21 +155,21 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][node-affinity]", func() {
 			ok         bool
 		}{{
 
-			cpu:        *resource.NewMilliQuantity(nodeToAllocatableMapCPU[nodeName[0]], "DecimalSI"),
-			mem:        *resource.NewQuantity(nodeToAllocatableMapMem[nodeName[0]], "DecimalSI"),
-			ethstorage: *resource.NewQuantity(nodeToAllocatableMapEphemeralStorage[nodeName[0]], "DecimalSI"),
+			cpu:        *resource.NewMilliQuantity(nodeToAllocatableMapCPU[nodeName[0]], resource.DecimalSI),
+			mem:        *resource.NewQuantity(nodeToAllocatableMapMem[nodeName[0]], resource.DecimalSI),
+			ethstorage: *resource.NewQuantity(nodeToAllocatableMapEphemeralStorage[nodeName[0]], resource.DecimalSI),
 			ip:         []string{nodeIPs[0], nodeIPs[1]},
 			ok:         true,
 		}, {
-			cpu:        *resource.NewMilliQuantity(nodeToAllocatableMapCPU[nodeName[1]], "DecimalSI"),
-			mem:        *resource.NewQuantity(nodeToAllocatableMapMem[nodeName[1]], "DecimalSI"),
-			ethstorage: *resource.NewQuantity(nodeToAllocatableMapEphemeralStorage[nodeName[1]], "DecimalSI"),
+			cpu:        *resource.NewMilliQuantity(nodeToAllocatableMapCPU[nodeName[1]], resource.DecimalSI),
+			mem:        *resource.NewQuantity(nodeToAllocatableMapMem[nodeName[1]], resource.DecimalSI),
+			ethstorage: *resource.NewQuantity(nodeToAllocatableMapEphemeralStorage[nodeName[1]], resource.DecimalSI),
 			ip:         []string{nodeIPs[0], nodeIPs[1]},
 			ok:         true,
 		}, {
-			cpu:        *resource.NewMilliQuantity(nodeToAllocatableMapCPU[nodeName[1]], "DecimalSI"),
-			mem:        *resource.NewQuantity(nodeToAllocatableMapMem[nodeName[1]], "DecimalSI"),
-			ethstorage: *resource.NewQuantity(nodeToAllocatableMapEphemeralStorage[nodeName[1]], "DecimalSI"),
+			cpu:        *resource.NewMilliQuantity(nodeToAllocatableMapCPU[nodeName[1]], resource.DecimalSI),
+			mem:        *resource.NewQuantity(nodeToAllocatableMapMem[nodeName[1]], resource.DecimalSI),
+			ethstorage: *resource.NewQuantity(nodeToAllocatableMapEphemeralStorage[nodeName[1]], resource.DecimalSI),
 			ip:         []string{nodeIPs[0], nodeIPs[1]},
 			ok:         false,
 		}}
@@ -243,15 +243,15 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][node-affinity]", func() {
 			ok         bool
 		}{{
 
-			cpu:        *resource.NewMilliQuantity(nodeToAllocatableMapCPU[nodeName], "DecimalSI"),
-			mem:        *resource.NewQuantity(nodeToAllocatableMapMem[nodeName], "DecimalSI"),
-			ethstorage: *resource.NewQuantity(nodeToAllocatableMapEphemeralStorage[nodeName], "DecimalSI"),
+			cpu:        *resource.NewMilliQuantity(nodeToAllocatableMapCPU[nodeName], resource.DecimalSI),
+			mem:        *resource.NewQuantity(nodeToAllocatableMapMem[nodeName], resource.DecimalSI),
+			ethstorage: *resource.NewQuantity(nodeToAllocatableMapEphemeralStorage[nodeName], resource.DecimalSI),
 			ip:         []string{nodeIP, badIP},
 			ok:         true,
 		}, {
-			cpu:        *resource.NewMilliQuantity(nodeToAllocatableMapCPU[nodeName], "DecimalSI"),
-			mem:        *resource.NewQuantity(nodeToAllocatableMapMem[nodeName], "DecimalSI"),
-			ethstorage: *resource.NewQuantity(nodeToAllocatableMapEphemeralStorage[nodeName], "DecimalSI"),
+			cpu:        *resource.NewMilliQuantity(nodeToAllocatableMapCPU[nodeName], resource.DecimalSI),
+			mem:        *resource.NewQuantity(nodeToAllocatableMapMem[nodeName], resource.DecimalSI),
+			ethstorage: *resource.NewQuantity(nodeToAllocatableMapEphemeralStorage[nodeName], resource.DecimalSI),
 			ip:         []string{nodeIP, badIP},
 			ok:         false,
 		}}

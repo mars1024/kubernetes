@@ -294,23 +294,23 @@ func CreateOrUpdateNodeLogicInfoSmName(nodeName, value string) error {
 	return nil
 }
 
-// CreateOrUpdateNodeMixrun updates sigma node support mixrun
-func CreateOrUpdateNodeMixrun(nodeName string) error {
+// CreateOrUpdateNodeColocation updates sigma 2.0 node support colocation.
+func CreateOrUpdateNodeColocation(nodeName string) error {
 	node := GetNode(nodeName)
 	node.LogicInfo.IsMixrun = true
 	updateNode(nodeName, node)
 	return nil
 }
 
-// EnsureNodeHasLabels checks node isMixrun is expected
-func EnsureNodeUpdateMixrun(nodeName string, expectedMixrun bool) error {
+// EnsureNodeHasLabels checks sigma 2.0 node colocation is expected.
+func EnsureNodeUpdateColocation(nodeName string, expectedMixrun bool) error {
 	node := GetNode(nodeName)
 	Expect(node.LogicInfo.IsMixrun).Should(Equal(expectedMixrun))
 	return nil
 }
 
-// DeleteNodeMixrun update sigma node mixrun not support mixrun
-func DeleteNodeMixrun(nodeName string) error {
+// DeleteNodeColocation update sigma 2.0 node not support colocation.
+func DeleteNodeColocation(nodeName string) error {
 	node := GetNode(nodeName)
 	node.LogicInfo.IsMixrun = false
 	updateNode(nodeName, node)

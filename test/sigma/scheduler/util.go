@@ -446,6 +446,7 @@ func formatAllocSpecStringWithSpreadStrategy(name string, strategy sigmak8sapi.S
 					CPU: sigmak8sapi.CPUSpec{
 						CPUSet: &sigmak8sapi.CPUSetSpec{
 							SpreadStrategy: strategy,
+							CPUIDs:         []int{},
 						},
 					},
 				},

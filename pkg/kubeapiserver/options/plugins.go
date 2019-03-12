@@ -80,6 +80,7 @@ import (
 	alipaypodpreset "k8s.io/kubernetes/plugin/pkg/admission/alipay/podpreset"
 	alipayresource "k8s.io/kubernetes/plugin/pkg/admission/alipay/resource"
 	alipayresourcemutationbe "k8s.io/kubernetes/plugin/pkg/admission/alipay/resourcemutationbe"
+	alipayresourcemutationqos "k8s.io/kubernetes/plugin/pkg/admission/alipay/resourcemutationqos"
 	alipaysetdefault "k8s.io/kubernetes/plugin/pkg/admission/alipay/setdefault"
 	alipaysidecar "k8s.io/kubernetes/plugin/pkg/admission/alipay/sidecar"
 	alipayzappinfo "k8s.io/kubernetes/plugin/pkg/admission/alipay/zappinfo"
@@ -134,6 +135,7 @@ var AllOrderedPlugins = []string{
 	alipodinjectionpostschedule.PluginName, // AliPodInjectionPostSchedule
 	poddeletionflowcontrol.PluginName,      // PodDeletionFlowControl
 
+	alipayresourcemutationqos.PluginName, // Alipay resource mutation admission for burstable
 	alipaysetdefault.PluginName,         // Alipay SetDefault
 	alipaycmdb.PluginName,               // Alipay CMDB
 	alipayinclusterkube.PluginName,      // Alipay in-cluster kubernetes service
@@ -190,6 +192,7 @@ func RegisterAllAdmissionPlugins(plugins *admission.Plugins) {
 	poddeletionflowcontrol.Register(plugins)
 
 	alipaysidecar.Register(plugins)
+	alipayresourcemutationqos.Register(plugins)
 	alipaysetdefault.Register(plugins)
 	alipaycmdb.Register(plugins)
 	alipayinclusterkube.Register(plugins)

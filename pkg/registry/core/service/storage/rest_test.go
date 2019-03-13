@@ -207,7 +207,7 @@ func NewTestRESTWithPods(t *testing.T, endpoints *api.EndpointsList, pods *api.P
 	portRange := utilnet.PortRange{Base: 30000, Size: 1000}
 	portAllocator := portallocator.NewPortAllocator(portRange)
 
-	rest, _ := NewREST(serviceStorage, endpointStorage, podStorage.Pod, r, portAllocator, nil)
+	rest, _ := NewREST(serviceStorage, endpointStorage, podStorage.Pod, nil, r, portAllocator, nil)
 
 	return rest, serviceStorage, server
 }

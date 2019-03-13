@@ -26,28 +26,35 @@ import (
 	"strconv"
 
 	"github.com/golang/glog"
+
 	"k8s.io/apimachinery/pkg/api/errors"
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1beta1 "k8s.io/apimachinery/pkg/apis/meta/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	utilnet "k8s.io/apimachinery/pkg/util/net"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/apimachinery/pkg/watch"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
+	genericrequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/apiserver/pkg/util/dryrun"
-
+	"k8s.io/apiserver/pkg/util/feature"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	apiservice "k8s.io/kubernetes/pkg/api/service"
 	api "k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/apis/core/helper"
 	"k8s.io/kubernetes/pkg/apis/core/validation"
+	"k8s.io/kubernetes/pkg/kubelet/client"
 	registry "k8s.io/kubernetes/pkg/registry/core/service"
 	"k8s.io/kubernetes/pkg/registry/core/service/ipallocator"
 	"k8s.io/kubernetes/pkg/registry/core/service/portallocator"
-	"k8s.io/apiserver/pkg/util/feature"
+
 	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancymeta "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/meta"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 )
 
 // REST adapts a service registry into apiserver's RESTStorage model.
@@ -58,6 +65,7 @@ type REST struct {
 	serviceNodePorts portallocator.Interface
 	proxyTransport   http.RoundTripper
 	pods             rest.Getter
+	kubeletConn      client.ConnectionInfoGetter
 }
 
 // ServiceNodePort includes protocol and port number of a service NodePort.
@@ -94,6 +102,7 @@ func NewREST(
 	services ServiceStorage,
 	endpoints EndpointsStorage,
 	pods rest.Getter,
+	k client.ConnectionInfoGetter,
 	serviceIPs ipallocator.Interface,
 	serviceNodePorts portallocator.Interface,
 	proxyTransport http.RoundTripper,
@@ -105,6 +114,7 @@ func NewREST(
 		serviceNodePorts: serviceNodePorts,
 		proxyTransport:   proxyTransport,
 		pods:             pods,
+		kubeletConn:      k,
 	}
 	return rest, &registry.ProxyREST{Redirector: rest, ProxyTransport: proxyTransport}
 }
@@ -501,10 +511,34 @@ func (rs *REST) ResourceLocation(ctx context.Context, id string) (*url.URL, http
 					}
 					ip := addr.IP
 					port := int(ss.Ports[i].Port)
-					return &url.URL{
-						Scheme: svcScheme,
-						Host:   net.JoinHostPort(ip, strconv.Itoa(port)),
-					}, rs.proxyTransport, nil
+
+					if addr.NodeName != nil {
+						nodeName := types.NodeName(*addr.NodeName)
+						if len(nodeName) == 0 {
+							utilruntime.HandleError(fmt.Errorf("Address %v does not have a valid nodeName", addr))
+							continue
+						}
+
+						conn := rs.kubeletConn
+						if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+							user, _ := genericrequest.UserFrom(ctx)
+							tenant, _ := multitenancyutil.TransformTenantInfoFromUser(user)
+							conn = rs.kubeletConn.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(client.ConnectionInfoGetter)
+						}
+						nodeInfo, err := conn.GetConnectionInfo(nodeName)
+						if err != nil {
+							return nil, nil, err
+						}
+						if len(svcScheme) == 0 {
+							svcScheme = "http"
+						}
+						loc := &url.URL{
+							Scheme: nodeInfo.Scheme,
+							Host:   net.JoinHostPort(nodeInfo.Hostname, nodeInfo.Port),
+							Path:   fmt.Sprintf("/podProxy/%s/%s/", svcScheme, net.JoinHostPort(ip, strconv.Itoa(port))),
+						}
+						return loc, nodeInfo.Transport, nil
+					}
 				}
 				utilruntime.HandleError(fmt.Errorf("Failed to find a valid address, skipping subset: %v", ss))
 			}

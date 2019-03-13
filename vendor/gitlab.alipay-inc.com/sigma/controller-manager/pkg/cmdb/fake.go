@@ -27,7 +27,12 @@ func (c *MockClient) DeleteContainerInfo(sn string) error {
 	return args.Error(0)
 }
 
-func (c *MockClient) GetContainerInfo(sn string) (*CMDBResp, error) {
+func (c *MockClient) GetContainerStatus(sn string) (int, error) {
 	args := c.Called(sn)
-	return args.Get(0).(*CMDBResp), args.Error(1)
+	return args.Get(0).(int), args.Error(1)
+}
+
+func (c *MockClient) GetContainerInfo(sn string) ([]*CMDBResp, error) {
+	args := c.Called(sn)
+	return args.Get(0).([]*CMDBResp), args.Error(1)
 }

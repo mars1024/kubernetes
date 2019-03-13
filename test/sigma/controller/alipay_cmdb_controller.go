@@ -81,45 +81,47 @@ func checkPodCMDBInfo(f *framework.Framework, getPod *corev1.Pod, cmdbCli cmdbCl
 	err := WaitTimeoutForCMDBInfo(cmdbCli, sn, http.StatusOK, 1*time.Minute)
 	Expect(err).NotTo(HaveOccurred(), "cmdb Info should be registered.")
 	// query cmdbInfo
-	cmdbResp, err := cmdbCli.GetContainerInfo(sn)
+	cmdbResps, err := cmdbCli.GetContainerInfo(sn)
 	Expect(err).NotTo(HaveOccurred(), "query cmdb Info should pass")
-	Expect(cmdbResp).NotTo(BeNil(), "cmdb info should not be empty")
-	Expect(cmdbResp.Code).To(Equal(http.StatusOK), "cmdb info should be ok.")
-	err = util.WaitTimeoutForPodFinalizer(f, getPod.Name, alipaymeta.CMDBFinalizer, 30*time.Second)
-	Expect(err).NotTo(HaveOccurred(), "cmdb finalizer should be patched.")
+	Expect(len(cmdbResps)).To(Equal(len(strings.Split(cmdbURL, ","))), "unexpected cmdb resp num.")
+	for _, cmdbResp := range cmdbResps {
+		Expect(cmdbResp).NotTo(BeNil(), "cmdb info should not be empty")
+		Expect(cmdbResp.Code).To(Equal(http.StatusOK), "cmdb info should be ok.")
+		err = util.WaitTimeoutForPodFinalizer(f, getPod.Name, alipaymeta.CMDBFinalizer, 30*time.Second)
+		Expect(err).NotTo(HaveOccurred(), "cmdb finalizer should be patched.")
 
-	getPod, err = f.ClientSet.CoreV1().Pods(f.Namespace.Name).Get(getPod.Name, metav1.GetOptions{})
-	Expect(err).NotTo(HaveOccurred())
-	framework.Logf("cmdbInfo :%+v, PodInfo:%+v", cmdbResp.Data, *getPod)
-	cmdbInfo := cmdbResp.Data
-	Expect(cmdbInfo.BizName).To(Equal(getPod.Labels["ali.BizName"]), "cmdb BizName should same as pod label ali.BizName")
-	Expect(cmdbInfo.AppName).To(Equal(getPod.Labels[k8sApi.LabelAppName]), "cmdb AppName should same as pod label app-name")
-	Expect(strings.ToLower(cmdbInfo.NodeSn)).To(Equal(getPod.Spec.NodeName), "cmdb ncSn should same as pod NodeName")
-	Expect(cmdbInfo.AllocPlanStatus).To(Equal("allocated"), "cmdb allocplanStatus should equal allocated.")
-	Expect(cmdbInfo.InstanceStatus).To(Equal("allocated"), "cmdb instancestatus should equal allocated")
-	Expect(cmdbInfo.InstanceType).To(Equal(getPod.Labels["com.alipay.acs.container.server_type"]), "cmdb instacneType default CONTAINER.")
-	Expect(cmdbInfo.ContainerId).To(Equal(string(getPod.UID)), "cmdb containerId should same as pod UID")
-	Expect(cmdbInfo.ContainerIp).To(Equal(getPod.Status.PodIP), "cmdb ncSn should same as podIp")
-	Expect(cmdbInfo.ContainerSn).To(Equal(sn), "cmdb ncSn should same as podsn")
-	Expect(cmdbInfo.ContainerHostName).To(Equal(getHostName(getPod)),
-		"cmdb containerHostName should same as annotation hostname template.")
-	Expect(cmdbInfo.DeployUnit).To(Equal(getPod.Labels[k8sApi.LabelDeployUnit]), "cmdb deployunit should same as pod deployunit")
-	Expect(cmdbInfo.PoolSystem).To(Equal("sigma3_1"), "cmdb poolsystem should same as sigma3_1")
-	// nodeSN
-	nodeSN, err := getNodeSN(f, getPod.Spec.NodeName)
-	Expect(err).NotTo(HaveOccurred(), "get node sn failed.")
-	Expect(nodeSN).To(Equal(cmdbInfo.NodeSn), "Unexpect node sn in cmdbInfo.")
-	//resources
-	memory, disk, cpu := getResources(getPod.Spec.Containers)
-	Expect(cmdbInfo.MemorySize).To(Equal(memory), "cmdb memory should same sa pod memory.")
-	Expect(cmdbInfo.DiskSize).To(Equal(disk), "cmdb disk should same sa pod disk.")
-	Expect(cmdbInfo.CpuNum).To(Equal(cpu), "cmdb cpu should same sa pod cpu num.")
-	cpuIds := getCpuIds(getPod)
-	Expect(cmdbInfo.CpuIds).To(Equal(cpuIds))
-	Expect(getPod.Finalizers).Should(ContainElement(ContainSubstring(alipaymeta.CMDBFinalizer)), "CMDBFinalizer should be register into pod.finalizers")
-	lastSpecHash, ok := getPod.Annotations[AnnotationLastSpecHash]
-	Expect(ok).To(BeTrue(), "Last-spec-hash should be specified.")
-	Expect(lastSpecHash).NotTo(BeEmpty(), "Last-spec-hash should not be empty.")
+		getPod, err = f.ClientSet.CoreV1().Pods(f.Namespace.Name).Get(getPod.Name, metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		framework.Logf("cmdbInfo :%+v, PodInfo:%+v", sigmabvt.DumpJson(cmdbResp.Data), sigmabvt.DumpJson(getPod))
+		cmdbInfo := cmdbResp.Data
+		Expect(cmdbInfo.BizName).To(Equal(getPod.Labels["ali.BizName"]), "cmdb BizName should same as pod label ali.BizName")
+		Expect(cmdbInfo.AppName).To(Equal(getPod.Labels[k8sApi.LabelAppName]), "cmdb AppName should same as pod label app-name")
+		Expect(strings.ToLower(cmdbInfo.NodeSn)).To(Equal(getPod.Spec.NodeName), "cmdb ncSn should same as pod NodeName")
+		Expect(cmdbInfo.InstanceStatus).To(Equal("allocated"), "cmdb instancestatus should equal allocated")
+		Expect(cmdbInfo.InstanceType).To(Equal("CONTAINER"), "cmdb instanceType default CONTAINER.")
+		Expect(cmdbInfo.ContainerId).To(Equal(string(getPod.UID)), "cmdb containerId should same as pod UID")
+		Expect(cmdbInfo.ContainerIp).To(Equal(getPod.Status.PodIP), "cmdb ncSn should same as podIp")
+		Expect(cmdbInfo.ContainerSn).To(Equal(sn), "cmdb ncSn should same as podsn")
+		Expect(cmdbInfo.ContainerHostName).To(Equal(getHostName(getPod)),
+			"cmdb containerHostName should same as annotation hostname template.")
+		Expect(cmdbInfo.DeployUnit).To(Equal(getPod.Labels[k8sApi.LabelDeployUnit]), "cmdb deployunit should same as pod deployunit")
+		Expect(cmdbInfo.PoolSystem).To(Equal("sigma3_1"), "cmdb poolsystem should same as sigma3_1")
+		// nodeSN
+		nodeSN, err := getNodeSN(f, getPod.Spec.NodeName)
+		Expect(err).NotTo(HaveOccurred(), "get node sn failed.")
+		Expect(nodeSN).To(Equal(cmdbInfo.NodeSn), "Unexpect node sn in cmdbInfo.")
+		//resources
+		memory, disk, cpu := getResources(getPod.Spec.Containers)
+		Expect(cmdbInfo.MemorySize).To(Equal(memory), "cmdb memory should same sa pod memory.")
+		Expect(cmdbInfo.DiskSize).To(Equal(disk), "cmdb disk should same sa pod disk.")
+		Expect(cmdbInfo.CpuNum).To(Equal(cpu), "cmdb cpu should same sa pod cpu num.")
+		cpuIds := getCpuIds(getPod)
+		Expect(cmdbInfo.CpuIds).To(Equal(cpuIds))
+		Expect(getPod.Finalizers).Should(ContainElement(ContainSubstring(alipaymeta.CMDBFinalizer)), "CMDBFinalizer should be register into pod.finalizers")
+		lastSpecHash, ok := getPod.Annotations[AnnotationLastSpecHash]
+		Expect(ok).To(BeTrue(), "Last-spec-hash should be specified.")
+		Expect(lastSpecHash).NotTo(BeEmpty(), "Last-spec-hash should not be empty.")
+	}
 }
 
 //CreateCMDBPod() return pod for cmdb.
@@ -229,12 +231,12 @@ func WaitTimeoutForCMDBInfo(cmdbCli cmdbClient.Client, sn string, code int, time
 // checkCMDBInfo check whether pod status is same as expected status.
 func checkCMDBInfo(client cmdbClient.Client, sn string, code int) wait.ConditionFunc {
 	return func() (bool, error) {
-		cmdbResp, err := client.GetContainerInfo(sn)
+		statusCode, err := client.GetContainerStatus(sn)
 		if err != nil {
 			return false, err
 		}
-		framework.Logf("pod[%s] cmdbinfo resp code:%d.", sn, cmdbResp.Code)
-		if cmdbResp.Code != code {
+		framework.Logf("pod[%s] cmdbinfo resp code:%d.", sn, statusCode)
+		if statusCode != code {
 			return false, nil
 		}
 		framework.Logf("pod[%s] cmdbinfo is ok.", sn)

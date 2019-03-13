@@ -7,6 +7,8 @@ type Client interface {
 	UpdateContainerInfo(reqInfo []byte) error
 	// 删除cmdb信息
 	DeleteContainerInfo(sn string) error
+	// 获取cmdb状态
+	GetContainerStatus(sn string) (int, error)
 	// 获取cmdb信息
-	GetContainerInfo(sn string) (*CMDBResp, error)
+	GetContainerInfo(sn string) ([]*CMDBResp, error)
 }

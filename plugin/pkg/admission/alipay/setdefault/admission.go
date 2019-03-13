@@ -118,7 +118,7 @@ func (c *AlipaySetDefault) Admit(a admission.Attributes) (err error) {
 		return admission.NewForbidden(a, err)
 	}
 
-	if err = setDefaultHostConfig(pod); err != nil {
+	if err = SetDefaultHostConfig(pod); err != nil {
 		return admission.NewForbidden(a, err)
 	}
 	return nil
@@ -150,7 +150,7 @@ next:
 	return nil
 }
 
-func setDefaultHostConfig(pod *core.Pod) error {
+func SetDefaultHostConfig(pod *core.Pod) error {
 	allocSpec, err := podAllocSpec(pod)
 	if err != nil {
 		return err

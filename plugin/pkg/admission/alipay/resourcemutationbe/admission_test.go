@@ -1,7 +1,6 @@
 package resourcemutationbe
 
 import (
-	"encoding/json"
 	"testing"
 
 	log "github.com/golang/glog"
@@ -186,8 +185,6 @@ func TestResourceMutationBE(t *testing.T) {
 
 func newPodWithResource(containers map[string]testContainer) *core.Pod {
 	pod := newPod()
-	allocSpec := sigmak8sapi.AllocSpec{}
-
 	for name, c := range containers {
 		pod.Spec.Containers = append(pod.Spec.Containers, core.Container{
 			Name: name,
@@ -200,12 +197,7 @@ func newPodWithResource(containers map[string]testContainer) *core.Pod {
 				},
 			},
 		})
-		allocSpec.Containers = append(allocSpec.Containers, newAllocSpecContainer(name))
 	}
-
-	data, _ := json.Marshal(&allocSpec)
-	pod.Annotations[sigmak8sapi.AnnotationPodAllocSpec] = string(data)
-
 	return pod
 }
 
@@ -221,16 +213,6 @@ func newPod() *core.Pod {
 		},
 		Spec: core.PodSpec{
 			Containers: []core.Container{},
-		},
-	}
-}
-
-func newAllocSpecContainer(name string) sigmak8sapi.Container {
-	return sigmak8sapi.Container{
-		Name: name,
-		Resource: sigmak8sapi.ResourceRequirements{
-			// GPU.ShareMode is validated in admission controller 'sigmascheduling'
-			GPU: sigmak8sapi.GPUSpec{ShareMode: sigmak8sapi.GPUShareModeExclusive},
 		},
 	}
 }

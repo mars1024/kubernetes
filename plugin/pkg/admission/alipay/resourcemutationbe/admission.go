@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apiserver/pkg/admission"
 	"k8s.io/kubernetes/pkg/apis/core"
+	"k8s.io/kubernetes/plugin/pkg/admission/alipay/setdefault"
 )
 
 const (
@@ -122,7 +123,10 @@ func mutatePodResource(pod *core.Pod) error {
 	}
 
 	if allocSpec == nil {
-		return fmt.Errorf("alloc spec must be set before best effort admission")
+		if err = setdefault.SetDefaultHostConfig(pod); err != nil {
+			return fmt.Errorf("failed to set default alloc spec")
+		}
+		allocSpec, _ = podAllocSpec(pod)
 	}
 
 	if len(allocSpec.Containers) != len(pod.Spec.Containers) {

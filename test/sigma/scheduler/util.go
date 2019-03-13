@@ -188,6 +188,24 @@ func runPodAndGetNodeName(f *framework.Framework, conf pausePodConfig) string {
 	err := f.ClientSet.CoreV1().Pods(f.Namespace.Name).Delete(pod.Name, metav1.NewDeleteOptions(0))
 	framework.ExpectNoError(err)
 
+	// wait until pod is deleted
+	timeout := 2 * time.Minute
+	t := time.Now()
+	for {
+		_, err := f.ClientSet.CoreV1().Pods(pod.Namespace).Get(pod.Name, metav1.GetOptions{})
+		if err != nil && strings.Contains(err.Error(), "not found") {
+			framework.Logf("pod %s has been removed", pod.Name)
+			return pod.Spec.NodeName
+		}
+		if time.Since(t) >= timeout {
+			framework.Logf("Gave up waiting for pod %s is removed after %v seconds",
+				pod.Name, time.Since(t).Seconds())
+			return ""
+		}
+		framework.Logf("Retrying to check whether pod %s is removed", pod.Name)
+		time.Sleep(1 * time.Second)
+	}
+
 	return pod.Spec.NodeName
 }
 

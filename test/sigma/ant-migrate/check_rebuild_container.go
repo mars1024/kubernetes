@@ -36,23 +36,7 @@ func ContainerLifeCycle(f *framework.Framework, pod *v1.Pod) {
 	By("Start sigma3.1 pod.")
 	err = antsigma.StopOrStartSigmaPod(f.ClientSet, pod, k8sapi.ContainerStateRunning)
 	Expect(err).To(BeNil(), "[Sigma3.1 LifeCycle] Start sigma3.1 pod failed.")
-	//antsigma.CheckDNSPolicy(f, pod)
-
-	//upgrade pod.
-	By("Upgrade sigma3.1 pod, expect exited.")
-	err = antsigma.UpgradeSigmaPod(f.ClientSet, pod, antsigma.NewUpgradePod(upgradeEnv), k8sapi.ContainerStateExited)
-	Expect(err).To(BeNil(), "[Sigma3.1 LifeCycle] Upgrade created sigma3.1 pod failed.")
-	//start pod
-	By("start upgraded sigma3.1 pod.")
-	err = antsigma.StopOrStartSigmaPod(f.ClientSet, pod, k8sapi.ContainerStateRunning)
-	Expect(err).To(BeNil(), "[Sigma3.1 LifeCycle] Start sigma3.1 pod failed after upgrade.")
-	antsigma.CheckSigmaUpgradeResource(f, pod, antsigma.NewUpgradePod(upgradeEnv))
-	//upgrade pod.
-	By("Upgrade sigma3.1 pod, expect running.")
-	err = antsigma.UpgradeSigmaPod(f.ClientSet, pod, antsigma.NewUpgradePod(upgradeEnv2), k8sapi.ContainerStateRunning)
-	Expect(err).To(BeNil(), "[Sigma3.1 LifeCycle] Upgrade created sigma3.1 expect running pod failed.")
-	antsigma.CheckSigmaUpgradeResource(f, pod, antsigma.NewUpgradePod(upgradeEnv2))
-	//antsigma.CheckDNSPolicy(f, pod)
+	antsigma.CheckDNSPolicy(f, pod)
 }
 
 // CheckSigma20ResourceReomoved() check sigma20 reource removed from etcd.
@@ -95,7 +79,8 @@ func CheckSigma20ResourceReomoved(f *framework.Framework, pod *v1.Pod, site stri
 }
 
 // CheckSigma31Resouce() check cpu/disk/mem/ip/volume/hostname/ip/userinfo
-func CheckSigma31Resouce(f *framework.Framework, pod *v1.Pod, containerHostName string, containerJson *dockertypes.ContainerJSON) {
+func CheckSigma31Resouce(f *framework.Framework, pod *v1.Pod, containerHostName string,
+	containerJson *dockertypes.ContainerJSON, cpusetMode string) {
 	if containerJson.Config == nil {
 		framework.Logf("container config is nil, container:%#v", containerJson)
 		Fail("Unexpected container info.")
@@ -116,14 +101,6 @@ func CheckSigma31Resouce(f *framework.Framework, pod *v1.Pod, containerHostName 
 	Expect(err).NotTo(HaveOccurred(), "check 3.1 pod hostname error")
 	Expect(stdout).To(Equal(containerHostName), "3.1 pod hostname is not equal with 2.0 container")
 
-	By("rebuild sigma3.1: check user account[sigma3test]")
-	cmd = []string{"cat", "/etc/passwd"}
-	stdout, _, err = antsigma.RetryExec(f, pod, cmd, "check_user", 10, 2)
-	Expect(err).NotTo(HaveOccurred(), "check 3.1 pod user account error")
-	if !strings.Contains(stdout, "sigma3test") {
-		framework.Logf("Exec %v cmd output: %s", stdout, pod.Name)
-		Fail("sigma3test account is not passed to 3.1 pod")
-	}
 	By("rebuild sigma3.1: check container memory should same as pod.")
 	cmd = []string{"cat", "/proc/meminfo"}
 	stdout, _, err = antsigma.RetryExec(f, pod, cmd, "check_mem", 10, 2)
@@ -133,14 +110,25 @@ func CheckSigma31Resouce(f *framework.Framework, pod *v1.Pod, containerHostName 
 	Expect(err).NotTo(HaveOccurred(), "check 3.1 pod mem is not equal with input.")
 	Expect(isEqual).To(BeTrue(), "check 3.1 pod mem is not equal with input.")
 
-	By("rebuild sigma3.1: check container cpu should same as pod.")
-	cmd = []string{"cat", "/proc/cpuinfo"}
-	stdout, _, err = antsigma.RetryExec(f, pod, cmd, "check_cpu", 10, 2)
-	Expect(err).NotTo(HaveOccurred(), "get 3.1 pod cpu error")
-	cpu := antsigma.Atoi64(labels["ali.CpuCount"], 0)
-	isEqual = antsigma.CompareCPU(cpu, stdout)
-	Expect(err).NotTo(HaveOccurred(), "check 3.1 pod cpu is not equal with input.")
-	Expect(isEqual).To(BeTrue(), "check 3.1 pod cpu is not equal with input.")
+	if cpusetMode == CPUSetModeDefault {
+		By("rebuild sigma3.1: check container cpu should same as pod.")
+		cmd = []string{"cat", "/proc/cpuinfo"}
+		stdout, _, err = antsigma.RetryExec(f, pod, cmd, "check_cpu", 10, 2)
+		Expect(err).NotTo(HaveOccurred(), "get 3.1 pod cpu error")
+		cpu := antsigma.Atoi64(labels["ali.CpuCount"], 0)
+		isEqual = antsigma.CompareCPU(cpu, stdout)
+		Expect(err).NotTo(HaveOccurred(), "check 3.1 pod cpu is not equal with input.")
+		Expect(isEqual).To(BeTrue(), "check 3.1 pod cpu is not equal with input.")
+	} else if cpusetMode == CPUSetModeShare {
+		By("rebuild sigma3.1: check container cpu should same as pod.")
+		cmd = []string{"cat", "/proc/cpuinfo"}
+		stdout, _, err = antsigma.RetryExec(f, pod, cmd, "check_cpu", 10, 2)
+		Expect(err).NotTo(HaveOccurred(), "get 3.1 pod cpu error")
+		cpu := GetNodeCPU(f, pod)
+		isEqual = antsigma.CompareCPU(cpu, stdout)
+		Expect(err).NotTo(HaveOccurred(), "check 3.1 pod cpu is not equal with input.")
+		Expect(isEqual).To(BeTrue(), "check 3.1 pod cpu is not equal with input.")
+	}
 
 	By("rebuild sigma3.1: check container diskSize should same as pod.")
 	cmd = []string{"df", "-h"}
@@ -160,8 +148,58 @@ func CheckSigma31Resouce(f *framework.Framework, pod *v1.Pod, containerHostName 
 	By("rebuild sigma3.1: check container armory info.")
 	antsigma.CheckArmory(pod)
 
-	//By("rebuild sigma3.1: check container dnsConfig")
-	//antsigma.CheckDNSPolicy(f, pod)
+	By("rebuild sigma3.1: check container dnsConfig")
+	antsigma.CheckDNSPolicy(f, pod)
+
+	By("rebuild sigma3.1: check container extra host alias.")
+	CheckHostAlias(f, pod)
+}
+
+func CheckHostAlias(f *framework.Framework, pod *v1.Pod) {
+	if len(pod.Spec.HostAliases) == 0 {
+		return
+	}
+	By("rebuild sigma3.1: get container hosts.")
+	cmd := []string{"cat", "/etc/hosts"}
+	stdout, _, err := antsigma.RetryExec(f, pod, cmd, "check_hosts", 10, 2)
+	Expect(err).NotTo(HaveOccurred(), "get 3.1 pod hosts error")
+	hosts := strings.Split(stdout, "\n")
+	framework.Logf("Hosts:%#v, pod alias:%#v", hosts, pod.Spec.HostAliases)
+	for _, hostAlias := range pod.Spec.HostAliases {
+		for _, hostname := range hostAlias.Hostnames {
+			str := fmt.Sprintf("%s %s", hostAlias.IP, hostname)
+			framework.Logf("Alias:%v", str)
+			Expect(antsigma.SliceContains(hosts, str, nil)).To(BeTrue(), "Check host alias failed.")
+		}
+	}
+}
+
+func CheckRebuildChanges(f *framework.Framework, pod *v1.Pod, publicKey string) {
+	By("rebuild sigma3.1: check user account")
+	cmd := []string{"cat", "/etc/passwd"}
+	stdout, _, err := antsigma.RetryExec(f, pod, cmd, "check_user", 10, 2)
+	Expect(err).NotTo(HaveOccurred(), "check 3.1 pod user account error")
+	if !strings.Contains(stdout, InjectUser) {
+		framework.Logf("Exec %v cmd output: %s", stdout, pod.Name)
+		Fail("sigma3test account is not passed to 3.1 pod")
+	}
+
+	By("rebuild sigma3.1: check user public key")
+	cmd = []string{"cat", "/root/.ssh/id_rsa.pub"}
+	stdout, _, err = antsigma.RetryExec(f, pod, cmd, "check_public_key", 10, 2)
+	Expect(err).NotTo(HaveOccurred(), "check 3.1 pod user public key error")
+	framework.Logf("Exec %v cmd output: %s", stdout, pod.Name)
+	Expect(strings.Trim(stdout, "\t\n\r ")).To(Equal(strings.Trim(publicKey, "\t\n\r ")), "check 3.1 pod user public key content failed.")
+
+	By("rebuild sigma3.1: check volume dir")
+	cmd = []string{"ls", fmt.Sprintf("%s/%s", InjectDir, InjectFile)}
+	stdout, _, err = antsigma.RetryExec(f, pod, cmd, "check_volume_info", 10, 2)
+	Expect(err).NotTo(HaveOccurred(), "check 3.1 pod volume info error")
+	framework.Logf("Exec %v cmd output: %s", stdout, pod.Name)
+	if strings.Contains(stdout, "No such file or directory") {
+		framework.Logf("Volume File: %v", stdout)
+		Fail("public key is not passed to 3.1 pod")
+	}
 }
 
 func CheckSigma31Volumes(pod *v1.Pod, c *dockertypes.ContainerJSON) {
@@ -195,12 +233,12 @@ func splitBindRawSpec(raw string) ([]string, error) {
 
 // CheckContainerStatus() check 2.0 container is stopped and 3.1 container is running.
 func CheckContainerStatus(hostIP, container20ID, container31ID string) {
-	By("check 2.0 container is stopped")
+	By("check 2.0 container deleted")
 	// log into slave node and check container status, container should be stopped
 	runOutput := util.GetDockerPsOutput(hostIP, container20ID)
 	framework.Logf("Container20Id:%v, hostIP:%v, outPut:%v", container20ID, hostIP, runOutput)
-	if !strings.Contains(runOutput, "Exited") && !strings.Contains(runOutput, "Stopped") {
-		Fail("2.0 container status is not Exited or Stopped, but we expect it should be that")
+	if runOutput != "" {
+		Fail("2.0 container should be deleted.")
 	}
 
 	By("check 3.1 container is up")
@@ -256,6 +294,16 @@ func GetSigmaContainerInfo(hostIP, containerID string) (string, string, string) 
 	container31CpuSets := util.GetContainerInfoWithStarAgent(hostIP, cpuSetCmd)
 	framework.Logf("Container %v, quotaId:%v, adminId:%v, cpusets:%v", containerID, container31QuotaID, container31AdminUID, container31CpuSets)
 	return container31QuotaID, container31AdminUID, container31CpuSets
+}
+
+func GetNodeCPU(f *framework.Framework, pod *v1.Pod) int64 {
+	pod, err := f.ClientSet.CoreV1().Pods(pod.Namespace).Get(pod.Name, metav1.GetOptions{})
+	Expect(err).To(BeNil(), "Get pod info failed.")
+	node, err := f.ClientSet.CoreV1().Nodes().Get(pod.Spec.NodeName, metav1.GetOptions{})
+	Expect(err).To(BeNil(), "Get node info failed.")
+	cpu, ok := node.Status.Allocatable.Cpu().AsInt64()
+	Expect(ok).To(BeTrue(), "Get node capacity info failed.")
+	return cpu
 }
 
 func DumpJson(v interface{}) string {

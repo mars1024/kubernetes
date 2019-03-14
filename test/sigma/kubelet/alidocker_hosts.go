@@ -83,8 +83,8 @@ func doHostsTestCase(f *framework.Framework, testCase *hostsTestCase) {
 	_, err = util.ResponseFromStarAgentTask(stopCommand, hostIP, hostSn)
 	Expect(err).NotTo(HaveOccurred(), "stop container failed")
 
-	// Wait 20 second to get all containers are started.
-	time.Sleep(time.Duration(20) * time.Second)
+	// Wait 60 second to get all containers are started.
+	time.Sleep(time.Duration(60) * time.Second)
 
 	// Get container's hosts.
 	result = f.ExecShellInContainer(testPod.Name, containerName, testCase.checkCommand)

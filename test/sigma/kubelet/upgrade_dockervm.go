@@ -17,7 +17,8 @@ var _ = Describe("[sigma-kubelet]", func() {
 	f := framework.NewDefaultFramework("sigma-kubelet")
 
 	caseName := "[upgrade_dockervm_pod]"
-	It("[sigma-kubelet]"+caseName, func() {
+	// It will be failed to create sandbox in the environment of new version Pouch.
+	It("[sigma-kubelet][ant]"+caseName, func() {
 		patchData := `{"spec":{"containers":[{"name":"pod-base","image":"reg.docker.alibaba-inc.com/sigma-x/mysql:test-v2"}]}}`
 		upgradeSuccessStr := "upgrade container success"
 

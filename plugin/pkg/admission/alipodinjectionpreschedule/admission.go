@@ -90,7 +90,7 @@ func (c *aliPodInjectionPreSchedule) Admit(a admission.Attributes) error {
 
 	//glog.V(3).Infof("aliPodInjectionPreSchedule preStart to admit %s, operation: %v, subresource: %v, pod: %v", key, a.GetOperation(), a.GetSubresource(), dumpJson(pod))
 
-	if len(a.GetSubresource()) != 0 || a.GetOperation() != admission.Create {
+	if len(a.GetSubresource()) != 0 || (a.GetOperation() != admission.Create && a.GetOperation() != admission.Update) {
 		return nil
 	}
 
@@ -277,7 +277,7 @@ func (c *aliPodInjectionPreSchedule) Admit(a admission.Attributes) error {
 		}
 	}
 	defer func() {
-		if !reflect.DeepEqual(podAllocSpec, sigmak8sapi.AllocSpec{}) {
+		if !reflect.DeepEqual(podAllocSpec, sigmak8sapi.AllocSpec{}) && a.GetOperation() == admission.Create {
 			pod.Annotations[sigmak8sapi.AnnotationPodAllocSpec] = dumpJson(podAllocSpec)
 		}
 	}()
@@ -287,71 +287,77 @@ func (c *aliPodInjectionPreSchedule) Admit(a admission.Attributes) error {
 		pod.Labels[sigmak8sapi.LabelDeployUnit] = pod.Labels[sigmak8sapi.LabelInstanceGroup]
 	}
 
-	// 1. 动态规则，现在只算iplabel了
-	dynamicStrategyMap := loadDynamicStrategyMap(pod, &appMetaInfo, &dynamicStrategy)
+	if a.GetOperation() == admission.Create {
+		// 1. 动态规则，现在只算iplabel了
+		dynamicStrategyMap := loadDynamicStrategyMap(pod, &appMetaInfo, &dynamicStrategy)
 
-	// 2. 确定IpLabel
-	glog.V(3).Infof("aliPodInjectionPreSchedule admitting %s, begin to setIpLabel", key)
-	setIpLabel(pod, podRouteRule, &staticStrategy, dynamicStrategyMap)
+		// 2. 确定IpLabel
+		glog.V(3).Infof("aliPodInjectionPreSchedule admitting %s, begin to setIpLabel", key)
+		setIpLabel(pod, podRouteRule, &staticStrategy, dynamicStrategyMap)
 
-	// 3. 设置调度规则里的单元、用途
-	glog.V(3).Infof("aliPodInjectionPreSchedule admitting %s, begin to setAppStageUnit", key)
-	setAppStageUnit(pod, podRouteRule, &appUnitStageConstraint)
+		// 3. 设置调度规则里的单元、用途
+		glog.V(3).Infof("aliPodInjectionPreSchedule admitting %s, begin to setAppStageUnit", key)
+		setAppStageUnit(pod, podRouteRule, &appUnitStageConstraint)
 
-	// 设置调度规则里的资源池，废弃
-	//setResourcePool(pod, resourcePoolMapping)
+		// 设置调度规则里的资源池，废弃
+		//setResourcePool(pod, resourcePoolMapping)
 
-	// 4. 设置其他默认调度规则
-	setPodScheduleRulesCommon(pod)
+		// 4. 设置其他默认调度规则
+		setPodScheduleRulesCommon(pod)
 
-	// 5. 设置NetPriority
-	glog.V(3).Infof("aliPodInjectionPreSchedule admitting %s, begin to setNetPriority", key)
-	setNetPriority(pod, &staticStrategy)
+		// 5. 设置NetPriority
+		glog.V(3).Infof("aliPodInjectionPreSchedule admitting %s, begin to setNetPriority", key)
+		setNetPriority(pod, &staticStrategy)
 
-	// 6. 设置Binds
+		// 6. 设置allocSpec里的HostConfigInfo
+		glog.V(3).Infof("aliPodInjectionPreSchedule admitting %s, begin to setHostConfigInfo", key)
+		setHostConfigInfo(pod, &podAllocSpec, &staticStrategy)
+
+		// 7. 设置应用互斥（包括同应用最大实例数）
+		glog.V(3).Infof("aliPodInjectionPreSchedule admitting %s, begin to setPodAllocSpecAntiAffinityRules", key)
+		setPodAllocSpecAntiAffinityRules(pod, &podAllocSpec, &staticStrategy, &globalScheduleRules, p0m0NodegroupMap)
+
+		// 8. 为强制标加tolerate
+		glog.V(3).Infof("aliPodInjectionPreSchedule admitting %s, begin to setPodTolerateForMandatoryLabels", key)
+		setPodTolerateForMandatoryLabels(pod, taintLabels)
+
+		// 9. 设置其他一些staticStrategy规则，如调度标签，privileged，host网络
+		glog.V(3).Infof("aliPodInjectionPreSchedule admitting %s, begin to setOtherStaticStrategy", key)
+		if !isRebuildPod(pod) {
+			setOtherStaticStrategy(pod, labelConfigMap, &staticStrategy)
+		}
+
+		// 10. 兼容2.0一些label
+		glog.V(3).Infof("aliPodInjectionPreSchedule admitting %s, begin to updatePodLabelsCompatible", key)
+		updatePodLabelsCompatible(pod, labelsCompatible)
+
+		// 11. 一些mock规则，用于测试
+		setMockRules(pod, podNamingMockRule)
+	}
+
+	// 12. 设置Binds
 	glog.V(3).Infof("aliPodInjectionPreSchedule admitting %s, begin to setBindsToVolumeAndMounts", key)
 	if !isRebuildPod(pod) {
 		setBindsToVolumeAndMounts(pod, &staticStrategy)
 	}
 
-	// 7. 设置allocSpec里的HostConfigInfo
-	glog.V(3).Infof("aliPodInjectionPreSchedule admitting %s, begin to setHostConfigInfo", key)
-	setHostConfigInfo(pod, &podAllocSpec, &staticStrategy)
-
-	// 8. 设置其他一些staticStrategy规则，如调度标签，privileged，host网络
-	glog.V(3).Infof("aliPodInjectionPreSchedule admitting %s, begin to setOtherStaticStrategy", key)
-	if !isRebuildPod(pod) {
-		setOtherStaticStrategy(pod, labelConfigMap, &staticStrategy)
-	}
-
-	// 9. 设置应用互斥（包括同应用最大实例数）
-	glog.V(3).Infof("aliPodInjectionPreSchedule admitting %s, begin to setPodAllocSpecAntiAffinityRules", key)
-	setPodAllocSpecAntiAffinityRules(pod, &podAllocSpec, &staticStrategy, &globalScheduleRules, p0m0NodegroupMap)
-
-	// 10. cpu set/share相关配置
+	// 13. cpu set/share相关配置
 	glog.V(3).Infof("aliPodInjectionPreSchedule admitting %s, begin to setPodCPUConfigs", key)
 	if !isRebuildPod(pod) {
 		setPodCPUConfigs(pod, &podAllocSpec, &cpuSetModeAdvConfig, &globalScheduleRules)
 	}
 
-	// 11. 为强制标加tolerate
-	glog.V(3).Infof("aliPodInjectionPreSchedule admitting %s, begin to setPodTolerateForMandatoryLabels", key)
-	setPodTolerateForMandatoryLabels(pod, taintLabels)
+	// 14. 设置container privileged
+	glog.V(3).Infof("aliPodInjectionPreSchedule admitting %s, begin to setContainerPrivileged", key)
+	setContainerPrivileged(pod, &staticStrategy)
 
-	// 12. 一些环境变量
+	// 15. 一些环境变量
 	glog.V(3).Infof("aliPodInjectionPreSchedule admitting %s, begin to setPodEnvCommon", key)
 	setPodEnvCommon(pod)
 
-	// 13. 配一些挂载目录
+	// 16. 配一些挂载目录
 	glog.V(3).Infof("aliPodInjectionPreSchedule admitting %s, begin to setPodMountsCommon", key)
 	setPodMountsCommon(pod)
-
-	// 14. 兼容2.0一些label
-	glog.V(3).Infof("aliPodInjectionPreSchedule admitting %s, begin to updatePodLabelsCompatible", key)
-	updatePodLabelsCompatible(pod, labelsCompatible)
-
-	// 15. 一些mock规则，用于测试
-	setMockRules(pod, podNamingMockRule)
 
 	glog.V(3).Infof("aliPodInjectionPreSchedule finish to admit %s, operation: %v, pod: %v", key, a.GetOperation(), dumpJson(pod))
 
@@ -660,13 +666,12 @@ func setHostConfigInfo(pod *api.Pod, allocSpec *sigmak8sapi.AllocSpec, staticStr
 	setAllocSpecContainer(allocSpec, allocSpecContainer)
 }
 
-func setOtherStaticStrategy(pod *api.Pod, labelConfigMap *api.ConfigMap, staticStrategy *sigma2api.AdvancedStrategy) {
+func setContainerPrivileged(pod *api.Pod, staticStrategy *sigma2api.AdvancedStrategy) {
 	if staticStrategy == nil {
 		return
 	}
 
 	mainContainer := getMainContainer(pod)
-
 	advancedParserConfig := staticStrategy.AdvancedParserConfig
 	if advancedParserConfig.Privileged && mainContainer != nil {
 		if mainContainer.SecurityContext == nil {
@@ -677,7 +682,14 @@ func setOtherStaticStrategy(pod *api.Pod, labelConfigMap *api.ConfigMap, staticS
 			mainContainer.SecurityContext.Privileged = &advancedParserConfig.Privileged
 		}
 	}
+}
 
+func setOtherStaticStrategy(pod *api.Pod, labelConfigMap *api.ConfigMap, staticStrategy *sigma2api.AdvancedStrategy) {
+	if staticStrategy == nil {
+		return
+	}
+
+	advancedParserConfig := staticStrategy.AdvancedParserConfig
 	if advancedParserConfig.NetworkMode == "host" {
 		if pod.Spec.SecurityContext == nil {
 			pod.Spec.SecurityContext = &api.PodSecurityContext{HostNetwork: true}
@@ -954,7 +966,7 @@ func setPodMountsCommon(pod *api.Pod) {
 }
 
 func addPodSpecHostFileVolume(pod *api.Pod, volumeName, hostPath string, pType api.HostPathType, containerPaths []string, readOnly bool) {
-	pod.Spec.Volumes = append(pod.Spec.Volumes, api.Volume{
+	addPodVolumeNoOverwrite(pod, api.Volume{
 		Name: volumeName,
 		VolumeSource: api.VolumeSource{
 			HostPath: &api.HostPathVolumeSource{
@@ -965,18 +977,12 @@ func addPodSpecHostFileVolume(pod *api.Pod, volumeName, hostPath string, pType a
 	})
 	for i := 0; i < len(pod.Spec.Containers); i++ {
 		c := &pod.Spec.Containers[i]
-		for _, path := range containerPaths {
-			c.VolumeMounts = append(c.VolumeMounts, api.VolumeMount{
-				Name:      volumeName,
-				MountPath: path,
-				ReadOnly:  readOnly,
-			})
-		}
+		addContainerVolumeMountsNoOverwrite(c, volumeName, containerPaths, readOnly)
 	}
 }
 
 func addPodSpecEmptyVolume(pod *api.Pod, volumeName string, containerPaths []string) {
-	pod.Spec.Volumes = append(pod.Spec.Volumes, api.Volume{
+	addPodVolumeNoOverwrite(pod, api.Volume{
 		Name: volumeName,
 		VolumeSource: api.VolumeSource{
 			EmptyDir: &api.EmptyDirVolumeSource{},
@@ -984,12 +990,7 @@ func addPodSpecEmptyVolume(pod *api.Pod, volumeName string, containerPaths []str
 	})
 	for i := 0; i < len(pod.Spec.Containers); i++ {
 		c := &pod.Spec.Containers[i]
-		for _, path := range containerPaths {
-			c.VolumeMounts = append(c.VolumeMounts, api.VolumeMount{
-				Name:      volumeName,
-				MountPath: path,
-			})
-		}
+		addContainerVolumeMountsNoOverwrite(c, volumeName, containerPaths, false)
 	}
 }
 

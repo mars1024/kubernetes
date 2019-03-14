@@ -307,6 +307,10 @@ func (m *kubeGenericRuntimeManager) generateContainerConfig(container *v1.Contai
 	if err := m.applyPlatformSpecificContainerConfig(config, container, pod, uid, username); err != nil {
 		return nil, cleanupAction, err
 	}
+	// Reuse the quota ID if found from pod annotation
+	if quotaId := GetDiskQuotaID(pod); quotaId != nil {
+		config.QuotaId = *quotaId
+	}
 
 	// set environment variables
 	envs := make([]*runtimeapi.KeyValue, len(opts.Envs))
@@ -374,8 +378,6 @@ func (m *kubeGenericRuntimeManager) generateContainerConfig(container *v1.Contai
 	}
 
 	config.Envs = envs
-	config.QuotaId = GetDiskQuotaID(pod)
-
 	return config, cleanupAction, nil
 }
 

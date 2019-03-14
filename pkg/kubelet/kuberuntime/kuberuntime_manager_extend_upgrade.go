@@ -269,7 +269,9 @@ func (m *kubeGenericRuntimeManager) createContainerExtension(podSandboxID string
 			containerConfig.Linux.Resources = &runtimeapi.LinuxContainerResources{}
 		}
 		if parentContainerStatus != nil && parentContainerStatus.Resources != nil {
-			containerConfig.QuotaId = parentContainerStatus.QuotaId
+			if parentContainerStatus.QuotaId != "" {
+				containerConfig.QuotaId = parentContainerStatus.QuotaId
+			}
 			containerConfig.Linux.Resources.DiskQuota = parentContainerStatus.Resources.DiskQuota
 		}
 	}

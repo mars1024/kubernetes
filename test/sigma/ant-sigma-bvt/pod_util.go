@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	k8sApi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
@@ -111,7 +112,7 @@ func CreateSigmaPod(client clientset.Interface, pod *v1.Pod) error {
 	if err != nil {
 		return err
 	}
-	err = wait.PollImmediate(5*time.Second, 5*time.Minute, CheckPodIsReady(client, pod))
+	err = wait.PollImmediate(5*time.Second, timeOut*time.Minute, CheckPodIsReady(client, pod))
 	return err
 }
 
@@ -175,7 +176,7 @@ func StopOrStartSigmaPod(client clientset.Interface, pod *v1.Pod, expectStatus k
 	if err != nil {
 		return err
 	}
-	return wait.PollImmediate(5*time.Second, 5*time.Minute, CheckPodIsReady(client, pod))
+	return wait.PollImmediate(5*time.Second, timeOut*time.Minute, CheckPodIsReady(client, pod))
 }
 
 func NewUpgradePod(env []v1.EnvVar) *v1.Pod {
@@ -268,9 +269,9 @@ func UpgradeSigmaPod(client clientset.Interface, pod *v1.Pod, upgradePod *v1.Pod
 	}
 	time.Sleep(5 * time.Second)
 	if expectStatus == k8sApi.ContainerStateExited {
-		err = util.WaitTimeoutForContainerUpdateStatus(client, pod, pod.Spec.Containers[0].Name, 3*time.Minute, StopSuccessStr, true)
+		err = util.WaitTimeoutForContainerUpdateStatus(client, pod, pod.Spec.Containers[0].Name, timeOut*time.Minute, StopSuccessStr, true)
 	} else {
-		err = util.WaitTimeoutForContainerUpdateStatus(client, pod, pod.Spec.Containers[0].Name, 3*time.Minute, UpgradeSuccessStr, true)
+		err = util.WaitTimeoutForContainerUpdateStatus(client, pod, pod.Spec.Containers[0].Name, timeOut*time.Minute, UpgradeSuccessStr, true)
 	}
 	return err
 }
@@ -301,7 +302,7 @@ func UpdateSigmaPod(client clientset.Interface, pod *v1.Pod, updatePod *v1.Pod, 
 		return err
 	}
 	time.Sleep(5 * time.Second)
-	err = wait.PollImmediate(5*time.Second, 5*time.Minute, CheckUpdatePodReady(client, pod))
+	err = wait.PollImmediate(5*time.Second, timeOut*time.Minute, CheckUpdatePodReady(client, pod))
 	return err
 }
 
@@ -417,4 +418,28 @@ func IsEnableOverQuota() string {
 		enableOverQuota = "false"
 	}
 	return enableOverQuota
+}
+
+func GetOperatingTimeOut() time.Duration {
+	value, ok := os.LookupEnv("TIMEOUT")
+	if !ok {
+		return time.Duration(5)
+	}
+	return time.Duration(Atoi(value, 5))
+}
+
+func GetConcurrentNum() int {
+	value, ok := os.LookupEnv("CONCURRENT")
+	if !ok {
+		return 10
+	}
+	return Atoi(value, 10)
+}
+
+func Atoi(str string, def int) int {
+	i, err := strconv.Atoi(str)
+	if err != nil {
+		return def
+	}
+	return i
 }

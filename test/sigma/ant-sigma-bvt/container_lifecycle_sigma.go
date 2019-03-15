@@ -18,12 +18,14 @@ import (
 )
 
 var site string
+var timeOut time.Duration
 
 var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 	f := framework.NewDefaultFramework("sigma-ant-bvt")
 	appName := "alipay-test-bvt-container"
 	enableOverQuota := IsEnableOverQuota()
-	framework.Logf("EnableOverQuota:%v", enableOverQuota)
+	timeOut = GetOperatingTimeOut()
+	framework.Logf("EnableOverQuota:%v, timeOut:%v, Default:%v, concurrent:%v", enableOverQuota, timeOut, timeOut*time.Minute, GetConcurrentNum())
 	BeforeEach(func() {
 		CheckAdapterParameters()
 		By(fmt.Sprintf("first make sure no pod exists in namespace %s", appName))
@@ -63,7 +65,7 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 		// update pod
 		By("Update Pod, increase resources.")
 		updateConfig := LoadUpdateConfig(2, 2147483648, "2G")
-		MustUpdate(s, f.ClientSet, &pod, updateConfig, 5*time.Minute)
+		MustUpdate(s, f.ClientSet, &pod, updateConfig, timeOut*time.Minute)
 		CheckAdapterUpdatedResource(f, &pod, updateConfig)
 
 		//restart pod
@@ -88,7 +90,7 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 		// update pod
 		By("Update Pod, decrease resources.")
 		updateConfig = LoadUpdateConfig(1, 1073741824, "1G")
-		MustUpdate(s, f.ClientSet, &pod, updateConfig, 5*time.Minute)
+		MustUpdate(s, f.ClientSet, &pod, updateConfig, timeOut*time.Minute)
 		CheckAdapterUpdatedResource(f, &pod, updateConfig)
 
 		//restart pod
@@ -203,7 +205,7 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 	It("[ant][sigma-alipay-bvt][adapter-concurrency] test adapter pod lifecycle use adapter with concurrency.", func() {
 		var wg sync.WaitGroup
 		var lock sync.Mutex
-		count := 10
+		count := GetConcurrentNum()
 		var num int
 		for i := 0; i < count; i++ {
 			wg.Add(1)
@@ -246,7 +248,7 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 	It("[ant][sigma-alipay-bvt][sigma3-concurrency] test sigma3 pod lifecycle use sigma3.1 with concurrency.", func() {
 		var wg sync.WaitGroup
 		var lock sync.Mutex
-		count := 10
+		count := GetConcurrentNum()
 		var num int
 		for i := 0; i < count; i++ {
 			wg.Add(1)

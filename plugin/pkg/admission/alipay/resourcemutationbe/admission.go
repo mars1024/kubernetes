@@ -12,12 +12,13 @@ import (
 	"k8s.io/apiserver/pkg/admission"
 	"k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/plugin/pkg/admission/alipay/setdefault"
+	"k8s.io/kubernetes/plugin/pkg/admission/alipay/util"
 )
 
 const (
 	// PluginName is the name for current plugin, it should be unique among all plugins.
 	PluginName                 = "AlipayResourceMutationBestEffort"
-	bestEffortCGroupParentName = "/sigma-stream"
+	bestEffortCGroupParentName = apis.CGROUP_PARENT_OFFLINE
 	bestEffortCPUBvtWarpNs     = int(-1)
 	bestEffortOOMScoreAdj      = int64(1000)
 )
@@ -117,7 +118,7 @@ func (a *AlipayResourceMutationBestEffort) Admit(attr admission.Attributes) (err
 }
 
 func mutatePodResource(pod *core.Pod) error {
-	allocSpec, err := podAllocSpec(pod)
+	allocSpec, err := util.PodAllocSpec(pod)
 	if err != nil {
 		return err
 	}
@@ -126,7 +127,7 @@ func mutatePodResource(pod *core.Pod) error {
 		if err = setdefault.SetDefaultHostConfig(pod); err != nil {
 			return fmt.Errorf("failed to set default alloc spec")
 		}
-		allocSpec, _ = podAllocSpec(pod)
+		allocSpec, _ = util.PodAllocSpec(pod)
 	}
 
 	if len(allocSpec.Containers) != len(pod.Spec.Containers) {
@@ -221,15 +222,4 @@ func shouldIgnore(a admission.Attributes) bool {
 		return true
 	}
 	return false
-}
-
-func podAllocSpec(pod *core.Pod) (*sigmak8sapi.AllocSpec, error) {
-	if v, exists := pod.Annotations[sigmak8sapi.AnnotationPodAllocSpec]; exists {
-		var allocSpec *sigmak8sapi.AllocSpec
-		if err := json.Unmarshal([]byte(v), &allocSpec); err != nil {
-			return nil, err
-		}
-		return allocSpec, nil
-	}
-	return nil, nil
 }

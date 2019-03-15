@@ -82,6 +82,7 @@ import (
 	alipayresourcemutationbe "k8s.io/kubernetes/plugin/pkg/admission/alipay/resourcemutationbe"
 	alipayresourcemutationqos "k8s.io/kubernetes/plugin/pkg/admission/alipay/resourcemutationqos"
 	alipaysetdefault "k8s.io/kubernetes/plugin/pkg/admission/alipay/setdefault"
+	alipaysetdefaulthostconfig "k8s.io/kubernetes/plugin/pkg/admission/alipay/setdefaulthostconfig"
 	alipaysidecar "k8s.io/kubernetes/plugin/pkg/admission/alipay/sidecar"
 	alipayzappinfo "k8s.io/kubernetes/plugin/pkg/admission/alipay/zappinfo"
 )
@@ -135,17 +136,18 @@ var AllOrderedPlugins = []string{
 	alipodinjectionpostschedule.PluginName, // AliPodInjectionPostSchedule
 	poddeletionflowcontrol.PluginName,      // PodDeletionFlowControl
 
-	alipayresourcemutationqos.PluginName, // Alipay resource mutation admission for burstable
-	alipaysetdefault.PluginName,         // Alipay SetDefault
-	alipaycmdb.PluginName,               // Alipay CMDB
-	alipayinclusterkube.PluginName,      // Alipay in-cluster kubernetes service
-	alipaypodlocation.PluginName,        // Alipay PodLocation
-	alipaypodpreset.PluginName,          // Alipay PodPreset
-	alipayzappinfo.PluginName,           // Alipay ZAppInfo
-	alipayresource.PluginName,           // Alipay resource validation admission
-	alipaycpushare.PluginName,           // Alipay cpushare injection admission
-	alipayimagepullsecret.PluginName,    // Alipay image pull secret injection admission
-	alipayresourcemutationbe.PluginName, // Alipay resource mutation admission for best effort
+	alipayresourcemutationqos.PluginName,  // Alipay resource mutation admission for burstable
+	alipaysetdefault.PluginName,           // Alipay SetDefault
+	alipaycmdb.PluginName,                 // Alipay CMDB
+	alipayinclusterkube.PluginName,        // Alipay in-cluster kubernetes service
+	alipaypodlocation.PluginName,          // Alipay PodLocation
+	alipaypodpreset.PluginName,            // Alipay PodPreset
+	alipayzappinfo.PluginName,             // Alipay ZAppInfo
+	alipayresource.PluginName,             // Alipay resource validation admission
+	alipaycpushare.PluginName,             // Alipay cpushare injection admission
+	alipayimagepullsecret.PluginName,      // Alipay image pull secret injection admission
+	alipaysetdefaulthostconfig.PluginName, // Alipay SetDefaultHostConfig
+	alipayresourcemutationbe.PluginName,   // Alipay resource mutation admission for best effort
 }
 
 // RegisterAllAdmissionPlugins registers all admission plugins and
@@ -203,6 +205,7 @@ func RegisterAllAdmissionPlugins(plugins *admission.Plugins) {
 	alipayresource.Register(plugins)
 	alipaycpushare.Register(plugins)
 	alipayappcert.Register(plugins)
+	alipaysetdefaulthostconfig.Register(plugins)
 	alipayresourcemutationbe.Register(plugins)
 }
 

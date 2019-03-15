@@ -9,12 +9,14 @@ import (
 	"strings"
 
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
+	alipaysigmak8sapi "gitlab.alipay-inc.com/sigma/apis/pkg/apis"
 	"k8s.io/apiserver/pkg/admission"
 	"k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/client/informers/informers_generated/internalversion"
 	corelisters "k8s.io/kubernetes/pkg/client/listers/core/internalversion"
 	kubeapiserveradmission "k8s.io/kubernetes/pkg/kubeapiserver/admission"
 	"k8s.io/kubernetes/pkg/util/slice"
+	"k8s.io/kubernetes/plugin/pkg/admission/alipay/util"
 )
 
 var (
@@ -30,16 +32,17 @@ const (
 )
 
 const (
-	bestEffortCGroupName = "/sigma-stream"
-	defaultCGroupParent  = "/sigma"
+	bestEffortCGroupName = "/" + alipaysigmak8sapi.CGROUP_PARENT_OFFLINE
+	defaultCGroupParent  = "/" + alipaysigmak8sapi.CGROUP_PARENT_ONLINE
 
-	// 网络优先级的分配： 保留:0-2， 在线业务: 3-7, 离线业务： 8-15
+	// 网络优先级的分配，保留：0-2，在线业务：3-7，离线业务：8-15
 	// Network QoS http://docs.alibaba-inc.com/pages/viewpage.action?pageId=479572415
 	netPriorityUnknown          = 0
 	netPriorityLatencySensitive = 5
 	netPriorityBatchJobs        = 7
 
-	// 在线任务使用1，离线任务使用-1, 目前仅调度在线任务固定使用2，ali2010rc1内核需要使用1，但蚂蚁线上没有此内核版本的机器
+	// 在线任务使用 1，离线任务使用 -1,
+	// 目前仅调度在线任务固定使用 2，ali2010rc1 内核需要使用 1，但蚂蚁线上没有此内核版本的机器
 	// http://baike.corp.taobao.com/index.php/Task_prempt
 	// http://baike.corp.taobao.com/index.php/Cpu_Isolation_Config
 	cpuBvtWarpUnknown           = 0
@@ -151,7 +154,7 @@ next:
 }
 
 func SetDefaultHostConfig(pod *core.Pod) error {
-	allocSpec, err := podAllocSpec(pod)
+	allocSpec, err := util.PodAllocSpec(pod)
 	if err != nil {
 		return err
 	}
@@ -213,7 +216,7 @@ func addSlashFrontIfNotExists(s string) string {
 }
 
 func validateCgroupName(pod *core.Pod, listCgroupParent func() ([]string, error)) error {
-	allocSpec, err := podAllocSpec(pod)
+	allocSpec, err := util.PodAllocSpec(pod)
 	if err != nil {
 		return err
 	}
@@ -230,17 +233,6 @@ func validateCgroupName(pod *core.Pod, listCgroupParent func() ([]string, error)
 		}
 	}
 	return nil
-}
-
-func podAllocSpec(pod *core.Pod) (*sigmak8sapi.AllocSpec, error) {
-	if v, exists := pod.Annotations[sigmak8sapi.AnnotationPodAllocSpec]; exists {
-		var allocSpec *sigmak8sapi.AllocSpec
-		if err := json.Unmarshal([]byte(v), &allocSpec); err != nil {
-			return nil, err
-		}
-		return allocSpec, nil
-	}
-	return nil, nil
 }
 
 func newAllocSpecContainer(name string) sigmak8sapi.Container {

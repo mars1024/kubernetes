@@ -11,6 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apiserver/pkg/admission"
 	"k8s.io/kubernetes/pkg/apis/core"
+	"k8s.io/kubernetes/plugin/pkg/admission/alipay/util"
 )
 
 type testContainer struct {
@@ -139,7 +140,7 @@ func TestResourceMutationBE(t *testing.T) {
 		handler := newAlipayResourceMutationBestEffort()
 		err := handler.Admit(attr)
 		assert.Nil(t, err)
-		allocSpec, err := podAllocSpec(pod)
+		allocSpec, err := util.PodAllocSpec(pod)
 		for _, c := range pod.Spec.Containers {
 			for name, tc := range tcase.containers {
 				if name != c.Name {

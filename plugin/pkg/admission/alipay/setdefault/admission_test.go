@@ -16,6 +16,7 @@ import (
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/fake"
 	"k8s.io/kubernetes/pkg/client/informers/informers_generated/internalversion"
 	kubeadmission "k8s.io/kubernetes/pkg/kubeapiserver/admission"
+	"k8s.io/kubernetes/plugin/pkg/admission/alipay/util"
 )
 
 func TestRegister(t *testing.T) {
@@ -150,7 +151,7 @@ func TestAdmit(t *testing.T) {
 			name:     "default cgroup parent",
 			initfunc: newPod,
 			validate: func(pod *core.Pod) {
-				allocSpec, err := podAllocSpec(pod)
+				allocSpec, err := util.PodAllocSpec(pod)
 				assert.Nil(t, err)
 				for i := 0; i < 2; i++ {
 					assert.Equal(t, defaultCGroupParent, allocSpec.Containers[i].HostConfig.CgroupParent)
@@ -175,7 +176,7 @@ func TestAdmit(t *testing.T) {
 				return pod
 			},
 			validate: func(pod *core.Pod) {
-				allocSpec, err := podAllocSpec(pod)
+				allocSpec, err := util.PodAllocSpec(pod)
 				assert.Nil(t, err)
 				for i := 0; i < 2; i++ {
 					assert.Equal(t, pod.Spec.Containers[i].Env[0].Name, containerSNEnvName)
@@ -196,7 +197,7 @@ func TestAdmit(t *testing.T) {
 				return pod
 			},
 			validate: func(pod *core.Pod) {
-				allocSpec, err := podAllocSpec(pod)
+				allocSpec, err := util.PodAllocSpec(pod)
 				assert.Nil(t, err)
 				for i := 0; i < 2; i++ {
 					assert.Equal(t, allocSpec.Containers[i].HostConfig.CgroupParent, defaultCGroupParent)

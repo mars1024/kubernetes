@@ -698,11 +698,19 @@ func (s *Server) getPodProxy(request *restful.Request, response *restful.Respons
 		return
 	}
 
+	queryParams := request.Request.URL.Query().Encode()
+	targetUrl := url.URL{
+		Scheme:   scheme,
+		Host:     podAddr,
+		Path:     podProxyOpts,
+		RawQuery: queryParams,
+	}
+
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 	client := &http.Client{Transport: tr}
-	resp, err := client.Get(fmt.Sprintf("%s://%s/%s", scheme, podAddr, podProxyOpts))
+	resp, err := client.Get(targetUrl.String())
 	if err != nil {
 		response.WriteError(http.StatusBadRequest, fmt.Errorf(`{"message": %s}`, err.Error()))
 		return

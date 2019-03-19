@@ -246,9 +246,11 @@ func makeMounts(pod *v1.Pod, podDir string, container *v1.Container, hostName, h
 			Propagation:    propagation,
 		})
 	}
+
+	isHostDNS := sigmautil.IsPodHostDNSMode(pod)
 	if mountEtcHostsFile {
 		hostAliases := pod.Spec.HostAliases
-		hostsMount, err := makeHostsMount(podDir, podIP, hostName, hostDomain, hostAliases, pod.Spec.HostNetwork)
+		hostsMount, err := makeHostsMount(podDir, podIP, hostName, hostDomain, hostAliases, pod.Spec.HostNetwork, isHostDNS)
 		if err != nil {
 			return nil, cleanupAction, err
 		}
@@ -287,9 +289,9 @@ func translateMountPropagation(mountMode *v1.MountPropagationMode) (runtimeapi.M
 
 // makeHostsMount makes the mountpoint for the hosts file that the containers
 // in a pod are injected with.
-func makeHostsMount(podDir, podIP, hostName, hostDomainName string, hostAliases []v1.HostAlias, useHostNetwork bool) (*kubecontainer.Mount, error) {
+func makeHostsMount(podDir, podIP, hostName, hostDomainName string, hostAliases []v1.HostAlias, useHostNetwork bool, isHostDNS bool) (*kubecontainer.Mount, error) {
 	hostsFilePath := path.Join(podDir, "etc-hosts")
-	if err := ensureHostsFile(hostsFilePath, podIP, hostName, hostDomainName, hostAliases, useHostNetwork); err != nil {
+	if err := ensureHostsFile(hostsFilePath, podIP, hostName, hostDomainName, hostAliases, useHostNetwork, isHostDNS); err != nil {
 		return nil, err
 	}
 	return &kubecontainer.Mount{
@@ -303,7 +305,7 @@ func makeHostsMount(podDir, podIP, hostName, hostDomainName string, hostAliases 
 
 // ensureHostsFile ensures that the given host file has an up-to-date ip, host
 // name, and domain name.
-func ensureHostsFile(fileName, hostIP, hostName, hostDomainName string, hostAliases []v1.HostAlias, useHostNetwork bool) error {
+func ensureHostsFile(fileName, hostIP, hostName, hostDomainName string, hostAliases []v1.HostAlias, useHostNetwork bool, isHostDNS bool) error {
 	var hostsFileContent []byte
 	var err error
 
@@ -317,7 +319,7 @@ func ensureHostsFile(fileName, hostIP, hostName, hostDomainName string, hostAlia
 		}
 	} else {
 		// if Pod is not using host network, create a managed hosts file with Pod IP and other information.
-		hostsFileContent = managedHostsFileContent(hostIP, hostName, hostDomainName, hostAliases)
+		hostsFileContent = managedHostsFileContent(hostIP, hostName, hostDomainName, hostAliases, isHostDNS)
 	}
 
 	return ioutil.WriteFile(fileName, hostsFileContent, 0644)
@@ -338,22 +340,33 @@ func nodeHostsFileContent(hostsFilePath string, hostAliases []v1.HostAlias) ([]b
 
 // managedHostsFileContent generates the content of the managed etc hosts based on Pod IP and other
 // information.
-func managedHostsFileContent(hostIP, hostName, hostDomainName string, hostAliases []v1.HostAlias) []byte {
+func managedHostsFileContent(hostIP, hostName, hostDomainName string, hostAliases []v1.HostAlias, isHostDNS bool) []byte {
 	var buffer bytes.Buffer
-	buffer.WriteString(managedHostsHeader)
-	buffer.WriteString("127.0.0.1\tlocalhost\n")                      // ipv4 localhost
-	buffer.WriteString("::1\tlocalhost ip6-localhost ip6-loopback\n") // ipv6 localhost
-	buffer.WriteString("fe00::0\tip6-localnet\n")
-	buffer.WriteString("fe00::0\tip6-mcastprefix\n")
-	buffer.WriteString("fe00::1\tip6-allnodes\n")
-	buffer.WriteString("fe00::2\tip6-allrouters\n")
+	if !isHostDNS {
+		buffer.WriteString("# Kubernetes-managed hosts file.\n")
+		buffer.WriteString("127.0.0.1\tlocalhost\n")                      // ipv4 localhost
+		buffer.WriteString("::1\tlocalhost ip6-localhost ip6-loopback\n") // ipv6 localhost
+		buffer.WriteString("fe00::0\tip6-localnet\n")
+		buffer.WriteString("fe00::0\tip6-mcastprefix\n")
+		buffer.WriteString("fe00::1\tip6-allnodes\n")
+		buffer.WriteString("fe00::2\tip6-allrouters\n")
+	} else {
+		nodeHostsFileContent, err := nodeHostsFileContent(etcHostsPath, hostAliases)
+		if err != nil {
+			return []byte{}
+		}
+		buffer.Write(nodeHostsFileContent)
+	}
 	if len(hostDomainName) > 0 {
 		buffer.WriteString(fmt.Sprintf("%s\t%s.%s\t%s\n", hostIP, hostName, hostDomainName, hostName))
 	} else {
 		buffer.WriteString(fmt.Sprintf("%s\t%s\n", hostIP, hostName))
 	}
-	buffer.Write(hostsEntriesFromHostAliases(hostAliases))
-	return buffer.Bytes()
+	hostsFileContent := buffer.Bytes()
+	if !isHostDNS {
+		hostsFileContent = append(hostsFileContent, hostsEntriesFromHostAliases(hostAliases)...)
+	}
+	return hostsFileContent
 }
 
 func hostsEntriesFromHostAliases(hostAliases []v1.HostAlias) []byte {

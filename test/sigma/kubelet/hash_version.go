@@ -77,7 +77,7 @@ func getContainerID(pod *v1.Pod) (string, error) {
 // doHashVersionTestCase tests four conditions:
 // 1. create a new container and check hashVersion;
 // 2. modify env of pod with higher hashVersion(trigger upgrade);
-// 3. modify image of pod with higher hashVersion(trigger upgrade);
+// 3. modify image of pod with higher hashVersion(trigger upgrade);		
 // 4. modify other field of pod with higher hashVersion(not triiger upgrade).
 func doHashVersionTestCase(f *framework.Framework, testCase *hashVersionTestCase) {
 	pod := testCase.pod

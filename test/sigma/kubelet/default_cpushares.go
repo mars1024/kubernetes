@@ -78,7 +78,7 @@ var _ = Describe("[sigma-kubelet][default-cpushares] DefaultCPUShares test", fun
 	})
 
 	// 待其他组件更新vendor后，把[ant]删除！！！
-	It("[smoke][ant] DefaultCPUShares: DefaultCPUShares defined", func() {
+	It("[smoke] DefaultCPUShares: DefaultCPUShares defined", func() {
 		pod := generateRunningPod()
 		resources := v1.ResourceRequirements{
 			Requests: v1.ResourceList{

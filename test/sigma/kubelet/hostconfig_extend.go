@@ -22,21 +22,26 @@ type hostConfigTestCase struct {
 	hostConfig *sigmak8sapi.HostConfigInfo
 }
 
-func checkExtendConfigFields(pod *v1.Pod, containerID string, testCase *hostConfigTestCase) {
+func checkExtendConfigFields(f *framework.Framework, pod *v1.Pod, containerName string, containerID string, testCase *hostConfigTestCase) {
 	hostIP := pod.Status.HostIP
-	format := "{{.HostConfig.MemorySwappiness}}/{{.HostConfig.MemorySwap}}/{{.HostConfig.CPUBvtWarpNs}}"
+	format := "{{.HostConfig.MemorySwappiness}}/{{.HostConfig.MemorySwap}}"
 	hostConfigStr, err := util.GetContainerInspectField(hostIP, containerID, format)
 	Expect(err).NotTo(HaveOccurred(), "failed get host config from container inspect")
 	hostConfigStr = strings.Replace(hostConfigStr, "\n", "", -1)
-	// items: MemorySwappiness, MemorySwap, CPUBvtWarpNs
+	// items: MemorySwappiness, MemorySwap
 	items := strings.Split(hostConfigStr, "/")
-	Expect(len(items)).Should(Equal(3))
+	Expect(len(items)).Should(Equal(2))
 	framework.Logf("check MemorySwappiness")
 	Expect(items[0]).Should(Equal(strconv.Itoa(int(testCase.hostConfig.MemorySwappiness))))
 	framework.Logf("check MemorySwap")
 	Expect(items[1]).Should(Equal(strconv.Itoa(int(testCase.hostConfig.MemorySwap))))
-	framework.Logf("check CPUBvtWarpNs")
-	Expect(items[2]).Should(Equal(strconv.Itoa(int(testCase.hostConfig.CPUBvtWarpNs))))
+
+	// There is no CPUBvtWarpNs field in container's config, so we get it from cgroup directly.
+	command := "cat /sys/fs/cgroup/cpuset,cpu,cpuacct/cpu.bvt_warp_ns"
+	cpuBvtWarpNSStr := f.ExecShellInContainer(pod.Name, containerName, command)
+	cpuBvtWarpNS := strings.Replace(cpuBvtWarpNSStr, "\n", "", -1)
+	framework.Logf("get pod cpuBvtWarpNS: %s", cpuBvtWarpNS)
+	Expect(cpuBvtWarpNS).To(Equal(strconv.Itoa(testCase.hostConfig.CPUBvtWarpNs)), "bad cpu bvt warp ns")
 }
 
 func doHostConfigTestCase(f *framework.Framework, testCase *hostConfigTestCase) {
@@ -69,7 +74,10 @@ func doHostConfigTestCase(f *framework.Framework, testCase *hostConfigTestCase) 
 
 	// Step4: Get and check extended hostconfig fields.
 	By("Get and check extended hostconfig fields.")
-	checkExtendConfigFields(getPod, containerID, testCase)
+	checkExtendConfigFields(f, getPod, containerName, containerID, testCase)
+
+	framework.Logf("pod %+v", getPod)
+	framework.Logf("pod %+v", getPod.Annotations)
 
 	// Stpe5: Upgrade pod
 	By("change container's field")
@@ -89,6 +97,9 @@ func doHostConfigTestCase(f *framework.Framework, testCase *hostConfigTestCase) 
 	getPod, err = f.ClientSet.CoreV1().Pods(f.Namespace.Name).Get(testPod.Name, metav1.GetOptions{})
 	Expect(err).NotTo(HaveOccurred(), "get pod err")
 
+	framework.Logf("pod1 %+v", getPod)
+	framework.Logf("pod1 %+v", getPod.Annotations)
+
 	// Step8: Check containerID changed
 	segs = strings.Split(getPod.Status.ContainerStatuses[0].ContainerID, "//")
 	if len(segs) != 2 {
@@ -100,7 +111,7 @@ func doHostConfigTestCase(f *framework.Framework, testCase *hostConfigTestCase) 
 
 	// Step9: Get and check extended hostconfig fields.
 	By("Get and check extended hostconfig fields after upgrade.")
-	checkExtendConfigFields(getPod, upgradedContainerID, testCase)
+	checkExtendConfigFields(f, getPod, containerName, upgradedContainerID, testCase)
 }
 
 var _ = Describe("[sigma-kubelet][alidocker-hostconfig] check AliDocker's extended hostconfig fields", func() {
@@ -112,6 +123,7 @@ var _ = Describe("[sigma-kubelet][alidocker-hostconfig] check AliDocker's extend
 
 		// Set alloc spec annotation
 		hostConfig := sigmak8sapi.HostConfigInfo{
+			//MemorySwap:       2147483648,
 			MemorySwap:       2048000000,
 			MemorySwappiness: 20,
 			PidsLimit:        1000,

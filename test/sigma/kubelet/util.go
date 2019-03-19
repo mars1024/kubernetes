@@ -65,6 +65,9 @@ func generatePodCommon() *v1.Pod {
 	}
 	// name should be unique
 	pod.Name = "pod-test-" + string(uuid.NewUUID())
+	if pod.Labels == nil {
+		pod.Labels = map[string]string{}
+	}
 	return pod
 }
 

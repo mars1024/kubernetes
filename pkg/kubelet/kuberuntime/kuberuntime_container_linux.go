@@ -19,6 +19,7 @@ limitations under the License.
 package kuberuntime
 
 import (
+	"strconv"
 	"time"
 
 	"k8s.io/api/core/v1"
@@ -27,11 +28,24 @@ import (
 	sigmautil "k8s.io/kubernetes/pkg/kubelet/sigma"
 )
 
+const (
+	containerPouchCPUBvtWarpNsAnnotation = "customization.cpu_bvt_warp_ns"
+	containerPouchMemorySwapAnnotation   = "io.alibaba.pouch.resources.memory-swap"
+)
+
 // applyPlatformSpecificContainerConfig applies platform specific configurations to runtimeapi.ContainerConfig.
 func (m *kubeGenericRuntimeManager) applyPlatformSpecificContainerConfig(config *runtimeapi.ContainerConfig, container *v1.Container, pod *v1.Pod, uid *int64, username string) error {
 	config.Linux = m.generateLinuxContainerConfig(container, pod, uid, username)
 
 	applyExtendContainerConfig(pod, container, config)
+
+	// For pouch
+	if config.Linux.Resources.CpuBvtWarpNs != 0 {
+		config.Annotations[containerPouchCPUBvtWarpNsAnnotation] = strconv.Itoa(int(config.Linux.Resources.CpuBvtWarpNs))
+	}
+	if config.Linux.Resources.MemorySwap > 0 {
+		config.Annotations[containerPouchMemorySwapAnnotation] = strconv.Itoa(int(config.Linux.Resources.MemorySwap))
+	}
 	return nil
 }
 

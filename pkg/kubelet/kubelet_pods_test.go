@@ -335,7 +335,7 @@ fe00::2	ip6-allrouters
 	}
 
 	for _, testCase := range testCases {
-		actualContent := managedHostsFileContent(testCase.hostIP, testCase.hostName, testCase.hostDomainName, testCase.hostAliases)
+		actualContent := managedHostsFileContent(testCase.hostIP, testCase.hostName, testCase.hostDomainName, testCase.hostAliases, false)
 		assert.Equal(t, testCase.expectedContent, string(actualContent), "hosts file content not expected")
 	}
 }

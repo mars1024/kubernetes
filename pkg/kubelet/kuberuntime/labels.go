@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/golang/glog"
+	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	"k8s.io/api/core/v1"
 	kubetypes "k8s.io/apimachinery/pkg/types"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
@@ -45,6 +46,7 @@ const (
 	containerPreStopHandlerLabel           = "io.kubernetes.container.preStopHandler"
 	containerPortsLabel                    = "io.kubernetes.container.ports"
 	containerPouchSupportCgroupLabel       = "pouch.SupportCgroup"
+	containerPouchCopyPodHostsLabel        = "pouch.CopyPodHosts"
 )
 
 type labeledPodSandboxInfo struct {
@@ -86,6 +88,10 @@ func newPodLabels(pod *v1.Pod) map[string]string {
 
 	// Get labels from v1.Pod
 	for k, v := range pod.Labels {
+		// Sandbox can't be started with DOCKER_VM mode.
+		if k == sigmak8sapi.LabelHostDNS || k == sigmak8sapi.LabelServerType {
+			continue
+		}
 		labels[k] = v
 	}
 

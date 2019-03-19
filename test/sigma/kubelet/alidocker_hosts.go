@@ -47,13 +47,18 @@ func doHostsTestCase(f *framework.Framework, testCase *hostsTestCase) {
 
 	hostname := getHostnameFromHost(hostIP)
 
+	runtimeType, err := util.GetContainerDType(hostIP)
+	Expect(err).NotTo(HaveOccurred(), "get runtime type error")
+
 	// Step4: Check command's result.
 	By("Check created pod's hosts")
 	result := f.ExecShellInContainer(testPod.Name, containerName, testCase.checkCommand)
 	framework.Logf("command result: %v", result)
 
-	// Always  check with keywords
-	checkResult(testCase.checkMethod, result, testCase.resultKeywords)
+	// Pouch uses init to start all process in DOCKER_VM mode, just ignore.
+	if runtimeType == util.ContainerdTypeDocker {
+		checkResult(testCase.checkMethod, result, testCase.resultKeywords)
+	}
 	// Check with host's hosts file if needed.
 	if testCase.isHostDNS {
 		// Get hosts of physical server.
@@ -73,12 +78,17 @@ func doHostsTestCase(f *framework.Framework, testCase *hostsTestCase) {
 	// Restart test will restart all containers and check the modification in hosts file.
 	By("Do restart test")
 	// Modify resolv.conf in container.
-	keyword := "8.81.8.81 localhost.localdomain99"
+	keyword := "8.81.8.81 abc.abc.abc.abc"
 	modifiedCommand := "echo " + keyword + " >> /etc/hosts"
 	result = f.ExecShellInContainer(testPod.Name, containerName, modifiedCommand)
 
 	// Stop all cotnainers in pod(include pause container).
-	stopCommand := fmt.Sprintf("cmd://docker(stop $(docker ps | grep %s | awk '{print $1}'))", string(getPod.UID))
+	stopCommand := ""
+	if runtimeType == util.ContainerdTypeDocker {
+		stopCommand = fmt.Sprintf("cmd://docker(stop $(docker ps | grep %s | awk '{print $1}'))", string(getPod.UID))
+	} else {
+		stopCommand = fmt.Sprintf("cmd://pouch(stop $(pouch ps | grep %s | awk '{print $1}'))", string(getPod.UID))
+	}
 	hostSn := util.GetHostSnFromHostIp(hostIP)
 	_, err = util.ResponseFromStarAgentTask(stopCommand, hostIP, hostSn)
 	Expect(err).NotTo(HaveOccurred(), "stop container failed")

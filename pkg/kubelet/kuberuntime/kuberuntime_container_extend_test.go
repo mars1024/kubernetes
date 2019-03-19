@@ -80,19 +80,22 @@ func TestGetAnonymousVolumesMount(t *testing.T) {
 }
 
 func TestGetDiskQuotaID(t *testing.T) {
+	var quotaId = "1234"
 	testCase := []struct {
 		name            string
 		annotationValue *sigmak8sapi.RebuildContainerInfo
-		expectValue     string
+		expectValue     *string
 	}{
 		{
-			name: "annotation is nil, so quotaID is empty",
+			name:        "annotation is nil, so quotaID is empty",
+			expectValue: nil,
 		},
 		{
 			name: "disk quota is nil, so quotaID is empty",
 			annotationValue: &sigmak8sapi.RebuildContainerInfo{
 				ContainerID: "123-test",
 			},
+			expectValue: nil,
 		},
 		{
 			name: "everything is ok",
@@ -100,7 +103,7 @@ func TestGetDiskQuotaID(t *testing.T) {
 				ContainerID: "123-test",
 				DiskQuotaID: "1234",
 			},
-			expectValue: "1234",
+			expectValue: &quotaId,
 		},
 	}
 

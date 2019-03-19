@@ -51,18 +51,22 @@ func getAnonymousVolumesMount(pod *v1.Pod) []*runtimeapi.Mount {
 	return mounts
 }
 
-// GetDiskQuotaID get disk quota ID which get from sigma2.0 container, if not exist, return ""
-func GetDiskQuotaID(pod *v1.Pod) string {
+// GetDiskQuotaID get disk quota ID which get from sigma2.0 container
+// if does not exist, return nil
+func GetDiskQuotaID(pod *v1.Pod) *string {
 	rebuildContainerInfo, err := sigmautil.GetContainerRebuildInfoFromAnnotation(pod)
 	if err != nil {
 		glog.V(4).Info(err.Error())
-		return ""
+		return nil
 	}
 	if rebuildContainerInfo == nil {
 		glog.V(4).Infof("pod %q rebuild container info is nil", format.Pod(pod))
-		return ""
+		return nil
 	}
-	return rebuildContainerInfo.DiskQuotaID
+	if rebuildContainerInfo.DiskQuotaID == "" {
+		return nil
+	}
+	return &rebuildContainerInfo.DiskQuotaID
 }
 
 // getCidrIPMask converts mask lenth to the format such as 255.255.0.0

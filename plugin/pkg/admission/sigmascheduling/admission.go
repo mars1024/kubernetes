@@ -298,6 +298,25 @@ func validatePod(attributes admission.Attributes) error {
 			fld := containerField.Index(i).Child("resource").Child("gpu").Child("shareMode")
 			allErrs = append(allErrs, field.Invalid(fld, string(container.Resource.GPU.ShareMode), ""))
 		}
+
+		memoryLimit := pod.Spec.Containers[idx].Resources.Limits.Memory()
+		memoryRequest := pod.Spec.Containers[idx].Resources.Requests.Memory()
+		if memoryLimit != nil {
+			if container.HostConfig.MemorySwap < memoryLimit.Value() {
+				fld := containerField.Index(i).Child("hostconfig").Child("memorySwap")
+				allErrs = append(allErrs, field.Invalid(fld, fmt.Sprintf("%v", container.HostConfig.MemorySwap),
+					fmt.Sprintf("the swap value shoule be larger than memory limit %d", memoryLimit.Value())))
+			}
+		}
+
+		if memoryRequest != nil {
+			if container.HostConfig.MemorySwap < memoryRequest.Value() {
+				fld := containerField.Index(i).Child("hostconfig").Child("memorySwap")
+				allErrs = append(allErrs, field.Invalid(fld, fmt.Sprintf("%v", container.HostConfig.MemorySwap),
+					fmt.Sprintf("the swap value shoule be larger than memory request %d", memoryRequest.Value())))
+			}
+		}
+
 	}
 
 	if priorityString, _ := pod.Annotations[sigmaapi.AnnotationNetPriority]; priorityString != "" {
@@ -342,12 +361,16 @@ func validatePod(attributes admission.Attributes) error {
 				oldAllocSpec.Containers[i].Resource.CPU.CPUSet = allocSpec.Containers[i].Resource.CPU.CPUSet
 			}
 		}
+
+		if container.HostConfig.MemorySwap != allocSpec.Containers[i].HostConfig.MemorySwap {
+			oldAllocSpec.Containers[i].HostConfig.MemorySwap = allocSpec.Containers[i].HostConfig.MemorySwap
+		}
 	}
 
 	if !apiequality.Semantic.DeepEqual(allocSpec, oldAllocSpec) {
 		// TODO: Pinpoint the specific field that causes the invalid error after we have strategic merge diff
 		return admission.NewForbidden(attributes,
-			fmt.Errorf("can not %s annotation %s due to only cpuIDs and cpuset field can be updated", op, sigmaapi.AnnotationPodAllocSpec))
+			fmt.Errorf("can not %s annotation %s due to only cpuIDs, cpuset and memorySwap field can be updated", op, sigmaapi.AnnotationPodAllocSpec))
 	}
 
 	return nil

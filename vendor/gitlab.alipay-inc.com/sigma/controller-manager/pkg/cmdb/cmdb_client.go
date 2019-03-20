@@ -193,7 +193,7 @@ func (c *CMDBClient) GetContainerStatus(sn string) (int, error) {
 			glog.Errorf("[CMDBClient] Get container %v info from cmdb %v failed, err:%v", sn, addr, err)
 			return 0, err
 		}
-		glog.Infof("url:%v, sn:%v, info:%v", sn, DumpJson(cmdbResp), c.URL)
+		glog.Infof("url:%v, sn:%v, info:%v", addr, sn, DumpJson(cmdbResp))
 		if cmdbResp == nil {
 			glog.Errorf("[CMDBClient] Get container %v info from cmdb %v is nil, info:%v", sn, addr, cmdbResp)
 			return 0, err

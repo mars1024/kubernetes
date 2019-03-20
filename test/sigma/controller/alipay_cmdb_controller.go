@@ -97,7 +97,7 @@ func checkPodCMDBInfo(f *framework.Framework, getPod *corev1.Pod, cmdbCli cmdbCl
 		Expect(cmdbInfo.BizName).To(Equal(getPod.Labels["ali.BizName"]), "cmdb BizName should same as pod label ali.BizName")
 		Expect(cmdbInfo.AppName).To(Equal(getPod.Labels[k8sApi.LabelAppName]), "cmdb AppName should same as pod label app-name")
 		Expect(strings.ToLower(cmdbInfo.NodeSn)).To(Equal(getPod.Spec.NodeName), "cmdb ncSn should same as pod NodeName")
-		Expect(cmdbInfo.InstanceStatus).To(Equal("allocated"), "cmdb instancestatus should equal allocated")
+		Expect(cmdbInfo.InstanceStatus).To(Equal(string(corev1.PodRunning)), "cmdb instancestatus should equal allocated")
 		Expect(cmdbInfo.InstanceType).To(Equal("CONTAINER"), "cmdb instanceType default CONTAINER.")
 		Expect(cmdbInfo.ContainerId).To(Equal(string(getPod.UID)), "cmdb containerId should same as pod UID")
 		Expect(cmdbInfo.ContainerIp).To(Equal(getPod.Status.PodIP), "cmdb ncSn should same as podIp")

@@ -702,7 +702,7 @@ func TestValidatePod(t *testing.T) {
 					},
 				},
 			},
-			err: "can not UPDATE annotation pod.beta1.sigma.ali/alloc-spec due to only cpuIDs and cpuset field can be updated",
+			err: "can not UPDATE annotation pod.beta1.sigma.ali/alloc-spec due to only cpuIDs, cpuset and memorySwap field can be updated",
 		},
 		{
 			name:   "pod update with cpuids",
@@ -1219,6 +1219,358 @@ func TestValidatePod(t *testing.T) {
 				},
 			},
 			err: "can not UPDATE annotation pod.beta1.sigma.ali/alloc-spec",
+		},
+		{
+			name:   "pod update with larger MemorySwap than requested memory is allowed",
+			action: admission.Update,
+			pod: api.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "123",
+					Namespace:   namespace,
+					Annotations: map[string]string{},
+				},
+				Spec: api.PodSpec{
+					Containers: []api.Container{
+						{
+							Name: "name1",
+							Resources: api.ResourceRequirements{
+								Requests: api.ResourceList{
+									api.ResourceCPU:    resource.MustParse("2"),
+									api.ResourceMemory: resource.MustParse("10000"),
+								},
+							},
+						},
+					},
+				},
+			},
+			alloc: sigmaapi.AllocSpec{
+				Containers: []sigmaapi.Container{
+					{
+						Name: "name1",
+						Resource: sigmaapi.ResourceRequirements{
+							CPU: sigmaapi.CPUSpec{
+								CPUSet: &sigmaapi.CPUSetSpec{
+									SpreadStrategy: sigmaapi.SpreadStrategySameCoreFirst,
+									CPUIDs:         []int{1, 2},
+								},
+							},
+							GPU: sigmaapi.GPUSpec{
+								ShareMode: sigmaapi.GPUShareModeExclusive,
+							},
+						},
+						HostConfig: sigmaapi.HostConfigInfo{
+							MemorySwap: int64(20000),
+						},
+					},
+				},
+			},
+			oldPod: &api.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "123",
+					Namespace:   namespace,
+					Annotations: map[string]string{},
+				},
+				Spec: api.PodSpec{
+					Containers: []api.Container{
+						{
+							Name: "name1",
+							Resources: api.ResourceRequirements{
+								Requests: api.ResourceList{
+									api.ResourceCPU:    resource.MustParse("2"),
+									api.ResourceMemory: resource.MustParse("10000"),
+								},
+							},
+						},
+					},
+				},
+			},
+			oldAlloc: &sigmaapi.AllocSpec{
+				Containers: []sigmaapi.Container{
+					{
+						Name: "name1",
+						Resource: sigmaapi.ResourceRequirements{
+							CPU: sigmaapi.CPUSpec{
+								CPUSet: &sigmaapi.CPUSetSpec{
+									SpreadStrategy: sigmaapi.SpreadStrategySameCoreFirst,
+									CPUIDs:         []int{1, 2},
+								},
+							},
+							GPU: sigmaapi.GPUSpec{
+								ShareMode: sigmaapi.GPUShareModeExclusive,
+							},
+						},
+					},
+				},
+			},
+			err: "",
+		},
+		{
+			name:   "pod update with larger MemorySwap than limited memory is allowed",
+			action: admission.Update,
+			pod: api.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "123",
+					Namespace:   namespace,
+					Annotations: map[string]string{},
+				},
+				Spec: api.PodSpec{
+					Containers: []api.Container{
+						{
+							Name: "name1",
+							Resources: api.ResourceRequirements{
+								Requests: api.ResourceList{
+									api.ResourceCPU:    resource.MustParse("2"),
+									api.ResourceMemory: resource.MustParse("10000"),
+								},
+								Limits: api.ResourceList{
+									api.ResourceCPU:    resource.MustParse("2"),
+									api.ResourceMemory: resource.MustParse("20000"),
+								},
+							},
+						},
+					},
+				},
+			},
+			alloc: sigmaapi.AllocSpec{
+				Containers: []sigmaapi.Container{
+					{
+						Name: "name1",
+						Resource: sigmaapi.ResourceRequirements{
+							CPU: sigmaapi.CPUSpec{
+								CPUSet: &sigmaapi.CPUSetSpec{
+									SpreadStrategy: sigmaapi.SpreadStrategySameCoreFirst,
+									CPUIDs:         []int{1, 2},
+								},
+							},
+							GPU: sigmaapi.GPUSpec{
+								ShareMode: sigmaapi.GPUShareModeExclusive,
+							},
+						},
+						HostConfig: sigmaapi.HostConfigInfo{
+							MemorySwap: int64(30000),
+						},
+					},
+				},
+			},
+			oldPod: &api.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "123",
+					Namespace:   namespace,
+					Annotations: map[string]string{},
+				},
+				Spec: api.PodSpec{
+					Containers: []api.Container{
+						{
+							Name: "name1",
+							Resources: api.ResourceRequirements{
+								Requests: api.ResourceList{
+									api.ResourceCPU:    resource.MustParse("2"),
+									api.ResourceMemory: resource.MustParse("10000"),
+								},
+								Limits: api.ResourceList{
+									api.ResourceCPU:    resource.MustParse("2"),
+									api.ResourceMemory: resource.MustParse("20000"),
+								},
+							},
+						},
+					},
+				},
+			},
+			oldAlloc: &sigmaapi.AllocSpec{
+				Containers: []sigmaapi.Container{
+					{
+						Name: "name1",
+						Resource: sigmaapi.ResourceRequirements{
+							CPU: sigmaapi.CPUSpec{
+								CPUSet: &sigmaapi.CPUSetSpec{
+									SpreadStrategy: sigmaapi.SpreadStrategySameCoreFirst,
+									CPUIDs:         []int{1, 2},
+								},
+							},
+							GPU: sigmaapi.GPUSpec{
+								ShareMode: sigmaapi.GPUShareModeExclusive,
+							},
+						},
+					},
+				},
+			},
+			err: "",
+		},
+		{
+			name:   "pod update with smaller MemorySwap than requested memory is not allowed",
+			action: admission.Update,
+			pod: api.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "123",
+					Namespace:   namespace,
+					Annotations: map[string]string{},
+				},
+				Spec: api.PodSpec{
+					Containers: []api.Container{
+						{
+							Name: "name1",
+							Resources: api.ResourceRequirements{
+								Requests: api.ResourceList{
+									api.ResourceCPU:    resource.MustParse("2"),
+									api.ResourceMemory: resource.MustParse("10000"),
+								},
+							},
+						},
+					},
+				},
+			},
+			alloc: sigmaapi.AllocSpec{
+				Containers: []sigmaapi.Container{
+					{
+						Name: "name1",
+						Resource: sigmaapi.ResourceRequirements{
+							CPU: sigmaapi.CPUSpec{
+								CPUSet: &sigmaapi.CPUSetSpec{
+									SpreadStrategy: sigmaapi.SpreadStrategySameCoreFirst,
+									CPUIDs:         []int{1, 2},
+								},
+							},
+							GPU: sigmaapi.GPUSpec{
+								ShareMode: sigmaapi.GPUShareModeExclusive,
+							},
+						},
+						HostConfig: sigmaapi.HostConfigInfo{
+							MemorySwap: int64(5000),
+						},
+					},
+				},
+			},
+			oldPod: &api.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "123",
+					Namespace:   namespace,
+					Annotations: map[string]string{},
+				},
+				Spec: api.PodSpec{
+					Containers: []api.Container{
+						{
+							Name: "name1",
+							Resources: api.ResourceRequirements{
+								Requests: api.ResourceList{
+									api.ResourceCPU:    resource.MustParse("2"),
+									api.ResourceMemory: resource.MustParse("10000"),
+								},
+							},
+						},
+					},
+				},
+			},
+			oldAlloc: &sigmaapi.AllocSpec{
+				Containers: []sigmaapi.Container{
+					{
+						Name: "name1",
+						Resource: sigmaapi.ResourceRequirements{
+							CPU: sigmaapi.CPUSpec{
+								CPUSet: &sigmaapi.CPUSetSpec{
+									SpreadStrategy: sigmaapi.SpreadStrategySameCoreFirst,
+									CPUIDs:         []int{1, 2},
+								},
+							},
+							GPU: sigmaapi.GPUSpec{
+								ShareMode: sigmaapi.GPUShareModeExclusive,
+							},
+						},
+					},
+				},
+			},
+			err: "the swap value shoule be larger than memory request 10000",
+		},
+		{
+			name:   "pod update with smaller MemorySwap than limited memory is allowed",
+			action: admission.Update,
+			pod: api.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "123",
+					Namespace:   namespace,
+					Annotations: map[string]string{},
+				},
+				Spec: api.PodSpec{
+					Containers: []api.Container{
+						{
+							Name: "name1",
+							Resources: api.ResourceRequirements{
+								Requests: api.ResourceList{
+									api.ResourceCPU:    resource.MustParse("2"),
+									api.ResourceMemory: resource.MustParse("10000"),
+								},
+								Limits: api.ResourceList{
+									api.ResourceCPU:    resource.MustParse("2"),
+									api.ResourceMemory: resource.MustParse("20000"),
+								},
+							},
+						},
+					},
+				},
+			},
+			alloc: sigmaapi.AllocSpec{
+				Containers: []sigmaapi.Container{
+					{
+						Name: "name1",
+						Resource: sigmaapi.ResourceRequirements{
+							CPU: sigmaapi.CPUSpec{
+								CPUSet: &sigmaapi.CPUSetSpec{
+									SpreadStrategy: sigmaapi.SpreadStrategySameCoreFirst,
+									CPUIDs:         []int{1, 2},
+								},
+							},
+							GPU: sigmaapi.GPUSpec{
+								ShareMode: sigmaapi.GPUShareModeExclusive,
+							},
+						},
+						HostConfig: sigmaapi.HostConfigInfo{
+							MemorySwap: int64(10000),
+						},
+					},
+				},
+			},
+			oldPod: &api.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "123",
+					Namespace:   namespace,
+					Annotations: map[string]string{},
+				},
+				Spec: api.PodSpec{
+					Containers: []api.Container{
+						{
+							Name: "name1",
+							Resources: api.ResourceRequirements{
+								Requests: api.ResourceList{
+									api.ResourceCPU:    resource.MustParse("2"),
+									api.ResourceMemory: resource.MustParse("10000"),
+								},
+								Limits: api.ResourceList{
+									api.ResourceCPU:    resource.MustParse("2"),
+									api.ResourceMemory: resource.MustParse("20000"),
+								},
+							},
+						},
+					},
+				},
+			},
+			oldAlloc: &sigmaapi.AllocSpec{
+				Containers: []sigmaapi.Container{
+					{
+						Name: "name1",
+						Resource: sigmaapi.ResourceRequirements{
+							CPU: sigmaapi.CPUSpec{
+								CPUSet: &sigmaapi.CPUSetSpec{
+									SpreadStrategy: sigmaapi.SpreadStrategySameCoreFirst,
+									CPUIDs:         []int{1, 2},
+								},
+							},
+							GPU: sigmaapi.GPUSpec{
+								ShareMode: sigmaapi.GPUShareModeExclusive,
+							},
+						},
+					},
+				},
+			},
+			err: "the swap value shoule be larger than memory limit 20000",
 		},
 	}
 	for i, tc := range tests {

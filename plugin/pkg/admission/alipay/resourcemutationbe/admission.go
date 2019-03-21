@@ -179,6 +179,10 @@ func mutatePodResource(pod *core.Pod) error {
 		return err
 	}
 
+	if pod.Annotations == nil {
+		pod.Annotations = make(map[string]string)
+	}
+
 	pod.Annotations[sigmak8sapi.AnnotationPodAllocSpec] = string(data)
 
 	return nil

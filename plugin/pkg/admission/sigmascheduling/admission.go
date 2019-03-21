@@ -302,7 +302,7 @@ func validatePod(attributes admission.Attributes) error {
 		memoryLimit := pod.Spec.Containers[idx].Resources.Limits.Memory()
 		memoryRequest := pod.Spec.Containers[idx].Resources.Requests.Memory()
 		if memoryLimit != nil {
-			if container.HostConfig.MemorySwap < memoryLimit.Value() {
+			if container.HostConfig.MemorySwap > 0 && container.HostConfig.MemorySwap < memoryLimit.Value() {
 				fld := containerField.Index(i).Child("hostconfig").Child("memorySwap")
 				allErrs = append(allErrs, field.Invalid(fld, fmt.Sprintf("%v", container.HostConfig.MemorySwap),
 					fmt.Sprintf("the swap value shoule be larger than memory limit %d", memoryLimit.Value())))
@@ -310,7 +310,7 @@ func validatePod(attributes admission.Attributes) error {
 		}
 
 		if memoryRequest != nil {
-			if container.HostConfig.MemorySwap < memoryRequest.Value() {
+			if container.HostConfig.MemorySwap > 0 && container.HostConfig.MemorySwap < memoryRequest.Value() {
 				fld := containerField.Index(i).Child("hostconfig").Child("memorySwap")
 				allErrs = append(allErrs, field.Invalid(fld, fmt.Sprintf("%v", container.HostConfig.MemorySwap),
 					fmt.Sprintf("the swap value shoule be larger than memory request %d", memoryRequest.Value())))

@@ -203,6 +203,11 @@ next:
 	if err != nil {
 		return err
 	}
+
+	if pod.Annotations == nil {
+		pod.Annotations = make(map[string]string)
+	}
+
 	pod.Annotations[sigmak8sapi.AnnotationPodAllocSpec] = string(data)
 	pod.Annotations[sigmak8sapi.AnnotationNetPriority] = strconv.FormatInt(netPriority, 10)
 	return nil

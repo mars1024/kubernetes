@@ -168,7 +168,8 @@ func (plugin *alipayAppCert) Admit(a admission.Attributes) (err error) {
 	}
 
 	// check if mosn is enabled
-	if pod.Annotations[alipaysigmak8sapi.MOSNSidecarInject] != string(alipaysigmak8sapi.SidecarInjectionPolicyEnabled) {
+	if pod.Annotations[alipaysigmak8sapi.MOSNSidecarInject] !=
+		string(alipaysigmak8sapi.SidecarInjectionPolicyEnabled) {
 		// no need to fetch app_local_key.json if mosn is not enabled
 		return nil
 	}

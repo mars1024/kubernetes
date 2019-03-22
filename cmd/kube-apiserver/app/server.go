@@ -20,6 +20,7 @@ limitations under the License.
 package app
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"io/ioutil"
@@ -30,7 +31,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"context"
 
 	"github.com/go-openapi/spec"
 	"github.com/golang/glog"
@@ -90,20 +90,20 @@ import (
 	"k8s.io/kubernetes/pkg/version/verflag"
 	"k8s.io/kubernetes/plugin/pkg/auth/authenticator/token/bootstrap"
 
+	multitenancycrdserver "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/apiextensions-apiserver/pkg/apiserver"
+	multitenancyfilter "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/filter"
+	bucketingfilter "gitlab.alipay-inc.com/antcloud-aks/cafe-cluster-operator/pkg/apiserver/filter"
+	cafeclientset "gitlab.alipay-inc.com/antcloud-aks/cafe-kubernetes-extension/pkg/client/clientset_generated/clientset"
+	cafeinformers "gitlab.alipay-inc.com/antcloud-aks/cafe-kubernetes-extension/pkg/client/informers_generated/externalversions"
+	multitenancyaggregator "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/kube-aggregator/pkg/apiserver"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	cafeadmission "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/admission"
+	multitenancyresolver "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/resolver"
+	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
+	genericfilters "k8s.io/apiserver/pkg/server/filters"
 	utilflag "k8s.io/kubernetes/pkg/util/flag"
 	_ "k8s.io/kubernetes/pkg/util/reflector/prometheus" // for reflector metric registration
 	_ "k8s.io/kubernetes/pkg/util/workqueue/prometheus" // for workqueue metric registration
-	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
-	multitenancyresolver "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/resolver"
-	multitenancyaggregator "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/kube-aggregator/pkg/apiserver"
-	multitenancycrdserver "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/apiextensions-apiserver/pkg/apiserver"
-	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
-	genericfilters "k8s.io/apiserver/pkg/server/filters"
-	multitenancyfilter "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/filter"
-	bucketingfilter "gitlab.alipay-inc.com/antcloud-aks/cafe-cluster-operator/pkg/apiserver/filter"
-	cafeadmission "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/admission"
-	cafeclientset "gitlab.alipay-inc.com/antcloud-aks/cafe-kubernetes-extension/pkg/client/clientset_generated/clientset"
-	cafeinformers "gitlab.alipay-inc.com/antcloud-aks/cafe-kubernetes-extension/pkg/client/informers_generated/externalversions"
 )
 
 const etcdRetryLimit = 60
@@ -594,7 +594,7 @@ func buildGenericConfig(
 		serviceResolver = multitenancyresolver.NewLoadBalancerServiceResolver(versionedInformers.Core().V1().Services().Lister())
 	}
 
-	genericConfig.Authentication.Authenticator, genericConfig.OpenAPIConfig.SecurityDefinitions, err = BuildAuthenticator(s, clientgoExternalClient, sharedInformers)
+	genericConfig.Authentication.Authenticator, genericConfig.OpenAPIConfig.SecurityDefinitions, err = BuildAuthenticator(s, client, clientgoExternalClient, sharedInformers)
 	if err != nil {
 		lastErr = fmt.Errorf("invalid authentication config: %v", err)
 		return
@@ -708,14 +708,18 @@ func BuildAdmissionPluginInitializers(
 }
 
 // BuildAuthenticator constructs the authenticator
-func BuildAuthenticator(s *options.ServerRunOptions, extclient clientgoclientset.Interface, sharedInformers informers.SharedInformerFactory) (authenticator.Request, *spec.SecurityDefinitions, error) {
+func BuildAuthenticator(s *options.ServerRunOptions, intclient *internalclientset.Clientset, extclient clientgoclientset.Interface, sharedInformers informers.SharedInformerFactory) (authenticator.Request, *spec.SecurityDefinitions, error) {
 	authenticatorConfig := s.Authentication.ToAuthenticationConfig()
 	if s.Authentication.ServiceAccounts.Lookup {
 		authenticatorConfig.ServiceAccountTokenGetter = serviceaccountcontroller.NewGetterFromClient(extclient)
 	}
-	authenticatorConfig.BootstrapTokenAuthenticator = bootstrap.NewTokenAuthenticator(
-		sharedInformers.Core().InternalVersion().Secrets().Lister().Secrets(v1.NamespaceSystem),
-	)
+
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		authenticatorConfig.BootstrapTokenAuthenticator = bootstrap.NewTokenAuthenticator(nil, intclient)
+	} else {
+		authenticatorConfig.BootstrapTokenAuthenticator = bootstrap.NewTokenAuthenticator(
+			sharedInformers.Core().InternalVersion().Secrets().Lister().Secrets(v1.NamespaceSystem), nil)
+	}
 
 	return authenticatorConfig.New()
 }

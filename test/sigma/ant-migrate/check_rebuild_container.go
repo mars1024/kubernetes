@@ -13,6 +13,7 @@ import (
 	k8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/kubernetes/test/e2e/framework"
 	antsigma "k8s.io/kubernetes/test/sigma/ant-sigma-bvt"
 	"k8s.io/kubernetes/test/sigma/swarm"
@@ -335,4 +336,12 @@ var upgradeEnv2 = []v1.EnvVar{
 		Name:  "SIGMA3_UPGRADE_TEST2",
 		Value: "test2",
 	},
+}
+
+func GetNodeName(f *framework.Framework) string {
+	Expect(f).NotTo(BeNil(), "init framework failed.")
+	nodes, err := f.ClientSet.CoreV1().Nodes().List(metav1.ListOptions{LabelSelector: labels.Everything().String()})
+	Expect(err).NotTo(HaveOccurred(), "List nodes failed.")
+	Expect(len(nodes.Items)).NotTo(BeZero(), "No nodes in cluster.")
+	return nodes.Items[0].Name
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -36,6 +37,8 @@ const (
 	ExtraHosts = "ant-migrate-test:10.10.10.10"
 )
 
+var WorkNode string
+
 var _ = Describe("[ant][migrate-container]", func() {
 	f := framework.NewDefaultFramework("ant-migrate-container")
 	appName := "ant-migrate-container"
@@ -44,6 +47,7 @@ var _ = Describe("[ant][migrate-container]", func() {
 		err := util.DeleteAllPodsInNamespace(f.ClientSet, appName)
 		Expect(err).ShouldNot(HaveOccurred(), "delete all pods of test namespace error")
 		antsigma.CheckArmoryParameters()
+		WorkNode = GetNodeName(f)
 	})
 
 	It("[ant][migrate-container][single][CpuSetMode_default] RebuildContainer: first create a 2.0 container, then migrate to 3.1 pod", func() {
@@ -81,6 +85,9 @@ var _ = Describe("[ant][migrate-container]", func() {
 
 // RebuildContainer20ToSigma31Pod() create sigma2.0 container and migrate to sigma3.1 pod, then check resources.
 func RebuildContainer20ToSigma31Pod(f *framework.Framework, appName string, cpusetMode string, lifeCyle bool) {
+	// Inject labels.
+	InjectSigm2NodeLabels(cpusetMode)
+	defer DeleteSigma2NodeLabels(cpusetMode)
 	createConfig := GetCreateConfig(appName, cpusetMode)
 	ns := appName
 
@@ -241,4 +248,22 @@ func GetCreateConfig(appName, cpuSetMode string) *dockerclient.ContainerConfig {
 	createConfig.HostConfig.DNSOptions = []string{"timeout:2", "attempts:2", "rotate"}
 	createConfig.HostConfig.ExtraHosts = []string{ExtraHosts}
 	return createConfig
+}
+
+func InjectSigm2NodeLabels(cpuSetMode string) {
+	if cpuSetMode == CPUSetModeShare {
+		extLabels := map[string]string{
+			"CpuSetMode": "share",
+		}
+		nodeName := strings.ToUpper(WorkNode)
+		swarm.CreateOrUpdateNodeLabel(nodeName, extLabels)
+		swarm.EnsureNodeHasLabels(nodeName, extLabels)
+	}
+}
+
+func DeleteSigma2NodeLabels(cpusetMode string) {
+	if cpusetMode == CPUSetModeShare {
+		nodeName := strings.ToUpper(WorkNode)
+		swarm.DeleteNodeLabels(nodeName, "CpuSetMode")
+	}
 }

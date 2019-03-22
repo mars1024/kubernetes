@@ -7,6 +7,7 @@ import (
 	multitenancymeta "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/meta"
 
 	"github.com/golang/glog"
+	"k8s.io/kubernetes/pkg/scheduler/volumebinder"
 )
 
 func (sched *Scheduler) ShallowCopyWithTenant(tenant multitenancy.TenantInfo) interface{} {
@@ -18,6 +19,7 @@ func (sched *Scheduler) ShallowCopyWithTenant(tenant multitenancy.TenantInfo) in
 	}
 	copyConfig.PodConditionUpdater = copyConfig.PodConditionUpdater.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(PodConditionUpdater)
 	copyConfig.PodPreemptor = copyConfig.PodPreemptor.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(PodPreemptor)
+	copyConfig.VolumeBinder = copyConfig.VolumeBinder.ShallowCopyWithTenant(tenant).(*volumebinder.VolumeBinder)
 	return &Scheduler{
 		config: &copyConfig,
 	}

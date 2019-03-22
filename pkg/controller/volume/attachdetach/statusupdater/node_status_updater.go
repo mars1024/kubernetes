@@ -61,7 +61,15 @@ func (nsu *nodeStatusUpdater) UpdateNodeStatuses() error {
 	// kubernetes/kubernetes/issues/37777
 	nodesToUpdate := nsu.actualStateOfWorld.GetVolumesToReportAttached()
 	for nodeName, attachedVolumes := range nodesToUpdate {
-		nodeObj, err := nsu.nodeLister.Get(string(nodeName))
+
+		tenant, err := nsu.tenantFromNodeName(nodeName)
+		cloned := nsu
+		if err == nil {
+			cloned = nsu.ShallowCopyWithTenant(tenant).(*nodeStatusUpdater)
+			glog.V(5).Infof("using tenant nodeStatusUpdater")
+		}
+		simpleNodeName := extractNodeName(nodeName)
+		nodeObj, err := cloned.nodeLister.Get(simpleNodeName)
 		if errors.IsNotFound(err) {
 			// If node does not exist, its status cannot be updated.
 			// Do nothing so that there is no retry until node is created.
@@ -78,7 +86,7 @@ func (nsu *nodeStatusUpdater) UpdateNodeStatuses() error {
 			continue
 		}
 
-		if err := nsu.updateNodeStatus(nodeName, nodeObj, attachedVolumes); err != nil {
+		if err := cloned.updateNodeStatus(types.NodeName(simpleNodeName), nodeObj, attachedVolumes); err != nil {
 			// If update node status fails, reset flag statusUpdateNeeded back to true
 			// to indicate this node status needs to be updated again
 			nsu.actualStateOfWorld.SetNodeStatusUpdateNeeded(nodeName)
@@ -96,6 +104,7 @@ func (nsu *nodeStatusUpdater) UpdateNodeStatuses() error {
 }
 
 func (nsu *nodeStatusUpdater) updateNodeStatus(nodeName types.NodeName, nodeObj *v1.Node, attachedVolumes []v1.AttachedVolume) error {
+	glog.V(5).Infof("TODO: updating node attach status: nodeName:%s, attachedVolumes:%v", nodeName, attachedVolumes)
 	node := nodeObj.DeepCopy()
 	node.Status.VolumesAttached = attachedVolumes
 	_, patchBytes, err := nodeutil.PatchNodeStatus(nsu.kubeClient.CoreV1(), nodeName, nodeObj, node)

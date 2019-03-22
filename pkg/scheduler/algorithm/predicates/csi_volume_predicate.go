@@ -18,6 +18,7 @@ package predicates
 
 import (
 	"fmt"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
 
 	"github.com/golang/glog"
 	"k8s.io/api/core/v1"
@@ -26,6 +27,7 @@ import (
 	"k8s.io/kubernetes/pkg/scheduler/algorithm"
 	schedulercache "k8s.io/kubernetes/pkg/scheduler/cache"
 	volumeutil "k8s.io/kubernetes/pkg/volume/util"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 )
 
 // CSIMaxVolumeLimitChecker defines predicate needed for counting CSI volumes
@@ -63,7 +65,10 @@ func (c *CSIMaxVolumeLimitChecker) attachableLimitPredicate(
 	if len(nodeVolumeLimits) == 0 {
 		return true, nil, nil
 	}
-
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+		c = c.ShallowCopyWithTenant(tenantInfo).(*CSIMaxVolumeLimitChecker)
+	}
 	// a map of unique volume name/csi volume handle and volume limit key
 	newVolumes := make(map[string]string)
 	if err := c.filterAttachableVolumes(pod.Spec.Volumes, pod.Namespace, newVolumes); err != nil {

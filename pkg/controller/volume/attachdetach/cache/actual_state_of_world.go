@@ -28,8 +28,13 @@ import (
 
 	"github.com/golang/glog"
 
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
+	multitenancycache "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/cache"
+
 	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/kubernetes/pkg/volume"
 	"k8s.io/kubernetes/pkg/volume/util"
 	"k8s.io/kubernetes/pkg/volume/util/operationexecutor"
@@ -145,12 +150,15 @@ type AttachedVolume struct {
 }
 
 // NewActualStateOfWorld returns a new instance of ActualStateOfWorld.
-func NewActualStateOfWorld(volumePluginMgr *volume.VolumePluginMgr) ActualStateOfWorld {
-	return &actualStateOfWorld{
+func NewActualStateOfWorld(volumePluginMgr *volume.VolumePluginMgr, nodeLister corelisters.NodeLister) ActualStateOfWorld {
+	asw := &actualStateOfWorld{
 		attachedVolumes:        make(map[v1.UniqueVolumeName]attachedVolume),
 		nodesToUpdateStatusFor: make(map[types.NodeName]nodeToUpdateStatusFor),
 		volumePluginMgr:        volumePluginMgr,
+		nodeLister:             nodeLister,
 	}
+	asw.populateNodeCache()
+	return asw
 }
 
 type actualStateOfWorld struct {
@@ -171,6 +179,12 @@ type actualStateOfWorld struct {
 	volumePluginMgr *volume.VolumePluginMgr
 
 	sync.RWMutex
+
+	nodeCacheLock sync.RWMutex
+	// NodeLister to fetch the shortName/longName pairs
+	nodeLister corelisters.NodeLister
+	// shortName/longName pairs
+	nodesCache map[string]string
 }
 
 // The volume object represents a volume the attach/detach controller
@@ -237,34 +251,55 @@ type nodeToUpdateStatusFor struct {
 
 func (asw *actualStateOfWorld) MarkVolumeAsAttached(
 	uniqueName v1.UniqueVolumeName, volumeSpec *volume.Spec, nodeName types.NodeName, devicePath string) error {
-	_, err := asw.AddVolumeNode(uniqueName, volumeSpec, nodeName, devicePath)
+
+	tmpNodeName, err := asw.getNodeName(nodeName)
+	if err != nil {
+		return err
+	}
+	_, err = asw.AddVolumeNode(uniqueName, volumeSpec, types.NodeName(tmpNodeName), devicePath)
 	return err
 }
 
 func (asw *actualStateOfWorld) MarkVolumeAsDetached(
 	volumeName v1.UniqueVolumeName, nodeName types.NodeName) {
-	asw.DeleteVolumeNode(volumeName, nodeName)
+	tmpNodeName, err := asw.getNodeName(nodeName)
+	if err != nil {
+		glog.Errorf("MarkVolumeAsDetached: failed to get tenant node name, but still try to delete via %s ", tmpNodeName)
+	}
+	asw.DeleteVolumeNode(volumeName, types.NodeName(tmpNodeName))
 }
 
 func (asw *actualStateOfWorld) RemoveVolumeFromReportAsAttached(
 	volumeName v1.UniqueVolumeName, nodeName types.NodeName) error {
 	asw.Lock()
 	defer asw.Unlock()
-	return asw.removeVolumeFromReportAsAttached(volumeName, nodeName)
+	tmpNodeName, err := asw.getNodeName(nodeName)
+	if err != nil {
+		return err
+	}
+	return asw.removeVolumeFromReportAsAttached(volumeName, types.NodeName(tmpNodeName))
 }
 
 func (asw *actualStateOfWorld) AddVolumeToReportAsAttached(
 	volumeName v1.UniqueVolumeName, nodeName types.NodeName) {
 	asw.Lock()
 	defer asw.Unlock()
-	asw.addVolumeToReportAsAttached(volumeName, nodeName)
+	tmpNodeName, err := asw.getNodeName(nodeName)
+	if err != nil {
+		glog.Errorf("AddVolumeToReportAsAttached: failed to get tenant node name, but still try to delete via %s ", tmpNodeName)
+	}
+	asw.addVolumeToReportAsAttached(volumeName, types.NodeName(tmpNodeName))
 }
 
 func (asw *actualStateOfWorld) AddVolumeNode(
 	uniqueName v1.UniqueVolumeName, volumeSpec *volume.Spec, nodeName types.NodeName, devicePath string) (v1.UniqueVolumeName, error) {
 	asw.Lock()
 	defer asw.Unlock()
-
+	tmpNodeName, err := asw.getNodeName(nodeName)
+	if err != nil {
+		return "", err
+	}
+	nodeName = types.NodeName(tmpNodeName)
 	var volumeName v1.UniqueVolumeName
 	if volumeSpec != nil {
 		attachableVolumePlugin, err := asw.volumePluginMgr.FindAttachablePluginBySpec(volumeSpec)
@@ -334,7 +369,11 @@ func (asw *actualStateOfWorld) SetVolumeMountedByNode(
 	volumeName v1.UniqueVolumeName, nodeName types.NodeName, mounted bool) error {
 	asw.Lock()
 	defer asw.Unlock()
-
+	tmpNodeName, err := asw.getNodeName(nodeName)
+	if err != nil {
+		return err
+	}
+	nodeName = types.NodeName(tmpNodeName)
 	volumeObj, nodeObj, err := asw.getNodeAndVolume(volumeName, nodeName)
 	if err != nil {
 		return fmt.Errorf("Failed to SetVolumeMountedByNode with error: %v", err)
@@ -358,7 +397,11 @@ func (asw *actualStateOfWorld) ResetDetachRequestTime(
 	volumeName v1.UniqueVolumeName, nodeName types.NodeName) {
 	asw.Lock()
 	defer asw.Unlock()
-
+	tmpNodeName, err := asw.getNodeName(nodeName)
+	if err != nil {
+		glog.Errorf("ResetDetachRequestTime: failed to get tenant node name, but still try to delete via %s ", tmpNodeName)
+	}
+	nodeName = types.NodeName(tmpNodeName)
 	volumeObj, nodeObj, err := asw.getNodeAndVolume(volumeName, nodeName)
 	if err != nil {
 		glog.Errorf("Failed to ResetDetachRequestTime with error: %v", err)
@@ -372,7 +415,10 @@ func (asw *actualStateOfWorld) SetDetachRequestTime(
 	volumeName v1.UniqueVolumeName, nodeName types.NodeName) (time.Duration, error) {
 	asw.Lock()
 	defer asw.Unlock()
-
+	tmpNodeName, err := asw.getNodeName(nodeName)
+	if err != nil {
+		glog.Errorf("ResetDetachRequestTime: failed to get tenant node name, but still try to delete via %s ", tmpNodeName)
+	}
 	volumeObj, nodeObj, err := asw.getNodeAndVolume(volumeName, nodeName)
 	if err != nil {
 		return 0, fmt.Errorf("Failed to set detach request time with error: %v", err)
@@ -487,6 +533,11 @@ func (asw *actualStateOfWorld) updateNodeStatusUpdateNeeded(nodeName types.NodeN
 func (asw *actualStateOfWorld) SetNodeStatusUpdateNeeded(nodeName types.NodeName) {
 	asw.Lock()
 	defer asw.Unlock()
+	tmpNodeName, err := asw.getNodeName(nodeName)
+	if err != nil {
+		glog.Errorf("SetNodeStatusUpdateNeeded: failed to get tenant node name, but still try to delete via %s ", tmpNodeName)
+	}
+	nodeName = types.NodeName(tmpNodeName)
 	if err := asw.updateNodeStatusUpdateNeeded(nodeName, true); err != nil {
 		glog.Warningf("Failed to update statusUpdateNeeded field in actual state of world: %v", err)
 	}
@@ -496,7 +547,11 @@ func (asw *actualStateOfWorld) DeleteVolumeNode(
 	volumeName v1.UniqueVolumeName, nodeName types.NodeName) {
 	asw.Lock()
 	defer asw.Unlock()
-
+	tmpNodeName, err := asw.getNodeName(nodeName)
+	if err != nil {
+		glog.Errorf("DeleteVolumeNode: failed to get tenant node name, but still try to delete via %s ", tmpNodeName)
+	}
+	nodeName = types.NodeName(tmpNodeName)
 	volumeObj, volumeExists := asw.attachedVolumes[volumeName]
 	if !volumeExists {
 		return
@@ -519,7 +574,11 @@ func (asw *actualStateOfWorld) VolumeNodeExists(
 	volumeName v1.UniqueVolumeName, nodeName types.NodeName) bool {
 	asw.RLock()
 	defer asw.RUnlock()
-
+	tmpNodeName, err := asw.getNodeName(nodeName)
+	if err != nil {
+		glog.Errorf("VolumeNodeExists: failed to get tenant node name, but still try to delete via %s ", tmpNodeName)
+	}
+	nodeName = types.NodeName(tmpNodeName)
 	volumeObj, volumeExists := asw.attachedVolumes[volumeName]
 	if volumeExists {
 		if _, nodeExists := volumeObj.nodesAttachedTo[nodeName]; nodeExists {
@@ -550,7 +609,11 @@ func (asw *actualStateOfWorld) GetAttachedVolumesForNode(
 	nodeName types.NodeName) []AttachedVolume {
 	asw.RLock()
 	defer asw.RUnlock()
-
+	tmpNodeName, err := asw.getNodeName(nodeName)
+	if err != nil {
+		glog.Errorf("GetAttachedVolumesForNode: failed to get tenant node name, but still try to delete via %s ", tmpNodeName)
+	}
+	nodeName = types.NodeName(tmpNodeName)
 	attachedVolumes := make(
 		[]AttachedVolume, 0 /* len */, len(asw.attachedVolumes) /* cap */)
 	for _, volumeObj := range asw.attachedVolumes {
@@ -573,7 +636,9 @@ func (asw *actualStateOfWorld) GetAttachedVolumesPerNode() map[types.NodeName][]
 	attachedVolumesPerNode := make(map[types.NodeName][]operationexecutor.AttachedVolume)
 	for _, volumeObj := range asw.attachedVolumes {
 		for nodeName, nodeObj := range volumeObj.nodesAttachedTo {
+			glog.V(5).Infof("TODO, GetAttachedVolumesPerNode, using nodename %s", nodeName)
 			volumes := attachedVolumesPerNode[nodeName]
+			glog.V(5).Infof("TODO, GetAttachedVolumesPerNode, volumes count %d", len(volumes))
 			volumes = append(volumes, getAttachedVolume(&volumeObj, &nodeObj).AttachedVolume)
 			attachedVolumesPerNode[nodeName] = volumes
 		}
@@ -633,6 +698,37 @@ func (asw *actualStateOfWorld) GetNodesToUpdateStatusFor() map[types.NodeName]no
 	return asw.nodesToUpdateStatusFor
 }
 
+func (asw *actualStateOfWorld) populateNodeCache() {
+	glog.V(5).Infof("starting populating node cache...")
+	nodes, err := asw.nodeLister.List(labels.Everything())
+	nodeMappings := make(map[string]string, 0)
+	if err == nil {
+		for _, nodeObj := range nodes {
+			nodeMappings[nodeObj.Name] = string(tenantNodeName(nodeObj))
+		}
+		asw.nodeCacheLock.Lock()
+		defer asw.nodeCacheLock.Unlock()
+		asw.nodesCache = nodeMappings
+	} else {
+		glog.Errorf("failed to fetch node list, will try to mapping the node mapping later")
+	}
+}
+
+func (asw *actualStateOfWorld) getNodeName(nodeName types.NodeName) (string, error) {
+	tmpNodeName := extractNodeName(nodeName)
+
+	if val, ok := asw.nodesCache[tmpNodeName]; ok {
+		glog.V(5).Infof("Node name %q has been transferred to %q", string(nodeName), val)
+	} else {
+		asw.populateNodeCache()
+		if len(asw.nodesCache[tmpNodeName]) == 0 {
+			return string(nodeName), fmt.Errorf("")
+		}
+	}
+	tmpNodeName = asw.nodesCache[tmpNodeName]
+	return tmpNodeName, nil
+}
+
 func getAttachedVolume(
 	attachedVolume *attachedVolume,
 	nodeAttachedTo *nodeAttachedTo) AttachedVolume {
@@ -646,4 +742,26 @@ func getAttachedVolume(
 		},
 		MountedByNode:       nodeAttachedTo.mountedByNode,
 		DetachRequestedTime: nodeAttachedTo.detachRequestedTime}
+}
+
+func tenantNodeName(node *v1.Node) types.NodeName {
+	tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(node.Annotations)
+	nodeName := node.Name
+	if err == nil {
+		nodeName = multitenancyutil.TransformTenantInfoToJointString(tenant, "/") + "/" + nodeName
+		glog.V(5).Infof("transform nodeName to tenant based: %s", nodeName)
+
+	}
+	return types.NodeName(nodeName)
+}
+
+func extractNodeName(nodeName types.NodeName) string {
+	node := string(nodeName)
+	_, _, simpleNode, err := multitenancycache.MultiTenancySplitKeyWrapper(func(key string) (string, string, error) {
+		return "", key, nil
+	})(node)
+	if err == nil {
+		node = simpleNode
+	}
+	return node
 }

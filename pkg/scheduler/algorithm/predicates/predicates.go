@@ -463,6 +463,10 @@ func (c *MaxPDVolumeCountChecker) predicate(pod *v1.Pod, meta algorithm.Predicat
 		return true, nil, nil
 	}
 
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+		c = c.ShallowCopyWithTenant(tenantInfo).(*MaxPDVolumeCountChecker)
+	}
 	newVolumes := make(map[string]bool)
 	if err := c.filterVolumes(pod.Spec.Volumes, pod.Namespace, newVolumes); err != nil {
 		return false, nil, err
@@ -605,6 +609,10 @@ func (c *VolumeZoneChecker) predicate(pod *v1.Pod, meta algorithm.PredicateMetad
 		return false, nil, fmt.Errorf("node not found")
 	}
 
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+		c = c.ShallowCopyWithTenant(tenantInfo).(*VolumeZoneChecker)
+	}
 	nodeConstraints := make(map[string]string)
 	for k, v := range node.ObjectMeta.Labels {
 		if k != kubeletapis.LabelZoneFailureDomain && k != kubeletapis.LabelZoneRegion {

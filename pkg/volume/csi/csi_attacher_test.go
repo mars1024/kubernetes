@@ -938,3 +938,11 @@ func newTestWatchPlugin(t *testing.T, csiClient *fakecsi.Clientset) (*csiPlugin,
 
 	return csiPlug, fakeWatcher, tmpDir, fakeClient
 }
+
+func TestExtractNodeName(t *testing.T) {
+	name := "MEUGIVCN/csitest/csi-cluster/2126253578"
+	shortName := extractNodeName(types.NodeName(name))
+	if shortName != "2126253578" {
+		t.Errorf("should be a short name \"%s\"", shortName)
+	}
+}

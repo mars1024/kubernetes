@@ -25,6 +25,8 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	multitenancymeta "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/meta"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -213,7 +215,15 @@ func (rc *reconciler) reconcile() {
 			}
 
 			// Update Node Status to indicate volume is no longer safe to mount.
-			err = rc.nodeStatusUpdater.UpdateNodeStatuses()
+			spec := attachedVolume.VolumeSpec
+			clonedNSU := rc.nodeStatusUpdater
+			if spec != nil {
+				tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(spec.PersistentVolume.Annotations)
+				if err == nil {
+					clonedNSU = rc.nodeStatusUpdater.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(statusupdater.NodeStatusUpdater)
+				}
+			}
+			err = clonedNSU.UpdateNodeStatuses()
 			if err != nil {
 				// Skip detaching this volume if unable to update node status
 				glog.Errorf(attachedVolume.GenerateErrorDetailed("UpdateNodeStatuses failed while attempting to report volume as attached", err).Error())
@@ -244,6 +254,7 @@ func (rc *reconciler) reconcile() {
 	rc.attachDesiredVolumes()
 
 	// Update Node Status
+
 	err := rc.nodeStatusUpdater.UpdateNodeStatuses()
 	if err != nil {
 		glog.Warningf("UpdateNodeStatuses failed with: %v", err)

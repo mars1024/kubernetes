@@ -20,10 +20,13 @@ package attachdetach
 
 import (
 	"fmt"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 	"net"
 	"time"
 
 	"github.com/golang/glog"
+	multitenancycache "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/cache"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	"k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -31,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -149,7 +153,7 @@ func NewAttachDetachController(
 	blkutil := volumepathhandler.NewBlockVolumePathHandler()
 
 	adc.desiredStateOfWorld = cache.NewDesiredStateOfWorld(&adc.volumePluginMgr)
-	adc.actualStateOfWorld = cache.NewActualStateOfWorld(&adc.volumePluginMgr)
+	adc.actualStateOfWorld = cache.NewActualStateOfWorld(&adc.volumePluginMgr, nodeInformer.Lister())
 	adc.attacherDetacher =
 		operationexecutor.NewOperationExecutor(operationexecutor.NewOperationGenerator(
 			kubeClient,
@@ -226,10 +230,19 @@ func indexByPVCKey(obj interface{}) ([]string, error) {
 	if len(pod.Spec.NodeName) == 0 || volumeutil.IsPodTerminated(pod, pod.Status) {
 		return []string{}, nil
 	}
+	tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
 	keys := []string{}
 	for _, podVolume := range pod.Spec.Volumes {
 		if pvcSource := podVolume.VolumeSource.PersistentVolumeClaim; pvcSource != nil {
-			keys = append(keys, fmt.Sprintf("%s/%s", pod.Namespace, pvcSource.ClaimName))
+			if err == nil {
+				keys = append(keys, fmt.Sprintf("%s/%s/%s",
+					multitenancyutil.TransformTenantInfoToJointString(tenant, "/"),
+					pod.Namespace, pvcSource.ClaimName))
+
+			} else {
+				keys = append(keys, fmt.Sprintf("%s/%s", pod.Namespace, pvcSource.ClaimName))
+
+			}
 		}
 	}
 	return keys, nil
@@ -349,6 +362,7 @@ func (adc *attachDetachController) populateActualStateOfWorld() error {
 
 	for _, node := range nodes {
 		nodeName := types.NodeName(node.Name)
+		nodeName = adc.tenantNodeName(node)
 		for _, attachedVolume := range node.Status.VolumesAttached {
 			uniqueName := attachedVolume.Name
 			// The nil VolumeSpec is safe only in the case the volume is not in use by any pod.
@@ -362,7 +376,7 @@ func (adc *attachDetachController) populateActualStateOfWorld() error {
 				continue
 			}
 			adc.processVolumesInUse(nodeName, node.Status.VolumesInUse)
-			adc.addNodeToDswp(node, types.NodeName(node.Name))
+			adc.addNodeToDswp(node, nodeName)
 		}
 	}
 	return nil
@@ -372,6 +386,7 @@ func (adc *attachDetachController) getNodeVolumeDevicePath(
 	volumeName v1.UniqueVolumeName, nodeName types.NodeName) (string, error) {
 	var devicePath string
 	var found bool
+	nodeName = types.NodeName(adc.extractNodeName(nodeName))
 	node, err := adc.nodeLister.Get(string(nodeName))
 	if err != nil {
 		return devicePath, err
@@ -393,10 +408,12 @@ func (adc *attachDetachController) getNodeVolumeDevicePath(
 func (adc *attachDetachController) populateDesiredStateOfWorld() error {
 	glog.V(5).Infof("Populating DesiredStateOfworld")
 
-	pods, err := adc.podLister.List(labels.Everything())
+	pods, err := adc.podLister.List(labels.Everything()) //TODO(yuzhi.wx) using pager for progressive fetch
+	//podList, err := adc.kubeClient.CoreV1().Pods(metav1.NamespaceAll).List(metav1.ListOptions{})
 	if err != nil {
 		return err
 	}
+	//pods := podList.Items
 	for _, pod := range pods {
 		podToAdd := pod
 		adc.podAdd(podToAdd)
@@ -404,7 +421,12 @@ func (adc *attachDetachController) populateDesiredStateOfWorld() error {
 			// The volume specs present in the ActualStateOfWorld are nil, let's replace those
 			// with the correct ones found on pods. The present in the ASW with no corresponding
 			// pod will be detached and the spec is irrelevant.
-			volumeSpec, err := util.CreateVolumeSpec(podVolume, podToAdd.Namespace, adc.pvcLister, adc.pvLister)
+			clonedAdc := adc
+			tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(podToAdd.Annotations)
+			if err == nil {
+				clonedAdc = adc.ShallowCopyWithTenant(tenant).(*attachDetachController)
+			}
+			volumeSpec, err := util.CreateVolumeSpec(podVolume, podToAdd.Namespace, clonedAdc.pvcLister, clonedAdc.pvLister)
 			if err != nil {
 				glog.Errorf(
 					"Error creating spec for volume %q, pod %q/%q: %v",
@@ -414,7 +436,7 @@ func (adc *attachDetachController) populateDesiredStateOfWorld() error {
 					err)
 				continue
 			}
-			nodeName := types.NodeName(podToAdd.Spec.NodeName)
+			nodeName := util.TenantNodeNameFromPod(podToAdd)
 			plugin, err := adc.volumePluginMgr.FindAttachablePluginBySpec(volumeSpec)
 			if err != nil || plugin == nil {
 				glog.V(10).Infof(
@@ -436,7 +458,7 @@ func (adc *attachDetachController) populateDesiredStateOfWorld() error {
 				continue
 			}
 			if adc.actualStateOfWorld.VolumeNodeExists(volumeName, nodeName) {
-				devicePath, err := adc.getNodeVolumeDevicePath(volumeName, nodeName)
+				devicePath, err := clonedAdc.getNodeVolumeDevicePath(volumeName, nodeName)
 				if err != nil {
 					glog.Errorf("Failed to find device path: %v", err)
 					continue
@@ -461,14 +483,18 @@ func (adc *attachDetachController) podAdd(obj interface{}) {
 		// Ignore pods without NodeName, indicating they are not scheduled.
 		return
 	}
-
+	clonedAdc := adc
+	tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+	if err == nil {
+		clonedAdc = adc.ShallowCopyWithTenant(tenant).(*attachDetachController)
+	}
 	volumeActionFlag := util.DetermineVolumeAction(
 		pod,
-		adc.desiredStateOfWorld,
+		clonedAdc.desiredStateOfWorld,
 		true /* default volume action */)
 
 	util.ProcessPodVolumes(pod, volumeActionFlag, /* addVolumes */
-		adc.desiredStateOfWorld, &adc.volumePluginMgr, adc.pvcLister, adc.pvLister)
+		clonedAdc.desiredStateOfWorld, &clonedAdc.volumePluginMgr, clonedAdc.pvcLister, clonedAdc.pvLister)
 }
 
 // GetDesiredStateOfWorld returns desired state of world associated with controller
@@ -485,14 +511,18 @@ func (adc *attachDetachController) podUpdate(oldObj, newObj interface{}) {
 		// Ignore pods without NodeName, indicating they are not scheduled.
 		return
 	}
-
+	clonedAdc := adc
+	tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+	if err == nil {
+		clonedAdc = adc.ShallowCopyWithTenant(tenant).(*attachDetachController)
+	}
 	volumeActionFlag := util.DetermineVolumeAction(
 		pod,
-		adc.desiredStateOfWorld,
+		clonedAdc.desiredStateOfWorld,
 		true /* default volume action */)
 
 	util.ProcessPodVolumes(pod, volumeActionFlag, /* addVolumes */
-		adc.desiredStateOfWorld, &adc.volumePluginMgr, adc.pvcLister, adc.pvLister)
+		clonedAdc.desiredStateOfWorld, &clonedAdc.volumePluginMgr, clonedAdc.pvcLister, clonedAdc.pvLister)
 }
 
 func (adc *attachDetachController) podDelete(obj interface{}) {
@@ -500,9 +530,13 @@ func (adc *attachDetachController) podDelete(obj interface{}) {
 	if pod == nil || !ok {
 		return
 	}
-
+	clonedAdc := adc
+	tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+	if err == nil {
+		clonedAdc = adc.ShallowCopyWithTenant(tenant).(*attachDetachController)
+	}
 	util.ProcessPodVolumes(pod, false, /* addVolumes */
-		adc.desiredStateOfWorld, &adc.volumePluginMgr, adc.pvcLister, adc.pvLister)
+		clonedAdc.desiredStateOfWorld, &clonedAdc.volumePluginMgr, clonedAdc.pvcLister, clonedAdc.pvLister)
 }
 
 func (adc *attachDetachController) nodeAdd(obj interface{}) {
@@ -513,6 +547,7 @@ func (adc *attachDetachController) nodeAdd(obj interface{}) {
 		return
 	}
 	nodeName := types.NodeName(node.Name)
+	nodeName = adc.tenantNodeName(node)
 	adc.nodeUpdate(nil, obj)
 	// kubernetes/kubernetes/issues/37586
 	// This is to workaround the case when a node add causes to wipe out
@@ -527,8 +562,8 @@ func (adc *attachDetachController) nodeUpdate(oldObj, newObj interface{}) {
 	if node == nil || !ok {
 		return
 	}
-
 	nodeName := types.NodeName(node.Name)
+	nodeName = adc.tenantNodeName(node)
 	adc.addNodeToDswp(node, nodeName)
 	adc.processVolumesInUse(nodeName, node.Status.VolumesInUse)
 }
@@ -540,6 +575,7 @@ func (adc *attachDetachController) nodeDelete(obj interface{}) {
 	}
 
 	nodeName := types.NodeName(node.Name)
+	nodeName = adc.tenantNodeName(node)
 	if err := adc.desiredStateOfWorld.DeleteNode(nodeName); err != nil {
 		// This might happen during drain, but we still want it to appear in our logs
 		glog.Infof("error removing node %q from desired-state-of-world: %v", nodeName, err)
@@ -549,7 +585,7 @@ func (adc *attachDetachController) nodeDelete(obj interface{}) {
 }
 
 func (adc *attachDetachController) enqueuePVC(obj interface{}) {
-	key, err := kcache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+	key, err := multitenancycache.MultiTenancyKeyFuncWrapper(kcache.DeletionHandlingMetaNamespaceKeyFunc)(obj)
 	if err != nil {
 		runtime.HandleError(fmt.Errorf("Couldn't get key for object %+v: %v", obj, err))
 		return
@@ -586,12 +622,16 @@ func (adc *attachDetachController) processNextItem() bool {
 
 func (adc *attachDetachController) syncPVCByKey(key string) error {
 	glog.V(5).Infof("syncPVCByKey[%s]", key)
-	namespace, name, err := kcache.SplitMetaNamespaceKey(key)
+	tenant, namespace, name, err := multitenancycache.MultiTenancySplitKeyWrapper(kcache.SplitMetaNamespaceKey)(key)
 	if err != nil {
-		glog.V(4).Infof("error getting namespace & name of pvc %q to get pvc from informer: %v", key, err)
+		glog.V(4).Infof("error getting tenant & namespace & name of pvc %q to get pvc from informer: %v", key, err)
 		return nil
 	}
-	pvc, err := adc.pvcLister.PersistentVolumeClaims(namespace).Get(name)
+	clonedAdc := adc
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		clonedAdc = adc.ShallowCopyWithTenant(tenant).(*attachDetachController)
+	}
+	pvc, err := clonedAdc.pvcLister.PersistentVolumeClaims(namespace).Get(name)
 	if apierrors.IsNotFound(err) {
 		glog.V(4).Infof("error getting pvc %q from informer: %v", key, err)
 		return nil
@@ -616,11 +656,11 @@ func (adc *attachDetachController) syncPVCByKey(key string) error {
 		}
 		volumeActionFlag := util.DetermineVolumeAction(
 			pod,
-			adc.desiredStateOfWorld,
+			clonedAdc.desiredStateOfWorld,
 			true /* default volume action */)
 
 		util.ProcessPodVolumes(pod, volumeActionFlag, /* addVolumes */
-			adc.desiredStateOfWorld, &adc.volumePluginMgr, adc.pvcLister, adc.pvLister)
+			clonedAdc.desiredStateOfWorld, &clonedAdc.volumePluginMgr, clonedAdc.pvcLister, clonedAdc.pvLister)
 	}
 	return nil
 }
@@ -743,6 +783,7 @@ func (adc *attachDetachController) addNodeToDswp(node *v1.Node, nodeName types.N
 
 		// Node specifies annotation indicating it should be managed by attach
 		// detach controller. Add it to desired state of world.
+		nodeName = adc.tenantNodeName(node)
 		adc.desiredStateOfWorld.AddNode(nodeName, keepTerminatedPodVolumes)
 	}
 }

@@ -30,12 +30,16 @@ import (
 	"github.com/golang/glog"
 
 	csipb "github.com/container-storage-interface/spec/lib/go/csi/v0"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancycache "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/cache"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 	"k8s.io/api/core/v1"
 	storage "k8s.io/api/storage/v1beta1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/pkg/volume"
 )
@@ -81,6 +85,12 @@ func (c *csiAttacher) Attach(spec *volume.Spec, nodeName types.NodeName) (string
 	}
 
 	node := string(nodeName)
+	tenant, _, simpleNode, err := multitenancycache.MultiTenancySplitKeyWrapper(func(key string) (string, string, error) {
+		return "", key, nil
+	})(node)
+	if err == nil {
+		node = simpleNode
+	}
 	pvName := spec.PersistentVolume.GetName()
 	attachID := getAttachmentName(csiSource.VolumeHandle, csiSource.Driver, node)
 
@@ -96,6 +106,13 @@ func (c *csiAttacher) Attach(spec *volume.Spec, nodeName types.NodeName) (string
 			},
 		},
 		Status: storage.VolumeAttachmentStatus{Attached: false},
+	}
+
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenant, err = multitenancyutil.TransformTenantInfoFromAnnotations(spec.PersistentVolume.Annotations)
+		if err == nil {
+			c = c.ShallowCopyWithTenant(tenant).(*csiAttacher)
+		}
 	}
 
 	_, err = c.k8s.StorageV1beta1().VolumeAttachments().Create(attachment)
@@ -138,6 +155,12 @@ func (c *csiAttacher) WaitForAttach(spec *volume.Spec, attachID string, pod *v1.
 	if skip {
 		glog.V(4).Infof(log("Driver is not attachable, skip waiting for attach"))
 		return "", nil
+	}
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(spec.PersistentVolume.Annotations)
+		if err == nil {
+			c = c.ShallowCopyWithTenant(tenant).(*csiAttacher)
+		}
 	}
 
 	return c.waitForVolumeAttachment(source.VolumeHandle, attachID, timeout)
@@ -252,7 +275,18 @@ func (c *csiAttacher) VolumesAreAttached(specs []*volume.Spec, nodeName types.No
 			}
 		}
 
-		attachID := getAttachmentName(source.VolumeHandle, source.Driver, string(nodeName))
+		node := string(nodeName)
+		if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+			tenant, _, simpleNode, err := multitenancycache.MultiTenancySplitKeyWrapper(func(key string) (string, string, error) {
+				return "", key, nil
+			})(node)
+			if err == nil {
+				node = simpleNode
+				c = c.ShallowCopyWithTenant(tenant).(*csiAttacher)
+			}
+		}
+
+		attachID := getAttachmentName(source.VolumeHandle, source.Driver, node)
 		glog.V(4).Info(log("probing attachment status for VolumeAttachment %v", attachID))
 		attach, err := c.k8s.StorageV1beta1().VolumeAttachments().Get(attachID, meta.GetOptions{})
 		if err != nil {
@@ -355,6 +389,13 @@ func (c *csiAttacher) MountDevice(spec *volume.Spec, devicePath string, deviceMo
 	}
 
 	// Start MountDevice
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(spec.PersistentVolume.Annotations)
+		if err == nil {
+			c = c.ShallowCopyWithTenant(tenant).(*csiAttacher)
+		}
+	}
+
 	nodeName := string(c.plugin.host.GetNodeName())
 	publishVolumeInfo, err := c.plugin.getPublishVolumeInfo(c.k8s, csiSource.VolumeHandle, csiSource.Driver, nodeName)
 
@@ -411,6 +452,17 @@ func (c *csiAttacher) Detach(volumeName string, nodeName types.NodeName) error {
 	driverName := parts[0]
 	volID := parts[1]
 	attachID := getAttachmentName(volID, driverName, string(nodeName))
+	node := string(nodeName)
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenant, _, simpleNode, err := multitenancycache.MultiTenancySplitKeyWrapper(func(key string) (string, string, error) {
+			return "", key, nil
+		})(node)
+		if err == nil {
+			node = simpleNode
+			c = c.ShallowCopyWithTenant(tenant).(*csiAttacher)
+		}
+	}
+
 	if err := c.k8s.StorageV1beta1().VolumeAttachments().Delete(attachID, nil); err != nil {
 		if apierrs.IsNotFound(err) {
 			// object deleted or never existed, done
@@ -578,6 +630,7 @@ func hasStageUnstageCapability(ctx context.Context, csi csiClient) (bool, error)
 
 // getAttachmentName returns csi-<sha252(volName,csiDriverName,NodeName>
 func getAttachmentName(volName, csiDriverName, nodeName string) string {
+	nodeName = extractNodeName(types.NodeName(nodeName))
 	result := sha256.Sum256([]byte(fmt.Sprintf("%s%s%s", volName, csiDriverName, nodeName)))
 	return fmt.Sprintf("csi-%x", result)
 }

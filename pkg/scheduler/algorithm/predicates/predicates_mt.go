@@ -88,3 +88,22 @@ func (c *CachedStorageClassInfo) ShallowCopyWithTenant(tenant multitenancy.Tenan
 	tenantCachedScInfo.StorageClassLister = tenantStorageClassLister.ShallowCopyWithTenant(tenant).(storagelisters.StorageClassLister)
 	return &tenantCachedScInfo
 }
+func (c *CSIMaxVolumeLimitChecker) ShallowCopyWithTenant(tenant multitenancy.TenantInfo) interface{} {
+	glog.Infof("CSIMaxVolumeLimitChecker copy with tenant #%v", tenant)
+	tenantCSIMaxVolumeLimitChecker := *c
+	tenantPvcInfo := tenantCSIMaxVolumeLimitChecker.pvcInfo.(multitenancymeta.TenantWise)
+	tenantPvInfo := tenantCSIMaxVolumeLimitChecker.pvInfo.(multitenancymeta.TenantWise)
+	tenantCSIMaxVolumeLimitChecker.pvcInfo = tenantPvcInfo.ShallowCopyWithTenant(tenant).(*CachedPersistentVolumeClaimInfo)
+	tenantCSIMaxVolumeLimitChecker.pvInfo = tenantPvInfo.ShallowCopyWithTenant(tenant).(*CachedPersistentVolumeInfo)
+	return &tenantCSIMaxVolumeLimitChecker
+}
+
+func (c *MaxPDVolumeCountChecker) ShallowCopyWithTenant(tenant multitenancy.TenantInfo) interface{} {
+	glog.Infof("MaxPDVolumeCountChecker copy with tenant #%v", tenant)
+	tenantChecker := *c
+	tenantPvcInfo := tenantChecker.pvcInfo.(multitenancymeta.TenantWise)
+	tenantPvInfo := tenantChecker.pvInfo.(multitenancymeta.TenantWise)
+	tenantChecker.pvcInfo = tenantPvcInfo.ShallowCopyWithTenant(tenant).(*CachedPersistentVolumeClaimInfo)
+	tenantChecker.pvInfo = tenantPvInfo.ShallowCopyWithTenant(tenant).(*CachedPersistentVolumeInfo)
+	return &tenantChecker
+}

@@ -18,14 +18,18 @@ package pvcprotection
 
 import (
 	"fmt"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 	"time"
 
 	"github.com/golang/glog"
+	multitenancycache "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/cache"
 	"k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	corelisters "k8s.io/client-go/listers/core/v1"
@@ -123,18 +127,21 @@ func (c *Controller) processNextWorkItem() bool {
 	}
 	defer c.queue.Done(pvcKey)
 
-	pvcNamespace, pvcName, err := cache.SplitMetaNamespaceKey(pvcKey.(string))
+	tenant, pvcNamespace, pvcName, err := multitenancycache.MultiTenancySplitKeyWrapper(cache.SplitMetaNamespaceKey)(pvcKey.(string))
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("Error parsing PVC key %q: %v", pvcKey, err))
 		return true
 	}
+	if err == nil {
+		err = c.processTenantPVC(tenant, pvcNamespace, pvcName)
+	} else {
+		err = c.processPVC(pvcNamespace, pvcName)
+	}
 
-	err = c.processPVC(pvcNamespace, pvcName)
 	if err == nil {
 		c.queue.Forget(pvcKey)
 		return true
 	}
-
 	utilruntime.HandleError(fmt.Errorf("PVC %v failed with : %v", pvcKey, err))
 	c.queue.AddRateLimited(pvcKey)
 
@@ -179,6 +186,44 @@ func (c *Controller) processPVC(pvcNamespace, pvcName string) error {
 	return nil
 }
 
+func (c *Controller) processTenantPVC(tenant multitenancy.TenantInfo, pvcNamespace, pvcName string) error {
+	glog.V(4).Infof("Processing PVC %s/%s", pvcNamespace, pvcName)
+	startTime := time.Now()
+	defer func() {
+		glog.V(4).Infof("Finished processing PVC %s/%s (%v)", pvcNamespace, pvcName, time.Since(startTime))
+	}()
+	cloned := c.ShallowCopyWithTenant(tenant).(*Controller)
+	pvc, err := cloned.pvcLister.PersistentVolumeClaims(pvcNamespace).Get(pvcName)
+	if apierrs.IsNotFound(err) {
+		glog.V(4).Infof("PVC %s/%s not found, ignoring", pvcNamespace, pvcName)
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	if isDeletionCandidate(pvc) {
+		// PVC should be deleted. Check if it's used and remove finalizer if
+		// it's not.
+		isUsed, err := c.isBeingUsed(pvc)
+		if err != nil {
+			return err
+		}
+		if !isUsed {
+			return c.removeFinalizer(pvc)
+		}
+	}
+
+	if needToAddFinalizer(pvc) {
+		// PVC is not being deleted -> it should have the finalizer. The
+		// finalizer should be added by admission plugin, this is just to add
+		// the finalizer to old PVCs that were created before the admission
+		// plugin was enabled.
+		return c.addFinalizer(pvc)
+	}
+	return nil
+}
+
 func (c *Controller) addFinalizer(pvc *v1.PersistentVolumeClaim) error {
 	// Skip adding Finalizer in case the StorageObjectInUseProtection feature is not enabled
 	if !c.storageObjectInUseProtectionEnabled {
@@ -186,7 +231,12 @@ func (c *Controller) addFinalizer(pvc *v1.PersistentVolumeClaim) error {
 	}
 	claimClone := pvc.DeepCopy()
 	claimClone.ObjectMeta.Finalizers = append(claimClone.ObjectMeta.Finalizers, volumeutil.PVCProtectionFinalizer)
-	_, err := c.client.CoreV1().PersistentVolumeClaims(claimClone.Namespace).Update(claimClone)
+	clonedController := c
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenant, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pvc.Annotations)
+		clonedController = c.ShallowCopyWithTenant(tenant).(*Controller)
+	}
+	_, err := clonedController.client.CoreV1().PersistentVolumeClaims(claimClone.Namespace).Update(claimClone)
 	if err != nil {
 		glog.V(3).Infof("Error adding protection finalizer to PVC %s/%s: %v", pvc.Namespace, pvc.Name, err)
 		return err
@@ -198,7 +248,12 @@ func (c *Controller) addFinalizer(pvc *v1.PersistentVolumeClaim) error {
 func (c *Controller) removeFinalizer(pvc *v1.PersistentVolumeClaim) error {
 	claimClone := pvc.DeepCopy()
 	claimClone.ObjectMeta.Finalizers = slice.RemoveString(claimClone.ObjectMeta.Finalizers, volumeutil.PVCProtectionFinalizer, nil)
-	_, err := c.client.CoreV1().PersistentVolumeClaims(claimClone.Namespace).Update(claimClone)
+	clonedController := c
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenant, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pvc.Annotations)
+		clonedController = c.ShallowCopyWithTenant(tenant).(*Controller)
+	}
+	_, err := clonedController.client.CoreV1().PersistentVolumeClaims(claimClone.Namespace).Update(claimClone)
 	if err != nil {
 		glog.V(3).Infof("Error removing protection finalizer from PVC %s/%s: %v", pvc.Namespace, pvc.Name, err)
 		return err
@@ -208,7 +263,12 @@ func (c *Controller) removeFinalizer(pvc *v1.PersistentVolumeClaim) error {
 }
 
 func (c *Controller) isBeingUsed(pvc *v1.PersistentVolumeClaim) (bool, error) {
-	pods, err := c.podLister.Pods(pvc.Namespace).List(labels.Everything())
+	clonedController := c
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenant, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pvc.Annotations)
+		clonedController = c.ShallowCopyWithTenant(tenant).(*Controller)
+	}
+	pods, err := clonedController.podLister.Pods(pvc.Namespace).List(labels.Everything())
 	if err != nil {
 		return false, err
 	}
@@ -243,7 +303,7 @@ func (c *Controller) pvcAddedUpdated(obj interface{}) {
 		utilruntime.HandleError(fmt.Errorf("PVC informer returned non-PVC object: %#v", obj))
 		return
 	}
-	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(pvc)
+	key, err := multitenancycache.MultiTenancyKeyFuncWrapper(cache.DeletionHandlingMetaNamespaceKeyFunc)(pvc)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("Couldn't get key for Persistent Volume Claim %#v: %v", pvc, err))
 		return
@@ -279,9 +339,15 @@ func (c *Controller) podAddedDeletedUpdated(obj interface{}, deleted bool) {
 	glog.V(4).Infof("Got event on pod %s/%s", pod.Namespace, pod.Name)
 
 	// Enqueue all PVCs that the pod uses
+	tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+
 	for _, volume := range pod.Spec.Volumes {
 		if volume.PersistentVolumeClaim != nil {
-			c.queue.Add(pod.Namespace + "/" + volume.PersistentVolumeClaim.ClaimName)
+			key := pod.Namespace + "/" + volume.PersistentVolumeClaim.ClaimName
+			if err == nil {
+				key = multitenancyutil.TransformTenantInfoToJointString(tenant, "/") + "/" + key
+			}
+			c.queue.Add(key)
 		}
 	}
 }

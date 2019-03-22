@@ -18,6 +18,8 @@ package operationexecutor
 
 import (
 	"fmt"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancycache "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/cache"
 	"path"
 	"strings"
 	"time"
@@ -1199,6 +1201,7 @@ func (og *operationGenerator) GenerateVerifyControllerAttachedVolumeFunc(
 		}
 
 		for _, attachedVolume := range node.Status.VolumesAttached {
+			glog.V(5).Infof("GenerateVerifyControllerAttachedVolumeFunc: attachvolume.name=%s,volumeToMount.VolumeName=%s", attachedVolume.Name, volumeToMount.VolumeName)
 			if attachedVolume.Name == volumeToMount.VolumeName {
 				addVolumeNodeErr := actualStateOfWorld.MarkVolumeAsAttached(
 					v1.UniqueVolumeName(""), volumeToMount.VolumeSpec, nodeName, attachedVolume.DevicePath)
@@ -1226,7 +1229,17 @@ func (og *operationGenerator) GenerateVerifyControllerAttachedVolumeFunc(
 func (og *operationGenerator) verifyVolumeIsSafeToDetach(
 	volumeToDetach AttachedVolume) error {
 	// Fetch current node object
-	node, fetchErr := og.kubeClient.CoreV1().Nodes().Get(string(volumeToDetach.NodeName), metav1.GetOptions{})
+	nodeName := volumeToDetach.NodeName
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenant, _, simpleNode, err := multitenancycache.MultiTenancySplitKeyWrapper(func(key string) (string, string, error) {
+			return "", key, nil
+		})(string(nodeName))
+		if err == nil {
+			nodeName = types.NodeName(simpleNode)
+			og = og.ShallowCopyWithTenant(tenant).(*operationGenerator)
+		}
+	}
+	node, fetchErr := og.kubeClient.CoreV1().Nodes().Get(string(nodeName), metav1.GetOptions{})
 	if fetchErr != nil {
 		if errors.IsNotFound(fetchErr) {
 			glog.Warningf(volumeToDetach.GenerateMsgDetailed("Node not found on API server. DetachVolume will skip safe to detach check", ""))

@@ -530,7 +530,7 @@ func (p *csiPlugin) skipAttach(driver string) (bool, error) {
 			// Don't skip attach if CSIDriver does not exist
 			return false, nil
 		}
-		return false, err
+		return false, nil
 	}
 	if csiDriver.Spec.AttachRequired != nil && *csiDriver.Spec.AttachRequired == false {
 		return true, nil

@@ -261,7 +261,7 @@ func TestTokenAuthenticator(t *testing.T) {
 
 	for _, test := range tests {
 		func() {
-			a := NewTokenAuthenticator(&lister{test.secrets})
+			a := NewTokenAuthenticator(&lister{test.secrets}, nil)
 			u, found, err := a.AuthenticateToken(test.token)
 			if err != nil {
 				t.Errorf("test %q returned an error: %v", test.name, err)

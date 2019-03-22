@@ -26,15 +26,27 @@ import (
 	"strings"
 	"time"
 
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/meta"
+
 	"github.com/golang/glog"
 
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/authentication/user"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	bootstrapapi "k8s.io/client-go/tools/bootstrap/token/api"
 	bootstraputil "k8s.io/client-go/tools/bootstrap/token/util"
+	"k8s.io/kubernetes/pkg/apis/core"
 	api "k8s.io/kubernetes/pkg/apis/core"
+	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
+	typedinternalversion "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/typed/core/internalversion"
 	"k8s.io/kubernetes/pkg/client/listers/core/internalversion"
+)
+
+const (
+	LabelAKSIamUser = "cafe.sofastack.io/iam-user"
 )
 
 // TODO: A few methods in this package is copied from other sources. Either
@@ -44,13 +56,14 @@ import (
 // NewTokenAuthenticator initializes a bootstrap token authenticator.
 //
 // Lister is expected to be for the "kube-system" namespace.
-func NewTokenAuthenticator(lister internalversion.SecretNamespaceLister) *TokenAuthenticator {
-	return &TokenAuthenticator{lister}
+func NewTokenAuthenticator(lister internalversion.SecretNamespaceLister, client *internalclientset.Clientset) *TokenAuthenticator {
+	return &TokenAuthenticator{lister, client}
 }
 
 // TokenAuthenticator authenticates bootstrap tokens from secrets in the API server.
 type TokenAuthenticator struct {
 	lister internalversion.SecretNamespaceLister
+	client *internalclientset.Clientset
 }
 
 // tokenErrorf prints a error message for a secret that has matched a bearer
@@ -97,7 +110,24 @@ func (t *TokenAuthenticator) AuthenticateToken(token string) (user.Info, bool, e
 	}
 
 	secretName := bootstrapapi.BootstrapTokenSecretPrefix + tokenID
-	secret, err := t.lister.Get(secretName)
+	var secret *core.Secret
+	var secretList *core.SecretList
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		secretList, err = t.client.Core().Secrets(metav1.NamespaceSystem).(meta.TenantWise).ShallowCopyWithTenant(multitenancy.AKSAdminTenant).(typedinternalversion.SecretInterface).List(metav1.ListOptions{
+			LabelSelector: fmt.Sprintf("cafe.sofastack.io/token-id=%s,cafe.sofastack.io/token-secret=%s",
+				tokenID, tokenSecret),
+		})
+		if err == nil {
+			if len(secretList.Items) > 0 {
+				secret = &secretList.Items[0]
+			} else if len(secretList.Items) == 0 {
+				glog.V(3).Infof("[Bootstrap Token] Not able to match a match secret for token-id %q", tokenID)
+				return nil, false, nil
+			}
+		}
+	} else {
+		secret, err = t.lister.Get(secretName)
+	}
 	if err != nil {
 		if errors.IsNotFound(err) {
 			glog.V(3).Infof("No secret of name %s to match bootstrap bearer token", secretName)
@@ -144,6 +174,40 @@ func (t *TokenAuthenticator) AuthenticateToken(token string) (user.Info, bool, e
 		return nil, false, nil
 	}
 
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		extra := map[string][]string{}
+		tenantID := secret.Labels["cafe.sofastack.io/tenant"]
+		if len(tenantID) == 0 {
+			tenantID = secret.Annotations[multitenancy.MultiTenancyAnnotationKeyTenantID]
+		}
+
+		workspaceID := secret.Labels["cafe.sofastack.io/workspace"]
+		if len(workspaceID) == 0 {
+			workspaceID = secret.Annotations[multitenancy.MultiTenancyAnnotationKeyWorkspaceID]
+		}
+
+		clusterID := secret.Labels["cafe.sofastack.io/cluster"]
+		if len(clusterID) == 0 {
+			clusterID = secret.Annotations[multitenancy.MultiTenancyAnnotationKeyClusterID]
+		}
+
+		extra[multitenancy.UserExtraInfoTenantID] = []string{tenantID}
+		extra[multitenancy.UserExtraInfoWorkspaceID] = []string{workspaceID}
+		extra[multitenancy.UserExtraInfoClusterID] = []string{clusterID}
+		val, ok := secret.Labels[LabelAKSIamUser]
+		if !ok {
+			tokenErrorf(secret, "has empty value for label %s.", LabelAKSIamUser)
+			return nil, false, nil
+		}
+		glog.V(3).Infof("Found iam user in Bootstrap secret %q", secretName)
+		if len(val) > 0 {
+			return &user.DefaultInfo{
+				Name:   strings.Replace(val, "JTQw", "@", 1), // show real user email
+				Groups: groups,
+				Extra:  extra,
+			}, true, nil
+		}
+	}
 	return &user.DefaultInfo{
 		Name:   bootstrapapi.BootstrapUserPrefix + string(id),
 		Groups: groups,

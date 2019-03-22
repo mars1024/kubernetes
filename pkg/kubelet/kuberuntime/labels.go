@@ -119,7 +119,7 @@ func newContainerLabels(container *v1.Container, pod *v1.Pod, containerType kube
 	}
 
 	for k, v := range pod.Labels {
-		if strings.HasPrefix(k, "ali") || strings.HasPrefix(k, "pouch.") {
+		if strings.HasPrefix(k, "ali") || strings.HasPrefix(k, "pouch.") || k == sigmak8sapi.LabelServerType {
 			labels[k] = v
 		}
 	}

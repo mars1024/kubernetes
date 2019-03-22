@@ -147,7 +147,8 @@ func DetermineVolumeAction(pod *v1.Pod, desiredStateOfWorld cache.DesiredStateOf
 	if pod == nil || len(pod.Spec.Volumes) <= 0 {
 		return defaultAction
 	}
-	nodeName := types.NodeName(pod.Spec.NodeName)
+	//nodeName := types.NodeName(pod.Spec.NodeName)
+	nodeName := TenantNodeNameFromPod(pod)
 	keepTerminatedPodVolume := desiredStateOfWorld.GetKeepTerminatedPodVolumesForNode(nodeName)
 
 	if util.IsPodTerminated(pod, pod.Status) {
@@ -179,7 +180,9 @@ func ProcessPodVolumes(pod *v1.Pod, addVolumes bool, desiredStateOfWorld cache.D
 			pod.Namespace,
 			pod.Name)
 		return
-	} else if !desiredStateOfWorld.NodeExists(nodeName) {
+	}
+	nodeName = TenantNodeNameFromPod(pod)
+	if !desiredStateOfWorld.NodeExists(nodeName) {
 		// If the node the pod is scheduled to does not exist in the desired
 		// state of the world data structure, that indicates the node is not
 		// yet managed by the controller. Therefore, ignore the pod.

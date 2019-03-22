@@ -18,6 +18,9 @@ package persistentvolume
 
 import (
 	"fmt"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
+
 	"reflect"
 	"strings"
 	"time"
@@ -306,7 +309,12 @@ func (ctrl *PersistentVolumeController) shouldDelayBinding(claim *v1.PersistentV
 		return false, nil
 	}
 
-	class, err := ctrl.classLister.Get(className)
+	cloned := ctrl
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(claim.Annotations)
+		cloned = ctrl.ShallowCopyWithTenant(tenantInfo).(*PersistentVolumeController)
+	}
+	class, err := cloned.classLister.Get(className)
 	if err != nil {
 		return false, nil
 	}
@@ -373,8 +381,10 @@ func (ctrl *PersistentVolumeController) syncUnboundClaim(claim *v1.PersistentVol
 	} else /* pvc.Spec.VolumeName != nil */ {
 		// [Unit test set 2]
 		// User asked for a specific PV.
-		glog.V(4).Infof("synchronizing unbound PersistentVolumeClaim[%s]: volume %q requested", claimToClaimKey(claim), claim.Spec.VolumeName)
-		obj, found, err := ctrl.volumes.store.GetByKey(claim.Spec.VolumeName)
+		volumeName := getVolumeNameFromPVC(claim)
+		glog.V(4).Infof("synchronizing unbound PersistentVolumeClaim[%s]: volume %q requested", claimToClaimKey(claim), volumeName)
+
+		obj, found, err := ctrl.volumes.store.GetByKey(volumeName)
 		if err != nil {
 			return err
 		}
@@ -459,7 +469,8 @@ func (ctrl *PersistentVolumeController) syncBoundClaim(claim *v1.PersistentVolum
 		}
 		return nil
 	}
-	obj, found, err := ctrl.volumes.store.GetByKey(claim.Spec.VolumeName)
+	volumeName := getVolumeNameFromPVC(claim)
+	obj, found, err := ctrl.volumes.store.GetByKey(volumeName)
 	if err != nil {
 		return err
 	}
@@ -523,7 +534,14 @@ func (ctrl *PersistentVolumeController) reuseVolumeOperation(volume *v1.Persiste
 
 	volumeClone.Annotations[releasedTimestamp] = time.Now().Format(time.RFC3339)
 
-	newVol, err := ctrl.kubeClient.CoreV1().PersistentVolumes().Update(volumeClone)
+	// start impersonating
+	kubeClient := ctrl.kubeClient
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(volume.Annotations)
+		kubeClient = ctrl.ShallowCopyWithTenant(tenantInfo).(*PersistentVolumeController).kubeClient
+	}
+
+	newVol, err := kubeClient.CoreV1().PersistentVolumes().Update(volumeClone)
 	if err != nil {
 		glog.Errorf("updating PersistentVolume[%s]: clean ClaimRef failed: %v", volume.Name, err)
 		return
@@ -581,7 +599,12 @@ func (ctrl *PersistentVolumeController) syncVolume(volume *v1.PersistentVolume) 
 		glog.V(4).Infof("synchronizing PersistentVolume[%s]: volume is bound to claim %s", volume.Name, claimrefToClaimKey(volume.Spec.ClaimRef))
 		// Get the PVC by _name_
 		var claim *v1.PersistentVolumeClaim
-		claimName := claimrefToClaimKey(volume.Spec.ClaimRef)
+		var claimName string
+		if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+			claimName = tenantClaimrefToClaimKey(volume.Spec.ClaimRef, volume)
+		} else {
+			claimName = claimrefToClaimKey(volume.Spec.ClaimRef)
+		}
 		obj, found, err := ctrl.claims.GetByKey(claimName)
 		if err != nil {
 			return err
@@ -596,13 +619,24 @@ func (ctrl *PersistentVolumeController) syncVolume(volume *v1.PersistentVolume) 
 			// Note that only non-released and non-failed volumes will be
 			// updated to Released state when PVC does not eixst.
 			if volume.Status.Phase != v1.VolumeReleased && volume.Status.Phase != v1.VolumeFailed {
-				obj, err = ctrl.claimLister.PersistentVolumeClaims(volume.Spec.ClaimRef.Namespace).Get(volume.Spec.ClaimRef.Name)
+				cloned := ctrl
+				if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+					tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(volume.Annotations)
+					cloned = ctrl.ShallowCopyWithTenant(tenantInfo).(*PersistentVolumeController)
+				}
+				obj, err = cloned.claimLister.PersistentVolumeClaims(volume.Spec.ClaimRef.Namespace).Get(volume.Spec.ClaimRef.Name)
 				if err != nil && !apierrs.IsNotFound(err) {
 					return err
 				}
 				found = !apierrs.IsNotFound(err)
 				if !found {
-					obj, err = ctrl.kubeClient.CoreV1().PersistentVolumeClaims(volume.Spec.ClaimRef.Namespace).Get(volume.Spec.ClaimRef.Name, metav1.GetOptions{})
+					// start impersonating
+					kubeClient := ctrl.kubeClient
+					if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+						tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(volume.Annotations)
+						kubeClient = ctrl.ShallowCopyWithTenant(tenantInfo).(*PersistentVolumeController).kubeClient
+					}
+					obj, err = kubeClient.CoreV1().PersistentVolumeClaims(volume.Spec.ClaimRef.Namespace).Get(volume.Spec.ClaimRef.Name, metav1.GetOptions{})
 					if err != nil && !apierrs.IsNotFound(err) {
 						return err
 					}
@@ -851,8 +885,13 @@ func (ctrl *PersistentVolumeController) updateVolumePhase(volume *v1.PersistentV
 	volumeClone := volume.DeepCopy()
 	volumeClone.Status.Phase = phase
 	volumeClone.Status.Message = message
-
-	newVol, err := ctrl.kubeClient.CoreV1().PersistentVolumes().UpdateStatus(volumeClone)
+	// start impersonating
+	kubeClient := ctrl.kubeClient
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(volume.Annotations)
+		kubeClient = ctrl.ShallowCopyWithTenant(tenantInfo).(*PersistentVolumeController).kubeClient
+	}
+	newVol, err := kubeClient.CoreV1().PersistentVolumes().UpdateStatus(volumeClone)
 	if err != nil {
 		glog.V(4).Infof("updating PersistentVolume[%s]: set phase %s failed: %v", volume.Name, phase, err)
 		return newVol, err
@@ -913,7 +952,13 @@ func (ctrl *PersistentVolumeController) bindVolumeToClaim(volume *v1.PersistentV
 // API server. The claim is not modified in this method!
 func (ctrl *PersistentVolumeController) updateBindVolumeToClaim(volumeClone *v1.PersistentVolume, claim *v1.PersistentVolumeClaim, updateCache bool) (*v1.PersistentVolume, error) {
 	glog.V(2).Infof("claim %q bound to volume %q", claimToClaimKey(claim), volumeClone.Name)
-	newVol, err := ctrl.kubeClient.CoreV1().PersistentVolumes().Update(volumeClone)
+	// start impersonating
+	kubeClient := ctrl.kubeClient
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(volumeClone.Annotations)
+		kubeClient = ctrl.ShallowCopyWithTenant(tenantInfo).(*PersistentVolumeController).kubeClient
+	}
+	newVol, err := kubeClient.CoreV1().PersistentVolumes().Update(volumeClone)
 	if err != nil {
 		glog.V(4).Infof("updating PersistentVolume[%s]: binding to %q failed: %v", volumeClone.Name, claimToClaimKey(claim), err)
 		return newVol, err
@@ -1002,7 +1047,13 @@ func (ctrl *PersistentVolumeController) bindClaimToVolume(claim *v1.PersistentVo
 
 	if dirty {
 		glog.V(2).Infof("volume %q bound to claim %q", volume.Name, claimToClaimKey(claim))
-		newClaim, err := ctrl.kubeClient.CoreV1().PersistentVolumeClaims(claim.Namespace).Update(claimClone)
+		// start impersonating
+		kubeClient := ctrl.kubeClient
+		if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+			tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(claim.Annotations)
+			kubeClient = ctrl.ShallowCopyWithTenant(tenantInfo).(*PersistentVolumeController).kubeClient
+		}
+		newClaim, err := kubeClient.CoreV1().PersistentVolumeClaims(claim.Namespace).Update(claimClone)
 		if err != nil {
 			glog.V(4).Infof("updating PersistentVolumeClaim[%s]: binding to %q failed: %v", claimToClaimKey(claim), volume.Name, err)
 			return newClaim, err
@@ -1120,8 +1171,13 @@ func (ctrl *PersistentVolumeController) unbindVolume(volume *v1.PersistentVolume
 		// The volume was pre-bound by user. Clear only the binging UID.
 		volumeClone.Spec.ClaimRef.UID = ""
 	}
-
-	newVol, err := ctrl.kubeClient.CoreV1().PersistentVolumes().Update(volumeClone)
+	// start impersonating
+	kubeClient := ctrl.kubeClient
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(volumeClone.Annotations)
+		kubeClient = ctrl.ShallowCopyWithTenant(tenantInfo).(*PersistentVolumeController).kubeClient
+	}
+	newVol, err := kubeClient.CoreV1().PersistentVolumes().Update(volumeClone)
 	if err != nil {
 		glog.V(4).Infof("updating PersistentVolume[%s]: rollback failed: %v", volume.Name, err)
 		return err
@@ -1182,7 +1238,13 @@ func (ctrl *PersistentVolumeController) recycleVolumeOperation(volume *v1.Persis
 	// This method may have been waiting for a volume lock for some time.
 	// Previous recycleVolumeOperation might just have saved an updated version,
 	// so read current volume state now.
-	newVolume, err := ctrl.kubeClient.CoreV1().PersistentVolumes().Get(volume.Name, metav1.GetOptions{})
+	// start impersonating
+	kubeClient := ctrl.kubeClient
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(volume.Annotations)
+		kubeClient = ctrl.ShallowCopyWithTenant(tenantInfo).(*PersistentVolumeController).kubeClient
+	}
+	newVolume, err := kubeClient.CoreV1().PersistentVolumes().Get(volume.Name, metav1.GetOptions{})
 	if err != nil {
 		glog.V(3).Infof("error reading persistent volume %q: %v", volume.Name, err)
 		return
@@ -1266,7 +1328,13 @@ func (ctrl *PersistentVolumeController) deleteVolumeOperation(volume *v1.Persist
 	// This method may have been waiting for a volume lock for some time.
 	// Previous deleteVolumeOperation might just have saved an updated version, so
 	// read current volume state now.
-	newVolume, err := ctrl.kubeClient.CoreV1().PersistentVolumes().Get(volume.Name, metav1.GetOptions{})
+	// start impersonating
+	kubeClient := ctrl.kubeClient
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(volume.Annotations)
+		kubeClient = ctrl.ShallowCopyWithTenant(tenantInfo).(*PersistentVolumeController).kubeClient
+	}
+	newVolume, err := kubeClient.CoreV1().PersistentVolumes().Get(volume.Name, metav1.GetOptions{})
 	if err != nil {
 		glog.V(3).Infof("error reading persistent volume %q: %v", volume.Name, err)
 		return "", nil
@@ -1310,7 +1378,8 @@ func (ctrl *PersistentVolumeController) deleteVolumeOperation(volume *v1.Persist
 
 	glog.V(4).Infof("deleteVolumeOperation [%s]: success", volume.Name)
 	// Delete the volume
-	if err = ctrl.kubeClient.CoreV1().PersistentVolumes().Delete(volume.Name, nil); err != nil {
+
+	if err = kubeClient.CoreV1().PersistentVolumes().Delete(volume.Name, nil); err != nil {
 		// Oops, could not delete the volume and therefore the controller will
 		// try to delete the volume again on next update. We _could_ maintain a
 		// cache of "recently deleted volumes" and avoid unnecessary deletion,
@@ -1339,7 +1408,12 @@ func (ctrl *PersistentVolumeController) isVolumeReleased(volume *v1.PersistentVo
 	}
 
 	var claim *v1.PersistentVolumeClaim
-	claimName := claimrefToClaimKey(volume.Spec.ClaimRef)
+	var claimName string
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		claimName = tenantClaimrefToClaimKey(volume.Spec.ClaimRef, volume)
+	} else {
+		claimName = claimrefToClaimKey(volume.Spec.ClaimRef)
+	}
 	obj, found, err := ctrl.claims.GetByKey(claimName)
 	if err != nil {
 		return false, err
@@ -1499,7 +1573,13 @@ func (ctrl *PersistentVolumeController) provisionClaimOperation(claim *v1.Persis
 	//  yet.
 
 	pvName := ctrl.getProvisionedVolumeNameForClaim(claim)
-	volume, err := ctrl.kubeClient.CoreV1().PersistentVolumes().Get(pvName, metav1.GetOptions{})
+	// start impersonating
+	kubeClient := ctrl.kubeClient
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(claim.Annotations)
+		kubeClient = ctrl.ShallowCopyWithTenant(tenantInfo).(*PersistentVolumeController).kubeClient
+	}
+	volume, err := kubeClient.CoreV1().PersistentVolumes().Get(pvName, metav1.GetOptions{})
 	if err == nil && volume != nil {
 		// Volume has been already provisioned, nothing to do.
 		glog.V(4).Infof("provisionClaimOperation [%s]: volume already exists, skipping", claimToClaimKey(claim))
@@ -1594,7 +1674,7 @@ func (ctrl *PersistentVolumeController) provisionClaimOperation(claim *v1.Persis
 	for i := 0; i < ctrl.createProvisionedPVRetryCount; i++ {
 		glog.V(4).Infof("provisionClaimOperation [%s]: trying to save volume %s", claimToClaimKey(claim), volume.Name)
 		var newVol *v1.PersistentVolume
-		if newVol, err = ctrl.kubeClient.CoreV1().PersistentVolumes().Create(volume); err == nil || apierrs.IsAlreadyExists(err) {
+		if newVol, err = kubeClient.CoreV1().PersistentVolumes().Create(volume); err == nil || apierrs.IsAlreadyExists(err) {
 			// Save succeeded.
 			if err != nil {
 				glog.V(3).Infof("volume %q for claim %q already exists, reusing", volume.Name, claimToClaimKey(claim))
@@ -1673,7 +1753,13 @@ func (ctrl *PersistentVolumeController) rescheduleProvisioning(claim *v1.Persist
 	newClaim := claim.DeepCopy()
 	delete(newClaim.Annotations, annSelectedNode)
 	// Try to update the PVC object
-	if _, err := ctrl.kubeClient.CoreV1().PersistentVolumeClaims(newClaim.Namespace).Update(newClaim); err != nil {
+	// start impersonating
+	kubeClient := ctrl.kubeClient
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(claim.Annotations)
+		kubeClient = ctrl.ShallowCopyWithTenant(tenantInfo).(*PersistentVolumeController).kubeClient
+	}
+	if _, err := kubeClient.CoreV1().PersistentVolumeClaims(newClaim.Namespace).Update(newClaim); err != nil {
 		glog.V(4).Infof("Failed to delete annotation 'annSelectedNode' for PersistentVolumeClaim %q: %v", claimToClaimKey(newClaim), err)
 		return
 	}
@@ -1727,7 +1813,12 @@ func (ctrl *PersistentVolumeController) findProvisionablePlugin(claim *v1.Persis
 	// provisionClaim() which leads here is never called with claimClass=="", we
 	// can save some checks.
 	claimClass := v1helper.GetPersistentVolumeClaimClass(claim)
-	class, err := ctrl.classLister.Get(claimClass)
+	cloned := ctrl
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(claim.Annotations)
+		cloned = ctrl.ShallowCopyWithTenant(tenantInfo).(*PersistentVolumeController)
+	}
+	class, err := cloned.classLister.Get(claimClass)
 	if err != nil {
 		return nil, nil, err
 	}

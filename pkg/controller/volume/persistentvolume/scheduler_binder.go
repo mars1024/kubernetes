@@ -32,6 +32,9 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	v1helper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 	volumeutil "k8s.io/kubernetes/pkg/volume/util"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 )
 
 // SchedulerVolumeBinder is used by the scheduler to handle PVC/PV binding
@@ -130,6 +133,10 @@ func NewVolumeBinder(
 		pvCache:         NewPVAssumeCache(pvInformer.Informer()),
 		podBindingCache: NewPodBindingCache(),
 		bindTimeout:     bindTimeout,
+	}
+
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		b.podBindingCache = NewClusterAwarePodBindingCache()
 	}
 
 	return b
@@ -290,6 +297,10 @@ func getPodName(pod *v1.Pod) string {
 }
 
 func getPVCName(pvc *v1.PersistentVolumeClaim) string {
+	tenantInfo, err := util.TransformTenantInfoFromAnnotations(pvc.Annotations)
+	if err == nil {
+		return util.TransformTenantInfoToJointString(tenantInfo, "/") + "/" + pvc.Namespace + "/" + pvc.Name
+	}
 	return pvc.Namespace + "/" + pvc.Name
 }
 
@@ -573,7 +584,6 @@ func (b *volumeBinder) checkVolumeProvisions(pod *v1.Pod, claimsToProvision []*v
 		if className == "" {
 			return false, fmt.Errorf("no class for claim %q", getPVCName(claim))
 		}
-
 		class, err := b.ctrl.classLister.Get(className)
 		if err != nil {
 			return false, fmt.Errorf("failed to find storage class %q", className)
@@ -606,7 +616,12 @@ func (b *volumeBinder) checkVolumeProvisions(pod *v1.Pod, claimsToProvision []*v
 
 func (b *volumeBinder) revertAssumedPVs(bindings []*bindingInfo) {
 	for _, bindingInfo := range bindings {
-		b.pvCache.Restore(bindingInfo.pv.Name)
+		name := bindingInfo.pv.Name
+		tenantInfo, err := util.TransformTenantInfoFromAnnotations(bindingInfo.pv.Annotations)
+		if err == nil {
+			name = util.TransformTenantInfoToJointString(tenantInfo, "/") + "/" + name
+		}
+		b.pvCache.Restore(name)
 	}
 }
 

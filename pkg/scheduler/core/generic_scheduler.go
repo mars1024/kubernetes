@@ -52,6 +52,7 @@ import (
 
 	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
 	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
+	multitenancymeta "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/meta"
 )
 
 const (
@@ -1183,6 +1184,10 @@ func podPassesBasicChecks(pod *v1.Pod, pvcLister corelisters.PersistentVolumeCla
 		if volume.PersistentVolumeClaim == nil {
 			// Volume is not a PVC, ignore
 			continue
+		}
+		if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+			tenant, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+			pvcLister = pvcLister.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(corelisters.PersistentVolumeClaimLister)
 		}
 		pvcName := volume.PersistentVolumeClaim.ClaimName
 		pvc, err := pvcLister.PersistentVolumeClaims(namespace).Get(pvcName)

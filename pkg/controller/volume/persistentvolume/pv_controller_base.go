@@ -18,6 +18,10 @@ package persistentvolume
 
 import (
 	"fmt"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancycache "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/cache"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
+
 	"strconv"
 	"time"
 
@@ -29,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	storageinformers "k8s.io/client-go/informers/storage/v1"
 	clientset "k8s.io/client-go/kubernetes"
@@ -80,7 +85,7 @@ func NewController(p ControllerParameters) (*PersistentVolumeController, error) 
 
 	controller := &PersistentVolumeController{
 		volumes:           newPersistentVolumeOrderedIndex(),
-		claims:            cache.NewStore(cache.DeletionHandlingMetaNamespaceKeyFunc),
+		claims:            cache.NewStore(controller.KeyFunc),
 		kubeClient:        p.KubeClient,
 		eventRecorder:     eventRecorder,
 		runningOperations: goroutinemap.NewGoRoutineMap(true /* exponentialBackOffOnError */),
@@ -192,8 +197,14 @@ func (ctrl *PersistentVolumeController) updateVolume(volume *v1.PersistentVolume
 	if !new {
 		return
 	}
-
-	err = ctrl.syncVolume(volume)
+	cloned := ctrl
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, err := multitenancyutil.TransformTenantInfoFromAnnotations(volume.Annotations)
+		if err == nil {
+			cloned = ctrl.ShallowCopyWithTenant(tenantInfo).(*PersistentVolumeController)
+		}
+	}
+	err = cloned.syncVolume(volume)
 	if err != nil {
 		if errors.IsConflict(err) {
 			// Version conflict error happens quite often and the controller
@@ -216,7 +227,12 @@ func (ctrl *PersistentVolumeController) deleteVolume(volume *v1.PersistentVolume
 	// sync the claim when its volume is deleted. Explicitly syncing the
 	// claim here in response to volume deletion prevents the claim from
 	// waiting until the next sync period for its Lost status.
-	claimKey := claimrefToClaimKey(volume.Spec.ClaimRef)
+	var claimKey string
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		claimKey = tenantClaimrefToClaimKey(volume.Spec.ClaimRef, volume)
+	} else {
+		claimKey = claimrefToClaimKey(volume.Spec.ClaimRef)
+	}
 	glog.V(5).Infof("deleteVolume[%s]: scheduling sync of claim %q", volume.Name, claimKey)
 	ctrl.claimQueue.Add(claimKey)
 }
@@ -233,7 +249,14 @@ func (ctrl *PersistentVolumeController) updateClaim(claim *v1.PersistentVolumeCl
 	if !new {
 		return
 	}
-	err = ctrl.syncClaim(claim)
+	cloned := ctrl
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, err := multitenancyutil.TransformTenantInfoFromAnnotations(claim.Annotations)
+		if err == nil {
+			cloned = ctrl.ShallowCopyWithTenant(tenantInfo).(*PersistentVolumeController)
+		}
+	}
+	err = cloned.syncClaim(claim)
 	if err != nil {
 		if errors.IsConflict(err) {
 			// Version conflict error happens quite often and the controller
@@ -298,16 +321,27 @@ func (ctrl *PersistentVolumeController) volumeWorker() {
 		key := keyObj.(string)
 		glog.V(5).Infof("volumeWorker[%s]", key)
 
-		_, name, err := cache.SplitMetaNamespaceKey(key)
+		ctrlCloned := ctrl
+		//_, name, err := cache.SplitMetaNamespaceKey(key)
+		tenant, _, name, err := multitenancycache.MultiTenancySplitKeyWrapper(cache.SplitMetaNamespaceKey)(key)
 		if err != nil {
 			glog.V(4).Infof("error getting name of volume %q to get volume from informer: %v", key, err)
 			return false
 		}
-		volume, err := ctrl.volumeLister.Get(name)
+		if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+			if err == nil {
+				ctrlCloned = ctrl.ShallowCopyWithTenant(tenant).(*PersistentVolumeController)
+			} else {
+				glog.Errorf("tenant enabled but no tenant info found: %s", err.Error())
+				return false
+			}
+		}
+
+		volume, err := ctrlCloned.volumeLister.Get(name)
 		if err == nil {
 			// The volume still exists in informer cache, the event must have
 			// been add/update/sync
-			ctrl.updateVolume(volume)
+			ctrlCloned.updateVolume(volume)
 			return false
 		}
 		if !errors.IsNotFound(err) {
@@ -317,7 +351,7 @@ func (ctrl *PersistentVolumeController) volumeWorker() {
 
 		// The volume is not in informer cache, the event must have been
 		// "delete"
-		volumeObj, found, err := ctrl.volumes.store.GetByKey(key)
+		volumeObj, found, err := ctrlCloned.volumes.store.GetByKey(key)
 		if err != nil {
 			glog.V(2).Infof("error getting volume %q from cache: %v", key, err)
 			return false
@@ -333,7 +367,7 @@ func (ctrl *PersistentVolumeController) volumeWorker() {
 			glog.Errorf("expected volume, got %+v", volumeObj)
 			return false
 		}
-		ctrl.deleteVolume(volume)
+		ctrlCloned.deleteVolume(volume)
 		return false
 	}
 	for {
@@ -355,17 +389,22 @@ func (ctrl *PersistentVolumeController) claimWorker() {
 		defer ctrl.claimQueue.Done(keyObj)
 		key := keyObj.(string)
 		glog.V(5).Infof("claimWorker[%s]", key)
-
-		namespace, name, err := cache.SplitMetaNamespaceKey(key)
+		cloned := ctrl
+		tenant, namespace, name, err := multitenancycache.MultiTenancySplitKeyWrapper(cache.SplitMetaNamespaceKey)(key)
+		if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+			if err == nil {
+				cloned = ctrl.ShallowCopyWithTenant(tenant).(*PersistentVolumeController)
+			}
+		}
 		if err != nil {
 			glog.V(4).Infof("error getting namespace & name of claim %q to get claim from informer: %v", key, err)
 			return false
 		}
-		claim, err := ctrl.claimLister.PersistentVolumeClaims(namespace).Get(name)
+		claim, err := cloned.claimLister.PersistentVolumeClaims(namespace).Get(name)
 		if err == nil {
 			// The claim still exists in informer cache, the event must have
 			// been add/update/sync
-			ctrl.updateClaim(claim)
+			cloned.updateClaim(claim)
 			return false
 		}
 		if !errors.IsNotFound(err) {
@@ -374,7 +413,7 @@ func (ctrl *PersistentVolumeController) claimWorker() {
 		}
 
 		// The claim is not in informer cache, the event must have been "delete"
-		claimObj, found, err := ctrl.claims.GetByKey(key)
+		claimObj, found, err := cloned.claims.GetByKey(key)
 		if err != nil {
 			glog.V(2).Infof("error getting claim %q from cache: %v", key, err)
 			return false
@@ -390,7 +429,7 @@ func (ctrl *PersistentVolumeController) claimWorker() {
 			glog.Errorf("expected claim, got %+v", claimObj)
 			return false
 		}
-		ctrl.deleteClaim(claim)
+		cloned.deleteClaim(claim)
 		return false
 	}
 	for {
@@ -438,7 +477,12 @@ func (ctrl *PersistentVolumeController) setClaimProvisioner(claim *v1.Persistent
 	// modify these, therefore create a copy.
 	claimClone := claim.DeepCopy()
 	metav1.SetMetaDataAnnotation(&claimClone.ObjectMeta, annStorageProvisioner, class.Provisioner)
-	newClaim, err := ctrl.kubeClient.CoreV1().PersistentVolumeClaims(claim.Namespace).Update(claimClone)
+	kubeClient := ctrl.kubeClient
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(claim.Annotations)
+		kubeClient = ctrl.ShallowCopyWithTenant(tenantInfo).(*PersistentVolumeController).kubeClient
+	}
+	newClaim, err := kubeClient.CoreV1().PersistentVolumeClaims(claim.Namespace).Update(claimClone)
 	if err != nil {
 		return newClaim, err
 	}

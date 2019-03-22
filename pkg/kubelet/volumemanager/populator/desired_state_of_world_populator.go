@@ -213,12 +213,6 @@ func (dswp *desiredStateOfWorldPopulator) findAndRemoveDeletedPods() {
 	for _, volumeToMount := range dswp.desiredStateOfWorld.GetVolumesToMount() {
 		pod, podExists := dswp.podManager.GetPodByUID(volumeToMount.Pod.UID)
 		if podExists {
-			if !volumeExists(pod, volumeToMount.VolumeSpec) {
-				dswp.desiredStateOfWorld.DeletePodFromVolume(
-					volumeToMount.PodName, volumeToMount.VolumeName)
-				dswp.deleteProcessedPod(volumeToMount.PodName)
-				continue
-			}
 			// Skip running pods
 			if !dswp.isPodTerminated(pod) {
 				continue

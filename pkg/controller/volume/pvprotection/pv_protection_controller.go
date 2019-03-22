@@ -18,6 +18,10 @@ package pvprotection
 
 import (
 	"fmt"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancycache "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/cache"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"time"
 
 	"github.com/golang/glog"
@@ -105,9 +109,13 @@ func (c *Controller) processNextWorkItem() bool {
 	}
 	defer c.queue.Done(pvKey)
 
-	pvName := pvKey.(string)
+	tenant, _, pvName, err := multitenancycache.MultiTenancySplitKeyWrapper(cache.SplitMetaNamespaceKey)(pvKey.(string))
 
-	err := c.processPV(pvName)
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		err = c.processTenantPV(tenant, pvName)
+	} else {
+		err = c.processPV(pvName)
+	}
 	if err == nil {
 		c.queue.Forget(pvKey)
 		return true
@@ -154,6 +162,42 @@ func (c *Controller) processPV(pvName string) error {
 	return nil
 }
 
+func (c *Controller) processTenantPV(tenant multitenancy.TenantInfo, pvName string) error {
+	glog.V(4).Infof("Processing PV %s", pvName)
+	startTime := time.Now()
+	defer func() {
+		glog.V(4).Infof("Finished processing PV %s (%v)", pvName, time.Since(startTime))
+	}()
+
+	cloned := c.ShallowCopyWithTenant(tenant).(*Controller)
+	pv, err := cloned.pvLister.Get(pvName)
+	if apierrs.IsNotFound(err) {
+		glog.V(4).Infof("PV %s not found, ignoring", pvName)
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	if isDeletionCandidate(pv) {
+		// PV should be deleted. Check if it's used and remove finalizer if
+		// it's not.
+		isUsed := c.isBeingUsed(pv)
+		if !isUsed {
+			return c.removeFinalizer(pv)
+		}
+	}
+
+	if needToAddFinalizer(pv) {
+		// PV is not being deleted -> it should have the finalizer. The
+		// finalizer should be added by admission plugin, this is just to add
+		// the finalizer to old PVs that were created before the admission
+		// plugin was enabled.
+		return c.addFinalizer(pv)
+	}
+	return nil
+}
+
 func (c *Controller) addFinalizer(pv *v1.PersistentVolume) error {
 	// Skip adding Finalizer in case the StorageObjectInUseProtection feature is not enabled
 	if !c.storageObjectInUseProtectionEnabled {
@@ -161,7 +205,12 @@ func (c *Controller) addFinalizer(pv *v1.PersistentVolume) error {
 	}
 	pvClone := pv.DeepCopy()
 	pvClone.ObjectMeta.Finalizers = append(pvClone.ObjectMeta.Finalizers, volumeutil.PVProtectionFinalizer)
-	_, err := c.client.CoreV1().PersistentVolumes().Update(pvClone)
+	clonedController := c
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenant, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pv.Annotations)
+		clonedController = c.ShallowCopyWithTenant(tenant).(*Controller)
+	}
+	_, err := clonedController.client.CoreV1().PersistentVolumes().Update(pvClone)
 	if err != nil {
 		glog.V(3).Infof("Error adding protection finalizer to PV %s: %v", pv.Name, err)
 		return err
@@ -173,7 +222,12 @@ func (c *Controller) addFinalizer(pv *v1.PersistentVolume) error {
 func (c *Controller) removeFinalizer(pv *v1.PersistentVolume) error {
 	pvClone := pv.DeepCopy()
 	pvClone.ObjectMeta.Finalizers = slice.RemoveString(pvClone.ObjectMeta.Finalizers, volumeutil.PVProtectionFinalizer, nil)
-	_, err := c.client.CoreV1().PersistentVolumes().Update(pvClone)
+	clonedController := c
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenant, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pv.Annotations)
+		clonedController = c.ShallowCopyWithTenant(tenant).(*Controller)
+	}
+	_, err := clonedController.client.CoreV1().PersistentVolumes().Update(pvClone)
 	if err != nil {
 		glog.V(3).Infof("Error removing protection finalizer from PV %s: %v", pv.Name, err)
 		return err
@@ -202,8 +256,13 @@ func (c *Controller) pvAddedUpdated(obj interface{}) {
 	}
 	glog.V(4).Infof("Got event on PV %s", pv.Name)
 
+	pvKey := pv.Name
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pv.Annotations)
+		pvKey = multitenancyutil.TransformTenantInfoToJointString(tenantInfo, "/") + "/" + pvKey
+	}
 	if needToAddFinalizer(pv) || isDeletionCandidate(pv) {
-		c.queue.Add(pv.Name)
+		c.queue.Add(pvKey)
 	}
 }
 

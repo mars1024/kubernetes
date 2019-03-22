@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	dockertypes "github.com/docker/docker/api/types"
 	. "github.com/onsi/gomega"
 	"github.com/samalba/dockerclient"
 	"github.com/sirupsen/logrus"
@@ -481,6 +482,7 @@ func MustDeleteContainer(name string) {
 		return
 	}
 	resp, err := DeleteContainer(name)
+	framework.Logf("delete container %v, resp: %v, err: %v", name, resp, err)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(resp.StatusCode).Should(Equal(http.StatusNoContent))
 
@@ -570,6 +572,20 @@ func StartContainer(containerID string) error {
 		return fmt.Errorf("start 2.0 container status is not http.StatusNoContent, status code is %v", resp.StatusCode)
 	}
 	return nil
+}
+
+// InspectContainer inspect a container
+func InspectContainer(containerID string) (*dockertypes.ContainerJSON, error) {
+	resp, err := QueryContainer(containerID)
+	if err != nil {
+		return nil, err
+	}
+	containerJson := &dockertypes.ContainerJSON{}
+	err = json.Unmarshal(resp, containerJson)
+	if err != nil {
+		return nil, err
+	}
+	return containerJson, nil
 }
 
 // QueryContainer start a container.
@@ -696,6 +712,32 @@ func UpgradeContainer(containerID string, upgradeOption ContainerUpgradeOption) 
 	return upgradeResp.ID, nil
 }
 
+// RebuildContainer rebuild a container, the same parameters as upgrade, specified config, if success, return a request ID
+func RebuildContainer(containerSn string, upgradeOption ContainerUpgradeOption) (string, error) {
+	body := WithJSONBody(upgradeOption)
+	q := url.Values{}
+	q.Add("async", "true")
+	query := WithQuery(q)
+	url := fmt.Sprintf("/containers/%s/rebuild", containerSn)
+	resp, err := Post(url, query, body)
+	if err != nil {
+		return "", err
+	}
+	if resp.StatusCode != http.StatusAccepted {
+		return "", fmt.Errorf("rebuild container failed, error code: %v", resp.StatusCode)
+	}
+
+	defer resp.Body.Close()
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("rebuild upgrade container result failed, err: %v", err)
+	}
+	rebuildResp := &ContainerCreationResp{}
+	err = json.Unmarshal(data, rebuildResp)
+	framework.Logf("request ID of 2.0 rebuild is %s", rebuildResp.ID)
+	return rebuildResp.ID, nil
+}
+
 // QueryRequestStateWithTimeout query request state until timeout.
 // If creating/upgrading container successfully, return the container info
 func QueryRequestStateWithTimeout(requestID string, timeout time.Duration) (*ContainerResult, error) {
@@ -730,6 +772,7 @@ func QueryRequestStateWithTimeout(requestID string, timeout time.Duration) (*Con
 					Site:        sigmaRequirement.Site,
 					HostIP:      result.HostIp,
 					HostSN:      result.HostSn,
+					ContainerHN: result.ContainerHn,
 				}, nil
 			}
 			break
@@ -760,4 +803,47 @@ func queryRequest(requestID string) (*Request, error) {
 		return nil, err
 	}
 	return request, nil
+}
+
+// CreateContainerWithAliapayParameters() create sigma2 container for alipay.
+func CreateContainerWithAliapayParameters(containerConfig *dockerclient.ContainerConfig) (*ContainerCreationResp, error) {
+	var body Option
+	var resp *http.Response
+	var err error
+	body = WithJSONBody(containerConfig)
+	resp, err = Post("/containers/create", body)
+
+	if err != nil {
+		logrus.Errorf("create 2.0 container return error:", err)
+		return nil, err
+	}
+
+	if resp.StatusCode == http.StatusInternalServerError {
+		bodyBytes, _ := ioutil.ReadAll(resp.Body)
+		framework.Logf("resp.Body:%s", string(bodyBytes))
+		return &ContainerCreationResp{}, nil
+	}
+
+	// create should return status code 201 or 202 depends on sync or async
+	Expect(resp.StatusCode).Should(SatisfyAny(Equal(http.StatusCreated), Equal(http.StatusAccepted)))
+	if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusCreated {
+		return nil, fmt.Errorf("received status code: %d, expect 201 or 202", resp.StatusCode)
+	}
+
+	fmt.Printf("Info: create container response body:%s", resp.Body)
+	container, err := ParseResponseBody(resp.Body)
+	fmt.Printf("Info: create container response body:%v", container)
+
+	if err != nil {
+		return nil, fmt.Errorf("parse response body failed: %v", err)
+	}
+
+	if container != nil && len(container.Containers) > 0 {
+		for _, cont := range container.Containers {
+			cont.DeployUnit = containerConfig.Labels["ali.AppDeployUnit"]
+			cont.Site = containerConfig.Labels["ali.Site"]
+		}
+	}
+	Expect(err).NotTo(HaveOccurred())
+	return container, nil
 }

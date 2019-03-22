@@ -22,6 +22,7 @@ func GetDockerPsOutput(hostIP, containerName string) string {
 	hostSn := GetHostSnFromHostIp(hostIP)
 	cmd := fmt.Sprintf("cmd://docker(ps -a | grep %s | grep -v pause)", containerName)
 	resp, err := ResponseFromStarAgentTask(cmd, hostIP, hostSn)
+	glog.Infof("hostIP:%v, containerName %v resp: %v, err:%v", hostIP, containerName, resp, err)
 	if err != nil {
 		glog.Error(err)
 		return ""
@@ -246,4 +247,17 @@ func GetContainerCpusets(hostIP, containerID string) string {
 
 	}
 	return strings.Replace(resp, " ", "", -1)
+}
+
+// GetContainerInfoWithStarAgent()
+func GetContainerInfoWithStarAgent(hostIP, cmd string) string {
+	hostSn := GetHostSnFromHostIp(hostIP)
+	dockerCmd := fmt.Sprintf("cmd://%s", cmd)
+	resp, err := ResponseFromStarAgentTask(dockerCmd, hostIP, hostSn)
+	if err != nil {
+		glog.Error(err)
+		return ""
+	}
+	return resp
+
 }

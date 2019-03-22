@@ -42,6 +42,18 @@ func CheckAdapterParameters() {
 	}
 }
 
+// CheckArmoryParameters() check armory input.
+func CheckArmoryParameters() {
+	if util.ArmoryUser == "" || util.ArmoryKey == "" {
+		panic("Load adapter bvt parameters failed, null value is not allowed.")
+	}
+
+	a = &ArmoryServer{
+		User: util.ArmoryUser,
+		Key:  util.ArmoryKey,
+	}
+}
+
 //LoadBaseCreateFile() get base create config for sigma-adapter.
 func LoadBaseCreateFile(file string) (*dockerclient.ContainerConfig, error) {
 	config := &dockerclient.ContainerConfig{
@@ -208,7 +220,7 @@ func CompareMemory(mem int64, stdout string) bool {
 	if mem == cMem {
 		return true
 	}
-	framework.Logf("Memory doesnot match, mem:%v, cmem:%v", mem, cMem)
+	framework.Logf("Memory doesn't match, expect 2.0 mem:%v, 3.1 container mem:%v", mem, cMem)
 	return false
 }
 
@@ -229,7 +241,7 @@ func CompareCPU(cpuCount int64, stdout string) bool {
 	if cpuCount == cpu {
 		return true
 	}
-	framework.Logf("CPU does not match. cpu:%v, cCpu:%v", cpuCount, cpu)
+	framework.Logf("CPU does not match. expect cpu:%v, 3.1 container cpu:%v", cpuCount, cpu)
 	return false
 }
 
@@ -251,7 +263,7 @@ func CompareDisk(diskSize int64, stdout string) bool {
 	if diskSize == disk {
 		return true
 	}
-	framework.Logf("disksize does not match. disk:%v, cdisk:%v", diskSize, disk)
+	framework.Logf("disk size does not match. expect 2.0 disk:%v, 3.1 container disk size:%v", diskSize, disk)
 	return false
 }
 

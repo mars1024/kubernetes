@@ -131,3 +131,15 @@ func String(b []byte) (s string) {
 	pstring.Len = pbytes.Len
 	return
 }
+
+func SliceContains(slice []string, v string, convert func(string) string) bool {
+	for _, s := range slice {
+		if convert != nil {
+			s = convert(s)
+		}
+		if s == v {
+			return true
+		}
+	}
+	return false
+}

@@ -18,7 +18,7 @@ import (
 const (
 	// PluginName is the name for current plugin, it should be unique among all plugins.
 	PluginName                 = "AlipayResourceMutationBestEffort"
-	bestEffortCGroupParentName = apis.CGROUP_PARENT_OFFLINE
+	bestEffortCGroupParentName = "/" + apis.CGROUP_PARENT_OFFLINE
 	bestEffortCPUBvtWarpNs     = int(-1)
 	bestEffortOOMScoreAdj      = int64(1000)
 )

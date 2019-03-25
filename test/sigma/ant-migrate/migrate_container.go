@@ -29,7 +29,6 @@ const (
 
 	// inject options
 	InjectUser = "sigma3test"
-	InjectFile = "migrate-test"
 	InjectKey  = "migrate-test@antfin.com"
 	InjectDir  = "/migrate-test"
 

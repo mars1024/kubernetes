@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/admission"
@@ -17,6 +18,7 @@ import (
 	"k8s.io/kubernetes/pkg/client/informers/informers_generated/internalversion"
 	kubeadmission "k8s.io/kubernetes/pkg/kubeapiserver/admission"
 	"k8s.io/kubernetes/plugin/pkg/admission/alipay/util"
+	"k8s.io/utils/pointer"
 )
 
 func TestRegister(t *testing.T) {
@@ -210,6 +212,34 @@ func TestAdmit(t *testing.T) {
 				assert.Equal(t, pod.Spec.Containers[1].Env[0].Value, "sn1")
 			},
 		},
+		{
+			name: "set guaranteed pod oom_score_adj",
+			initfunc: func() *core.Pod {
+				guaranteedPodOOMScoreAdj = pointer.Int64Ptr(-1)
+				return newPod()
+			},
+			validate: func(pod *core.Pod) {
+				allocSpec, err := util.PodAllocSpec(pod)
+				assert.Nil(t, err)
+				assert.Equal(t, allocSpec.Containers[0].HostConfig.OomScoreAdj, int64(-1))
+				assert.Equal(t, allocSpec.Containers[1].HostConfig.OomScoreAdj, int64(-1))
+			},
+		},
+		{
+			name: "don't set non-guaranteed pod oom_score_adj",
+			initfunc: func() *core.Pod {
+				guaranteedPodOOMScoreAdj = pointer.Int64Ptr(-1)
+				pod := newPod()
+				pod.Spec.Containers[0].Resources.Limits[core.ResourceMemory] = resource.MustParse("3Gi")
+				return pod
+			},
+			validate: func(pod *core.Pod) {
+				allocSpec, err := util.PodAllocSpec(pod)
+				assert.Nil(t, err)
+				assert.Equal(t, allocSpec.Containers[0].HostConfig.OomScoreAdj, int64(0))
+				assert.Equal(t, allocSpec.Containers[1].HostConfig.OomScoreAdj, int64(0))
+			},
+		},
 	} {
 		t.Logf("testcase [%s]", test.name)
 
@@ -219,6 +249,7 @@ func TestAdmit(t *testing.T) {
 		}
 		f.Start(stopCh)
 
+		guaranteedPodOOMScoreAdj = new(int64)
 		pod := test.initfunc()
 		a := admission.NewAttributesRecord(pod, nil, core.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, core.Resource("pods").WithVersion("version"), "", admission.Create, false, nil)
 		err = handler.Admit(a)
@@ -243,10 +274,30 @@ func newPod() *core.Pod {
 				{
 					Name:  "javaweb",
 					Image: "pause:2.0",
+					Resources: core.ResourceRequirements{
+						Limits: core.ResourceList{
+							core.ResourceCPU:    resource.MustParse("1"),
+							core.ResourceMemory: resource.MustParse("1Gi"),
+						},
+						Requests: core.ResourceList{
+							core.ResourceCPU:    resource.MustParse("1"),
+							core.ResourceMemory: resource.MustParse("1Gi"),
+						},
+					},
 				},
 				{
 					Name:  "sidecar",
 					Image: "pause:2.0",
+					Resources: core.ResourceRequirements{
+						Limits: core.ResourceList{
+							core.ResourceCPU:    resource.MustParse("1"),
+							core.ResourceMemory: resource.MustParse("1Gi"),
+						},
+						Requests: core.ResourceList{
+							core.ResourceCPU:    resource.MustParse("1"),
+							core.ResourceMemory: resource.MustParse("1Gi"),
+						},
+					},
 				},
 			},
 		},

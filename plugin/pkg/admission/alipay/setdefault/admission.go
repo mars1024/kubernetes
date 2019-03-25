@@ -12,6 +12,7 @@ import (
 	alipaysigmak8sapi "gitlab.alipay-inc.com/sigma/apis/pkg/apis"
 	"k8s.io/apiserver/pkg/admission"
 	"k8s.io/kubernetes/pkg/apis/core"
+	"k8s.io/kubernetes/pkg/apis/core/helper/qos"
 	"k8s.io/kubernetes/pkg/client/informers/informers_generated/internalversion"
 	corelisters "k8s.io/kubernetes/pkg/client/listers/core/internalversion"
 	kubeapiserveradmission "k8s.io/kubernetes/pkg/kubeapiserver/admission"
@@ -20,7 +21,8 @@ import (
 )
 
 var (
-	defaultCGroupName = flag.String("default-cgroup-parent", defaultCGroupParent, "default cgroup parent for each pods")
+	defaultCGroupName        = flag.String("default-cgroup-parent", defaultCGroupParent, "default cgroup parent for each pods")
+	guaranteedPodOOMScoreAdj = flag.Int64("guaranteed-pod-oom-score-adj", 0, "default oom_score_adj for guaranteed pods")
 )
 
 const (
@@ -196,6 +198,13 @@ next:
 			if netPriority == netPriorityUnknown {
 				netPriority = netPriorityLatencySensitive
 			}
+		}
+	}
+
+	// https://aone.alipay.com/issue/19065268
+	if qos.GetPodQOS(pod) == core.PodQOSGuaranteed && *guaranteedPodOOMScoreAdj != 0 {
+		for i := range allocSpec.Containers {
+			allocSpec.Containers[i].HostConfig.OomScoreAdj = *guaranteedPodOOMScoreAdj
 		}
 	}
 

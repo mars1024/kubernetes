@@ -260,7 +260,7 @@ func TestAdmit(t *testing.T) {
 				for i := 0; i < 2; i++ {
 					assert.Equal(t, cpuBvtWarpUnknown, allocSpec.Containers[i].HostConfig.CPUBvtWarpNs)
 				}
-				assert.Equal(t, int64(netPriorityUnknown), podNetPriority(pod))
+				assert.Equal(t, int64(netPriorityBatchJobs), podNetPriority(pod))
 			},
 		},
 	} {

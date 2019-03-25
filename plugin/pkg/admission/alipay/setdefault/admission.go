@@ -191,8 +191,10 @@ next:
 		switch allocSpec.Containers[i].HostConfig.CgroupParent {
 		case bestEffortCGroupName:
 			allocSpec.Containers[i].HostConfig.CPUBvtWarpNs = cpuBvtWarpNsBatchJobs
-			netPriority = netPriorityBatchJobs
+			fallthrough
 		case systemAgentCGroupParent:
+			// http://gitlab.alipay-inc.com/acs/cherokee/blob/master/tasks/drivers/machine/driver_machine_install_navy_seals_agent.go#L26
+			netPriority = netPriorityBatchJobs
 		default:
 			if c.HostConfig.CPUBvtWarpNs == cpuBvtWarpUnknown {
 				allocSpec.Containers[i].HostConfig.CPUBvtWarpNs = cpuBvtWarpNsLatencySensitve

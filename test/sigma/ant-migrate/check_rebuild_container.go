@@ -193,7 +193,7 @@ func CheckRebuildChanges(f *framework.Framework, pod *v1.Pod, publicKey string) 
 	Expect(strings.Trim(stdout, "\t\n\r ")).To(Equal(strings.Trim(publicKey, "\t\n\r ")), "check 3.1 pod user public key content failed.")
 
 	By("rebuild sigma3.1: check volume dir")
-	cmd = []string{"ls", fmt.Sprintf("%s/%s", InjectDir, InjectFile)}
+	cmd = []string{"ls", fmt.Sprintf("%s/passwd", InjectDir)}
 	stdout, _, err = antsigma.RetryExec(f, pod, cmd, "check_volume_info", 10, 2)
 	Expect(err).NotTo(HaveOccurred(), "check 3.1 pod volume info error")
 	framework.Logf("Exec %v cmd output: %s", stdout, pod.Name)

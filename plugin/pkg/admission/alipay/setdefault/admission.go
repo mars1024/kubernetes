@@ -34,8 +34,9 @@ const (
 )
 
 const (
-	bestEffortCGroupName = "/" + alipaysigmak8sapi.CGROUP_PARENT_OFFLINE
-	defaultCGroupParent  = "/" + alipaysigmak8sapi.CGROUP_PARENT_ONLINE
+	bestEffortCGroupName    = "/" + alipaysigmak8sapi.CGROUP_PARENT_OFFLINE
+	defaultCGroupParent     = "/" + alipaysigmak8sapi.CGROUP_PARENT_ONLINE
+	systemAgentCGroupParent = "/" + alipaysigmak8sapi.CGROUP_PARENT_SYS
 
 	// 网络优先级的分配，保留：0-2，在线业务：3-7，离线业务：8-15
 	// Network QoS http://docs.alibaba-inc.com/pages/viewpage.action?pageId=479572415
@@ -190,6 +191,9 @@ next:
 		switch allocSpec.Containers[i].HostConfig.CgroupParent {
 		case bestEffortCGroupName:
 			allocSpec.Containers[i].HostConfig.CPUBvtWarpNs = cpuBvtWarpNsBatchJobs
+			fallthrough
+		case systemAgentCGroupParent:
+			// http://gitlab.alipay-inc.com/acs/cherokee/blob/master/tasks/drivers/machine/driver_machine_install_navy_seals_agent.go#L26
 			netPriority = netPriorityBatchJobs
 		default:
 			if c.HostConfig.CPUBvtWarpNs == cpuBvtWarpUnknown {

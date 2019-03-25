@@ -240,6 +240,29 @@ func TestAdmit(t *testing.T) {
 				assert.Equal(t, allocSpec.Containers[1].HostConfig.OomScoreAdj, int64(0))
 			},
 		},
+		{
+			name: "system-agent cgroup parent",
+			initfunc: func() *core.Pod {
+				pod := newPod()
+				allocSpec := sigmak8sapi.AllocSpec{
+					Containers: []sigmak8sapi.Container{
+						{Name: "javaweb", HostConfig: sigmak8sapi.HostConfigInfo{CgroupParent: systemAgentCGroupParent}},
+						{Name: "sidecar", HostConfig: sigmak8sapi.HostConfigInfo{CgroupParent: systemAgentCGroupParent}},
+					},
+				}
+				data, _ := json.Marshal(&allocSpec)
+				pod.Annotations[sigmak8sapi.AnnotationPodAllocSpec] = string(data)
+				return pod
+			},
+			validate: func(pod *core.Pod) {
+				allocSpec, err := util.PodAllocSpec(pod)
+				assert.Nil(t, err)
+				for i := 0; i < 2; i++ {
+					assert.Equal(t, cpuBvtWarpUnknown, allocSpec.Containers[i].HostConfig.CPUBvtWarpNs)
+				}
+				assert.Equal(t, int64(netPriorityUnknown), podNetPriority(pod))
+			},
+		},
 	} {
 		t.Logf("testcase [%s]", test.name)
 

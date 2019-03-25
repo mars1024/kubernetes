@@ -176,6 +176,12 @@ func defaultPredicates() sets.String {
 		// Fit is determined based on whether a pod can tolerate all of the node's taints
 		factory.RegisterFitPredicate(predicates.PodToleratesNodeTaintsPred, predicates.PodToleratesNodeTaints),
 
+		// Fit is determined based on whether the pod and the node are of the same sub-cluster
+		factory.RegisterFitPredicate(predicates.CheckSubClusterPred, predicates.CheckSubClusterPredicate),
+
+		// Fit is determined by an optional CustomExpression annotation on pod
+		factory.RegisterFitPredicate(predicates.CustomExpressionPred, predicates.CheckCustomExpressionPredicate),
+
 		// Fit is determined by volume topology requirements.
 		factory.RegisterFitPredicateFactory(
 			predicates.CheckVolumeBindingPred,
@@ -256,6 +262,21 @@ func defaultPriorities() sets.String {
 				Weight: 1,
 			},
 		),
+
+		// Prioritize nodes by an optional CustomExpression annotation on pod
+		factory.RegisterPriorityConfigFactory(
+			"CustomExpression",
+			factory.PriorityConfigFactory{
+				MapReduceFunction: func(args factory.PluginFactoryArgs) (algorithm.PriorityMapFunction, algorithm.PriorityReduceFunction) {
+					return priorities.NewCustomExpressionPriority(args.ServiceLister, algorithm.EmptyControllerLister{}, algorithm.EmptyReplicaSetLister{}, algorithm.EmptyStatefulSetLister{})
+				},
+				Weight: 100000,
+			},
+		),
+
+		// Another instance of MostRequestedPriority/LeastRequestedPriority, disabled (weight=0) by default, meant to be overridden by `scheduling.aks.cafe.sofastack.io/priority-weight-override`
+		factory.RegisterPriorityFunction2("MostRequestedPriority2", priorities.MostRequestedPriorityMap, nil, 0),
+		factory.RegisterPriorityFunction2("LeastRequestedPriority2", priorities.LeastRequestedPriorityMap, nil, 0),
 
 		// Prioritize nodes by least requested utilization.
 		factory.RegisterPriorityFunction2("LeastRequestedPriority", priorities.LeastRequestedPriorityMap, nil, 1),

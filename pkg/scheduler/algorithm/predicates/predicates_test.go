@@ -24,6 +24,8 @@ import (
 	"strings"
 	"testing"
 
+	"k8s.io/kubernetes/pkg/scheduler/evaluateexpression"
+
 	"k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -547,6 +549,133 @@ func TestPodFitsHost(t *testing.T) {
 			}
 			if !fits && !reflect.DeepEqual(reasons, expectedFailureReasons) {
 				t.Errorf("unexpected failure reasons: %v, want: %v", reasons, expectedFailureReasons)
+			}
+			if fits != test.fits {
+				t.Errorf("unexpected difference: expected: %v got %v", test.fits, fits)
+			}
+		})
+	}
+}
+
+func TestCheckCustomExpression(t *testing.T) {
+	tests := []struct {
+		pod         *v1.Pod
+		node        *v1.Node
+		fits        bool
+		param       string
+		name        string
+		expectError bool
+	}{
+		{
+			pod:   &v1.Pod{},
+			node:  &v1.Node{},
+			fits:  true,
+			name:  "no host specified",
+			param: "true",
+		},
+		{
+			pod:         &v1.Pod{},
+			node:        &v1.Node{},
+			fits:        true,
+			name:        "nothing",
+			param:       "",
+			expectError: true,
+		},
+		{
+			pod:         &v1.Pod{},
+			node:        &v1.Node{},
+			fits:        true,
+			name:        "invalid param",
+			param:       "a/0",
+			expectError: true,
+		},
+		{
+			pod:   &v1.Pod{},
+			node:  &v1.Node{},
+			fits:  true,
+			name:  "hardcoded true",
+			param: "true",
+		},
+		{
+			pod:   &v1.Pod{},
+			node:  &v1.Node{},
+			fits:  false,
+			name:  "hardcoded false",
+			param: "false",
+		},
+		{
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"abc": "true",
+					},
+				},
+			},
+			node:  &v1.Node{},
+			fits:  true,
+			name:  "true from pod labels",
+			param: "pod.labels['abc']",
+		},
+		{
+			pod: &v1.Pod{},
+			node: &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						"abc": "true",
+					},
+				},},
+			fits:  true,
+			name:  "false from node annotations",
+			param: "node.annotations['abc']",
+		},
+		{
+			pod:   &v1.Pod{},
+			node:  &v1.Node{},
+			fits:  true,
+			name:  "arithmetic",
+			param: "1+1",
+		},
+		{
+			pod:   &v1.Pod{},
+			node:  &v1.Node{},
+			fits:  false,
+			name:  "arithmetic",
+			param: "1-1",
+		},
+		{
+			pod:   &v1.Pod{},
+			node:  &v1.Node{},
+			fits:  true,
+			name:  "true",
+			param: "\"tr\"+\"ue\"",
+		},
+		{
+			pod:   &v1.Pod{},
+			node:  &v1.Node{},
+			fits:  false,
+			name:  "false",
+			param: "\"fal\"+\"se\"",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+
+			if len(test.param) > 0 {
+				if test.pod.Annotations == nil {
+					test.pod.Annotations = make(map[string]string)
+				}
+
+				test.pod.Annotations[evaluateexpression.PodPredicateExpressionAnnotationKey] = test.param
+			}
+			nodeInfo := schedulercache.NewNodeInfo()
+			nodeInfo.SetNode(test.node)
+			fits, _, err := CheckCustomExpressionPredicate(test.pod, PredicateMetadata(test.pod, nil), nodeInfo)
+			if err != nil && test.expectError {
+				return
+			}
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
 			}
 			if fits != test.fits {
 				t.Errorf("unexpected difference: expected: %v got %v", test.fits, fits)

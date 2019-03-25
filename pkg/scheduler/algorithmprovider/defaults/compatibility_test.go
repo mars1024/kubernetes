@@ -729,6 +729,7 @@ func TestCompatibility_v1_Scheduler(t *testing.T) {
 			{"name": "TaintTolerationPriority",   "weight": 2},
 			{"name": "InterPodAffinityPriority",   "weight": 2},
 			{"name": "MostRequestedPriority",   "weight": 2},
+			{"name": "CustomExpression",   "weight": 2},
 			{
 				"name": "RequestedToCapacityRatioPriority",
 				"weight": 2,
@@ -787,6 +788,7 @@ func TestCompatibility_v1_Scheduler(t *testing.T) {
 					{Name: "TaintTolerationPriority", Weight: 2},
 					{Name: "InterPodAffinityPriority", Weight: 2},
 					{Name: "MostRequestedPriority", Weight: 2},
+					{Name: "CustomExpression", Weight: 2},
 					{
 						Name:   "RequestedToCapacityRatioPriority",
 						Weight: 2,
@@ -839,6 +841,9 @@ func TestCompatibility_v1_Scheduler(t *testing.T) {
 			{"name": "MatchInterPodAffinity"},
 			{"name": "GeneralPredicates"},
 			{"name": "CheckVolumeBinding"},
+			{"name": "CheckSubCluster"},
+			{"name": "CheckMaxReplicasPressure"},
+			{"name": "CustomExpression"},
 			{"name": "TestServiceAffinity", "argument": {"serviceAffinity" : {"labels" : ["region"]}}},
 			{"name": "TestLabelsPresence",  "argument": {"labelsPresence"  : {"labels" : ["foo"], "presence":true}}}
 		  ],"priorities": [
@@ -852,6 +857,8 @@ func TestCompatibility_v1_Scheduler(t *testing.T) {
 			{"name": "TaintTolerationPriority",   "weight": 2},
 			{"name": "InterPodAffinityPriority",   "weight": 2},
 			{"name": "MostRequestedPriority",   "weight": 2},
+			{"name": "MostRequestedPriority2",   "weight": 2},
+			{"name": "LeastRequestedPriority2",   "weight": 2},
 			{
 				"name": "RequestedToCapacityRatioPriority",
 				"weight": 2,
@@ -897,6 +904,9 @@ func TestCompatibility_v1_Scheduler(t *testing.T) {
 					{Name: "MatchInterPodAffinity"},
 					{Name: "GeneralPredicates"},
 					{Name: "CheckVolumeBinding"},
+					{Name: "CheckSubCluster"},
+					{Name: "CheckMaxReplicasPressure"},
+					{Name: "CustomExpression"},
 					{Name: "TestServiceAffinity", Argument: &schedulerapi.PredicateArgument{ServiceAffinity: &schedulerapi.ServiceAffinity{Labels: []string{"region"}}}},
 					{Name: "TestLabelsPresence", Argument: &schedulerapi.PredicateArgument{LabelsPresence: &schedulerapi.LabelsPresence{Labels: []string{"foo"}, Presence: true}}},
 				},
@@ -911,6 +921,8 @@ func TestCompatibility_v1_Scheduler(t *testing.T) {
 					{Name: "TaintTolerationPriority", Weight: 2},
 					{Name: "InterPodAffinityPriority", Weight: 2},
 					{Name: "MostRequestedPriority", Weight: 2},
+					{Name: "MostRequestedPriority2", Weight: 2},
+					{Name: "LeastRequestedPriority2", Weight: 2},
 					{
 						Name:   "RequestedToCapacityRatioPriority",
 						Weight: 2,

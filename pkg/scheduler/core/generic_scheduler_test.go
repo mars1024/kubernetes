@@ -429,6 +429,28 @@ func TestGenericScheduler(t *testing.T) {
 			name:         "test error with priority map",
 			wErr:         errors.NewAggregate([]error{errPrioritize, errPrioritize}),
 		},
+		{
+			predicates:   map[string]algorithm.FitPredicate{"true": truePredicate},
+			prioritizers: []algorithm.PriorityConfig{{Function: numericPriority, Name: "NumericPriority", Weight: 1}},
+			nodes:        []string{"3", "2", "1"},
+			pod: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "ignore", UID: types.UID("ignore"), Annotations: map[string]string{
+				PriorityWeightOverrideAnnotationKey: `{"NumericPriority": -1}`,
+			}}},
+			expectedHosts: sets.NewString("1"),
+			name:          "test priority-override",
+			wErr:          nil,
+		},
+		{
+			predicates:   map[string]algorithm.FitPredicate{"true": truePredicate},
+			prioritizers: []algorithm.PriorityConfig{{Function: numericPriority, Name: "NumericPriority", Weight: 1}},
+			nodes:        []string{"3", "2", "1"},
+			pod: &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "ignore", UID: types.UID("ignore"), Annotations: map[string]string{
+				PriorityWeightOverrideAnnotationKey: "invalid",
+			}}},
+			expectedHosts: sets.NewString("3"),
+			name:          "test invalid priority-override annotation",
+			wErr:          nil,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

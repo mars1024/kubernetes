@@ -215,7 +215,7 @@ func (g *genericScheduler) selectHostForVolumes(pod *v1.Pod, priorityList schedu
 
 	for _, node := range priorityList {
 		// If the node has bound volumes for the pod
-		if len(g.volumeBinder.Binder.GetBindingsCache().GetBindings(pod, node.Host)) > 0 {
+		if g.volumeBinder != nil && len(g.volumeBinder.Binder.GetBindingsCache().GetBindings(pod, node.Host)) > 0 {
 			nodesWithBoundVolumes = append(nodesWithBoundVolumes, node)
 		} else {
 			nodesWithoutBoundVolumes = append(nodesWithoutBoundVolumes, node)
@@ -768,10 +768,14 @@ func PrioritizeNodes(
 	// Summarize all scores.
 	result := make(schedulerapi.HostPriorityList, 0, len(nodes))
 
+	// See if priority weights are overridden
+	priorityWeightOverride := getPriorityWeightOverrideMap(pod)
+
 	for i := range nodes {
 		result = append(result, schedulerapi.HostPriority{Host: nodes[i].Name, Score: 0})
 		for j := range priorityConfigs {
-			result[i].Score += results[j][i].Score * priorityConfigs[j].Weight
+			effectiveWeight := getEffectivePriorityWeight(priorityWeightOverride, priorityConfigs[j].Name, priorityConfigs[j].Weight)
+			result[i].Score += results[j][i].Score * effectiveWeight
 		}
 	}
 

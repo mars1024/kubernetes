@@ -302,9 +302,23 @@ func GetNodeCPU(f *framework.Framework, pod *v1.Pod) int64 {
 	Expect(err).To(BeNil(), "Get pod info failed.")
 	node, err := f.ClientSet.CoreV1().Nodes().Get(pod.Spec.NodeName, metav1.GetOptions{})
 	Expect(err).To(BeNil(), "Get node info failed.")
-	cpu, ok := node.Status.Allocatable.Cpu().AsInt64()
-	Expect(ok).To(BeTrue(), "Get node capacity info failed.")
-	return cpu
+	sharePool, ok := GetNodeSharePool(node)
+	Expect(ok).To(BeTrue(), "Get node share pool info failed.")
+	return int64(len(sharePool))
+}
+
+func GetNodeSharePool(node *v1.Node) ([]int32, bool) {
+	sharePoolstr, ok := node.Annotations[k8sapi.AnnotationNodeCPUSharePool]
+	if !ok {
+		return nil, false
+	}
+	sharePool := &k8sapi.CPUSharePool{}
+	err := json.Unmarshal([]byte(sharePoolstr), sharePool)
+	if err != nil {
+		framework.Logf("Unmarshal share pool %v failed:%v", sharePoolstr, err)
+		return nil, false
+	}
+	return sharePool.CPUIDs, true
 }
 
 func DumpJson(v interface{}) string {

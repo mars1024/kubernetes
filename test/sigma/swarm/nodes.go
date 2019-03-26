@@ -12,40 +12,40 @@ import (
 
 //LogicInfo mock logicinfo with some field not omitempty, in case cerebellum panic.
 type LogicInfo struct {
-	UpdateTime            string            `json:",omitempty"` // "UpdateTime": "2016-06-29 13:14:16","2016-06-29 13:14:16"
-	ServerCreateTime      string            `json:",omitempty"` // "ServerCreateTime": "2013-02-25 22:39:58"
-	ServerModifyTime      string            `json:",omitempty"` // "ServerModifyTime": "2015-12-10 15:16:55"
-	Site                  string            `json:",omitempty"` // "Site": "et15sqa", //机房
-	Region                string            `json:",omitempty"` // "Region": "****", //所属域：集团生产|阿里云|蚂蚁
-	GeogRegion            string            `json:",omitempty"` // "GeogRegion": "****", //地理位置简称
-	NcServerId            int64             `json:",omitempty"` // "NcServerId": 689511, //在cmdb系统中的唯一id, int64
-	NcSn                  string            `json:",omitempty"` // 将废弃, 统一成命名成HostSn，Hostname, HostIp; 用HostSn替代
-	NcHostname            string            `json:",omitempty"` // 将废弃, 统一成命名成HostSn，Hostname, HostIp; 用Hostname替代
-	NcIp                  string            `json:",omitempty"` // 将废弃, 统一成命名成HostSn，Hostname, HostIp; 用HostIp替代
-	HostSn                string            `json:",omitempty"` // "HostSn": "Armory取到的sn信息",
-	Hostname              string            `json:",omitempty"` // "Hostname": "e19h19470.et15sqa",
-	HostIp                string            `json:",omitempty"` // "HostIp": "100.81.153.117",
-	ParentServiceTag      string            `json:",omitempty"` // "ParentServiceTag": "", //父设备, 物理机为机框sn，容器为宿主机sn
-	Room                  string            `json:",omitempty"` // "Room": "A2-3.Eu6", //房间
-	Rack                  string            `json:",omitempty"` // "Rack": "H21", //机架
-	NetArchVersion        string            `json:",omitempty"` // "NetArchVersion": "3.0/3.5/4.0",
-	UplinkHostName        string            `json:",omitempty"` // "UplinkHostName": "PSW-A5-1-H19.ET15", //上联设备主机名。 上联设备一般就是PSW
-	UplinkIp              string            `json:",omitempty"` // "UplinkIp": "", //上联设备IP
-	UplinkSn              string            `json:",omitempty"` // "UplinkSn": "", //上联设备Sn
-	ASW                   string            `json:",omitempty"` // "ASW": "ASW-A5-1-H19.ET15", //ASW
-	LogicPod              string            `json:",omitempty"` // "LogicPod": "6", //逻辑Pod，比如： 6
-	Pod                   string            `json:",omitempty"` //"Pod": "6", //Pod，比如： 6
-	DswCluster            string            `json:",omitempty"` // "DswCluster": "EU6-APPDB-G1", //网络集群（网络核心）比如：EU6-APPDB-G1
-	NetLogicSite          string            `json:",omitempty"` // "NetLogicSite": "EU6-MASTER", //网络上的逻辑机房，与网络相关比如：EU6-MASTER
-	SmName                string            `json:",omitempty"` // "SmName": "A8", //机型简称
-	Model                 string            `json:",omitempty"` // "Model": "PowerEdge R510", //机型
-	IdcManagerState       string            `json:",omitempty"` // "IdcManagerState": "READY|REPAIR", //IDC管控状态，用于标记是否存在硬件故障
-	EnableOverQuota       bool              `json:",omitempty"` // "EnableOverQuota": true|false, //是否超卖
-	CpuOverQuota          float64           `json:",omitempty"` // "CpuOverQuota": 3.5,
-	MemoryOverQuota       float64           `json:",omitempty"` // "MemoryOverQuota": 3.5,
-	DiskOverQuota         float64           `json:",omitempty"` // "DiskOverQuota": 3.5,n
-	GpuOverQuota          float64           `json:",omitempty"` // "GpuOverQuota": 3.5,
-	ExtLabels             map[string]string // *可变的扩展标签
+	UpdateTime            string  `json:",omitempty"` // "UpdateTime": "2016-06-29 13:14:16","2016-06-29 13:14:16"
+	ServerCreateTime      string  `json:",omitempty"` // "ServerCreateTime": "2013-02-25 22:39:58"
+	ServerModifyTime      string  `json:",omitempty"` // "ServerModifyTime": "2015-12-10 15:16:55"
+	Site                  string  `json:",omitempty"` // "Site": "et15sqa", //机房
+	Region                string  `json:",omitempty"` // "Region": "****", //所属域：集团生产|阿里云|蚂蚁
+	GeogRegion            string  `json:",omitempty"` // "GeogRegion": "****", //地理位置简称
+	NcServerId            int64   `json:",omitempty"` // "NcServerId": 689511, //在cmdb系统中的唯一id, int64
+	NcSn                  string  `json:",omitempty"` // 将废弃, 统一成命名成HostSn，Hostname, HostIp; 用HostSn替代
+	NcHostname            string  `json:",omitempty"` // 将废弃, 统一成命名成HostSn，Hostname, HostIp; 用Hostname替代
+	NcIp                  string  `json:",omitempty"` // 将废弃, 统一成命名成HostSn，Hostname, HostIp; 用HostIp替代
+	HostSn                string  `json:",omitempty"` // "HostSn": "Armory取到的sn信息",
+	Hostname              string  `json:",omitempty"` // "Hostname": "e19h19470.et15sqa",
+	HostIp                string  `json:",omitempty"` // "HostIp": "100.81.153.117",
+	ParentServiceTag      string  `json:",omitempty"` // "ParentServiceTag": "", //父设备, 物理机为机框sn，容器为宿主机sn
+	Room                  string  `json:",omitempty"` // "Room": "A2-3.Eu6", //房间
+	Rack                  string  `json:",omitempty"` // "Rack": "H21", //机架
+	NetArchVersion        string  `json:",omitempty"` // "NetArchVersion": "3.0/3.5/4.0",
+	UplinkHostName        string  `json:",omitempty"` // "UplinkHostName": "PSW-A5-1-H19.ET15", //上联设备主机名。 上联设备一般就是PSW
+	UplinkIp              string  `json:",omitempty"` // "UplinkIp": "", //上联设备IP
+	UplinkSn              string  `json:",omitempty"` // "UplinkSn": "", //上联设备Sn
+	ASW                   string  `json:",omitempty"` // "ASW": "ASW-A5-1-H19.ET15", //ASW
+	LogicPod              string  `json:",omitempty"` // "LogicPod": "6", //逻辑Pod，比如： 6
+	Pod                   string  `json:",omitempty"` //"Pod": "6", //Pod，比如： 6
+	DswCluster            string  `json:",omitempty"` // "DswCluster": "EU6-APPDB-G1", //网络集群（网络核心）比如：EU6-APPDB-G1
+	NetLogicSite          string  `json:",omitempty"` // "NetLogicSite": "EU6-MASTER", //网络上的逻辑机房，与网络相关比如：EU6-MASTER
+	SmName                string  `json:",omitempty"` // "SmName": "A8", //机型简称
+	Model                 string  `json:",omitempty"` // "Model": "PowerEdge R510", //机型
+	IdcManagerState       string  `json:",omitempty"` // "IdcManagerState": "READY|REPAIR", //IDC管控状态，用于标记是否存在硬件故障
+	EnableOverQuota       bool    `json:",omitempty"` // "EnableOverQuota": true|false, //是否超卖
+	CpuOverQuota          float64 `json:",omitempty"` // "CpuOverQuota": 3.5,
+	MemoryOverQuota       float64 `json:",omitempty"` // "MemoryOverQuota": 3.5,
+	DiskOverQuota         float64 `json:",omitempty"` // "DiskOverQuota": 3.5,n
+	GpuOverQuota          float64 `json:",omitempty"` // "GpuOverQuota": 3.5,
+	ExtLabels             map[string]string           // *可变的扩展标签
 	ExtendScalarResources map[string]int64
 	MandatoryLabel        string            //"MandatoryLabel":"MixRun" //强制匹配标，最多只允许一个
 	MandatoryLabels       map[string]string //强制标，由boss强制必填的标签和用户自定义标签。
@@ -260,8 +260,8 @@ type AllocPlan struct {
 	GpuQuota                map[string]GpuQuota
 	GpuVolumes              []string //gpu驱动所在的数据卷
 	GpuVolumeDriver         string
-	NetBandwidthQuota       int64 //例：10240,      //网络带宽配额
-	MatchRequirement        bool  `json:"ResourceNoLongerMatchRequirement"` //资源规格调整失败时会设置为true，其他时候为false
+	NetBandwidthQuota       int64                                            //例：10240,      //网络带宽配额
+	MatchRequirement        bool   `json:"ResourceNoLongerMatchRequirement"` //资源规格调整失败时会设置为true，其他时候为false
 	PlanPath                string
 	ExtendScalarResources   map[string]int64
 	Resources               []ScalarResource
@@ -379,6 +379,14 @@ func EnsureNodeHasMandatoryLabels(nodeName string, labels map[string]string) err
 		Expect(data).Should(Equal(value))
 	}
 	return nil
+}
+
+// IsNodeHasExpectLabels checks node has the specified labels
+func IsNodeHasExpectLabels(nodeName string, key, value string) (string, bool) {
+	node := GetNode(nodeName)
+
+	oldValue, ok := node.LogicInfo.ExtLabels[key]
+	return oldValue, ok
 }
 
 // DeleteNodeMandatoryLabels removes mandatory label from sigma node

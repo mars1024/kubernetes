@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
+	"gitlab.alibaba-inc.com/sigma/sigma-k8s-extensions/pkg/apis/apps/v1beta1"
 	alipaysigmak8sapi "gitlab.alipay-inc.com/sigma/apis/pkg/apis"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/kubernetes/pkg/util/system"
@@ -651,4 +652,10 @@ func isNodeSchedulable(node *v1.Node) bool {
 	networkReady := framework.IsNodeConditionUnset(node, v1.NodeNetworkUnavailable) ||
 		framework.IsNodeConditionSetAsExpectedSilent(node, v1.NodeNetworkUnavailable, false)
 	return !node.Spec.Unschedulable && nodeReady && networkReady
+}
+
+func createPreview(f *framework.Framework, previewReq *v1beta1.CapacityPreview) *v1beta1.CapacityPreview {
+	pod, err := f.PreviewClient.AppsV1beta1().CapacityPreviews(f.Namespace.Name).Create(previewReq)
+	framework.ExpectNoError(err)
+	return pod
 }

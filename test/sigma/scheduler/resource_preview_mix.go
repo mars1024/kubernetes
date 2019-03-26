@@ -147,4 +147,99 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][resource][Serial]", func() {
 
 		testContext.execTests()
 	})
+
+	//混合链路 preview 3.1 ：
+	// 指定 IP 进行 preview
+	It("preview_002 sigma 3.1 preview with specific IP.", func() {
+		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
+		framework.Logf("get one node to schedule, nodeName: %s", nodeName)
+
+		AllocatableCPU := nodeToAllocatableMapCPU[nodeName]
+		AllocatableMemory := nodeToAllocatableMapMem[nodeName]
+		AllocatableDisk := nodeToAllocatableMapEphemeralStorage[nodeName]
+
+		framework.Logf("total cpu: %d", AllocatableCPU)
+		framework.Logf("total memory: %d", AllocatableMemory)
+		framework.Logf("total disk: %d", AllocatableDisk)
+
+		requestedCPU := AllocatableCPU / 2
+		requestedMemory := AllocatableMemory / 2
+		requestedDisk := AllocatableDisk / 2
+
+		By("Request a pod with CPU/Memory/EphemeralStorage.")
+		nodeIP := nodesInfo[nodeName].Status.Addresses[0].Address
+
+		tests := []resourceCase{
+			{
+				cpu:             requestedCPU,
+				mem:             requestedMemory,
+				ethstorage:      requestedDisk,
+				requestType:     requestTypeKubernetesPreview,
+				affinityConfig:  map[string][]string{api.LabelNodeIP: {nodeIP}},
+				shouldScheduled: true,
+				previewCount:    2,
+			},
+			{
+				cpu:             requestedCPU,
+				mem:             requestedMemory,
+				ethstorage:      requestedDisk,
+				requestType:     requestTypeKubernetes,
+				affinityConfig:  map[string][]string{api.LabelNodeIP: {nodeIP}},
+				shouldScheduled: true,
+				spreadStrategy:  "sameCoreFirst",
+			},
+			{
+				cpu:             requestedCPU,
+				mem:             requestedMemory,
+				ethstorage:      requestedDisk,
+				requestType:     requestTypeKubernetesPreview,
+				affinityConfig:  map[string][]string{api.LabelNodeIP: {nodeIP}},
+				shouldScheduled: true,
+				previewCount:    1,
+			},
+			{
+				cpu:             requestedCPU,
+				mem:             requestedMemory,
+				ethstorage:      requestedDisk,
+				requestType:     requestTypeKubernetes,
+				shouldScheduled: true,
+				cpushare:        true,
+				affinityConfig:  map[string][]string{api.LabelNodeIP: {nodeIP}},
+			},
+			{
+				cpu:             requestedCPU,
+				mem:             requestedMemory,
+				ethstorage:      requestedDisk,
+				requestType:     requestTypeKubernetesPreview,
+				affinityConfig:  map[string][]string{api.LabelNodeIP: {nodeIP}},
+				shouldScheduled: true,
+				previewCount:    0,
+			},
+			{
+				cleanIndexes: []int{1, 3},
+				requestType:  cleanResource,
+			},
+			{
+				cpu:             requestedCPU,
+				mem:             requestedMemory,
+				ethstorage:      requestedDisk,
+				requestType:     requestTypeKubernetesPreview,
+				affinityConfig:  map[string][]string{api.LabelNodeIP: {nodeIP}},
+				shouldScheduled: true,
+				previewCount:    2,
+			},
+		}
+
+		testContext := &testContext{
+			caseName:  "preview_002",
+			cs:        cs,
+			localInfo: nil,
+			f:         f,
+			testCases: tests,
+		}
+
+		testContext.execTests()
+	})
 })

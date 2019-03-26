@@ -50,6 +50,8 @@ import (
 	. "github.com/onsi/gomega"
 	gomegatypes "github.com/onsi/gomega/types"
 
+	"gitlab.alibaba-inc.com/sigma/sigma-k8s-extensions/pkg/apis/apps/v1beta1"
+	extclientset "gitlab.alibaba-inc.com/sigma/sigma-k8s-extensions/pkg/client/clientset"
 	apps "k8s.io/api/apps/v1"
 	batch "k8s.io/api/batch/v1"
 	"k8s.io/api/core/v1"
@@ -1486,6 +1488,26 @@ func podCompleted(c clientset.Interface, podName, namespace string) wait.Conditi
 		}
 		switch pod.Status.Phase {
 		case v1.PodFailed, v1.PodSucceeded:
+			return true, nil
+		}
+		return false, nil
+	}
+}
+
+func WaitTimeoutForPreviewFinishInNamespace(previewClient *extclientset.Clientset, previewName, namespace string, timeout time.Duration) error {
+	return wait.PollImmediate(Poll, timeout, previewFinish(previewClient, previewName, namespace))
+}
+
+func previewFinish(previewClient *extclientset.Clientset, previewName, namespace string) wait.ConditionFunc {
+	return func() (bool, error) {
+		preview, err := previewClient.AppsV1beta1().CapacityPreviews(namespace).Get(previewName, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		switch preview.Status.Phase {
+		case v1beta1.PreviewPhasePending:
+			return false, fmt.Errorf("preview in pending")
+		case v1beta1.PreviewPhaseCompleted:
 			return true, nil
 		}
 		return false, nil

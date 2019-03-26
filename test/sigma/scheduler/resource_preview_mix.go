@@ -5,6 +5,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
+	extclientset "gitlab.alibaba-inc.com/sigma/sigma-k8s-extensions/pkg/client/clientset"
 	"k8s.io/kubernetes/test/sigma/swarm"
 
 	"k8s.io/api/core/v1"
@@ -15,7 +16,9 @@ import (
 
 var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][resource][Serial]", func() {
 	var cs clientset.Interface
+	var previewClient *extclientset.Clientset
 	var nodeList *v1.NodeList
+	var err error
 
 	nodeToAllocatableMapCPU := make(map[string]int64)
 	nodeToAllocatableMapMem := make(map[string]int64)
@@ -27,6 +30,9 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][resource][Serial]", func() {
 
 	BeforeEach(func() {
 		cs = f.ClientSet
+		previewClient, err = NewPreviewClient(framework.TestContext.KubeConfig)
+		framework.ExpectNoError(err)
+
 		nodeList = &v1.NodeList{}
 		masterNodes, nodeList = getMasterAndWorkerNodesOrDie(cs)
 		for i, node := range nodeList.Items {
@@ -233,11 +239,12 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][resource][Serial]", func() {
 		}
 
 		testContext := &testContext{
-			caseName:  "preview_002",
-			cs:        cs,
-			localInfo: nil,
-			f:         f,
-			testCases: tests,
+			caseName:      "preview_002",
+			cs:            cs,
+			localInfo:     nil,
+			f:             f,
+			testCases:     tests,
+			PreviewClient: previewClient,
 		}
 
 		testContext.execTests()

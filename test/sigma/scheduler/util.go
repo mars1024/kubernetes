@@ -26,8 +26,10 @@ import (
 	"github.com/sirupsen/logrus"
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	"gitlab.alibaba-inc.com/sigma/sigma-k8s-extensions/pkg/apis/apps/v1beta1"
+	extclientset "gitlab.alibaba-inc.com/sigma/sigma-k8s-extensions/pkg/client/clientset"
 	alipaysigmak8sapi "gitlab.alipay-inc.com/sigma/apis/pkg/apis"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/kubernetes/pkg/util/system"
 	"k8s.io/kubernetes/test/sigma/env"
 	"k8s.io/kubernetes/test/sigma/swarm"
@@ -654,8 +656,41 @@ func isNodeSchedulable(node *v1.Node) bool {
 	return !node.Spec.Unschedulable && nodeReady && networkReady
 }
 
-func createPreview(f *framework.Framework, previewReq *v1beta1.CapacityPreview) *v1beta1.CapacityPreview {
-	pod, err := f.PreviewClient.AppsV1beta1().CapacityPreviews(f.Namespace.Name).Create(previewReq)
+func NewPreviewClient(kubeconfig string) (*extclientset.Clientset, error) {
+	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	if err != nil {
+		return nil, err
+	}
+
+	cs, err := extclientset.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+	return cs, nil
+}
+
+func createPreview(tc *testContext, previewReq *v1beta1.CapacityPreview) *v1beta1.CapacityPreview {
+	pod, err := tc.PreviewClient.AppsV1beta1().CapacityPreviews(tc.f.Namespace.Name).Create(previewReq)
 	framework.ExpectNoError(err)
 	return pod
+}
+
+func WaitTimeoutForPreviewFinishInNamespace(previewClient *extclientset.Clientset, previewName, namespace string, timeout time.Duration) error {
+	return wait.PollImmediate(framework.Poll, timeout, previewFinish(previewClient, previewName, namespace))
+}
+
+func previewFinish(previewClient *extclientset.Clientset, previewName, namespace string) wait.ConditionFunc {
+	return func() (bool, error) {
+		preview, err := previewClient.AppsV1beta1().CapacityPreviews(namespace).Get(previewName, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		switch preview.Status.Phase {
+		case v1beta1.PreviewPhasePending:
+			return false, fmt.Errorf("preview in pending")
+		case v1beta1.PreviewPhaseCompleted:
+			return true, nil
+		}
+		return false, nil
+	}
 }

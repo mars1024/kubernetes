@@ -18,6 +18,7 @@ import (
 	"gitlab.alibaba-inc.com/sigma/sigma-api/sigma/v3"
 	"gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	"gitlab.alibaba-inc.com/sigma/sigma-k8s-extensions/pkg/apis/apps/v1beta1"
+	extclientset "gitlab.alibaba-inc.com/sigma/sigma-k8s-extensions/pkg/client/clientset"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -214,13 +215,13 @@ func PreviewAndVerifyK8sCase(tc *testContext, caseIndex int, test resourceCase) 
 		},
 	}
 	framework.Logf("preview request: %v", previewReq)
-	preview := createPreview(tc.f, previewReq)
+	preview := createPreview(tc, previewReq)
 
 	if tc.resourceToDelete == nil {
 		tc.resourceToDelete = map[int]*resourceItem{}
 	}
-	err := framework.WaitTimeoutForPreviewFinishInNamespace(tc.f.PreviewClient, preview.Name, preview.Namespace, waitForPodRunningTimeout)
-	newPreview, err := tc.f.PreviewClient.AppsV1beta1().CapacityPreviews(preview.Namespace).Get(preview.Name, metav1.GetOptions{})
+	err := WaitTimeoutForPreviewFinishInNamespace(tc.PreviewClient, preview.Name, preview.Namespace, waitForPodRunningTimeout)
+	newPreview, err := tc.PreviewClient.AppsV1beta1().CapacityPreviews(preview.Namespace).Get(preview.Name, metav1.GetOptions{})
 	if err != nil || newPreview == nil {
 		framework.Logf("refresh preview:%s err:%v", preview.Name, err)
 	} else {
@@ -796,6 +797,7 @@ type testContext struct {
 	nodeName             string
 	// 默认为 false，这种情况下，集团 sigma2.0 创建容器其实是 mock；如果设置为 true，则真实创建容器
 	isSigmaNotMock bool
+	PreviewClient  *extclientset.Clientset
 }
 
 func (tc *testContext) execTests(checkFuncList ...checkFunc) {

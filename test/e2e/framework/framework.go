@@ -25,7 +25,6 @@ import (
 	"sync"
 	"time"
 
-	extclientset "gitlab.alibaba-inc.com/sigma/sigma-k8s-extensions/pkg/client/clientset"
 	"k8s.io/api/core/v1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -71,7 +70,6 @@ type Framework struct {
 	KubemarkExternalClusterClientSet clientset.Interface
 	APIExtensionsClientSet           apiextensionsclient.Interface
 	CSIClientSet                     csi.Interface
-	PreviewClient                    *extclientset.Clientset
 
 	InternalClientset *internalclientset.Clientset
 	AggregatorClient  *aggregatorclient.Clientset
@@ -194,9 +192,6 @@ func (f *Framework) BeforeEach() {
 		jsonConfig := config
 		jsonConfig.ContentType = "application/json"
 		f.CSIClientSet, err = csi.NewForConfig(jsonConfig)
-		Expect(err).NotTo(HaveOccurred())
-
-		f.PreviewClient, err = NewPreviewClient(TestContext.KubeConfig)
 		Expect(err).NotTo(HaveOccurred())
 
 		// create scales getter, set GroupVersion and NegotiatedSerializer to default values
@@ -894,17 +889,4 @@ func GetLogToFileFunc(file *os.File) func(format string, args ...interface{}) {
 		}
 		writer.Flush()
 	}
-}
-
-func NewPreviewClient(kubeconfig string) (*extclientset.Clientset, error) {
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
-	if err != nil {
-		return nil, err
-	}
-
-	cs, err := extclientset.NewForConfig(config)
-	if err != nil {
-		return nil, err
-	}
-	return cs, nil
 }

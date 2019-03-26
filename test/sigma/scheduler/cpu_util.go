@@ -17,6 +17,7 @@ import (
 	antsigma "gitlab.alibaba-inc.com/sigma/sigma-ant-api/sigma"
 	"gitlab.alibaba-inc.com/sigma/sigma-api/sigma/v3"
 	"gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
+	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	"gitlab.alibaba-inc.com/sigma/sigma-k8s-extensions/pkg/apis/apps/v1beta1"
 	extclientset "gitlab.alibaba-inc.com/sigma/sigma-k8s-extensions/pkg/client/clientset"
 	"k8s.io/api/core/v1"
@@ -482,6 +483,13 @@ func createAndVerifySigmaCasePreview(tc *testContext, caseIndex int, test resour
 func initPausePodFromResourceCase(tc *testContext, caseIndex int, test resourceCase) (*v1.Pod, *pausePodConfig) {
 	var allocSpecRequest = &api.AllocSpec{}
 	setAllocSpecRequest := false
+
+	if test.colocation {
+		if test.labels == nil {
+			test.labels = make(map[string]string)
+		}
+		test.labels[sigmak8sapi.LabelPodQOSClass] = string(sigmak8sapi.SigmaQOSBestEffort)
+	}
 
 	config := &pausePodConfig{
 		Labels: test.labels,

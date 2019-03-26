@@ -57,9 +57,9 @@ var _ = Describe("[ant][migrate-container]", func() {
 		RebuildContainer20ToSigma31Pod(f, appName, CPUSetModeShare, true)
 	})
 
-	It("[ant][migrate-container][single][CpuSetMode_cpushare] RebuildContainer: first create a 2.0 container, then migrate to 3.1 pod", func() {
-		RebuildContainer20ToSigma31Pod(f, appName, CPUSetModeAntForest, true)
-	})
+	//It("[ant][migrate-container][single][CpuSetMode_cpushare] RebuildContainer: first create a 2.0 container, then migrate to 3.1 pod", func() {
+	//	RebuildContainer20ToSigma31Pod(f, appName, CPUSetModeAntForest, true)
+	//})
 
 	It("[ant][migrate-container][multi][defaultCpuSetMode] RebuildContainer: first create a 2.0 container, then migrate to 3.1 pod.", func() {
 		var wg sync.WaitGroup

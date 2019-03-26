@@ -170,9 +170,25 @@ func (kl *Kubelet) updateStateStatus(pod *v1.Pod, result kubecontainer.PodSyncRe
 		}
 	}
 
-	// If not updated, just return.
 	if !updated {
-		return nil
+		specHash, exists := sigmautil.GetSpecHashFromAnnotation(pod)
+		if !exists {
+			glog.Warningf("Failed to get specHash from %s", format.Pod(pod))
+			return nil
+		}
+		// Check is there a need to refresh all specHash.
+		needRefreshHash := false
+		for key, status := range latestStateStatus.Statuses {
+			if status.SpecHash != specHash {
+				needRefreshHash = true
+				status.SpecHash = specHash
+				latestStateStatus.Statuses[key] = status
+			}
+		}
+
+		if !needRefreshHash {
+			return nil
+		}
 	}
 
 	// Generate patchData

@@ -85,8 +85,8 @@ var _ = Describe("[ant][migrate-container]", func() {
 // RebuildContainer20ToSigma31Pod() create sigma2.0 container and migrate to sigma3.1 pod, then check resources.
 func RebuildContainer20ToSigma31Pod(f *framework.Framework, appName string, cpusetMode string, lifeCyle bool) {
 	// Inject labels.
-	InjectSigm2NodeLabels(cpusetMode)
-	defer DeleteSigma2NodeLabels(cpusetMode)
+	value := InjectSigm2NodeLabels(cpusetMode)
+	defer DeleteSigma2NodeLabels(cpusetMode, value)
 	createConfig := GetCreateConfig(appName, cpusetMode)
 	ns := appName
 
@@ -249,20 +249,39 @@ func GetCreateConfig(appName, cpuSetMode string) *dockerclient.ContainerConfig {
 	return createConfig
 }
 
-func InjectSigm2NodeLabels(cpuSetMode string) {
+func InjectSigm2NodeLabels(cpuSetMode string) string {
 	if cpuSetMode == CPUSetModeShare {
 		extLabels := map[string]string{
-			"CpuSetMode": "share",
+			"CpuSetMode": CPUSetModeShare,
 		}
 		nodeName := strings.ToUpper(WorkNode)
-		swarm.CreateOrUpdateNodeLabel(nodeName, extLabels)
-		swarm.EnsureNodeHasLabels(nodeName, extLabels)
+		value, ok := swarm.IsNodeHasExpectLabels(nodeName, "CpuSetMode", "share")
+		framework.Logf("Inject node label:%v, ok:%v, value:%v", WorkNode, ok, value)
+		if !ok || value != CPUSetModeShare {
+			framework.Logf("Inject node:%v", WorkNode)
+			swarm.CreateOrUpdateNodeLabel(nodeName, extLabels)
+			swarm.EnsureNodeHasLabels(nodeName, extLabels)
+			return ""
+		}
+		return value
 	}
+	return ""
 }
 
-func DeleteSigma2NodeLabels(cpusetMode string) {
+func DeleteSigma2NodeLabels(cpusetMode, value string) {
 	if cpusetMode == CPUSetModeShare {
 		nodeName := strings.ToUpper(WorkNode)
-		swarm.DeleteNodeLabels(nodeName, "CpuSetMode")
+		if value == "" {
+			// delete inject label
+			framework.Logf("Delete node label:%v, oldvalue:%v", WorkNode, value)
+			swarm.DeleteNodeLabels(nodeName, "CpuSetMode")
+		} else {
+			// restore label value.
+			extLabels := map[string]string{
+				"CpuSetMode": value,
+			}
+			framework.Logf("Restore node label:%v, oldvalue:%v", WorkNode, value)
+			swarm.CreateOrUpdateNodeLabel(nodeName, extLabels)
+		}
 	}
 }

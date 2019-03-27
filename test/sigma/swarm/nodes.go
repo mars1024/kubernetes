@@ -454,6 +454,14 @@ func GetNode(nodeName string) *Node {
 	return node
 }
 
+func GetNodeSN(nodeName string) string {
+	// query the site info from armory
+	nsInfo, err := util.QueryArmory(fmt.Sprintf("sn=='%v'", nodeName))
+	Expect(err).NotTo(HaveOccurred(), "query armory return error:%s", err)
+	Expect(len(nsInfo)).To(Equal(1), "unexpected nsInfo:%#v", nsInfo)
+	return nsInfo[0].ServiceTag
+}
+
 // /nodes/allocplans/et15/818210969/
 func GetAllocPlans(nodeName string) []*AllocPlan {
 	// query the site info from armory

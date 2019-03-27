@@ -39,6 +39,8 @@ type Container struct {
 	Resource ResourceRequirements `json:"resource,omitempty"`
 	// Extra attributes of HostConfig required by this container.
 	HostConfig HostConfigInfo `json:"hostConfig,omitempty"`
+	//Reserved memory to keep alive.
+	KeepAliveMemory *int64 `json:"keepAliveMemory,omitempty"`
 }
 
 // ResourceRequirements describes extra attributes of the compute resource requirements.
@@ -313,16 +315,16 @@ type DanglingPod struct {
 	UID string `json:"uid"`
 	// SN is used to register peripheral system such as armory
 	// +optional
-	SN string `json:"sn, omitempty"`
+	SN string `json:"sn,omitempty"`
 	// The time pod is created
 	// +optional
-	CreationTimestamp metav1.Time `json:"creationTimestamp, omitempty"`
+	CreationTimestamp metav1.Time `json:"creationTimestamp,omitempty"`
 	// Ip address of DanglingPod
 	// +optional
-	PodIP string `json:"podIP, omitempty"`
+	PodIP string `json:"podIP,omitempty"`
 	// The Phase of DanglingPod
 	// +optional
-	Phase v1.PodPhase `json:"phase, omitempty"`
-	// If SafeToRemove is true, Sigmalet will delete dangling pod
+	Phase v1.PodPhase `json:"phase,omitempty"`
+	// If SafeToRemove is true,Sigmalet will delete dangling pod
 	SafeToRemove bool `json:"safeToRemove"`
 }

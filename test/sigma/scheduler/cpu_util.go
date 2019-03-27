@@ -18,6 +18,8 @@ import (
 	"gitlab.alibaba-inc.com/sigma/sigma-api/sigma/v3"
 	"gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
+	"gitlab.alibaba-inc.com/sigma/sigma-k8s-extensions/pkg/apis/apps/v1beta1"
+	extclientset "gitlab.alibaba-inc.com/sigma/sigma-k8s-extensions/pkg/client/clientset"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,12 +33,13 @@ import (
 )
 
 const (
-	requestTypeSigma           = "sigma"
-	requestTypeSigmaUpdate     = "sigmaUpdate"
-	requestTypeAntSigmaPreview = "antSigmaPreview"
-	requestTypeKubernetes      = "kubernetes"
-	requestTypePreview         = "preview"
-	cleanResource              = "cleanResource"
+	requestTypeSigma             = "sigma"
+	requestTypeSigmaUpdate       = "sigmaUpdate"
+	requestTypeAntSigmaPreview   = "antSigmaPreview"
+	requestTypeKubernetesPreview = "kubernetesPreview"
+	requestTypeKubernetes        = "kubernetes"
+	requestTypePreview           = "preview"
+	cleanResource                = "cleanResource"
 
 	CPUSetNameSpace = "sigma-scheduler-cpuset"
 )
@@ -197,6 +200,52 @@ func testPreviewSigmaCase(test resourceCase) int {
 
 	option, _ := swarm.AntPreviewCreateContainerWithOption(config)
 	return option.Count
+}
+
+func PreviewAndVerifyK8sCase(tc *testContext, caseIndex int, test resourceCase) {
+	pod, _ := initPausePodFromResourceCase(tc, caseIndex, test)
+	previewReq := &v1beta1.CapacityPreview{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      pod.Name,
+			Namespace: pod.Namespace,
+		},
+		Spec: v1beta1.CapacityPreviewSpec{
+			Template: v1.PodTemplateSpec{
+				Spec: pod.Spec,
+			},
+		},
+	}
+	framework.Logf("preview request: %v", previewReq)
+	preview := createPreview(tc, previewReq)
+
+	if tc.resourceToDelete == nil {
+		tc.resourceToDelete = map[int]*resourceItem{}
+	}
+	err := WaitTimeoutForPreviewFinishInNamespace(tc.PreviewClient, preview.Name, preview.Namespace, waitForPodRunningTimeout)
+	newPreview, err := tc.PreviewClient.AppsV1beta1().CapacityPreviews(preview.Namespace).Get(preview.Name, metav1.GetOptions{})
+	if err != nil || newPreview == nil {
+		framework.Logf("refresh preview:%s err:%v", preview.Name, err)
+	} else {
+		preview = newPreview
+	}
+	if test.shouldScheduled {
+		if len(tc.testCases) > 0 {
+			Expect(preview.Status.AvailableReplicas == int32(tc.testCases[caseIndex].previewCount)).Should(BeTrue(),
+				"CaseName:%s,requirementId:%s, Case[%d], kubernetes, expect pod to be scheduled successfully. params: %+v, expect:%d,actually:%d", tc.caseName, pod.Name, caseIndex, tc.testCases[caseIndex], tc.testCases[caseIndex].previewCount, preview.Status.AvailableReplicas)
+		} else {
+			Expect(preview.Status.AvailableReplicas == int32(test.previewCount)).Should(BeTrue(),
+				"CaseName:%s,requirementId:%s, Case[%d], kubernetes, expect pod to be scheduled successfully. params: %+v, preview: %+v", tc.caseName, pod.Name, caseIndex, nil, preview)
+		}
+	} else {
+		if len(tc.testCases) > 0 {
+			Expect(preview.Status.AvailableReplicas == int32(tc.testCases[caseIndex].previewCount)).Should(BeFalse(),
+				fmt.Sprintf("CaeName:%s,requirementId:%s, Case[%d], kubernetes, expect pod failed to be scheduled.params:%+v, expect:%d,actually:%d", tc.caseName, pod.Name, caseIndex, tc.testCases[caseIndex], tc.testCases[caseIndex].previewCount, preview.Status.AvailableReplicas))
+		} else {
+			Expect(preview.Status.AvailableReplicas == int32(test.previewCount)).Should(BeFalse(),
+				fmt.Sprintf("CaeName:%s,requirementId:%s, Case[%d], kubernetes, expect pod failed to be scheduled.params:%+v", tc.caseName, pod.Name, caseIndex, nil))
+		}
+	}
+
 }
 
 func previewAndVerifySigmaCase(tc *testContext, caseIndex int, test resourceCase) {
@@ -431,7 +480,7 @@ func createAndVerifySigmaCasePreview(tc *testContext, caseIndex int, test resour
 	}
 }
 
-func createAndVerifyK8sPod(tc *testContext, caseIndex int, test resourceCase) {
+func initPausePodFromResourceCase(tc *testContext, caseIndex int, test resourceCase) (*v1.Pod, *pausePodConfig) {
 	var allocSpecRequest = &api.AllocSpec{}
 	setAllocSpecRequest := false
 
@@ -447,14 +496,14 @@ func createAndVerifyK8sPod(tc *testContext, caseIndex int, test resourceCase) {
 		Name:   "scheduler-" + strconv.Itoa(caseIndex) + "-" + string(uuid.NewUUID()),
 		Resources: &v1.ResourceRequirements{
 			Limits: v1.ResourceList{
-				v1.ResourceCPU:              *resource.NewMilliQuantity(test.cpu, resource.DecimalSI),
-				v1.ResourceMemory:           *resource.NewQuantity(test.mem, resource.BinarySI),
-				v1.ResourceEphemeralStorage: *resource.NewQuantity(test.ethstorage, resource.BinarySI),
+				v1.ResourceCPU:              *resource.NewMilliQuantity(test.cpu, "DecimalSI"),
+				v1.ResourceMemory:           *resource.NewQuantity(test.mem, "DecimalSI"),
+				v1.ResourceEphemeralStorage: *resource.NewQuantity(test.ethstorage, "DecimalSI"),
 			},
 			Requests: v1.ResourceList{
-				v1.ResourceCPU:              *resource.NewMilliQuantity(test.cpu, resource.DecimalSI),
-				v1.ResourceMemory:           *resource.NewQuantity(test.mem, resource.BinarySI),
-				v1.ResourceEphemeralStorage: *resource.NewQuantity(test.ethstorage, resource.BinarySI),
+				v1.ResourceCPU:              *resource.NewMilliQuantity(test.cpu, "DecimalSI"),
+				v1.ResourceMemory:           *resource.NewQuantity(test.mem, "DecimalSI"),
+				v1.ResourceEphemeralStorage: *resource.NewQuantity(test.ethstorage, "DecimalSI"),
 			},
 		},
 	}
@@ -534,7 +583,15 @@ func createAndVerifyK8sPod(tc *testContext, caseIndex int, test resourceCase) {
 		config.Affinity = util.GetAffinityNodeSelectorRequirementAndMap(test.affinityConfig)
 	}
 	addOverQuotaPodSpecIfNeed(tc, config)
-	pod := createPausePod(tc.f, *config)
+	pod := initPausePod(tc.f, *config)
+
+	return pod, config
+}
+
+func createAndVerifyK8sPod(tc *testContext, caseIndex int, test resourceCase) {
+	pod, config := initPausePodFromResourceCase(tc, caseIndex, test)
+	pod = createPausePod(tc.f, *config)
+
 	if tc.resourceToDelete == nil {
 		tc.resourceToDelete = map[int]*resourceItem{}
 	}
@@ -748,6 +805,7 @@ type testContext struct {
 	nodeName             string
 	// 默认为 false，这种情况下，集团 sigma2.0 创建容器其实是 mock；如果设置为 true，则真实创建容器
 	isSigmaNotMock bool
+	PreviewClient  *extclientset.Clientset
 }
 
 func (tc *testContext) execTests(checkFuncList ...checkFunc) {
@@ -826,6 +884,8 @@ func (tc *testContext) execTests(checkFuncList ...checkFunc) {
 				defer swarm.DeleteNodeLabels(nodeName, "CpuSetMode", "CpuShareOverQuota")
 			}
 			previewAndVerifySigmaCase(tc, i, test)
+		case requestTypeKubernetesPreview:
+			PreviewAndVerifyK8sCase(tc, i, test)
 		case requestTypeSigmaUpdate:
 			createAndVerifySigmaUpdateCase(tc, i, test)
 		case cleanResource:

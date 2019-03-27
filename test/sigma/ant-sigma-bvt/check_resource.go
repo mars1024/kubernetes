@@ -284,7 +284,6 @@ func CheckSigmaUpgradeResource(f *framework.Framework, testPod *v1.Pod, upgradeP
 		envs = append(envs, fmt.Sprintf("%v=%v", env.Name, env.Value))
 	}
 	isEqual := CompareENV(envs, stdout)
-	time.Sleep(time.Minute * 10)
 	Expect(err).NotTo(HaveOccurred(), "[Sigma3.1LifeCycle] [upgrade] check 3.1 pod env is not equal with input.")
 	Expect(isEqual).To(BeTrue(), "[Sigma3.1LifeCycle] [upgrade] check 3.1 pod env is not equal with input.")
 

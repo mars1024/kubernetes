@@ -46,7 +46,9 @@ func CheckSigma20ResourceReomoved(f *framework.Framework, pod *v1.Pod, site stri
 	nodeInfo := GetNodeInfo(f, pod.Spec.NodeName)
 	framework.Logf("Node: %#v", DumpJson(nodeInfo))
 	hostSn := nodeInfo.Labels[k8sapi.LabelNodeSN]
-	Expect(hostSn).NotTo(BeEmpty(), "hostSn must be added in node labels.")
+	Expect(hostSn).NotTo(BeEmpty(), "hostSn must be added in node labels:%v", nodeInfo.Labels)
+	hostSn = swarm.GetNodeSN(hostSn)
+	Expect(hostSn).NotTo(BeEmpty(), "query hostSN from armory failed, hostSn:%v", hostSn)
 	slotId := pod.Labels["ali.SlotId"]
 	Expect(slotId).NotTo(BeEmpty(), "SlotId must be specified in pod labels.")
 

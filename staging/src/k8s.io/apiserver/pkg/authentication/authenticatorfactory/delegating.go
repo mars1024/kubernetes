@@ -34,6 +34,9 @@ import (
 	webhooktoken "k8s.io/apiserver/plugin/pkg/authenticator/token/webhook"
 	authenticationclient "k8s.io/client-go/kubernetes/typed/authentication/v1beta1"
 	"k8s.io/client-go/util/cert"
+	"k8s.io/apiserver/pkg/util/feature"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/filter"
 )
 
 // DelegatingAuthenticatorConfig is the minimal configuration needed to create an authenticator
@@ -81,7 +84,11 @@ func (c DelegatingAuthenticatorConfig) New() (authenticator.Request, *spec.Secur
 		}
 		verifyOpts := x509.DefaultVerifyOptions()
 		verifyOpts.Roots = clientCAs
-		authenticators = append(authenticators, x509.New(verifyOpts, x509.CommonNameUserConversion))
+		if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+			authenticators = append(authenticators, x509.New(verifyOpts, filter.CommonNameUserConversionWithMultiTenancy))
+		} else {
+			authenticators = append(authenticators, x509.New(verifyOpts, x509.CommonNameUserConversion))
+		}
 	}
 
 	if c.TokenAccessReviewClient != nil {

@@ -26,6 +26,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -238,9 +239,13 @@ func (m *kubeGenericRuntimeManager) startContainer(podSandboxID string, podSandb
 }
 
 func (m *kubeGenericRuntimeManager) updateContainer(containerID kubecontainer.ContainerID, container *v1.Container, pod *v1.Pod) (string, error) {
+	specAnnotations := make(map[string]string)
 	resources := m.generateLinuxContainerResources(container, pod)
 	glog.Infof("update container: %s with linux resource: %+v", container.Name, resources)
-	err := m.runtimeService.UpdateContainerResources(containerID.ID, resources)
+	if resources.MemorySwap > 0 {
+		specAnnotations[containerPouchMemorySwapAnnotation] = strconv.FormatInt(int64(resources.MemorySwap), 10)
+	}
+	err := m.runtimeService.UpdateContainerResources(containerID.ID, resources, specAnnotations)
 	if err != nil {
 		message := fmt.Sprintf("failed to update container %q(id=%q) in pod %q: %v", container.Name, containerID.String(), format.Pod(pod), err)
 		m.recordContainerEvent(pod, container, containerID.ID, v1.EventTypeWarning, events.FailedToUpdateContainer, message)

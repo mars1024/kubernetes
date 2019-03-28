@@ -41,7 +41,7 @@ import (
 type ActivePodsFunc func() []*v1.Pod
 
 type runtimeService interface {
-	UpdateContainerResources(id string, resources *runtimeapi.LinuxContainerResources) error
+	UpdateContainerResources(id string, resources *runtimeapi.LinuxContainerResources, specAnnotations map[string]string) error
 	ContainerStatus(containerID string) (*runtimeapi.ContainerStatus, error)
 }
 
@@ -347,7 +347,8 @@ func (m *manager) updateContainerCPUSet(containerID string, cpus cpuset.CPUSet) 
 		containerID,
 		&runtimeapi.LinuxContainerResources{
 			CpusetCpus: cpus.String(),
-		})
+		},
+		nil)
 }
 
 func (m *manager) getContainerCPUSet(containerID string) (cpuset.CPUSet, error) {

@@ -409,7 +409,7 @@ func (m *CPUByLoadThrottleManager) ThrottleCgroupToSpecQuota(containerID string,
 	resources := &runtimeapi.LinuxContainerResources{
 		CpuQuota: specQuota,
 	}
-	return m.containerManager.UpdateContainerResources(containerID, resources)
+	return m.containerManager.UpdateContainerResources(containerID, resources, nil)
 }
 
 // CheckLoadWarn check node load whether too large or not.

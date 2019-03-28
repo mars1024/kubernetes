@@ -269,10 +269,10 @@
 			"revisionTime": "2018-11-29T17:17:00Z"
 		},
 		{
-			"checksumSHA1": "huiTA0Sz0ec6l2Rc3b65ftNqGvQ=",
+			"checksumSHA1": "zvvUrNyDbp0An4v9nOnaBpzmcBU=",
 			"path": "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api",
-			"revision": "6fe4aa2ab5457c7df91bfe00b1ed61abc12209d8",
-			"revisionTime": "2019-01-25T09:52:49Z",
+			"revision": "15ed497b29889db1822e146e6677e03c41b8bf80",
+			"revisionTime": "2019-03-28T04:06:23Z",
 			"version": "develop",
 			"versionExact": "develop"
 		},
@@ -301,10 +301,10 @@
 			"revisionTime": "2019-01-21T08:50:27Z"
 		},
 		{
-			"checksumSHA1": "VGRKStBBaWO0EIv3BwknNX3aKok=",
+			"checksumSHA1": "ubVLSPFOxoT4tDEvalmv3JckBns=",
 			"path": "gitlab.alipay-inc.com/sigma/apis/pkg/apis",
-			"revision": "ac0daeec33125843fa5544c127b9e5292eb3447f",
-			"revisionTime": "2019-01-04T06:41:56Z"
+			"revision": "e829bdf5c9defc9c2510c3d0ad9b48e9816d25ad",
+			"revisionTime": "2019-03-14T03:34:20Z"
 		},
 		{
 			"checksumSHA1": "7y2gX6w9W1xC09Rjn4FVRCbtPFw=",

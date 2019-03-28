@@ -76,33 +76,38 @@ func (a *AlipayRouterInjector) Admit(attributes admission.Attributes) (err error
 	if !ok {
 		return apierrors.NewBadRequest("Resource was marked with kind Pod but was unable to be converted")
 	}
-
-	op := attributes.GetOperation()
-	switch op {
-	case admission.Create:
-		return a.injectRouter(pod)
+	if err := a.injectRouter(pod); err != nil {
+		return apierrors.NewInternalError(err)
 	}
-	return apierrors.NewBadRequest("Alipay Router Injector Admission only handles Create event")
+	return nil
 }
 
 func (a *AlipayRouterInjector) injectRouter(pod *api.Pod) error {
 	// add router volumes to pod.
-	publicRouter := hasPublicRouterLabel(pod.Labels)
+	addVolume := false
+	// inject volume mounts.
 	for i := range pod.Spec.Containers {
-		if hasInjectorEnv(pod.Spec.Containers[i].Env) {
-			if !hasVolumeMount(pod.Spec.Containers[i].VolumeMounts, RouterVolumeName) {
-				pod.Spec.Containers[i].VolumeMounts = append(pod.Spec.Containers[i].VolumeMounts, getVolumeMount(RouterVolumeDestination))
-				if !hasVolume(pod.Spec.Volumes, RouterVolumeName) {
-					if publicRouter {
-						pod.Spec.Volumes = append(pod.Spec.Volumes, getVolume(RouterVolumePublicSource))
-					} else {
-						pod.Spec.Volumes = append(pod.Spec.Volumes, getVolume(RouterVolumeSource))
-					}
-				}
-			}
+		if !hasInjectorEnv(pod.Spec.Containers[i].Env) || hasVolumeMount(pod.Spec.Containers[i].VolumeMounts, RouterVolumeName) {
+			continue
 		}
+		// inject volume.
+		addVolume = true
+		pod.Spec.Containers[i].VolumeMounts = append(pod.Spec.Containers[i].VolumeMounts, getVolumeMount(RouterVolumeDestination))
+	}
+	// inject volume.
+	if addVolume && !hasVolume(pod.Spec.Volumes, RouterVolumeName) {
+		injectPodVolume(pod)
 	}
 	return nil
+}
+
+func injectPodVolume(pod *api.Pod) {
+	path := RouterVolumeSource
+	if hasPublicRouterLabel(pod.Labels) {
+		path = RouterVolumePublicSource
+	}
+	pod.Spec.Volumes = append(pod.Spec.Volumes, getVolume(path))
+	return
 }
 
 func hasInjectorEnv(envs []api.EnvVar) bool {

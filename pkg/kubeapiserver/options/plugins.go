@@ -81,6 +81,7 @@ import (
 	alipayresource "k8s.io/kubernetes/plugin/pkg/admission/alipay/resource"
 	alipayresourcemutationbe "k8s.io/kubernetes/plugin/pkg/admission/alipay/resourcemutationbe"
 	alipayresourcemutationqos "k8s.io/kubernetes/plugin/pkg/admission/alipay/resourcemutationqos"
+	alipayrouter "k8s.io/kubernetes/plugin/pkg/admission/alipay/router"
 	alipaysetdefault "k8s.io/kubernetes/plugin/pkg/admission/alipay/setdefault"
 	alipaysetdefaulthostconfig "k8s.io/kubernetes/plugin/pkg/admission/alipay/setdefaulthostconfig"
 	alipaysidecar "k8s.io/kubernetes/plugin/pkg/admission/alipay/sidecar"
@@ -148,6 +149,7 @@ var AllOrderedPlugins = []string{
 	alipayimagepullsecret.PluginName,      // Alipay image pull secret injection admission
 	alipaysetdefaulthostconfig.PluginName, // Alipay SetDefaultHostConfig
 	alipayresourcemutationbe.PluginName,   // Alipay resource mutation admission for best effort
+	alipayrouter.PluginName,               //alipay router mutation admission for container router configuration.
 }
 
 // RegisterAllAdmissionPlugins registers all admission plugins and
@@ -207,6 +209,7 @@ func RegisterAllAdmissionPlugins(plugins *admission.Plugins) {
 	alipayappcert.Register(plugins)
 	alipaysetdefaulthostconfig.Register(plugins)
 	alipayresourcemutationbe.Register(plugins)
+	alipayrouter.Register(plugins)
 }
 
 // DefaultOffAdmissionPlugins get admission plugins off by default for kube-apiserver.

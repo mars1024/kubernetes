@@ -3,7 +3,7 @@
 # http://www.rpm.org/max-rpm/ch-rpm-inside.html              #
 ##############################################################
 Name: t-sigma-slave-binary
-Version:1.1.2
+Version:1.1.3
 Release: %(echo $RELEASE)
 # if you want use the parameter of rpm_create on build time,
 # uncomment below

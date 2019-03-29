@@ -246,6 +246,10 @@ func GetCreateConfig(appName, cpuSetMode string) *dockerclient.ContainerConfig {
 	createConfig.HostConfig.DnsSearch = []string{"test.alipay.net"}
 	createConfig.HostConfig.DNSOptions = []string{"timeout:2", "attempts:2", "rotate"}
 	createConfig.HostConfig.ExtraHosts = []string{ExtraHosts}
+	if cpuSetMode == CPUSetModeShare {
+		createConfig.Labels["ali.EnableDefaultRoute"] = "true"
+	}
+	createConfig.Env = append(createConfig.Env, "ali_run_mode=alipay_container")
 	return createConfig
 }
 

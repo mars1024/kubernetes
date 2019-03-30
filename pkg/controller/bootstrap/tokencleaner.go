@@ -26,8 +26,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
+	typecorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	bootstrapapi "k8s.io/client-go/tools/bootstrap/token/api"
 	"k8s.io/client-go/tools/cache"
@@ -35,6 +37,11 @@ import (
 	api "k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/util/metrics"
+
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancycache "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/cache"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/meta"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 )
 
 // TokenCleanerOptions contains options for the TokenCleaner
@@ -164,9 +171,12 @@ func (tc *TokenCleaner) syncFunc(key string) error {
 		glog.V(4).Infof("Finished syncing secret %q (%v)", key, time.Since(startTime))
 	}()
 
-	namespace, name, err := cache.SplitMetaNamespaceKey(key)
+	tenant, namespace, name, err := multitenancycache.MultiTenancySplitKeyWrapper(cache.SplitMetaNamespaceKey)(key)
 	if err != nil {
 		return err
+	}
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tc = tc.ShallowCopyWithTenant(tenant).(*TokenCleaner)
 	}
 
 	ret, err := tc.secretLister.Secrets(namespace).Get(name)
@@ -193,7 +203,14 @@ func (tc *TokenCleaner) evalSecret(o interface{}) {
 		if len(secret.UID) > 0 {
 			options = &metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &secret.UID}}
 		}
-		err := tc.client.CoreV1().Secrets(secret.Namespace).Delete(secret.Name, options)
+
+		var err error
+		if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+			tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(secret.Annotations)
+			err = tc.client.CoreV1().Secrets(secret.Namespace).(meta.TenantWise).ShallowCopyWithTenant(tenantInfo).(typecorev1.SecretInterface).Delete(secret.Name, options)
+		} else {
+			err = tc.client.CoreV1().Secrets(secret.Namespace).Delete(secret.Name, options)
+		}
 		// NotFound isn't a real error (it's already been deleted)
 		// Conflict isn't a real error (the UID precondition failed)
 		if err != nil && !apierrors.IsConflict(err) && !apierrors.IsNotFound(err) {

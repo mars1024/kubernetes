@@ -12,8 +12,8 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/samalba/dockerclient"
+	alipaysigmak8sapi "gitlab.alipay-inc.com/sigma/apis/pkg/apis"
 	"k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/kubernetes/test/e2e/framework"
 	antsigma "k8s.io/kubernetes/test/sigma/ant-sigma-bvt"
@@ -88,9 +88,8 @@ func RebuildContainer20ToSigma31Pod(f *framework.Framework, appName string, cpus
 	value := InjectSigm2NodeLabels(cpusetMode)
 	defer DeleteSigma2NodeLabels(cpusetMode, value)
 	createConfig := GetCreateConfig(appName, cpusetMode)
-	ns := appName
 
-	containerHostName, podSn, container20ID, site, hostIP := CreateSigma2Container(createConfig)
+	containerHostName, _, container20ID, site, hostIP := CreateSigma2Container(createConfig)
 	defer swarm.DeleteContainer(container20ID)
 
 	By("start 2.0 container")
@@ -119,13 +118,17 @@ func RebuildContainer20ToSigma31Pod(f *framework.Framework, appName string, cpus
 	container20QuotaID, container20AdminUID, container20CpuSets := GetSigmaContainerInfo(hostIP, container20ID)
 	// rebuild sigma3.1 pod
 	By("sigma3.1: rebuild 3.1 pod.")
-	testPod := rebuildSigma3Pod(f, podSn, appName)
+	containerName := strings.TrimLeft(containerJson.Name, "/")
+	testPod := rebuildSigma3Pod(f, containerName, appName)
 	defer util.DeletePod(f.ClientSet, testPod)
 
 	By("check pod is running， rebuild finish.")
-	err = util.WaitTimeoutForPodStatus(f.ClientSet, testPod, v1.PodRunning, 3*time.Minute)
+	err = util.WaitTimeoutForPodStatusByContainerName(f.ClientSet, testPod, v1.PodRunning, containerName, 3*time.Minute)
 	Expect(err).NotTo(HaveOccurred(), "pod status is not running")
-	testPod, err = f.ClientSet.CoreV1().Pods(ns).Get(podSn, metav1.GetOptions{})
+	containerLabel := map[string]string{
+		alipaysigmak8sapi.LabelPodContainerName: containerName,
+	}
+	testPod, err = util.GetPodsByLabel(f.ClientSet, appName, containerLabel, false)
 	Expect(err).NotTo(HaveOccurred(), "can not get the rebuild pod from namespace")
 	container31ID := util.GetContainerIDFromPod(testPod)
 
@@ -210,17 +213,20 @@ func CreateSigma2Container(containerConfig *dockerclient.ContainerConfig) (strin
 }
 
 // rebuildSigma3Pod() rebuild sigma3.1 pod.
-func rebuildSigma3Pod(f *framework.Framework, podSn, appName string) *v1.Pod {
+func rebuildSigma3Pod(f *framework.Framework, containerName, appName string) *v1.Pod {
 	By("use swarm rebuild API reconstruct 3.1 pod.")
 	reqInfo := swarm.ContainerUpgradeOption{}
 	// rebuild sigma3.1 pod
-	requestId, err := swarm.RebuildContainer(podSn, reqInfo)
-	framework.Logf("rebuild container %v, requestId:%v, err:%v", podSn, requestId, err)
+	requestId, err := swarm.RebuildContainer(containerName, reqInfo)
+	framework.Logf("rebuild container %v, requestId:%v, err:%v", containerName, requestId, err)
 	Expect(err).NotTo(HaveOccurred(), "rebuild 3.1 pod error.")
 	Expect(requestId).NotTo(BeEmpty(), "unexpected rebuild requestId.")
 
 	By("check the 3.1 pod object exists")
-	testPod, err := f.ClientSet.CoreV1().Pods(appName).Get(podSn, metav1.GetOptions{IncludeUninitialized: true})
+	containerLabel := map[string]string{
+		alipaysigmak8sapi.LabelPodContainerName: containerName,
+	}
+	testPod, err := util.GetPodsByLabel(f.ClientSet, appName, containerLabel, true)
 	Expect(err).NotTo(HaveOccurred(), "can not get the rebuild pod from namespace")
 	rebuildResult, err := swarm.QueryRequestStateWithTimeout(requestId, 5*time.Minute)
 	Expect(err).NotTo(HaveOccurred(), "Query sigma3.1 container create result failed.")
@@ -246,6 +252,10 @@ func GetCreateConfig(appName, cpuSetMode string) *dockerclient.ContainerConfig {
 	createConfig.HostConfig.DnsSearch = []string{"test.alipay.net"}
 	createConfig.HostConfig.DNSOptions = []string{"timeout:2", "attempts:2", "rotate"}
 	createConfig.HostConfig.ExtraHosts = []string{ExtraHosts}
+	if cpuSetMode == CPUSetModeShare {
+		createConfig.Labels["ali.EnableDefaultRoute"] = "true"
+	}
+	createConfig.Env = append(createConfig.Env, "ali_run_mode=alipay_container")
 	return createConfig
 }
 

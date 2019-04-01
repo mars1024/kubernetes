@@ -11,6 +11,7 @@ import (
 	alipaysigmak8sapi "gitlab.alipay-inc.com/sigma/apis/pkg/apis"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
@@ -162,6 +163,41 @@ func CheckPodStatus(client clientset.Interface, podName, namespace string, expec
 	}
 }
 
+// WaitTimeoutForPodStatusByContainerName check whether the pod status is same as expected status within the timeout.
+func WaitTimeoutForPodStatusByContainerName(client clientset.Interface, pod *v1.Pod, expectedStatus v1.PodPhase, containerName string, timeout time.Duration) error {
+	return wait.PollImmediate(5*time.Second, timeout, CheckPodStatusByContainerName(client, containerName, pod.Namespace, expectedStatus))
+}
+
+// CheckPodStatusByContainerName check whether pod status is same as expected status.
+func CheckPodStatusByContainerName(client clientset.Interface, containerName, namespace string, expectedStatus v1.PodPhase) wait.ConditionFunc {
+	containerLabel := map[string]string{
+		alipaysigmak8sapi.LabelPodContainerName: containerName,
+	}
+	return func() (bool, error) {
+		pod, err := GetPodsByLabel(client, namespace, containerLabel, false)
+		if err != nil {
+			return false, err
+		}
+		framework.Logf("pod[%s] status phase is %v", containerName, pod.Status.Phase)
+		if pod.Status.Phase == expectedStatus {
+			return true, nil
+		}
+		return false, nil
+	}
+}
+
+func GetPodsByLabel(client clientset.Interface, namespace string, containerLabel map[string]string, initializer bool) (*v1.Pod, error) {
+	labelSelector := labels.Set(containerLabel).AsSelectorPreValidated()
+	pods, err := client.CoreV1().Pods(namespace).List(metav1.ListOptions{
+		LabelSelector:        labelSelector.String(),
+		IncludeUninitialized: true,
+	})
+	if len(pods.Items) != 1 {
+		return nil, fmt.Errorf("Unexpected pod num: %v", len(pods.Items))
+	}
+	return &pods.Items[0], err
+}
+
 // checkPodContainerStatus check whether container in pod status is ready.
 func checkPodContainerStatusReady(client clientset.Interface, podName, namespace string) wait.ConditionFunc {
 	return func() (bool, error) {
@@ -288,7 +324,7 @@ func UnsuspendContainer(client clientset.Interface, pod *v1.Pod, namespace strin
 }
 
 func patchContainerToDesiredState(client clientset.Interface, pod *v1.Pod, namespace, containerName,
-	successStr string, desiredContainerState sigmak8sapi.ContainerState) error {
+successStr string, desiredContainerState sigmak8sapi.ContainerState) error {
 	patchData, err := GenerateContainerStatePatchData(containerName, desiredContainerState)
 	if err != nil {
 		return err

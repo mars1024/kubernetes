@@ -14,132 +14,138 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# user can set POUCH_ROOT_OVERRIDE to overwrite the pouch root dir
+POUCH_ROOT=${POUCH_ROOT_OVERRIDE:=/home/t4/pouch}
+GRAPH_ROOT=${POUCH_ROOT}/containerd/root/io.containerd.snapshotter.v1.overlayfs/snapshots
+
 usage() {
-	err "Invalid usage. Usage: "
-	err "\t$0 init"
-	err "\t$0 mount <mount dir> <json params>"
-	err "\t$0 unmount <mount dir>"
-	exit 1
+    err "Invalid usage. Usage: "
+    err "\t$0 init"
+    err "\t$0 mount <mount dir> <json params>"
+    err "\t$0 unmount <mount dir>"
+    exit 1
 }
 
 err() {
-	echo -ne $* 1>&2
+    echo -ne $* 1>&2
 }
 
 log() {
-	echo -ne $* >&1
+    echo -ne $* >&1
 }
 
 # Judge whether a dir is empty
-is_empty_dir(){ 
+is_empty_dir(){
     return `ls -A $1|wc -w`
 }
 
-PYTHONSCRIPT="import sys;import json;temp = json.loads(sys.argv[1]);print(temp[sys.argv[2]])"
+PYTHON_SCRIPT="import sys;import json;temp = json.loads(sys.argv[1]);print(temp[sys.argv[2]])"
 
 domount() {
-	MNTPATH=$1
-	if [ ! -d $MNTPATH ] ; then
-		mkdir -p $MNTPATH &> /dev/null
-	fi
+    MNTPATH=$1
+    if [[ ! -d ${MNTPATH} ]] ; then
+        mkdir -p ${MNTPATH} &> /dev/null
+    fi
 
-	# Copy initial files from image if MNTPATH is empty.
-	if is_empty_dir $MNTPATH ; then
-		# Get IMAGE and IMAGEPATH from json
-		IMAGE=`echo $PYTHONSCRIPT | python - $2 "image"`
-		IMAGEPATH=`echo $PYTHONSCRIPT | python - $2 "imagePath"`
+    # Copy initial files from image if MNTPATH is empty.
+    if is_empty_dir ${MNTPATH} ; then
+        # Get IMAGE and IMAGEPATH from json
+        IMAGE=`echo ${PYTHON_SCRIPT} | python - $2 "image"`
+        IMAGEPATH=`echo ${PYTHON_SCRIPT} | python - $2 "imagePath"`
 
-		RUNTIME="Docker"
-		if command "pouch" &> /dev/null; then
-			RUNTIME="Pouch"
-		fi
+        RUNTIME="Docker"
+        if command "pouch" &> /dev/null; then
+            RUNTIME="Pouch"
+        fi
 
-		if [ "$RUNTIME" = "Docker" ]; then
-			# Make sure image exists
-			docker pull $IMAGE &> /dev/null
-			CTHOME=`docker inspect -f "{{.GraphDriver.Data.RootDir}}" $IMAGE 2> /dev/null`
-			if [[ $CTHOME != *overlay*/root ]]; then
-				err "{ \"status\": \"Failure\", \"message\": \"Failed to get root dir from image $IMAGE\"}"
-				exit 1
-			fi
-			if [ -d $CTHOME$IMAGEPATH ]; then
-				cp -rp $CTHOME$IMAGEPATH $MNTPATH
-			fi
-		else
-			mergedPath=`echo ${IMAGE//\//__}`
-			mergedDir=/home/t4/pouch-volume/${mergedPath}
-			if [ ! -d $mergedDir ]; then
-				mkdir -p $mergedDir
-			fi
-			if is_empty_dir $mergedDir; then
-				# Make sure image exists
-				pouch pull $IMAGE &> /dev/null
-				cid=`pouch create --net host -l type="pouch-volume" $IMAGE`
-				if [ $? -ne 0 ]; then
-					err "{ \"status\": \"Failure\", \"message\": \"Failed to create container based on $IMAGE\"}"
-					exit 1
-				fi
-				lowerdir=`pouch inspect -f '{{.Snapshotter.Data.LowerDir}}' ${cid}`
-				upperdir=`pouch inspect -f '{{.Snapshotter.Data.UpperDir}}' ${cid}`
-				workdir=`pouch inspect -f '{{.Snapshotter.Data.WorkDir}}' ${cid}`
-				mount -t overlay -o rw,lowerdir=${lowerdir},upperdir=${upperdir},workdir=${workdir} overlay ${mergedDir} &> /dev/null
-				if [ $? -ne 0 ]; then
-					err "{ \"status\": \"Failure\", \"message\": \"Failed to mount container's dir\"}"
-					pouch rm -v ${cid} &> /dev/null
-					exit 1
-				fi
-			fi
-			if [ -d ${mergedDir} ]; then
-				cp -rp ${mergedDir}$IMAGEPATH $MNTPATH &> /dev/null
-			fi
-			umount ${mergedDir} &> /dev/null
-			pouch rm -v ${cid} &> /dev/null
-		fi
-	fi
+        if [[ "$RUNTIME" = "Docker" ]]; then
+            # Make sure image exists
+            docker pull ${IMAGE} &> /dev/null
+            CTHOME=`docker inspect -f "{{.GraphDriver.Data.RootDir}}" ${IMAGE} 2> /dev/null`
+            if [[ ${CTHOME} != *overlay*/root ]]; then
+                err "{ \"status\": \"Failure\", \"message\": \"Failed to get root dir from image $IMAGE\"}"
+                exit 1
+            fi
+            if [[ -d ${CTHOME}${IMAGEPATH} ]]; then
+                cp -rp ${CTHOME}${IMAGEPATH} ${MNTPATH}
+            fi
+        else
+            mergedPath=`echo ${IMAGE//\//__}`
+            mergedDir=/home/t4/pouch-volume/${mergedPath}
+            if [[ ! -d ${mergedDir} ]]; then
+                mkdir -p ${mergedDir}
+            fi
+            if is_empty_dir ${mergedDir}; then
+                # Make sure image exists
+                pouch pull ${IMAGE} &> /dev/null
+                cid=`pouch create --net host -l type="pouch-volume" ${IMAGE}`
+                if [[ $? -ne 0 ]]; then
+                    err "{ \"status\": \"Failure\", \"message\": \"Failed to create container based on $IMAGE\"}"
+                    exit 1
+                fi
+                lowerdir=`pouch inspect -f '{{.Snapshotter.Data.LowerDir}}' ${cid}`
+                upperdir=`pouch inspect -f '{{.Snapshotter.Data.UpperDir}}' ${cid}`
+                workdir=`pouch inspect -f '{{.Snapshotter.Data.WorkDir}}' ${cid}`
+                cd ${GRAPH_ROOT}
+                slowerdir=`echo ${lowerdir} | sed "s+${GRAPH_ROOT}+.+g"`
+                env PWD=${GRAPH_ROOT} mount -t overlay -o rw,lowerdir=${slowerdir},upperdir=${upperdir},workdir=${workdir} overlay ${mergedDir} &> /dev/null
+                if [[ $? -ne 0 ]]; then
+                    err "{ \"status\": \"Failure\", \"message\": \"Failed to mount container's dir\"}"
+                    pouch rm -v ${cid} &> /dev/null
+                    exit 1
+                fi
+            fi
+            if [[ -d ${mergedDir} ]]; then
+                cp -rp ${mergedDir}${IMAGEPATH} ${MNTPATH} &> /dev/null
+            fi
+            umount ${mergedDir} &> /dev/null
+            pouch rm -v ${cid} &> /dev/null
+        fi
+    fi
 
-	log '{"status": "Success"}'
-	exit 0
+    log '{"status": "Success"}'
+    exit 0
 }
 
 unmount() {
-	MNTPATH=$1
-	# Check MNTPATH is legal because "rm -rf" is dangerous.
-	if [[ $MNTPATH != */pods/* ]] ; then
-		err "{ \"status\": \"Failure\", \"message\": \"Failed to delete path ${MNTPATH}\"}"
-		exit 1
-	fi
+    MNTPATH=$1
+    # Check MNTPATH is legal because "rm -rf" is dangerous.
+    if [[ ${MNTPATH} != */pods/* ]] ; then
+        err "{ \"status\": \"Failure\", \"message\": \"Failed to delete path ${MNTPATH}\"}"
+        exit 1
+    fi
 
-	# We need to remove the content in the MNTPATH, so kubelet can delete the pod successfully.
-	rm -rf $MNTPATH/* &> /dev/null
-	rm -rf $MNTPATH/.* &> /dev/null
+    # We need to remove the content in the MNTPATH, so kubelet can delete the pod successfully.
+    rm -rf ${MNTPATH}/* &> /dev/null
+    rm -rf ${MNTPATH}/.* &> /dev/null
 
-	log '{"status": "Success"}'
-	exit 0
+    log '{"status": "Success"}'
+    exit 0
 }
 
 op=$1
 
-if [ "$op" = "init" ]; then
-	log '{"status": "Success", "capabilities": {"attach": false}}'
-	exit 0
+if [[ "$op" = "init" ]]; then
+    log '{"status": "Success", "capabilities": {"attach": false}}'
+    exit 0
 fi
 
-if [ $# -lt 2 ]; then
-	usage
+if [[ $# -lt 2 ]]; then
+    usage
 fi
 
 shift
 
 case "$op" in
-	mount)
-		domount $*
-		;;
-	unmount)
-		unmount $*
-		;;
-	*)
-		log '{"status": "Not supported"}'
-		exit 0
+    mount)
+        domount $*
+        ;;
+    unmount)
+        unmount $*
+        ;;
+    *)
+        log '{"status": "Not supported"}'
+        exit 0
 esac
 
 exit 1

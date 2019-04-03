@@ -51,6 +51,7 @@ const (
 	cpuBvtWarpUnknown           = 0
 	cpuBvtWarpNsLatencySensitve = 2
 	cpuBvtWarpNsBatchJobs       = -1
+	defaultPidsLimit            = uint16(32767)
 
 	// 每个容器都要需要设置 SN 环境变量
 	containerSNEnvName = "SN"
@@ -187,6 +188,10 @@ next:
 			c.HostConfig.CgroupParent = *defaultCGroupName
 		}
 		allocSpec.Containers[i].HostConfig.CgroupParent = addSlashFrontIfNotExists(c.HostConfig.CgroupParent)
+		// default pidsLimit.
+		if allocSpec.Containers[i].HostConfig.PidsLimit == 0 {
+			allocSpec.Containers[i].HostConfig.PidsLimit = defaultPidsLimit
+		}
 
 		switch allocSpec.Containers[i].HostConfig.CgroupParent {
 		case bestEffortCGroupName:

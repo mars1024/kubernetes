@@ -160,6 +160,7 @@ func TestAdmit(t *testing.T) {
 					assert.Equal(t, containerSNEnvName, pod.Spec.Containers[i].Env[0].Name)
 					assert.Equal(t, "sn1", pod.Spec.Containers[i].Env[0].Value)
 					assert.Equal(t, cpuBvtWarpNsLatencySensitve, allocSpec.Containers[i].HostConfig.CPUBvtWarpNs)
+					assert.Equal(t, uint16(32767), allocSpec.Containers[i].HostConfig.PidsLimit)
 				}
 				assert.Equal(t, int64(netPriorityLatencySensitive), podNetPriority(pod))
 			},
@@ -259,6 +260,7 @@ func TestAdmit(t *testing.T) {
 				assert.Nil(t, err)
 				for i := 0; i < 2; i++ {
 					assert.Equal(t, cpuBvtWarpUnknown, allocSpec.Containers[i].HostConfig.CPUBvtWarpNs)
+					assert.Equal(t, uint16(32767), allocSpec.Containers[i].HostConfig.PidsLimit)
 				}
 				assert.Equal(t, int64(netPriorityBatchJobs), podNetPriority(pod))
 			},

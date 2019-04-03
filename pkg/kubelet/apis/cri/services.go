@@ -48,7 +48,7 @@ type ContainerManager interface {
 	// ContainerStatus returns the status of the container.
 	ContainerStatus(containerID string) (*runtimeapi.ContainerStatus, error)
 	// UpdateContainerResources updates the cgroup resources for the container.
-	UpdateContainerResources(containerID string, resources *runtimeapi.LinuxContainerResources) error
+	UpdateContainerResources(containerID string, resources *runtimeapi.LinuxContainerResources, specAnnotations map[string]string) error
 	// ExecSync executes a command in the container, and returns the stdout output.
 	// If command exits with a non-zero exit code, an error is returned.
 	ExecSync(containerID string, cmd []string, timeout time.Duration) (stdout []byte, stderr []byte, err error)

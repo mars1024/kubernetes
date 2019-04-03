@@ -624,7 +624,7 @@ type mockContainerRuntime struct {
 	err error
 }
 
-func (rt mockContainerRuntime) UpdateContainerResources(id string, resources *runtimeapi.LinuxContainerResources) error {
+func (rt mockContainerRuntime) UpdateContainerResources(id string, resources *runtimeapi.LinuxContainerResources, specAnnotations map[string]string) error {
 	return rt.err
 }
 

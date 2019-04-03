@@ -45,7 +45,7 @@ type runtimeService interface {
 	// UpdateContainerResources updates cgroupfs resource.
 	// id is contatiner ID.
 	// resources are cgroupfs specified resources.
-	UpdateContainerResources(id string, resources *runtimeapi.LinuxContainerResources) error
+	UpdateContainerResources(id string, resources *runtimeapi.LinuxContainerResources, specAnnotations map[string]string) error
 }
 
 // ResourceAdjustController defines the necessary parameters for
@@ -226,7 +226,8 @@ func (r *ResourceAdjustController) scaleUpMemory(containerID string, recommended
 		containerID,
 		&runtimeapi.LinuxContainerResources{
 			MemoryLimitInBytes: recommendedMemoryValue,
-		})
+		},
+		nil)
 }
 
 func filterBurstablePods(pods []*v1.Pod) *v1.PodList {

@@ -131,11 +131,11 @@ func (in instrumentedRuntimeService) ContainerStatus(containerID string) (*runti
 	return out, err
 }
 
-func (in instrumentedRuntimeService) UpdateContainerResources(containerID string, resources *runtimeapi.LinuxContainerResources) error {
+func (in instrumentedRuntimeService) UpdateContainerResources(containerID string, resources *runtimeapi.LinuxContainerResources, specAnnotations map[string]string) error {
 	const operation = "container_status"
 	defer recordOperation(operation, time.Now())
 
-	err := in.service.UpdateContainerResources(containerID, resources)
+	err := in.service.UpdateContainerResources(containerID, resources, specAnnotations)
 	recordError(operation, err)
 	return err
 }

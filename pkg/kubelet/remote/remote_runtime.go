@@ -363,13 +363,14 @@ func (r *RemoteRuntimeService) ContainerStatus(containerID string) (*runtimeapi.
 }
 
 // UpdateContainerResources updates a containers resource config
-func (r *RemoteRuntimeService) UpdateContainerResources(containerID string, resources *runtimeapi.LinuxContainerResources) error {
+func (r *RemoteRuntimeService) UpdateContainerResources(containerID string, resources *runtimeapi.LinuxContainerResources, specAnnotations map[string]string) error {
 	ctx, cancel := getContextWithTimeout(r.timeout)
 	defer cancel()
 
 	_, err := r.runtimeClient.UpdateContainerResources(ctx, &runtimeapi.UpdateContainerResourcesRequest{
 		ContainerId: containerID,
 		Linux:       resources,
+		SpecAnnotations: specAnnotations,
 	})
 	if err != nil {
 		glog.Errorf("UpdateContainerResources %q from runtime service failed: %v", containerID, err)

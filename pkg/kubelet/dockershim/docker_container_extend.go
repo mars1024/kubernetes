@@ -276,21 +276,11 @@ func updateCreateConfigExtend(config *dockertypes.ContainerCreateConfig, runtime
 	// Set NetPriority field.
 	config.Config.NetPriority = int(runtimeConfig.NetPriority)
 
-	if runtimeConfig.Linux == nil || runtimeConfig.Linux.Resources == nil {
-		glog.Warningf("Ignore to update extend hostconfig field because of invalid ContainerConfig: %v", runtimeConfig)
-		return
+	// Set IntelRdt related field.
+	if runtimeConfig.Linux != nil && runtimeConfig.Linux.IntelRdt != nil {
+		config.HostConfig.Resources.IntelRdtGroup = runtimeConfig.Linux.IntelRdt.IntelRdtGroup
+		config.HostConfig.Resources.IntelRdtMba = runtimeConfig.Linux.IntelRdt.IntelRdtMba
 	}
-
-	// Set Swappiness field.
-	if runtimeConfig.Linux.Resources.MemorySwappiness != nil {
-		config.HostConfig.Resources.MemorySwappiness = &runtimeConfig.Linux.Resources.MemorySwappiness.Value
-	}
-	// Set MemorySwap field.
-	config.HostConfig.Resources.MemorySwap = runtimeConfig.Linux.Resources.MemorySwap
-	// Set CPUBvtWarpNs field.
-	config.HostConfig.Resources.CPUBvtWarpNs = runtimeConfig.Linux.Resources.CpuBvtWarpNs
-	// Set PidsLimit field.
-	config.HostConfig.Resources.PidsLimit = runtimeConfig.Linux.Resources.PidsLimit
 }
 
 // PauseContainer pauses the container.

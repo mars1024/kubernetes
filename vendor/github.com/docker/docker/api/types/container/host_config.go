@@ -337,7 +337,10 @@ type Resources struct {
 	Ulimits              []*units.Ulimit // List of ulimits to be set in the container
 
 	// Extended field.
-	CPUBvtWarpNs int64 `json:"CPUBvtWarpNs"` // https://yuque.antfin-inc.com/sys/sigma3.x/bibyod
+	CPUBvtWarpNs     int64  `json:"CPUBvtWarpNs"` // https://yuque.antfin-inc.com/sys/sigma3.x/bibyod
+	MemoryWmarkRatio int    `json:"MemoryWmarkRatio"`
+	IntelRdtGroup    string `json:"IntelRdtGroup"`
+	IntelRdtMba      string `json:"IntelRdtMba"`
 
 	// Applicable to Windows
 	CPUCount           int64  `json:"CpuCount"`   // CPU count

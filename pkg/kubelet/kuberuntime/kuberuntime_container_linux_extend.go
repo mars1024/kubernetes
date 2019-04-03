@@ -68,6 +68,7 @@ func applyDiskQuota(pod *v1.Pod, container *v1.Container, lc *runtimeapi.LinuxCo
 }
 
 // applyExtendContainerResource can merge extended resource feilds into container config of CRI.
+// Deprecated: Use annotations instead of extending CRI in future.
 func applyExtendContainerResource(pod *v1.Pod, container *v1.Container,
 	lc *runtimeapi.LinuxContainerConfig, enforceCPULimits bool) {
 	// Set ulimits if possible.
@@ -147,6 +148,33 @@ func applyExtendContainerResource(pod *v1.Pod, container *v1.Container,
 			lc.Resources.OomScoreAdj = hostConfig.OomScoreAdj
 			glog.V(0).Infof("Set OomScoreAdj with hostConfig value %d for container %s in pod %s",
 				hostConfig.OomScoreAdj, container.Name, format.Pod(pod))
+		}
+
+		// reset MemoryWmarkRatio defined in hostconfig
+		if hostConfig.MemoryWmarkRatio != 0 {
+			lc.Resources.MemoryWmarkRatio = float32(hostConfig.MemoryWmarkRatio)
+			glog.V(0).Infof("Set MemoryWmarkRatio with hostConfig value %v for container %s in pod %s",
+				hostConfig.MemoryWmarkRatio, container.Name, format.Pod(pod))
+		}
+
+		// reset IntelRdtMba if defined in hostconfig
+		if hostConfig.IntelRdtMba != "" {
+			if lc.IntelRdt == nil {
+				lc.IntelRdt = &runtimeapi.IntelRdt{}
+			}
+			lc.IntelRdt.IntelRdtMba = hostConfig.IntelRdtMba
+			glog.V(0).Infof("Set IntelRdtMba with hostConfig value %v for container %s in pod %s",
+				hostConfig.IntelRdtMba, container.Name, format.Pod(pod))
+		}
+
+		// reset IntelRdtGroup if defined in hostconfig
+		if hostConfig.IntelRdtGroup != "" {
+			if lc.IntelRdt == nil {
+				lc.IntelRdt = &runtimeapi.IntelRdt{}
+			}
+			lc.IntelRdt.IntelRdtGroup = hostConfig.IntelRdtGroup
+			glog.V(0).Infof("Set IntelRdtGroup with hostConfig value %v for container %s in pod %s",
+				hostConfig.IntelRdtGroup, container.Name, format.Pod(pod))
 		}
 	}
 }

@@ -23,6 +23,7 @@ import (
 var (
 	defaultCGroupName        = flag.String("default-cgroup-parent", defaultCGroupParent, "default cgroup parent for each pods")
 	guaranteedPodOOMScoreAdj = flag.Int64("guaranteed-pod-oom-score-adj", 0, "default oom_score_adj for guaranteed pods")
+	defaultPidsLimit         = flag.Int("default-pids-limit", 32767, "default pidsLimit for each container.")
 )
 
 const (
@@ -51,7 +52,6 @@ const (
 	cpuBvtWarpUnknown           = 0
 	cpuBvtWarpNsLatencySensitve = 2
 	cpuBvtWarpNsBatchJobs       = -1
-	defaultPidsLimit            = uint16(32767)
 
 	// 每个容器都要需要设置 SN 环境变量
 	containerSNEnvName = "SN"
@@ -190,7 +190,7 @@ next:
 		allocSpec.Containers[i].HostConfig.CgroupParent = addSlashFrontIfNotExists(c.HostConfig.CgroupParent)
 		// default pidsLimit.
 		if allocSpec.Containers[i].HostConfig.PidsLimit == 0 {
-			allocSpec.Containers[i].HostConfig.PidsLimit = defaultPidsLimit
+			allocSpec.Containers[i].HostConfig.PidsLimit = uint16(*defaultPidsLimit)
 		}
 
 		switch allocSpec.Containers[i].HostConfig.CgroupParent {

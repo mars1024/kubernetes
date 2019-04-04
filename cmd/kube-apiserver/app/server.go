@@ -496,6 +496,7 @@ func buildGenericConfig(
 		handler = genericfilters.WithTimeoutForNonLongRunningRequests(handler, c.LongRunningFunc, c.RequestTimeout)
 		handler = genericfilters.WithWaitGroup(handler, c.LongRunningFunc, c.HandlerChainWaitGroup)
 		handler = genericapifilters.WithRequestInfo(handler, c.RequestInfoResolver)
+		handler = multitenancyfilter.WithBlacklist(handler)
 		handler = genericfilters.WithPanicRecovery(handler)
 		return handler
 

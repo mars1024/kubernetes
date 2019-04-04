@@ -93,6 +93,7 @@ var _ = Describe("[sigma-kubelet][alidocker-hostname] check AliDocker's hostname
 	It("[smoke][ant]ali.host.dns=true and pod has hostname specified", func() {
 		pod := generateRunningPod()
 		pod.Labels[labelHostDNS] = "true"
+		pod.Labels[sigmak8sapi.LabelServerType] = sigmak8sapi.PodLabelDockerVM
 		pod.Annotations[sigmak8sapi.AnnotationPodHostNameTemplate] = podHostname
 
 		testCase := hostnameTestCase{
@@ -105,6 +106,7 @@ var _ = Describe("[sigma-kubelet][alidocker-hostname] check AliDocker's hostname
 	It("[ant]ali.host.dns=true and pod has no hostname specified", func() {
 		pod := generateRunningPod()
 		pod.Labels[labelHostDNS] = "true"
+		pod.Labels[sigmak8sapi.LabelServerType] = sigmak8sapi.PodLabelDockerVM
 
 		testCase := hostnameTestCase{
 			pod:        pod,

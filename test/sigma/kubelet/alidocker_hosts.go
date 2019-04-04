@@ -139,6 +139,7 @@ var _ = Describe("[sigma-kubelet][alidocker-hosts] check AliDocker's HostAliases
 	It("[smoke][ant]ali.host.dns=true and pod has HostAliases", func() {
 		pod := generateRunningPod()
 		pod.Labels[labelHostDNS] = "true"
+		pod.Labels[sigmak8sapi.LabelServerType] = sigmak8sapi.PodLabelDockerVM
 		pod.Spec.HostAliases = []v1.HostAlias{
 			v1.HostAlias{
 				Hostnames: []string{"localhost.localdomain11", "localhost.localdomain22"},
@@ -159,6 +160,7 @@ var _ = Describe("[sigma-kubelet][alidocker-hosts] check AliDocker's HostAliases
 	It("[smoke][ant]ali.host.dns=true, pod has HostAliases and hostDomainName", func() {
 		pod := generateRunningPod()
 		pod.Labels[labelHostDNS] = "true"
+		pod.Labels[sigmak8sapi.LabelServerType] = sigmak8sapi.PodLabelDockerVM
 		pod.Annotations[sigmak8sapi.AnnotationPodHostNameTemplate] = "sigmaslave110.alipay.com"
 		pod.Spec.HostAliases = []v1.HostAlias{
 			v1.HostAlias{
@@ -180,6 +182,7 @@ var _ = Describe("[sigma-kubelet][alidocker-hosts] check AliDocker's HostAliases
 	It("[ant]ali.host.dns=true and pod has no HostAliases", func() {
 		pod := generateRunningPod()
 		pod.Labels[labelHostDNS] = "true"
+		pod.Labels[sigmak8sapi.LabelServerType] = sigmak8sapi.PodLabelDockerVM
 		testCase := hostsTestCase{
 			pod:            pod,
 			checkCommand:   "cat /etc/hosts",

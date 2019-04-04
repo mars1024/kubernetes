@@ -7,6 +7,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -113,9 +114,11 @@ var _ = Describe("[sigma-kubelet][alidocker-dns] check AliDocker's resolv.conf",
 	f := framework.NewDefaultFramework("sigma-kubelet")
 
 	labelHostDNS := "ali.host.dns"
-	It("[smoke]ali.host.dns=true and pod has dnsConfig", func() {
+	// TODO: Remove [ant] when new version pouch suppport this.
+	It("[smoke][ant]ali.host.dns=true and pod has dnsConfig", func() {
 		pod := generateRunningPod()
 		pod.Labels[labelHostDNS] = "true"
+		pod.Labels[sigmak8sapi.LabelServerType] = sigmak8sapi.PodLabelDockerVM
 		pod.Spec.DNSPolicy = v1.DNSNone
 		valueStr := "2"
 		pod.Spec.DNSConfig = &v1.PodDNSConfig{

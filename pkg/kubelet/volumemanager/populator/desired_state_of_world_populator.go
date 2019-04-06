@@ -327,6 +327,21 @@ func (dswp *desiredStateOfWorldPopulator) processPodVolumes(
 		}
 	}
 
+	// Remove volume from desired state of world (eg: user remove volumes from pod spec)
+	// Note: only non-PV supported for now, removing PV volume from pod is not permitted for now
+	for _, volumeToMount := range dswp.desiredStateOfWorld.GetVolumesToMount() {
+		pod, podExists := dswp.podManager.GetPodByUID(volumeToMount.Pod.UID)
+		if podExists && !podContainsVolume(pod, volumeToMount.VolumeSpec) {
+			dswp.desiredStateOfWorld.DeletePodFromVolume(volumeToMount.PodName, volumeToMount.VolumeName)
+			dswp.deleteProcessedPod(volumeToMount.PodName)
+			glog.V(4).Infof(
+				"Removed volume %q (volSpec=%q) for pod %q from desired state.",
+				volumeToMount.VolumeName,
+				volumeToMount.VolumeSpec.Name(),
+				uniquePodName)
+		}
+
+	}
 	// some of the volume additions may have failed, should not mark this pod as fully processed
 	if allVolumesAdded {
 		dswp.markPodProcessed(uniquePodName)

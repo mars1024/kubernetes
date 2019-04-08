@@ -464,10 +464,17 @@ func (m *kubeGenericRuntimeManager) podSandboxChanged(pod *v1.Pod, podStatus *ku
 		return true, false, sandboxStatus.Metadata.Attempt + 1, sandboxStatus.Id
 	}
 
-	// Needs to start sandbox if pod has IP.
-	if len(pod.Status.PodIP) > 0 && sandboxStatus.State != runtimeapi.PodSandboxState_SANDBOX_READY {
-		glog.V(2).Infof("No ready sandbox for pod %q can be found. Need to start the latest one", format.Pod(pod))
-		return false, true, sandboxStatus.Metadata.Attempt + 1, sandboxStatus.Id
+	// If pod has IP or there are some containers are created, we need restart sandbox only, else we can recreate sandbox.
+	if sandboxStatus.State != runtimeapi.PodSandboxState_SANDBOX_READY {
+		// It is safe to recreate the sandbox when pod has no ip and all containers are not created.
+		if len(pod.Status.PodIP) > 0 || len(podStatus.ContainerStatuses) > 0 {
+			glog.V(2).Infof("No ready sandbox for pod %q can be found. Need to start the latest one", format.Pod(pod))
+			return false, true, sandboxStatus.Metadata.Attempt, sandboxStatus.Id
+		} else {
+			glog.V(2).Infof("No ready sandbox for pod %q can be found and the pod is not delivered. Need to create a new sandbox",
+				format.Pod(pod))
+			return true, false, sandboxStatus.Metadata.Attempt + 1, sandboxStatus.Id
+		}
 	}
 
 	// Needs to create a new sandbox when network namespace changed.
@@ -476,10 +483,11 @@ func (m *kubeGenericRuntimeManager) podSandboxChanged(pod *v1.Pod, podStatus *ku
 		return true, false, sandboxStatus.Metadata.Attempt + 1, ""
 	}
 
-	// Needs to create a new sandbox when the sandbox does not have an IP address.
+	// Needs to restart the latest sandbox when the sandbox does not have an IP address.
+	// IP will be set in the start procedure.
 	if !kubecontainer.IsHostNetworkPod(pod) && sandboxStatus.Network.Ip == "" {
-		glog.V(2).Infof("Sandbox for pod %q has no IP address.  Need to start a new one", format.Pod(pod))
-		return true, false, sandboxStatus.Metadata.Attempt + 1, sandboxStatus.Id
+		glog.V(2).Infof("Sandbox for pod %q has no IP address.  Need to start the latest one", format.Pod(pod))
+		return false, true, sandboxStatus.Metadata.Attempt, sandboxStatus.Id
 	}
 
 	return false, false, sandboxStatus.Metadata.Attempt, sandboxStatus.Id
@@ -976,6 +984,13 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 		glog.V(4).Infof("Starting sandbox for pod %s", format.Pod(pod))
 		startSandboxResult := kubecontainer.NewSyncResult(kubecontainer.CreatePodSandbox, format.Pod(pod))
 		result.AddSyncResult(startSandboxResult)
+
+		// Stop sandbox if needed.
+		// Don't use StopPodSandbox here because StartPodSandbox will release ip.
+		if err := m.runtimeService.StopContainer(podSandboxID, 0); err != nil {
+			glog.Warningf("Stop sandbox %s failed: %v", podSandboxID, err)
+		}
+
 		if err := m.runtimeService.StartPodSandbox(podSandboxID); err != nil {
 			glog.Errorf("Failed to start sandbox %s", podSandboxID)
 			result.Fail(err)

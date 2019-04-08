@@ -875,7 +875,7 @@ func TestComputePodActions(t *testing.T) {
 			actions: podActions{
 				StartSandbox:                        true,
 				SandboxID:                           baseStatus.SandboxStatuses[0].Id,
-				Attempt:                             uint32(1),
+				Attempt:                             uint32(0),
 				ContainersToStart:                   []int{},
 				ContainersToKill:                    getKillMap(basePod, baseStatus, []int{}),
 				ContainersToStartBecauseDesireState: []int{0, 1, 2},
@@ -887,7 +887,7 @@ func TestComputePodActions(t *testing.T) {
 				ContainersToUnsuspend:               make(map[kubecontainer.ContainerID]containerOperationInfo),
 			},
 		},
-		"Kill pod and recreate all containers (except for the succeeded one) if the pod sandbox is dead, and RestartPolicy == OnFailure": {
+		"Restart all containers (except for the succeeded one) if the pod sandbox is dead, and RestartPolicy == OnFailure": {
 			mutatePodFn: func(pod *v1.Pod) {
 				pod.Spec.RestartPolicy = v1.RestartPolicyOnFailure
 				pod.Status.PodIP = "1.1.1.1"
@@ -900,7 +900,7 @@ func TestComputePodActions(t *testing.T) {
 			actions: podActions{
 				StartSandbox:                        true,
 				SandboxID:                           baseStatus.SandboxStatuses[0].Id,
-				Attempt:                             uint32(1),
+				Attempt:                             uint32(0),
 				ContainersToStart:                   []int{},
 				ContainersToKill:                    getKillMap(basePod, baseStatus, []int{}),
 				ContainersToStartBecauseDesireState: []int{0, 2},
@@ -912,9 +912,11 @@ func TestComputePodActions(t *testing.T) {
 				ContainersToUnsuspend:               make(map[kubecontainer.ContainerID]containerOperationInfo),
 			},
 		},
-		"Kill pod and recreate all containers if the PodSandbox does not have an IP": {
+		"Kill pod and recreate all containers if the PodSandbox does not have an IP and no container is created": {
 			mutateStatusFn: func(status *kubecontainer.PodStatus) {
 				status.SandboxStatuses[0].Network.Ip = ""
+				status.SandboxStatuses[0].State = runtimeapi.PodSandboxState_SANDBOX_NOTREADY
+				status.ContainerStatuses = []*kubecontainer.ContainerStatus{}
 			},
 			actions: podActions{
 				KillPod:                             true,

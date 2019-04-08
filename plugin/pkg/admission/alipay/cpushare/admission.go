@@ -14,8 +14,10 @@ const (
 	// PluginName is the name for current plugin, it should be unique among all plugins
 	PluginName = "AlipayCPUShareInject"
 
-	cpushareModeEnvName  = "ALIPAY_SIGMA_CPUMODE"
-	cpushareModeEnvValue = "cpushare"
+	cpushareModeEnvName             = "ALIPAY_SIGMA_CPUMODE"
+	cpushareModeEnvValue            = "cpushare"
+	cpushareMaxProcessorEnvName     = "SIGMA_MAX_PROCESSORS_LIMIT"
+	cpushareAJDKMaxProcessorEnvName = "AJDK_MAX_PROCESSORS_LIMIT"
 
 	cpushareVolumeName = "cpushare-volume"
 	cpusharePatchFile  = "/lib/libsysconf-alipay.so"
@@ -101,6 +103,33 @@ func (a *AlipayCPUShareAdmission) injectCPUShare(pod *core.Pod) error {
 			pod.Spec.Containers[i].Env = append(pod.Spec.Containers[i].Env, core.EnvVar{
 				Name:  cpushareModeEnvName,
 				Value: cpushareModeEnvValue,
+			})
+		}
+
+		//add container env: SIGMA_MAX_PROCESSORS_LIMIT=cpu request
+		// For cpuset container, it should be cpuset cores number;
+		// For cpushare container, it will be cpu request(after cpushare admission injection)
+		if !hasEnv(pod.Spec.Containers[i].Env, cpushareMaxProcessorEnvName) {
+			cpuNum := pod.Spec.Containers[i].Resources.Limits.Cpu()
+			// round up to integer, so 1.5C would become 2C.
+			// A zero cpu request would end up at least 1.
+			cpuNum.RoundUp(0)
+
+			pod.Spec.Containers[i].Env = append(pod.Spec.Containers[i].Env, core.EnvVar{
+				Name:  cpushareMaxProcessorEnvName,
+				Value: cpuNum.String(),
+			})
+		}
+
+		if !hasEnv(pod.Spec.Containers[i].Env, cpushareAJDKMaxProcessorEnvName) {
+			cpuNum := pod.Spec.Containers[i].Resources.Limits.Cpu()
+			// round up to integer, so 1.5C would become 2C.
+			// A zero cpu request would end up at least 1.
+			cpuNum.RoundUp(0)
+
+			pod.Spec.Containers[i].Env = append(pod.Spec.Containers[i].Env, core.EnvVar{
+				Name:  cpushareAJDKMaxProcessorEnvName,
+				Value: cpuNum.String(),
 			})
 		}
 

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apiserver/pkg/admission"
 
@@ -54,9 +55,17 @@ func TestAdmit(t *testing.T) {
 
 	// assert container env and volumeMounts are successfully injected
 	for _, container := range pod.Spec.Containers {
-		assert.Equal(1, len(container.Env))
+		assert.Equal(3, len(container.Env))
 		assert.Equal(cpushareModeEnvName, container.Env[0].Name)
 		assert.Equal(cpushareModeEnvValue, container.Env[0].Value)
+
+		// assert container cpushareMaxProcessorEnvName env is injected
+		assert.Equal(cpushareMaxProcessorEnvName, container.Env[1].Name)
+		assert.Equal("3", container.Env[1].Value)
+
+		// assert container cpushareAJDKMaxProcessorEnvName env is injected
+		assert.Equal(cpushareAJDKMaxProcessorEnvName, container.Env[2].Name)
+		assert.Equal("3", container.Env[2].Value)
 
 		assert.Equal(1, len(container.VolumeMounts))
 		assert.Equal(cpushareVolumeName, container.VolumeMounts[0].Name)
@@ -83,10 +92,26 @@ func newPod() *core.Pod {
 							Value: cpushareModeEnvValue,
 						},
 					},
+					Resources: core.ResourceRequirements{
+						Limits: core.ResourceList{
+							core.ResourceCPU: *resource.NewMilliQuantity(3000, resource.DecimalSI),
+						},
+						Requests: core.ResourceList{
+							core.ResourceCPU: *resource.NewMilliQuantity(1500, resource.DecimalSI),
+						},
+					},
 				},
 				{
 					Name:  "sidecar",
 					Image: "pause:2.0",
+					Resources: core.ResourceRequirements{
+						Limits: core.ResourceList{
+							core.ResourceCPU: *resource.NewMilliQuantity(3000, resource.DecimalSI),
+						},
+						Requests: core.ResourceList{
+							core.ResourceCPU: *resource.NewMilliQuantity(1500, resource.DecimalSI),
+						},
+					},
 				},
 			},
 		},

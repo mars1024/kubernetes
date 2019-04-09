@@ -8,7 +8,7 @@ const (
 	// FQDN is full qualified domain name of Pods
 	FQDN = MetaAlipayPrefix + "/fqdn"
 
-	// pod ip
+	// LabelPodIp stores pod ip address
 	LabelPodIp = MetaAlipayPrefix + "/pod-ip"
 
 	// pod container id
@@ -37,6 +37,17 @@ const (
 
 	// LabelPodAppEnv is the application environment for pod
 	LabelPodAppEnv = MetaAlipayPrefix + "/app-env"
+
+	// LabelPodAppCPUProfile indicates application custom cpu profile.
+	// Right now, it is set to pod from PAAS.
+	// See doc: https://yuque.antfin-inc.com/sys/sigma3.x/scrh0f#7eddfda9
+	LabelPodAppCPUProfile = CustomAlipayPrefix + "/app-cpu-profile"
+)
+
+// Readiness Gate.
+const (
+	// TimeShareSchedulingReadinessGate is a readiness gate for time-sharing.
+	TimeShareSchedulingReadinessGate = CustomAlipayPrefix + "/time-sharing-scheduling"
 )
 
 // PodPromotionType defines a new type for podPromotion type value

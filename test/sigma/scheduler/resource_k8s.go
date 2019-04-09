@@ -337,6 +337,11 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][resource][Serial]", func() {
 		framework.ExpectNodeHasLabel(cs, nodeName, sigmak8sapi.LabelCPUOverQuota, "2")
 		defer framework.RemoveLabelOffNode(cs, nodeName, sigmak8sapi.LabelCPUOverQuota)
 
+		if env.Tester == env.TesterAnt {
+			swarm.SetNodeOverQuota(nodeName, 2, 1)
+			defer swarm.SetNodeToNotOverQuota(nodeName)
+		}
+
 		overQuotaTaint := v1.Taint{
 			Key:    sigmak8sapi.LabelEnableOverQuota,
 			Value:  "true",

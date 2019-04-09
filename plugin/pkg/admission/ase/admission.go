@@ -425,7 +425,6 @@ func makeVolumeMountsForLogAgentContainer(items *[]VolumeMountConfigItem) []core
 			result = append(result, core.VolumeMount{
 				Name:      item.VolumeName,
 				MountPath: getMountPathForLogAgentContainer(item.MountAs),
-				ReadOnly:  true,
 			})
 		}
 		return result

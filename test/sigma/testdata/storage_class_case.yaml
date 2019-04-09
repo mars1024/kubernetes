@@ -1,0 +1,98 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: multidisk-csi-test
+
+---
+
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: nodediskstorageclasses.storageextensions.sigma.alipay.com
+  namespace: multidisk-csi-test
+spec:
+  group: storageextensions.sigma.alipay.com
+  version: v1
+  names:
+    kind: NodeDiskStorageClass
+    plural: nodediskstorageclasses
+  scope: Namespaced
+
+---
+apiVersion: storageextensions.sigma.alipay.com/v1
+kind: NodeDiskStorageClass
+metadata:
+  name: node-disk-class-1
+  namespace: multidisk-csi-test
+spec:
+  selector:
+    matchLabels:
+      a: b
+    matchExpressions:
+      - {key: c, operator: In, values: [a]}
+  storageClasses:
+    - storageClassName: csi-alilocal-test
+      mountPoints: 
+        - /
+  root: /
+
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: csi-alilocal-test
+  namespace: multidisk-csi-test
+provisioner: csi-alilocal
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+
+---
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: csi-pvc
+  namespace: multidisk-csi-test
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 500M
+  storageClassName: csi-alilocal-test
+
+---
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bvt-pod-multidisk-1
+  namespace: multidisk-csi-test
+  annotations:
+          pod.beta1.sigma.ali/alloc-spec: '{"containers":[{"name":"web","hostConfig":{"diskQuotaMode":"/"}}]}'
+  labels:
+    sigma.ali/app-name: my-app
+    sigma.ali/instance-group: sigma-alipay-test
+    sigma.ali/deploy-unit: dev
+    sigma.ali/site: gtjsqa
+    meta.k8s.alipay.com/zone: AZ00A
+spec:
+  containers:
+    - name: web
+      image: reg.docker.alibaba-inc.com/antk8s/nginx
+      resources:
+        limits:
+          cpu: "1"
+          ephemeral-storage: 3Gi
+          memory: 2Gi
+        requests:
+          cpu: "1"
+          ephemeral-storage: 3Gi
+          memory: 2Gi
+      volumeMounts:
+        - name: test-csi-pvc
+          mountPath: /test-pvc
+  volumes:
+    - name: test-csi-pvc
+      persistentVolumeClaim:
+        claimName: csi-pvc

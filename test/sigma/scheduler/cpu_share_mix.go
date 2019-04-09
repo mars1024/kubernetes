@@ -152,4 +152,80 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler]cpushare][cpu]", func() {
 		)
 	})
 
+	// 非超卖场景下验证分配的物理核优先，sigma2.0 CPUSet容器的扩缩容对k8s CPUSharePool分配正确
+	// 步骤 要求每个容器分配的cpu个数不能低于2个，否则这个case会验证失败
+	// 1.  1/4 整机核 cpushare k8s（预期成功）
+	// 2.  1/4 整机核 cpuset  sigma（预期成功）
+	// 3.  删除sigma容器
+
+	// 验证结果
+	//1. node节点的sharePool的值 = 整机cpu - cpuset容器的cpu
+	//2. cpuset的cpu，容器内不重叠
+	//3. cpuset的cpu，整机不重叠
+	It("[smoke][p0] cpushareMix002", func() {
+
+		nodeName := GetNodeThatCanRunPod(f)
+		Expect(nodeName).ToNot(BeNil())
+
+		framework.Logf("get one node to schedule, nodeName: %s", nodeName)
+		framework.WaitForStableCluster(cs, masterNodes)
+		// Apply kubernetes node label to each node
+
+		AllocatableCPU := nodeToAllocatableMapCPU[nodeName]
+		AllocatableMemory := nodeToAllocatableMapMem[nodeName]
+		AllocatableDisk := nodeToAllocatableMapEphemeralStorage[nodeName]
+
+		requestedCPU := AllocatableCPU / 4
+		requestedMemory := AllocatableMemory / 8 //保证一定能扩容出来
+		requestedDisk := AllocatableDisk / 8     //保证一定能扩容出来
+
+		// get nodeIP by node name
+		nodeIP := nodesInfo[nodeName].Status.Addresses[0].Address
+		localInfoString := nodesInfo[nodeName].Annotations[api.AnnotationLocalInfo]
+		Expect(localInfoString == "").ShouldNot(BeTrue(), fmt.Sprintf("nodeName:%s, localInfoString is empty", nodeName))
+		localInfo := &api.LocalInfo{}
+		if err := json.Unmarshal([]byte(localInfoString), localInfo); err != nil {
+			Expect(err).ShouldNot(HaveOccurred(), fmt.Sprintf("nodeName:%s, localInfoString:%v parse error", nodeName, localInfoString))
+		}
+
+		tests := []resourceCase{
+			{
+				cpu:             requestedCPU,
+				mem:             requestedMemory,
+				ethstorage:      requestedDisk,
+				requestType:     requestTypeKubernetes,
+				shouldScheduled: true,
+				cpushare:        true,
+				affinityConfig:  map[string][]string{api.LabelNodeIP: {nodeIP}},
+			},
+			{
+				cpu:             requestedCPU,
+				mem:             requestedMemory,
+				ethstorage:      requestedDisk,
+				requestType:     requestTypeSigma,
+				shouldScheduled: true,
+				affinityConfig:  map[string][]string{"ali.SpecifiedNcIps": {nodeIP}},
+				spreadStrategy:  "sameCoreFirst",
+			},
+			{
+				cleanIndexes: []int{1},
+				requestType:  cleanResource,
+			},
+		}
+		testContext := &testContext{
+			caseName:  "cpushareMix002",
+			cs:        cs,
+			localInfo: localInfo,
+			f:         f,
+			testCases: tests,
+			nodeName:  nodeName,
+		}
+
+		testContext.execTests(
+			checkContainerCPUIDNotDuplicated,
+			checkHostCPUIdNotDuplicated,
+			checkSharePool,
+			checkContainerShareCPUShouldBeNil,
+		)
+	})
 })

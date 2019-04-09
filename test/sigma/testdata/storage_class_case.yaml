@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: happyleaf-csi-test
+  name: multidisk-csi-test
 
 ---
 
@@ -9,7 +9,7 @@ apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
   name: nodediskstorageclasses.storageextensions.sigma.alipay.com
-  namespace: happyleaf-csi-test
+  namespace: multidisk-csi-test
 spec:
   group: storageextensions.sigma.alipay.com
   version: v1
@@ -23,7 +23,7 @@ apiVersion: storageextensions.sigma.alipay.com/v1
 kind: NodeDiskStorageClass
 metadata:
   name: node-disk-class-1
-  namespace: happyleaf-csi-test
+  namespace: multidisk-csi-test
 spec:
   selector:
     matchLabels:
@@ -41,7 +41,7 @@ apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
   name: csi-alilocal-test
-  namespace: happyleaf-csi-test
+  namespace: multidisk-csi-test
 provisioner: csi-alilocal
 reclaimPolicy: Delete
 volumeBindingMode: WaitForFirstConsumer
@@ -52,7 +52,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: csi-pvc
-  namespace: happyleaf-csi-test
+  namespace: multidisk-csi-test
 spec:
   accessModes:
     - ReadWriteOnce
@@ -66,8 +66,8 @@ spec:
 apiVersion: v1
 kind: Pod
 metadata:
-  name: bvt-pod-happyleaf-1
-  namespace: happyleaf-csi-test
+  name: bvt-pod-multidisk-1
+  namespace: multidisk-csi-test
   annotations:
           pod.beta1.sigma.ali/alloc-spec: '{"containers":[{"name":"web","hostConfig":{"diskQuotaMode":"/"}}]}'
   labels:

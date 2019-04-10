@@ -239,6 +239,10 @@ func (b *configMapVolumeMounter) SetUpAt(dir string, fsGroup *int64) error {
 	}()
 
 	writerContext := fmt.Sprintf("pod %v/%v volume %v", b.pod.Namespace, b.pod.Name, b.volName)
+	if err := b.ensureDir(dir); err != nil {
+		glog.Errorf("failed to ensure %q to be existed: %s", dir, err.Error())
+		return err
+	}
 	writer, err := volumeutil.NewAtomicWriter(dir, writerContext)
 	if err != nil {
 		glog.Errorf("Error creating atomic writer: %v", err)

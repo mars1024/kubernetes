@@ -362,6 +362,7 @@ func (ed *emptyDir) setupDir(dir string) error {
 			glog.Errorf("Expected directory %q permissions to be: %s; got: %s", dir, perm.Perm(), fileinfo.Mode().Perm())
 		}
 	}
+	glog.V(3).Infof("pod %v: setup dir(%s) for volume %v", ed.pod.UID, dir, ed.volName)
 
 	return nil
 }

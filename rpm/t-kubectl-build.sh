@@ -23,8 +23,8 @@ git clean -xdf
 git rev-parse --short  HEAD
 git status
 
-# delete git and init git to v1.12
-git tag -d `git tag` &&  git tag v1.12 &&  git tag
+# delete git and init git to v1.12.2
+git tag -d `git tag` &&  git tag v1.12.2 &&  git tag
 
 # compile binary
 bin="kubectl"

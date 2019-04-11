@@ -1,4 +1,4 @@
-package dockershim
+package sigma
 
 import (
 	"strings"
@@ -42,7 +42,7 @@ func TestParseDiskQuotaToLabel(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			value := parseDiskQuotaToLabel(tt.diskQuota)
+			value := ParseDiskQuotaToLabel(tt.diskQuota)
 			rootDiskQuotapass := false
 			items := strings.Split(value, ";")
 			for _, item := range items {
@@ -94,7 +94,7 @@ func TestParseDiskQuota(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			value := parseDiskQuota(tt.diskQuotaStr)
+			value := ParseDiskQuota(tt.diskQuotaStr)
 			assert.Equal(t, value, tt.expectDiskQuota)
 		})
 	}

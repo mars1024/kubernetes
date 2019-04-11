@@ -31,9 +31,9 @@ import (
 	"github.com/golang/glog"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/kubernetes/pkg/features"
-
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 	"k8s.io/kubernetes/pkg/kubelet/dockershim/libdocker"
+	sigmautil "k8s.io/kubernetes/pkg/kubelet/sigma"
 )
 
 // ListContainers lists all containers matching the filter.
@@ -112,7 +112,7 @@ func (ds *dockerService) CreateContainer(_ context.Context, r *runtimeapi.Create
 	if config.Linux != nil && config.Linux.Resources != nil && len(config.Linux.Resources.DiskQuota) > 0 {
 		// Write AutoQuotaId as true in the labels.
 		labels[labelAutoQuotaId] = strconv.FormatBool(true)
-		labels[labelDiskQuota] = parseDiskQuotaToLabel(config.Linux.Resources.DiskQuota)
+		labels[labelDiskQuota] = sigmautil.ParseDiskQuotaToLabel(config.Linux.Resources.DiskQuota)
 	}
 	// Write QuotaId in the labels.
 	if quotaId, err := strconv.Atoi(config.QuotaId); err == nil && quotaId > 0 {

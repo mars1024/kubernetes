@@ -167,14 +167,14 @@ var _ = Describe("[sigma-kubelet] [Disruptive] inplace_update_004 update contain
 	})
 })
 
-var _ = Describe("[sigma-kubelet] inplace_update_005 update container's memory swappiness should be ok", func() {
+var _ = Describe("[sigma-kubelet] inplace_update_005 update container's memory swappiness in annotation should be ok", func() {
 	f := framework.NewDefaultFramework("sigma-kubelet")
 	initResource := getResourceRequirements(getResourceList("500m", "128Mi"), getResourceList("500m", "128Mi"))
 	It("update container's resource requirement without QoS class change", func() {
 		pod := generateRunningPodWithInitResource(initResource)
 		testCase := InplaceUpdateContainerResourceTestCase{
 			pod: pod,
-			patchData: fmt.Sprintf(`{"metadata": {"annotations": {%q:%q, %q:%q}}`,
+			patchData: fmt.Sprintf(`{"metadata": {"annotations": {%q:%q, %q:%q}}}`,
 				sigmak8sapi.AnnotationPodInplaceUpdateState, sigmak8sapi.InplaceUpdateStateAccepted,
 				sigmak8sapi.AnnotationPodAllocSpec, fmt.Sprintf(`{"containers":[{"name":"%s","hostConfig":{"memorySwappiness": 0}}]}`, pod.Spec.Containers[0].Name),
 			),

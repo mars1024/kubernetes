@@ -433,6 +433,12 @@ const (
 	// If there is no hashVersion in container,
 	// we regard it as v1.10 if DefaultHashVersionAs110 is true, else is v1.12.
 	DefaultHashVersionTo110 utilfeature.Feature = "DefaultHashVersionTo110"
+
+	// owner: @fankang.fk (fankang.fk@alibaba-inc.com)
+	// alpha: v1.12
+	//
+	// Disable the admit function to avoid reject pod.
+	DisableRejectPod utilfeature.Feature = "DisableRejectPod"
 )
 
 func init() {
@@ -508,6 +514,7 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	EvictPodByPolicy:                            {Default: true, PreRelease: utilfeature.Alpha},
 	DisableChangePodStatusByNodeReadyCondition:  {Default: true, PreRelease: utilfeature.Beta},
 	DefaultHashVersionTo110:                     {Default: false, PreRelease: utilfeature.Alpha},
+	DisableRejectPod:                            {Default: false, PreRelease: utilfeature.Alpha},
 
 	// inherited features from generic apiserver, relisted here to get a conflict if it is changed
 	// unintentionally on either side:

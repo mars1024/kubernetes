@@ -841,7 +841,9 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	evictionManager, evictionAdmitHandler := eviction.NewManager(klet.resourceAnalyzer, evictionConfig, killPodNow(klet.podWorkers, kubeDeps.Recorder), klet.imageManager, klet.containerGC, kubeDeps.Recorder, nodeRef, klet.clock)
 
 	klet.evictionManager = evictionManager
-	klet.admitHandlers.AddPodAdmitHandler(evictionAdmitHandler)
+	if !utilfeature.DefaultFeatureGate.Enabled(features.DisableRejectPod) {
+		klet.admitHandlers.AddPodAdmitHandler(evictionAdmitHandler)
+	}
 
 	if utilfeature.DefaultFeatureGate.Enabled(features.Sysctls) {
 		// add sysctl admission
@@ -864,7 +866,9 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	if err != nil {
 		return nil, err
 	}
-	klet.admitHandlers.AddPodAdmitHandler(oversold)
+	if !utilfeature.DefaultFeatureGate.Enabled(features.DisableRejectPod) {
+		klet.admitHandlers.AddPodAdmitHandler(oversold)
+	}
 
 	// enable active deadline handler
 	activeDeadlineHandler, err := newActiveDeadlineHandler(klet.statusManager, kubeDeps.Recorder, klet.clock)
@@ -875,7 +879,9 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	klet.AddPodSyncHandler(activeDeadlineHandler)
 
 	criticalPodAdmissionHandler := preemption.NewCriticalPodAdmissionHandler(klet.GetActivePods, killPodNow(klet.podWorkers, kubeDeps.Recorder), kubeDeps.Recorder)
-	klet.admitHandlers.AddPodAdmitHandler(lifecycle.NewPredicateAdmitHandler(klet.getNodeAnyWay, criticalPodAdmissionHandler, klet.containerManager.UpdatePluginResources))
+	if !utilfeature.DefaultFeatureGate.Enabled(features.DisableRejectPod) {
+		klet.admitHandlers.AddPodAdmitHandler(lifecycle.NewPredicateAdmitHandler(klet.getNodeAnyWay, criticalPodAdmissionHandler, klet.containerManager.UpdatePluginResources))
+	}
 	// apply functional Option's
 	for _, opt := range kubeDeps.Options {
 		opt(klet)

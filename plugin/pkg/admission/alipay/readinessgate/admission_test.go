@@ -73,7 +73,7 @@ func TestAdmit(t *testing.T) {
 			name:               "promotionType share, expect readiness Gate.",
 			promotionType:      string(antapi.PodPromotionTypeShare),
 			existReadinessGate: false,
-			hasReadinessGate:   true,
+			hasReadinessGate:   false,
 		},
 		{
 			name:               "promotionType taobao, expect readiness Gate.",

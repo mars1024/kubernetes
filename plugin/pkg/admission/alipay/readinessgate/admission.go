@@ -73,7 +73,7 @@ func (a *AlipayReadinessGate) Admit(attributes admission.Attributes) (err error)
 
 func (a *AlipayReadinessGate) setDefaultReadinessGate(pod *api.Pod) error {
 	// time-sharing pod.
-	if value, ok := pod.Labels[antapi.LabelPodPromotionType]; ok && value != antapi.PodPromotionTypeNone.String() {
+	if value, ok := pod.Labels[antapi.LabelPodPromotionType]; ok && (value == antapi.PodPromotionTypeTaobao.String() || value == antapi.PodPromotionTypeAntMember.String()) {
 		AddReadinessGate(pod, antapi.TimeShareSchedulingReadinessGate)
 	}
 	return nil

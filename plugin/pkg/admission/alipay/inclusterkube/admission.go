@@ -1,6 +1,7 @@
 package inclusterkube
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"net/url"
@@ -28,10 +29,15 @@ const (
 	kubernetesInClusterServicePort = "KUBERNETES_SERVICE_PORT"
 )
 
+var (
+	clusterDomain = flag.String("in-cluster-domain", "", "cluster domain used for search domain")
+)
+
 type AlipayInClusterKubernetes struct {
 	*admission.Handler
 
 	configMapLister corelisters.ConfigMapLister
+	clusterDomain   string
 }
 
 // Register registers a plugin
@@ -60,7 +66,7 @@ func (i *AlipayInClusterKubernetes) ValidateInitialization() error {
 }
 
 func NewAlipayInClusterKubernetes() *AlipayInClusterKubernetes {
-	return &AlipayInClusterKubernetes{Handler: admission.NewHandler(admission.Create)}
+	return &AlipayInClusterKubernetes{Handler: admission.NewHandler(admission.Create), clusterDomain: *clusterDomain}
 }
 
 func (i *AlipayInClusterKubernetes) Admit(a admission.Attributes) (err error) {
@@ -80,6 +86,7 @@ func (i *AlipayInClusterKubernetes) Admit(a admission.Attributes) (err error) {
 		return errors.NewInternalError(err)
 	}
 
+	i.HandleInClusterDNSSearchDomain(pod, a.GetNamespace())
 	return nil
 }
 
@@ -143,6 +150,30 @@ func getServerPortFromKubeConfig(kubeConfig *api.Config) (string, string, error)
 		return "", "", fmt.Errorf("url.Parse error: %v", err)
 	}
 	return u.Hostname(), u.Port(), nil
+}
+
+func (i *AlipayInClusterKubernetes) HandleInClusterDNSSearchDomain(pod *core.Pod, ns string) {
+	if len(i.clusterDomain) == 0 || len(ns) == 0 {
+		return
+	}
+
+	switch pod.Spec.DNSPolicy {
+	case core.DNSClusterFirst:
+		if pod.Spec.SecurityContext != nil && pod.Spec.SecurityContext.HostNetwork {
+			return
+		}
+	case core.DNSClusterFirstWithHostNet:
+	default:
+		return
+	}
+
+	if pod.Spec.DNSConfig == nil {
+		pod.Spec.DNSConfig = &core.PodDNSConfig{}
+	}
+	glog.V(4).Infof("inject dns search domain for pod %s/%s", ns, pod.Name)
+	pod.Spec.DNSConfig.Searches = append(pod.Spec.DNSConfig.Searches,
+		fmt.Sprintf("%s.svc.%s", ns, i.clusterDomain),
+		fmt.Sprintf("svc.%s", i.clusterDomain))
 }
 
 func shouldIgnore(attributes admission.Attributes) bool {

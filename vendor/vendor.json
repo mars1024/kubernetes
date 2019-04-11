@@ -429,16 +429,16 @@
 			"revisionTime": "2019-04-30T08:20:32Z"
 		},
 		{
-			"checksumSHA1": "8+3rQDSXrGhue996Rr5rbWsVWvA=",
+			"checksumSHA1": "+SIf/DKZujvrNo1GkMtzbY1VuYk=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/controller/nodelifecycle/scheduler",
-			"revision": "6ee881c2d7ef7c07388ef3b8778b3de9a94a892f",
-			"revisionTime": "2019-04-07T14:49:40Z"
+			"revision": "f6b0cc0da827d843bddd29eb0c91d029650e9ee0",
+			"revisionTime": "2019-04-11T12:12:44Z"
 		},
 		{
 			"checksumSHA1": "eClpikY41uZ/LbVfNmjpHyMVaHU=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/kube-aggregator/pkg/apiserver",
-			"revision": "6ee881c2d7ef7c07388ef3b8778b3de9a94a892f",
-			"revisionTime": "2019-04-07T14:49:40Z"
+			"revision": "f6b0cc0da827d843bddd29eb0c91d029650e9ee0",
+			"revisionTime": "2019-04-11T12:12:44Z"
 		},
 		{
 			"checksumSHA1": "K8+G1V4leN1kbadl/4a+4gNoQGo=",
@@ -485,14 +485,8 @@
 		{
 			"checksumSHA1": "Xq8EkboE7ql49/ct42PCvj1lKng=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/admission/multitenancyrestriction",
-			"revision": "81859822ef89ce7c2aab320e996ea6196a672b83",
-			"revisionTime": "2019-01-29T05:39:12Z"
-		},
-		{
-			"checksumSHA1": "Xq8EkboE7ql49/ct42PCvj1lKng=",
-			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/admission/multitenancyrestriction",
-			"revision": "efbebcc962ccefb7deea41ebfc049813eea93b8a",
-			"revisionTime": "2019-01-29T03:55:33Z"
+			"revision": "f6b0cc0da827d843bddd29eb0c91d029650e9ee0",
+			"revisionTime": "2019-04-11T12:12:44Z"
 		},
 		{
 			"checksumSHA1": "wU3VKYfpxK5GjPqykpsz5p5W/Ig=",
@@ -509,8 +503,8 @@
 		{
 			"checksumSHA1": "JOLvhyNxEVjAghSOKSw5zn6Tezs=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/auth/authorizer/bypassadmin",
-			"revision": "6ee881c2d7ef7c07388ef3b8778b3de9a94a892f",
-			"revisionTime": "2019-04-07T14:49:40Z"
+			"revision": "f6b0cc0da827d843bddd29eb0c91d029650e9ee0",
+			"revisionTime": "2019-04-11T12:12:44Z"
 		},
 		{
 			"checksumSHA1": "ZSLrtsjhGi2ZHC54fyIOm/52TpM=",

@@ -88,6 +88,7 @@ const (
 	MOSNSidecarIngressPort      = MOSNSidecarAlipayPrefix + "/ingress-port"
 	MOSNSidecarEgressPort       = MOSNSidecarAlipayPrefix + "/egress-port"
 	MOSNSidecarRegistryPort     = MOSNSidecarAlipayPrefix + "/registry-port"
+	MOSNSidecarSmoothUpgrade    = MOSNSidecarAlipayPrefix + "/smooth-upgrade"
 )
 
 // SidecarInjectionPolicy determines the policy for injecting the
@@ -107,4 +108,21 @@ const (
 	// annotation with value of "disabled".
 	// This annotation must be submitted with "mosn.sidecar.k8s.alipay.com/image" together.
 	SidecarInjectionPolicyEnabled SidecarInjectionPolicy = "enabled"
+)
+
+const (
+	// CSIAlipayPrefix is special sub-domain for csi
+	CSIAlipayPrefix = "csi." + AlipayGroupName
+	CSIDataRecycle  = CSIAlipayPrefix + "/data-recycle"
+)
+
+const (
+	// PodAlipayPrefix is special sub-domain for pod
+	PodAlipayPrefix = "pod." + AlipayGroupName
+	PodIPReuseTTL   = PodAlipayPrefix + "/ip-reuse-ttl"
+)
+
+const (
+	// Skip the AlipayResourceAdmission validation
+	SkipResourceAdmission = MetaAlipayPrefix + "/skip-resource-validation"
 )

@@ -16,4 +16,8 @@ const (
 	MandatoryAlipayPrefix string = "mandatory" + "." + AlipayGroupName
 	// NodeAlipayPrefix is Node labels/taint/annotations key prefix
 	NodeAlipayPrefix string = "node" + "." + AlipayGroupName
+	// NetworkAlipayPrefix is network prefix for Alibaba Cloud
+	NetworkAlipayPrefix string = "network" + "." + AlipayGroupName
+	// FinalizerAlipayPrefix is finalizer prefix for Alipay
+	FinalizerAlipayPrefix string = "finalizer" + "." + AlipayGroupName
 )

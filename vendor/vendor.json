@@ -3,6 +3,12 @@
 	"ignore": "",
 	"package": [
 		{
+			"checksumSHA1": "rs5R/nSz+hgp6V1vmyuYw3A6SRw=",
+			"path": "github.com/Knetic/govaluate",
+			"revision": "9aa49832a739dcd78a5542ff189fb82c3e423116",
+			"revisionTime": "2017-10-22T00:36:10Z"
+		},
+		{
 			"checksumSHA1": "9M1BUjBNckbad0h6aU/fqaZkSW8=",
 			"path": "github.com/go-logr/logr",
 			"revision": "9fb12b3b21c5415d16ac18dc5cd42c1cfdd40c4e",
@@ -13,12 +19,6 @@
 			"path": "github.com/go-logr/zapr",
 			"revision": "03f06a783fbb7dfaf3f629c7825480e43a7105e6",
 			"revisionTime": "2019-03-06T23:41:18Z"
-		},
-		{
-			"checksumSHA1": "rs5R/nSz+hgp6V1vmyuYw3A6SRw=",
-			"path": "github.com/Knetic/govaluate",
-			"revision": "9aa49832a739dcd78a5542ff189fb82c3e423116",
-			"revisionTime": "2017-10-22T00:36:10Z"
 		},
 		{
 			"checksumSHA1": "C3vYm4bMePcm9iiy7uPLmXscNNE=",
@@ -803,10 +803,10 @@
 			"versionExact": "master"
 		},
 		{
-			"checksumSHA1": "w6ze+sznXZ/5+wmL1Nhebxuelu4=",
+			"checksumSHA1": "87TVzjFNry9SUPaAHAnkLEjKJ0g=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/cafe-kubernetes-extension/plugin/admission/clusterinjection",
-			"revision": "83ac5ae254debf714147d3ce187ce3d75a7d9f1a",
-			"revisionTime": "2019-03-27T07:25:55Z"
+			"revision": "83f9e301ccf1866c7bd35b51b67b0ac3f8f46dd7",
+			"revisionTime": "2019-04-12T08:16:38Z"
 		},
 		{
 			"checksumSHA1": "nu2S+yIOytAwfojGEVtmtz6elxM=",
@@ -817,8 +817,8 @@
 		{
 			"checksumSHA1": "l8nvd8jhX90SsyN5irXf7m5ncKU=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/cafe-kubernetes-extension/plugin/admission/objectmetareconcile",
-			"revision": "83ac5ae254debf714147d3ce187ce3d75a7d9f1a",
-			"revisionTime": "2019-03-27T07:25:55Z"
+			"revision": "83f9e301ccf1866c7bd35b51b67b0ac3f8f46dd7",
+			"revisionTime": "2019-04-12T08:16:38Z"
 		},
 		{
 			"checksumSHA1": "bLHkfGWsuX1vymblAdh5FwGf53g=",
@@ -903,6 +903,12 @@
 			"path": "gopkg.in/tomb.v1",
 			"revision": "dd632973f1e7218eb1089048e0798ec9ae7dceb8",
 			"revisionTime": "2014-10-24T13:56:13Z"
+		},
+		{
+			"checksumSHA1": "ci23gRCbOL1vk70nLE7v7TWFxTM=",
+			"path": "k8s.io/klog",
+			"revision": "291f19f84ceb3e47785d3b4bda653cfcd58622a1",
+			"revisionTime": "2019-03-11T22:06:38Z"
 		},
 		{
 			"checksumSHA1": "ff+QfhJ3klBIOU8j29MWbT9cZXc=",
@@ -1001,12 +1007,6 @@
 			"path": "sigs.k8s.io/testing_frameworks/integration/internal",
 			"revision": "57f07443c2d47d9c7f932a9a4fc87fbf3408215d",
 			"revisionTime": "2019-01-30T14:01:39Z"
-		},
-		{
-			"checksumSHA1": "ci23gRCbOL1vk70nLE7v7TWFxTM=",
-			"path": "k8s.io/klog",
-			"revision": "291f19f84ceb3e47785d3b4bda653cfcd58622a1",
-			"revisionTime": "2019-03-11T22:06:38Z"
 		}
 	],
 	"rootPath": "k8s.io/kubernetes"

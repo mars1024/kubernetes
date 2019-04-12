@@ -318,7 +318,7 @@ func podMatchesScopeFunc(selector api.ScopedResourceSelectorRequirement, object 
 	case api.ResourceQuotaScopePriorityClass:
 		return podMatchesSelector(pod, selector)
 	}
-	return false, nil
+	return podMatchesSelector(pod, selector)
 }
 
 // PodUsageFunc returns the quota usage for a pod.
@@ -387,6 +387,12 @@ func podMatchesSelector(pod *api.Pod, selector api.ScopedResourceSelectorRequire
 	if labelSelector.Matches(labels.Set(m)) {
 		return true, nil
 	}
+
+	// do general label selector with pod labels.
+	if labelSelector.Matches(labels.Set(pod.Labels)) {
+		return true, nil
+	}
+
 	return false, nil
 }
 

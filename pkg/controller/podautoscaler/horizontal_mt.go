@@ -15,6 +15,6 @@ func (a *HorizontalController) ShallowCopyWithTenant(tenant multitenancy.TenantI
 	copied.podLister = a.podLister.(meta.TenantWise).ShallowCopyWithTenant(tenant).(corelisters.PodLister)
 	copied.hpaNamespacer = a.hpaNamespacer.(meta.TenantWise).ShallowCopyWithTenant(tenant).(autoscalingclient.HorizontalPodAutoscalersGetter)
 	copied.scaleNamespacer = a.scaleNamespacer.(meta.TenantWise).ShallowCopyWithTenant(tenant).(scale.ScalesGetter)
-	copied.replicaCalc = a.ShallowCopyWithTenant(tenant).(*ReplicaCalculator)
+	copied.replicaCalc = a.replicaCalc.ShallowCopyWithTenant(tenant).(*ReplicaCalculator)
 	return &copied
 }

@@ -110,13 +110,19 @@ func (r *proxyHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// write a new location based on the existing request pointed at the target service
 	location := &url.URL{}
 	location.Scheme = "https"
-	rloc, err := r.serviceResolver.ResolveEndpoint(handlingInfo.serviceNamespace, handlingInfo.serviceName)
-	if err != nil {
-		glog.Errorf("error resolving %s/%s: %v", handlingInfo.serviceNamespace, handlingInfo.serviceName, err)
-		http.Error(w, "service unavailable", http.StatusServiceUnavailable)
-		return
+	if len(handlingInfo.restConfig.Host) != 0 {
+		glog.V(4).Infof("Found override ake apiservice host %q", handlingInfo.restConfig.Host)
+		location.Host = handlingInfo.restConfig.Host
+	} else {
+		rloc, err := r.serviceResolver.ResolveEndpoint(handlingInfo.serviceNamespace, handlingInfo.serviceName)
+		if err != nil {
+			glog.Errorf("error resolving %s/%s: %v", handlingInfo.serviceNamespace, handlingInfo.serviceName, err)
+			http.Error(w, "service unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		location.Host = rloc.Host
 	}
-	location.Host = rloc.Host
+
 	location.Path = req.URL.Path
 	location.RawQuery = req.URL.Query().Encode()
 
@@ -208,6 +214,18 @@ func (r *proxyHandler) updateAPIService(apiService *apiregistrationapi.APIServic
 		serviceNamespace: apiService.Spec.Service.Namespace,
 		serviceAvailable: apiregistrationapi.IsAPIServiceConditionTrue(apiService, apiregistrationapi.Available),
 	}
+	// override default service based apiserver aggregator
+	// by stephen.xd
+	if serverAddr, ok := apiService.Annotations[AKEApiServiceAddrAnn]; ok {
+		serverHost, serverName, err := parseAKEApiService(serverAddr)
+		if err != nil {
+			glog.Infof("unable to parse ake apiService: %v", err)
+		} else {
+			newInfo.restConfig.TLSClientConfig.ServerName = serverName
+			newInfo.restConfig.Host = serverHost
+		}
+	}
+
 	if r.proxyTransport != nil && r.proxyTransport.DialContext != nil {
 		newInfo.restConfig.Dial = r.proxyTransport.DialContext
 	}

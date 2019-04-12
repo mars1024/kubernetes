@@ -63,6 +63,10 @@ func (r *MinionClusterInjection) ValidateInitialization() error {
 
 // Admit makes an admission decision based on the request attributes
 func (r *MinionClusterInjection) Admit(a admission.Attributes) error {
+	if a.GetResource().Group == "authorization.k8s.io" {
+		// Skip delegated RBAC requests
+		return nil
+	}
 	accessor, err := meta.Accessor(a.GetObject())
 	if err != nil {
 		return err

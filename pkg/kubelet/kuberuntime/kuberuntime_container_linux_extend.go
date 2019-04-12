@@ -167,6 +167,11 @@ func applyExtendContainerResource(pod *v1.Pod, container *v1.Container,
 				hostConfig.IntelRdtMba, container.Name, format.Pod(pod))
 		}
 
+		// reuse general cgroup parent
+		if hostConfig.IntelRdtGroup == "" {
+			hostConfig.IntelRdtGroup = hostConfig.CgroupParent
+		}
+
 		// reset IntelRdtGroup if defined in hostconfig
 		if hostConfig.IntelRdtGroup != "" {
 			if lc.IntelRdt == nil {

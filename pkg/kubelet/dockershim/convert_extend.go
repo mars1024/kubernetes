@@ -22,6 +22,10 @@ func toDockerResources(resources *runtimeapi.LinuxContainerResources) *dockercon
 		BlkioWeight:       uint16(resources.BlkioWeight),
 		KernelMemory:      resources.KernelMemory,
 		MemoryReservation: resources.MemoryReservation,
+		MemorySwap:        resources.MemorySwap,
+		CPUBvtWarpNs:      resources.CpuBvtWarpNs,
+		PidsLimit:         resources.PidsLimit,
+		MemoryWmarkRatio:  int(resources.MemoryWmarkRatio),
 	}
 	if resources.MemorySwappiness != nil {
 		dockerResources.MemorySwappiness = &resources.MemorySwappiness.Value
@@ -130,6 +134,10 @@ func toRuntimeAPIResources(resources *dockercontainer.Resources) *runtimeapi.Lin
 		BlkioWeight:       uint32(resources.BlkioWeight),
 		KernelMemory:      resources.KernelMemory,
 		MemoryReservation: resources.MemoryReservation,
+		CpuBvtWarpNs:      resources.CPUBvtWarpNs,
+		MemorySwap:        resources.MemorySwap,
+		PidsLimit:         resources.PidsLimit,
+		MemoryWmarkRatio:  float32(resources.MemoryWmarkRatio),
 	}
 	if resources.MemorySwappiness != nil {
 		CRIResources.MemorySwappiness = &runtimeapi.Int64Value{Value: *resources.MemorySwappiness}

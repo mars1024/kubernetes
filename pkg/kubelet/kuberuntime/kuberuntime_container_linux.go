@@ -31,6 +31,10 @@ import (
 const (
 	containerPouchCPUBvtWarpNsAnnotation = "customization.cpu_bvt_warp_ns"
 	containerPouchMemorySwapAnnotation   = "io.alibaba.pouch.resources.memory-swap"
+	containerPouchMemoryWMarkRatio       = "customization.memory_wmark_ratio"
+	containerPouchIntelRdtMba            = "customization.intel_rdt_mba"
+	containerPouchIntelRdtGroup          = "customization.intel_rdt_group"
+	containerPouchPidsLimit              = "io.alibaba.pouch.resources.pids-limit"
 )
 
 // applyPlatformSpecificContainerConfig applies platform specific configurations to runtimeapi.ContainerConfig.
@@ -39,14 +43,35 @@ func (m *kubeGenericRuntimeManager) applyPlatformSpecificContainerConfig(config 
 
 	applyExtendContainerConfig(pod, container, config)
 
-	// For pouch
+	// Generate annotations for pouch.
+	applyPlatformAnnotationForPouch(config)
+	return nil
+}
+
+// applyPlatformAnnotationForPouch will generate some annotations for pouch.
+// https://yuque.antfin-inc.com/huamin.thm/gfg57i/gg1y2a#522ef370
+// https://yuque.antfin-inc.com/pouchcontainer/cncf/cfen40
+func applyPlatformAnnotationForPouch(config *runtimeapi.ContainerConfig) {
 	if config.Linux.Resources.CpuBvtWarpNs != 0 {
 		config.Annotations[containerPouchCPUBvtWarpNsAnnotation] = strconv.Itoa(int(config.Linux.Resources.CpuBvtWarpNs))
 	}
-	if config.Linux.Resources.MemorySwap > 0 {
+	if config.Linux.Resources.MemorySwap != 0 {
 		config.Annotations[containerPouchMemorySwapAnnotation] = strconv.Itoa(int(config.Linux.Resources.MemorySwap))
 	}
-	return nil
+	if config.Linux.Resources.MemoryWmarkRatio > 0 {
+		config.Annotations[containerPouchMemoryWMarkRatio] = strconv.Itoa(int(config.Linux.Resources.MemoryWmarkRatio))
+	}
+	if config.Linux.IntelRdt != nil {
+		if len(config.Linux.IntelRdt.IntelRdtMba) != 0 {
+			config.Annotations[containerPouchIntelRdtMba] = config.Linux.IntelRdt.IntelRdtMba
+		}
+		if len(config.Linux.IntelRdt.IntelRdtGroup) != 0 {
+			config.Annotations[containerPouchIntelRdtGroup] = config.Linux.IntelRdt.IntelRdtGroup
+		}
+	}
+	if config.Linux.Resources.PidsLimit > 0 {
+		config.Annotations[containerPouchPidsLimit] = strconv.FormatInt(config.Linux.Resources.PidsLimit, 10)
+	}
 }
 
 // generateLinuxContainerConfig generates linux container config for kubelet runtime v1.

@@ -66,6 +66,7 @@ import (
 	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
 	multitenancymeta "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/meta"
 	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
+	multitenancycache "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/cache"
 )
 
 const (
@@ -902,7 +903,11 @@ func (c *configFactory) updateNodeInCache(oldObj, newObj interface{}) {
 	}
 
 	c.invalidateCachedPredicatesOnNodeUpdate(newNode, oldNode)
-	c.podQueue.MoveAllToActiveQueue()
+	// Only activate unschedulable pods if the node became more schedulable.
+	if nodeSchedulingPropertiesChanged(newNode, oldNode) {
+		// TODO(zibo.hzb): should just move pod with same cluster
+		c.podQueue.MoveAllToActiveQueue()
+	}
 }
 
 func (c *configFactory) invalidateCachedPredicatesOnNodeUpdate(newNode *v1.Node, oldNode *v1.Node) {
@@ -1421,7 +1426,7 @@ func NewPodInformer(client clientset.Interface, resyncPeriod time.Duration) core
 			",status.phase!=" + string(v1.PodFailed))
 	lw := cache.NewListWatchFromClient(client.CoreV1().RESTClient(), string(v1.ResourcePods), metav1.NamespaceAll, selector)
 	return &podInformer{
-		informer: cache.NewSharedIndexInformer(lw, &v1.Pod{}, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}),
+		informer: cache.NewSharedIndexInformer(lw, &v1.Pod{}, resyncPeriod, cache.Indexers{multitenancycache.TenantNamespaceIndex: multitenancycache.MetaTenantNamespaceIndexFunc}),
 	}
 }
 

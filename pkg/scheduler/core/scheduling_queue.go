@@ -200,6 +200,7 @@ func NewPriorityQueue() *PriorityQueue {
 	pq.cond.L = &pq.lock
 	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
 		pq.activeQ = newHeap(MultiTenancyKeyFuncWrapper(cache.MetaNamespaceKeyFunc), util.HigherPriorityPod)
+		pq.unschedulableQ = newUnschedulablePodsMapWithExtendKeyFunc()
 	}
 	return pq
 }

@@ -7,7 +7,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -163,6 +163,27 @@ var _ = Describe("[sigma-kubelet] [Disruptive] inplace_update_004 update contain
 
 		testCase.pod.Annotations = make(map[string]string)
 		testCase.pod.Annotations[sigmak8sapi.AnnotationPodInplaceUpdateState] = sigmak8sapi.InplaceUpdateStateAccepted
+		doInplaceUpdateContainerResourceTestCase(f, &testCase)
+	})
+})
+
+var _ = Describe("[sigma-kubelet] inplace_update_005 update container's memory swappiness in annotation should be ok", func() {
+	f := framework.NewDefaultFramework("sigma-kubelet")
+	initResource := getResourceRequirements(getResourceList("500m", "128Mi"), getResourceList("500m", "128Mi"))
+	It("update container's resource requirement without QoS class change", func() {
+		pod := generateRunningPodWithInitResource(initResource)
+		testCase := InplaceUpdateContainerResourceTestCase{
+			pod: pod,
+			patchData: fmt.Sprintf(`{"metadata": {"annotations": {%q:%q, %q:%q}}}`,
+				sigmak8sapi.AnnotationPodInplaceUpdateState, sigmak8sapi.InplaceUpdateStateAccepted,
+				sigmak8sapi.AnnotationPodAllocSpec, fmt.Sprintf(`{"containers":[{"name":"%s","hostConfig":{"memorySwappiness": 0}}]}`, pod.Spec.Containers[0].Name),
+			),
+			expectSuccess: true,
+		}
+
+		testCase.pod.Annotations = make(map[string]string)
+		testCase.pod.Annotations[sigmak8sapi.AnnotationPodInplaceUpdateState] = sigmak8sapi.InplaceUpdateStateAccepted
+
 		doInplaceUpdateContainerResourceTestCase(f, &testCase)
 	})
 })

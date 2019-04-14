@@ -27,7 +27,7 @@ import (
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	sigmautil "k8s.io/kubernetes/pkg/kubelet/sigma"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubetypes "k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -535,6 +535,10 @@ func computeResourceChanges(lc *runtimeapi.LinuxContainerResources, containerSta
 	}
 
 	if lc.MemoryLimitInBytes != currentResources.MemoryLimitInBytes {
+		resourceChanged[v1.ResourceMemory] = true
+	}
+
+	if lc.MemorySwappiness != currentResources.MemorySwappiness {
 		resourceChanged[v1.ResourceMemory] = true
 	}
 

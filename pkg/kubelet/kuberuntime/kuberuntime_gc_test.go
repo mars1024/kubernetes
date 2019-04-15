@@ -33,8 +33,10 @@ import (
 )
 
 func TestSandboxGC(t *testing.T) {
-	fakeRuntime, _, m, err := createTestRuntimeManager()
+	fakeRuntime, imageService, m, err := createTestRuntimeManager()
 	assert.NoError(t, err)
+
+	imageService.PullImage(&runtimeapi.ImageSpec{Image: "busybox"}, nil)
 
 	podStateProvider := m.containerGC.podStateProvider.(*fakePodStateProvider)
 	makeGCSandbox := func(pod *v1.Pod, attempt uint32, state runtimeapi.PodSandboxState, withPodStateProvider bool, createdAt int64) sandboxTemplate {
@@ -182,8 +184,10 @@ func TestSandboxGC(t *testing.T) {
 }
 
 func TestContainerGC(t *testing.T) {
-	fakeRuntime, _, m, err := createTestRuntimeManager()
+	fakeRuntime, imageService, m, err := createTestRuntimeManager()
 	assert.NoError(t, err)
+	imageService.PullImage(&runtimeapi.ImageSpec{Image: "test-image"}, nil)
+
 	m.containerGC.kubeClient = fake.NewSimpleClientset()
 	m.containerGC.nodeName = "host"
 	node := &v1.Node{

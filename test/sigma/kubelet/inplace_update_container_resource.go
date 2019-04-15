@@ -61,7 +61,7 @@ func doInplaceUpdateContainerResourceTestCase(f *framework.Framework, testCase *
 		Expect(state).Should(Equal(sigmak8sapi.InplaceUpdateStateSucceeded))
 
 		if testCase.expectDiskQuota != "" {
-			time.Sleep(time.Second * 10)
+			time.Sleep(time.Second * 30)
 			// Check DiskQuota.
 			checkCommand := "df -h | grep '/$' | awk '{print $2}'"
 			result := f.ExecShellInContainer(testPod.Name, containerName, checkCommand)

@@ -240,7 +240,10 @@ func (m *kubeGenericRuntimeManager) startContainer(podSandboxID string, podSandb
 
 func (m *kubeGenericRuntimeManager) updateContainer(containerID kubecontainer.ContainerID, container *v1.Container, pod *v1.Pod) (string, error) {
 	specAnnotations := make(map[string]string)
-	resources := m.generateLinuxContainerResources(container, pod)
+	resources, err := m.generateLinuxContainerResources(container, pod)
+	if err != nil {
+		return "", err
+	}
 	glog.Infof("update container: %s with linux resource: %+v", container.Name, resources)
 	containerStatus, err := m.runtimeService.ContainerStatus(containerID.ID)
 	if err != nil {
@@ -356,9 +359,9 @@ func (m *kubeGenericRuntimeManager) generateContainerConfig(container *v1.Contai
 	}
 
 	isHostDNS := sigmautil.IsPodHostDNSMode(pod)
-        if isHostDNS {
-                config.Labels[containerPouchCopyPodHostsLabel] = "true"
-        }
+	if isHostDNS {
+		config.Labels[containerPouchCopyPodHostsLabel] = "true"
+	}
 
 	// Add network env on sigmalet side.
 	// See: https://yuque.antfin-inc.com/sys/sigma3.x/tgpuxq
@@ -402,8 +405,21 @@ func (m *kubeGenericRuntimeManager) generateContainerConfig(container *v1.Contai
 }
 
 // returns linux container resources to the container.
-func (m *kubeGenericRuntimeManager) generateLinuxContainerResources(container *v1.Container, pod *v1.Pod) *runtimeapi.LinuxContainerResources {
-	return m.generateLinuxContainerConfig(container, pod, nil, "").Resources
+func (m *kubeGenericRuntimeManager) generateLinuxContainerResources(container *v1.Container, pod *v1.Pod) (*runtimeapi.LinuxContainerResources, error) {
+	// Get image status
+	imageSpec := &runtimeapi.ImageSpec{
+		Image: container.Image,
+	}
+	imageStatus, err := m.imageService.ImageStatus(imageSpec)
+	if err != nil {
+		return nil, err
+	}
+	if imageStatus == nil {
+		msg := fmt.Sprintf("image %s not found", container.Image)
+		return nil, errors.New(msg)
+	}
+
+	return m.generateLinuxContainerConfig(container, pod, imageStatus, nil, "").Resources, nil
 }
 
 // makeDevices generates container devices for kubelet runtime v1.

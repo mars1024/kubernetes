@@ -34,7 +34,9 @@ import (
 
 // TestRemoveContainer tests removing the container and its corresponding container logs.
 func TestRemoveContainer(t *testing.T) {
-	fakeRuntime, _, m, err := createTestRuntimeManager()
+	fakeRuntime, imageService, m, err := createTestRuntimeManager()
+	imageService.PullImage(&runtimeapi.ImageSpec{Image: "busybox"}, nil)
+
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			UID:       "12345678",
@@ -221,7 +223,8 @@ func TestToKubeContainerStatus(t *testing.T) {
 func TestLifeCycleHook(t *testing.T) {
 
 	// Setup
-	fakeRuntime, _, m, _ := createTestRuntimeManager()
+	fakeRuntime, imageService, m, _ := createTestRuntimeManager()
+	imageService.PullImage(&runtimeapi.ImageSpec{Image: "busybox"}, nil)
 
 	gracePeriod := int64(30)
 	cID := kubecontainer.ContainerID{

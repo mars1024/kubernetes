@@ -19,6 +19,8 @@ limitations under the License.
 package kuberuntime
 
 import (
+	"errors"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -39,7 +41,20 @@ const (
 
 // applyPlatformSpecificContainerConfig applies platform specific configurations to runtimeapi.ContainerConfig.
 func (m *kubeGenericRuntimeManager) applyPlatformSpecificContainerConfig(config *runtimeapi.ContainerConfig, container *v1.Container, pod *v1.Pod, uid *int64, username string) error {
-	config.Linux = m.generateLinuxContainerConfig(container, pod, uid, username)
+	// Get image status
+	imageSpec := &runtimeapi.ImageSpec{
+		Image: container.Image,
+	}
+	imageStatus, err := m.imageService.ImageStatus(imageSpec)
+	if err != nil {
+		return err
+	}
+	if imageStatus == nil {
+		msg := fmt.Sprintf("image %s not found", container.Image)
+		return errors.New(msg)
+	}
+
+	config.Linux = m.generateLinuxContainerConfig(container, pod, imageStatus, uid, username)
 
 	applyExtendContainerConfig(pod, container, config)
 
@@ -76,7 +91,7 @@ func applyPlatformAnnotationForPouch(config *runtimeapi.ContainerConfig) {
 
 // generateLinuxContainerConfig generates linux container config for kubelet runtime v1.
 // All supported resources will be generated here.
-func (m *kubeGenericRuntimeManager) generateLinuxContainerConfig(container *v1.Container, pod *v1.Pod, uid *int64, username string) *runtimeapi.LinuxContainerConfig {
+func (m *kubeGenericRuntimeManager) generateLinuxContainerConfig(container *v1.Container, pod *v1.Pod, imageStatus *runtimeapi.Image, uid *int64, username string) *runtimeapi.LinuxContainerConfig {
 	lc := &runtimeapi.LinuxContainerConfig{
 		Resources:       &runtimeapi.LinuxContainerResources{},
 		SecurityContext: m.determineEffectiveSecurityContext(pod, container, uid, username),
@@ -119,7 +134,7 @@ func (m *kubeGenericRuntimeManager) generateLinuxContainerConfig(container *v1.C
 		}
 	}
 
-	applyExtendContainerResource(pod, container, lc, m.cpuCFSQuota)
+	applyExtendContainerResource(pod, container, imageStatus, lc, m.cpuCFSQuota)
 
 	return lc
 }

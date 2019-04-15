@@ -56,7 +56,7 @@ func makeExpectedConfig(m *kubeGenericRuntimeManager, pod *v1.Pod, containerInde
 		Stdin:       container.Stdin,
 		StdinOnce:   container.StdinOnce,
 		Tty:         container.TTY,
-		Linux:       m.generateLinuxContainerConfig(container, pod, new(int64), ""),
+		Linux:       m.generateLinuxContainerConfig(container, pod, nil, new(int64), ""),
 		Envs:        envs,
 	}
 
@@ -69,6 +69,9 @@ func makeExpectedConfig(m *kubeGenericRuntimeManager, pod *v1.Pod, containerInde
 func TestGenerateContainerConfig(t *testing.T) {
 	_, imageService, m, err := createTestRuntimeManager()
 	assert.NoError(t, err)
+
+	imageId, _ := imageService.PullImage(&runtimeapi.ImageSpec{Image: "busybox"}, nil)
+	image, _ := imageService.ImageStatus(&runtimeapi.ImageSpec{Image: imageId})
 
 	runAsUser := int64(1000)
 	runAsGroup := int64(2000)
@@ -130,9 +133,6 @@ func TestGenerateContainerConfig(t *testing.T) {
 	_, _, err = m.generateContainerConfig(&podWithContainerSecurityContext.Spec.Containers[0], podWithContainerSecurityContext, 0, "", podWithContainerSecurityContext.Spec.Containers[0].Image, kubecontainer.ContainerTypeRegular)
 	assert.Error(t, err)
 
-	imageId, _ := imageService.PullImage(&runtimeapi.ImageSpec{Image: "busybox"}, nil)
-	image, _ := imageService.ImageStatus(&runtimeapi.ImageSpec{Image: imageId})
-
 	image.Uid = nil
 	image.Username = "test"
 
@@ -144,8 +144,10 @@ func TestGenerateContainerConfig(t *testing.T) {
 }
 
 func TestGenerateContainerConfigWithUlimits(t *testing.T) {
-	_, _, m, err := createTestRuntimeManager()
+	_, imageService, m, err := createTestRuntimeManager()
 	assert.NoError(t, err)
+
+	imageService.PullImage(&runtimeapi.ImageSpec{Image: "busybox"}, nil)
 
 	allocSpec := &sigmak8sapi.AllocSpec{
 		Containers: []sigmak8sapi.Container{

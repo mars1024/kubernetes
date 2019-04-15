@@ -6,6 +6,7 @@ import (
 	"github.com/golang/glog"
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 	sigmautil "k8s.io/kubernetes/pkg/kubelet/sigma"
 	"k8s.io/kubernetes/pkg/kubelet/util/format"
@@ -45,7 +46,7 @@ func applyExtendContainerConfig(pod *v1.Pod, container *v1.Container, config *ru
 
 // applyDiskQuota can set diskQuota in containerConfig.
 // Resources field of containerConfig should not be nil.
-func applyDiskQuota(pod *v1.Pod, container *v1.Container, lc *runtimeapi.LinuxContainerConfig) error {
+func applyDiskQuota(pod *v1.Pod, container *v1.Container, imageStatus *runtimeapi.Image, lc *runtimeapi.LinuxContainerConfig) error {
 	// Set "/" quota as the size of ephemeral storage in requests.
 	requestEphemeralStorage, requestESExists := container.Resources.Requests[v1.ResourceEphemeralStorage]
 	if !requestESExists || requestEphemeralStorage.IsZero() {
@@ -62,14 +63,63 @@ func applyDiskQuota(pod *v1.Pod, container *v1.Container, lc *runtimeapi.LinuxCo
 	}
 	glog.V(4).Infof("Set RootFs DiskQuotaMode as %s for container %s in pod %s",
 		string(diskQuotaMode), container.Name, format.Pod(pod))
-	lc.Resources.DiskQuota = map[string]string{string(diskQuotaMode): getDiskSize(requestEphemeralStorage.String())}
+
+	lc.Resources.DiskQuota = map[string]string{}
+
+	// We should set diskquota in the format such as "/&/home/admin=10g" if DiskQuotaMode is ".*".
+	// The volumes include normal volumeMount and image volume.
+	// VolumeMount from PVC is ignored because PVC has its own DiskQuota.
+	if diskQuotaMode == sigmak8sapi.DiskQuotaModeRootFsAndVolume {
+		diskQuotaKey := sigmautil.DiskQuotaLimitRootFsOnly
+
+		// Get volumes from PVC.
+		volumeFromPVC := sets.NewString()
+		for _, volume := range pod.Spec.Volumes {
+			if volume.PersistentVolumeClaim != nil {
+				volumeFromPVC.Insert(volume.Name)
+			}
+		}
+
+		// volumePathFromPVC records the mount path from pvc.
+		// volumePath records the mount path we should set DiskQuota.
+		volumePathFromPVC := sets.NewString()
+		volumePath := sets.NewString()
+		for _, volumeMount := range container.VolumeMounts {
+			if volumeFromPVC.Has(volumeMount.Name) {
+				volumePathFromPVC.Insert(volumeMount.MountPath)
+				continue
+			}
+			volumePath.Insert(volumeMount.MountPath)
+		}
+
+		// Add image volume path to volumePath.
+		if imageStatus != nil {
+			for containerPath := range imageStatus.Volumes {
+				if !volumePathFromPVC.Has(containerPath) && !volumePath.Has(containerPath) {
+					volumePath.Insert(containerPath)
+				}
+			}
+		}
+
+		// Generate DiskQuotaKey.
+		for _, path := range volumePath.List() {
+			diskQuotaKey = diskQuotaKey + "&" + path
+		}
+
+		lc.Resources.DiskQuota[diskQuotaKey] = getDiskSize(requestEphemeralStorage.String())
+	} else {
+		// Set DiskQuota in the format such as "/=10g" if DiskQuotaMode is "/".
+		lc.Resources.DiskQuota[string(diskQuotaMode)] = getDiskSize(requestEphemeralStorage.String())
+	}
+
+	glog.V(0).Infof("Set ResourceQuota with %v for container %s in pod %s", lc.Resources.DiskQuota, container.Name, format.Pod(pod))
 
 	return nil
 }
 
 // applyExtendContainerResource can merge extended resource feilds into container config of CRI.
 // Deprecated: Use annotations instead of extending CRI in future.
-func applyExtendContainerResource(pod *v1.Pod, container *v1.Container,
+func applyExtendContainerResource(pod *v1.Pod, container *v1.Container, imageStatus *runtimeapi.Image,
 	lc *runtimeapi.LinuxContainerConfig, enforceCPULimits bool) {
 	// Set ulimits if possible.
 	ulimits := sigmautil.GetUlimitsFromAnnotation(container, pod)
@@ -81,7 +131,7 @@ func applyExtendContainerResource(pod *v1.Pod, container *v1.Container,
 	}
 
 	// Set diskquota.
-	applyDiskQuota(pod, container, lc)
+	applyDiskQuota(pod, container, imageStatus, lc)
 
 	// Set other fields defined in hostconfig.
 	hostConfig := sigmautil.GetHostConfigFromAnnotation(pod, container.Name)

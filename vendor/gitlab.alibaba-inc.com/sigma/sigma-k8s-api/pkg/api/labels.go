@@ -54,4 +54,7 @@ const (
 
 	// the type of container.
 	LabelServerType = "com.alipay.acs.container.server_type"
+
+	// pod group of pod
+	LabelPodGroupName = "scheduling.sigma.ali/pod-group-name"
 )

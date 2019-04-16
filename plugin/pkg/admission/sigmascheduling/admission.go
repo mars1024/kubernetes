@@ -286,9 +286,12 @@ func validatePod(attributes admission.Attributes) error {
 						fmt.Sprintf("the count of cpuIDs is not match pod spec and this pod is not in inplace update process")))
 				}
 			} else {
-				fld := field.NewPath("spec").Child("containers").Index(i).Child("resources").Child("requests").Child("cpu")
-				allErrs = append(allErrs, field.Invalid(fld, fmt.Sprintf("%v", pod.Spec.Containers[idx].Resources.Requests.Cpu().String()),
-					fmt.Sprintf("pod spec is invalid, must be integer")))
+				// If a pod belongs to a PodGroup, its cpu requests may not be an integer.
+				if pod.Labels == nil || pod.Labels[sigmaapi.LabelPodGroupName] == "" {
+					fld := field.NewPath("spec").Child("containers").Index(i).Child("resources").Child("requests").Child("cpu")
+					allErrs = append(allErrs, field.Invalid(fld, fmt.Sprintf("%v", pod.Spec.Containers[idx].Resources.Requests.Cpu().String()),
+						fmt.Sprintf("pod spec is invalid, must be integer")))
+				}
 			}
 		}
 

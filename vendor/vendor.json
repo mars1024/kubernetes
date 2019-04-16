@@ -269,10 +269,10 @@
 			"revisionTime": "2018-11-29T17:17:00Z"
 		},
 		{
-			"checksumSHA1": "zvvUrNyDbp0An4v9nOnaBpzmcBU=",
+			"checksumSHA1": "m2Tjj/L7FTavkoRdYZRjZH6hPnA=",
 			"path": "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api",
-			"revision": "15ed497b29889db1822e146e6677e03c41b8bf80",
-			"revisionTime": "2019-03-28T04:06:23Z",
+			"revision": "ac165ad672fd0dab5c29d9837e6d79fd36fe91ea",
+			"revisionTime": "2019-04-03T03:17:16Z",
 			"version": "develop",
 			"versionExact": "develop"
 		},

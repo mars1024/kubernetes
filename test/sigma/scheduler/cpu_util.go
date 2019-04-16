@@ -66,6 +66,7 @@ type allocatedResult struct {
 type resourceCase struct {
 	cpu                       int64
 	mem                       int64
+	keepAliveMemory           int64
 	ethstorage                int64
 	cpushare                  bool
 	colocation                bool
@@ -520,6 +521,20 @@ func initPausePodFromResourceCase(tc *testContext, caseIndex int, test resourceC
 					},
 				},
 			},
+		}
+		setAllocSpecRequest = true
+	}
+	if test.keepAliveMemory != int64(0) {
+		if len(allocSpecRequest.Containers) >= 1 {
+			allocSpecRequest.Containers[0].KeepAliveMemory = &test.keepAliveMemory
+		} else {
+			allocSpecRequest.Containers = []api.Container{
+				{
+					Name:            config.Name,
+					Resource:        api.ResourceRequirements{},
+					KeepAliveMemory: &test.keepAliveMemory,
+				},
+			}
 		}
 		setAllocSpecRequest = true
 	}

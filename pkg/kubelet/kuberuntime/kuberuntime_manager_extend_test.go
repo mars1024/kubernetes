@@ -21,8 +21,9 @@ import (
 )
 
 func TestSyncPodExtension(t *testing.T) {
-	fakeRuntime, _, m, err := createTestRuntimeManager()
+	fakeRuntime, imageService, m, err := createTestRuntimeManager()
 	assert.NoError(t, err)
+	imageService.PullImage(&runtimeapi.ImageSpec{Image: "alpine"}, nil)
 
 	containerNameFirst := "foo1"
 	containerNameSecond := "foo2"
@@ -500,8 +501,9 @@ func TestComputePodActions_extension(t *testing.T) {
 }
 
 func TestSyncPodExtensionWithUpdatedContainer(t *testing.T) {
-	fakeRuntime, _, m, err := createTestRuntimeManager()
+	fakeRuntime, imageService, m, err := createTestRuntimeManager()
 	assert.NoError(t, err)
+	imageService.PullImage(&runtimeapi.ImageSpec{Image: "image1"}, nil)
 
 	containerNameFirst := "foo"
 	pod := &v1.Pod{
@@ -592,8 +594,10 @@ func TestSyncPodExtensionWithUpdatedContainer(t *testing.T) {
 }
 
 func TestContainerChanged(t *testing.T) {
-	_, _, m, err := createTestRuntimeManager()
+	_, imageService, m, err := createTestRuntimeManager()
 	require.NoError(t, err)
+	imageService.PullImage(&runtimeapi.ImageSpec{Image: "image1"}, nil)
+	imageService.PullImage(&runtimeapi.ImageSpec{Image: "imageNew"}, nil)
 
 	for desc, test := range map[string]struct {
 		container       *v1.Container

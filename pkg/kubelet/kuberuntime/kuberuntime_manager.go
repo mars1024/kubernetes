@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"time"
 
 	"github.com/golang/glog"
@@ -500,7 +501,10 @@ func (m *kubeGenericRuntimeManager) containerChanged(container *v1.Container, co
 	expectedHash := kubecontainer.HashContainerWithHashVersion(container, containerStatus.HashVersion, &containerStatus.Hash)
 	needToRestart = containerStatus.Hash != expectedHash
 	if needToRestart == false {
-		newResources := m.generateLinuxContainerResources(container, pod)
+		newResources, err := m.generateLinuxContainerResources(container, pod)
+		if err != nil {
+			return expectedHash, containerStatus.Hash, needToRestart, needToResize
+		}
 		changed, restartNeeded := computeResourceChanges(newResources, containerStatus)
 		if len(changed) > 0 {
 			needToRestart = restartNeeded
@@ -542,19 +546,7 @@ func computeResourceChanges(lc *runtimeapi.LinuxContainerResources, containerSta
 		resourceChanged[v1.ResourceMemory] = true
 	}
 
-	// Compare rootfs quota only
-	// Pouch's DiskQuota
-	//"DiskQuota": {
-	//   ".*": "3g",
-	//   "/var/lib/mysql": "3g",
-	//   "/var/run/secrets/kubernetes.io/serviceaccount": "3g"
-	//},
-	expectedDiskQuotaRootFsAndVolume := lc.DiskQuota[string(sigmak8sapi.DiskQuotaModeRootFsAndVolume)]
-	currentDiskQuotaRootFsAndVolume := currentResources.DiskQuota[string(sigmak8sapi.DiskQuotaModeRootFsAndVolume)]
-	expectedDiskQuotaRootFsOnly := lc.DiskQuota[string(sigmak8sapi.DiskQuotaModeRootFsOnly)]
-	currentDiskQuotaRootFsOnly := currentResources.DiskQuota[string(sigmak8sapi.DiskQuotaModeRootFsOnly)]
-	if expectedDiskQuotaRootFsAndVolume != currentDiskQuotaRootFsAndVolume ||
-		expectedDiskQuotaRootFsOnly != currentDiskQuotaRootFsOnly {
+	if !reflect.DeepEqual(lc.DiskQuota, currentResources.DiskQuota) {
 		resourceChanged[v1.ResourceEphemeralStorage] = true
 	}
 

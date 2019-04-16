@@ -3576,7 +3576,6 @@ func ValidatePodUpdate(newPod, oldPod *core.Pod) field.ErrorList {
 
 	// munge spec.initContainers[*].name
 	var newInitContainers []core.Container
-	glog.Errorf("pod:%#v", mungedPod.Spec.InitContainers)
 	for ix, container := range mungedPod.Spec.InitContainers {
 		if len(mungedPod.Spec.InitContainers) > len(newPod.Spec.InitContainers) {
 			// delete container validation.

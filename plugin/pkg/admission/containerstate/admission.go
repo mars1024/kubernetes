@@ -46,6 +46,7 @@ type ContainerState struct {
 }
 
 var _ admission.ValidationInterface = &ContainerState{}
+var _ admission.MutationInterface = &ContainerState{}
 
 // Validate makes sure that all containers are set to correct ContainerState labels
 func (n *ContainerState) Validate(attributes admission.Attributes) (err error) {
@@ -124,6 +125,81 @@ func validateName(attributes admission.Attributes, pod *api.Pod, name sigmaapi.C
 			fmt.Errorf("annotation %s can not %s due to %s", sigmaapi.AnnotationPodUpdateStatus, op, err))
 	}
 	return nil
+}
+
+// Admit makes sure that all containers are set to correct ContainerState labels
+func (n *ContainerState) Admit(attributes admission.Attributes) (err error) {
+	if shouldIgnore(attributes) {
+		return nil
+	}
+
+	pod, ok := attributes.GetObject().(*api.Pod)
+	if !ok {
+		return apierrors.NewBadRequest("Resource was marked with kind Pod but was unable to be converted")
+	}
+
+	op := attributes.GetOperation()
+	if op != admission.Create && op != admission.Update {
+		return apierrors.NewBadRequest("ContainerState Admission only handles Update event")
+	}
+
+	glog.V(10).Infof("ContainerState validateUpdate pod: %#v", pod)
+	if pod.Annotations == nil {
+		return nil
+	}
+
+	stateBytes, stateExist := pod.Annotations[sigmaapi.AnnotationContainerStateSpec]
+	updateStatusBytes, updateStatusExist := pod.Annotations[sigmaapi.AnnotationPodUpdateStatus]
+
+	if stateExist {
+		var states sigmaapi.ContainerStateSpec
+		err := json.Unmarshal([]byte(stateBytes), &states)
+		if err != nil {
+			return admission.NewForbidden(attributes,
+				fmt.Errorf("annotation %s can not %s due to json unmarshal error `%s`", sigmaapi.AnnotationContainerStateSpec, op, err))
+		}
+		for name := range states.States {
+			if !ContainerExist(pod, name) {
+				delete(states.States, name)
+			}
+		}
+		newStateBytes, err := json.Marshal(states)
+		if err != nil {
+			return admission.NewForbidden(attributes,
+				fmt.Errorf("annotation %s can not %s due to json marshal error `%s`", sigmaapi.AnnotationContainerStateSpec, op, err))
+		}
+		pod.Annotations[sigmaapi.AnnotationContainerStateSpec] = string(newStateBytes)
+	}
+
+	if updateStatusExist {
+		var statuses sigmaapi.ContainerStateStatus
+		err := json.Unmarshal([]byte(updateStatusBytes), &statuses)
+		if err != nil {
+			return admission.NewForbidden(attributes,
+				fmt.Errorf("annotation %s can not %s due to json unmarshal error `%s`", sigmaapi.AnnotationPodUpdateStatus, op, err))
+		}
+		for name := range statuses.Statuses {
+			if !ContainerExist(pod, name) {
+				delete(statuses.Statuses, name)
+			}
+		}
+		newUpdateStatusBytes, err := json.Marshal(statuses)
+		if err != nil {
+			return admission.NewForbidden(attributes,
+				fmt.Errorf("annotation %s can not %s due to json marshal error `%s`", sigmaapi.AnnotationPodUpdateStatus, op, err))
+		}
+		pod.Annotations[sigmaapi.AnnotationPodUpdateStatus] = string(newUpdateStatusBytes)
+	}
+	return nil
+}
+
+func ContainerExist(pod *api.Pod, name sigmaapi.ContainerInfo) bool {
+	for i := range pod.Spec.Containers {
+		if pod.Spec.Containers[i].Name == name.Name {
+			return true
+		}
+	}
+	return false
 }
 
 func validateState(attributes admission.Attributes, status sigmaapi.ContainerState, restartPolicy api.RestartPolicy) error {

@@ -3483,11 +3483,11 @@ func ValidateContainerUpdates(newContainers, oldContainers []core.Container, fld
 	allErrs = field.ErrorList{}
 	// currently only supports adding containers to a pod
 	// TODO: removing this check when removing containers are supported as well
-	if len(newContainers) < len(oldContainers) {
-		//TODO: Pinpoint the specific container that causes the invalid error after we have strategic merge diff
-		allErrs = append(allErrs, field.Forbidden(fldPath, "pod updates may not remove containers"))
-		return allErrs, true
-	}
+	//if len(newContainers) < len(oldContainers) {
+	//	//TODO: Pinpoint the specific container that causes the invalid error after we have strategic merge diff
+	//	allErrs = append(allErrs, field.Forbidden(fldPath, "pod updates may not remove containers"))
+	//	return allErrs, true
+	//}
 
 	// validate updated container images
 	for i, ctr := range newContainers {
@@ -3514,7 +3514,6 @@ func ValidatePodUpdate(newPod, oldPod *core.Pod) field.ErrorList {
 	// 1.  spec.containers[*].* except name
 	// 2.  spec.initContainers[*].* except name
 	// 3.  spec.* except nodeSelector, nodeName, hostname, subdomain, securityContext.hostNetwork, securityContext.hostIPC, securityContext.hostPID, securityContext.shareProcessNamespace, Qos
-
 
 	containerErrs, stop := ValidateContainerUpdates(newPod.Spec.Containers, oldPod.Spec.Containers, specPath.Child("containers"))
 	allErrs = append(allErrs, containerErrs...)
@@ -3564,15 +3563,28 @@ func ValidatePodUpdate(newPod, oldPod *core.Pod) field.ErrorList {
 	//		* switching containers' order in Pod.Spec.Containers
 	//      then removing below for loop.
 	for ix, container := range mungedPod.Spec.Containers {
-		container.Name = newPod.Spec.Containers[ix].Name
+		if len(mungedPod.Spec.Containers) > len(newPod.Spec.Containers) {
+			// delete container validation.
+			container.Name = mungedPod.Spec.Containers[ix].Name
+		} else {
+			// add container validation.
+			container.Name = newPod.Spec.Containers[ix].Name
+		}
 		newContainers = append(newContainers, container)
 	}
 	mungedPod.Spec.Containers = newContainers
 
 	// munge spec.initContainers[*].name
 	var newInitContainers []core.Container
+	glog.Errorf("pod:%#v", mungedPod.Spec.InitContainers)
 	for ix, container := range mungedPod.Spec.InitContainers {
-		container.Name = newPod.Spec.InitContainers[ix].Name
+		if len(mungedPod.Spec.InitContainers) > len(newPod.Spec.InitContainers) {
+			// delete container validation.
+			container.Name = mungedPod.Spec.InitContainers[ix].Name
+		} else {
+			// add container validation.
+			container.Name = newPod.Spec.InitContainers[ix].Name
+		}
 		newInitContainers = append(newInitContainers, container)
 	}
 	mungedPod.Spec.InitContainers = newInitContainers
@@ -3605,7 +3617,6 @@ func ValidatePodUpdate(newPod, oldPod *core.Pod) field.ErrorList {
 	} else { // mungedPod.Spec.SecurityContext == nil
 		mungedPod.Spec.SecurityContext = newPod.Spec.SecurityContext
 	}
-
 
 	allErrs = append(allErrs, validateOnlyAddedTolerations(newPod.Spec.Tolerations, oldPod.Spec.Tolerations, specPath.Child("tolerations"))...)
 
@@ -4696,7 +4707,7 @@ func ValidateSecret(secret *core.Secret) field.ErrorList {
 			allErrs = append(allErrs, field.Required(field.NewPath("metadata", "annotations").Key(core.ServiceAccountNameKey), ""))
 		}
 	case core.SecretTypeOpaque, "":
-	// no-op
+		// no-op
 	case core.SecretTypeDockercfg:
 		dockercfgBytes, exists := secret.Data[core.DockerConfigKey]
 		if !exists {
@@ -4742,7 +4753,7 @@ func ValidateSecret(secret *core.Secret) field.ErrorList {
 		if _, exists := secret.Data[core.TLSPrivateKeyKey]; !exists {
 			allErrs = append(allErrs, field.Required(dataPath.Key(core.TLSPrivateKeyKey), ""))
 		}
-	// TODO: Verify that the key matches the cert.
+		// TODO: Verify that the key matches the cert.
 	default:
 		// no-op
 	}

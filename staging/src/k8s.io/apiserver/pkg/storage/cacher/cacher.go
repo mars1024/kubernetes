@@ -232,10 +232,6 @@ type Cacher struct {
 func NewCacherFromConfig(config Config) *Cacher {
 	stopCh := make(chan struct{})
 
-	watchCache := newWatchCache(config.CacheCapacity, config.KeyFunc, config.Indexers, config.GetAttrsFunc, config.Versioner)
-	listerWatcher := newCacherListerWatcher(config.Storage, config.ResourcePrefix, config.NewListFunc)
-	reflectorName := "storage/cacher.go:" + config.ResourcePrefix
-
 	// Give this error when it is constructed rather than when you get the
 	// first watch item, because it's much easier to track down that way.
 	if obj, ok := config.Type.(runtime.Object); ok {
@@ -248,8 +244,6 @@ func NewCacherFromConfig(config Config) *Cacher {
 		ready:       newReady(),
 		storage:     config.Storage,
 		objectType:  reflect.TypeOf(config.Type),
-		watchCache:  watchCache,
-		reflector:   cache.NewNamedReflector(reflectorName, listerWatcher, config.Type, watchCache, 0),
 		versioner:   config.Versioner,
 		triggerFunc: config.TriggerPublisherFunc,
 		watcherIdx:  0,
@@ -268,7 +262,24 @@ func NewCacherFromConfig(config Config) *Cacher {
 		stopCh: stopCh,
 		timer:  time.NewTimer(time.Duration(0)),
 	}
-	watchCache.SetOnEvent(cacher.processEvent)
+
+	// Ensure that timer is stopped.
+	if !cacher.timer.Stop() {
+		// Consume triggered (but not yet received) timer event
+		// so that future reuse does not get a spurious timeout.
+		<-cacher.timer.C
+	}
+
+	watchCache := newWatchCache(
+		config.CacheCapacity, config.KeyFunc, config.Indexers, cacher.processEvent, config.GetAttrsFunc, config.Versioner)
+	listerWatcher := newCacherListerWatcher(config.Storage, config.ResourcePrefix, config.NewListFunc)
+	reflectorName := "storage/cacher.go:" + config.ResourcePrefix
+
+	reflector := cache.NewNamedReflector(reflectorName, listerWatcher, config.Type, watchCache, 0)
+
+	cacher.watchCache = watchCache
+	cacher.reflector = reflector
+
 	go cacher.dispatchEvents()
 
 	cacher.stopWg.Add(1)
@@ -282,13 +293,6 @@ func NewCacherFromConfig(config Config) *Cacher {
 			}, time.Second, stopCh,
 		)
 	}()
-
-	// Ensure that timer is stopped.
-	if !cacher.timer.Stop() {
-		// Consume triggered (but not yet received) timer event
-		// so that future reuse does not get a spurious timeout.
-		<-cacher.timer.C
-	}
 
 	return cacher
 }

@@ -450,7 +450,7 @@ func TestWatcherNotGoingBackInTime(t *testing.T) {
 func TestCacheWatcherStoppedInAnotherGoroutine(t *testing.T) {
 	var w *cacheWatcher
 	done := make(chan struct{})
-	filter := func(string, labels.Set, fields.Set) bool { return true }
+	filter := func(string, labels.Set, fields.Set, bool) bool { return true }
 	forget := func() {
 		w.stop()
 		done <- struct{}{}

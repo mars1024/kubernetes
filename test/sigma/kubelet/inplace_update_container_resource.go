@@ -85,12 +85,9 @@ var _ = Describe("[sigma-kubelet] inplace_update_001 update container's resource
 	It("update container's resource requirement without QoS class change", func() {
 		testCase := InplaceUpdateContainerResourceTestCase{
 			pod:           generateRunningPodWithInitResource(initResource),
-			patchData:     `{"spec":{"containers":[{"name":"pod-base","resources":{"requests": {"cpu": "1000m", "memory": "256Mi"}, "limits": {"cpu": "1000m", "memory": "256Mi"}}}]}}`,
+			patchData:     fmt.Sprintf(`{"metadata":{"annotations":{%q:%q}},"spec":{"containers":[{"name":"pod-base","resources":{"requests": {"cpu": "1000m", "memory": "256Mi"}, "limits": {"cpu": "1000m", "memory": "256Mi"}}}]}}`, sigmak8sapi.AnnotationPodInplaceUpdateState, sigmak8sapi.InplaceUpdateStateAccepted),
 			expectSuccess: true,
 		}
-
-		testCase.pod.Annotations = make(map[string]string)
-		testCase.pod.Annotations[sigmak8sapi.AnnotationPodInplaceUpdateState] = sigmak8sapi.InplaceUpdateStateAccepted
 
 		doInplaceUpdateContainerResourceTestCase(f, &testCase)
 	})
@@ -157,12 +154,10 @@ var _ = Describe("[sigma-kubelet] [Disruptive] inplace_update_004 update contain
 		// The maximum allowed cpu-shares is 262144
 		testCase := InplaceUpdateContainerResourceTestCase{
 			pod:           generateRunningPodWithInitResource(initResource),
-			patchData:     `{"spec":{"containers":[{"name":"pod-base","resources":{"requests": {"cpu": "20000", "memory": "256Mi"}, "limits": {"cpu": "20000", "memory": "256Mi"}}}]}}`,
+			patchData:     fmt.Sprintf(`{"metadata":{"annotations":{%q:%q}},"spec":{"containers":[{"name":"pod-base","resources":{"requests": {"cpu": "2000", "memory": "256Mi"}, "limits": {"cpu": "2000", "memory": "256Mi"}}}]}}`, sigmak8sapi.AnnotationPodInplaceUpdateState, sigmak8sapi.InplaceUpdateStateAccepted),
 			expectSuccess: false,
 		}
 
-		testCase.pod.Annotations = make(map[string]string)
-		testCase.pod.Annotations[sigmak8sapi.AnnotationPodInplaceUpdateState] = sigmak8sapi.InplaceUpdateStateAccepted
 		doInplaceUpdateContainerResourceTestCase(f, &testCase)
 	})
 })
@@ -180,9 +175,6 @@ var _ = Describe("[sigma-kubelet] inplace_update_005 update container's memory s
 			),
 			expectSuccess: true,
 		}
-
-		testCase.pod.Annotations = make(map[string]string)
-		testCase.pod.Annotations[sigmak8sapi.AnnotationPodInplaceUpdateState] = sigmak8sapi.InplaceUpdateStateAccepted
 
 		doInplaceUpdateContainerResourceTestCase(f, &testCase)
 	})

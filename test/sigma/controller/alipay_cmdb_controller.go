@@ -111,10 +111,10 @@ func checkPodCMDBInfo(f *framework.Framework, getPod *corev1.Pod, cmdbCli cmdbCl
 		Expect(err).NotTo(HaveOccurred(), "get node sn failed.")
 		Expect(nodeSN).To(Equal(cmdbInfo.NodeSn), "Unexpect node sn in cmdbInfo.")
 		//resources
-		memory, disk, cpu := getResources(getPod.Spec.Containers)
+		memory, disk, cpuRequest := getResources(getPod.Spec.Containers)
 		Expect(cmdbInfo.MemorySize).To(Equal(memory), "cmdb memory should same sa pod memory.")
 		Expect(cmdbInfo.DiskSize).To(Equal(disk), "cmdb disk should same sa pod disk.")
-		Expect(cmdbInfo.CpuNum).To(Equal(cpu), "cmdb cpu should same sa pod cpu num.")
+		Expect(cmdbInfo.CpuRequest).To(Equal(cpuRequest), "cmdb cpu should same sa pod cpu num.")
 		cpuIds := getCpuIds(getPod)
 		Expect(cmdbInfo.CpuIds).To(Equal(cpuIds))
 		Expect(getPod.Finalizers).Should(ContainElement(ContainSubstring(alipaymeta.CMDBFinalizer)), "CMDBFinalizer should be register into pod.finalizers")
@@ -169,7 +169,7 @@ func getResources(containers []corev1.Container) (int64, int64, int64) {
 		resource := container.Resources.Requests
 		memory, _ := resource.Memory().AsInt64()
 		disk, _ := resource.StorageEphemeral().AsInt64()
-		cpu, _ := resource.Cpu().AsInt64()
+		cpu := resource.Cpu().MilliValue()
 		memorys += memory
 		disks += disk
 		cpus += cpu

@@ -1066,7 +1066,7 @@ type ready struct {
 }
 
 func newReady() *ready {
-	return &ready{c: sync.NewCond(&sync.Mutex{})}
+	return &ready{c: sync.NewCond(&sync.RWMutex{})}
 }
 
 func (r *ready) wait() {
@@ -1080,8 +1080,9 @@ func (r *ready) wait() {
 // TODO: Make check() function more sophisticated, in particular
 // allow it to behave as "waitWithTimeout".
 func (r *ready) check() bool {
-	r.c.L.Lock()
-	defer r.c.L.Unlock()
+	rwMutex := r.c.L.(*sync.RWMutex)
+	rwMutex.RLock()
+	defer rwMutex.RUnlock()
 	return r.ok
 }
 

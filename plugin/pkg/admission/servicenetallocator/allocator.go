@@ -103,7 +103,7 @@ func (af *AllocatorFactory) NodePortAllocatorForCluster(cluster *v1alpha1.Minion
 	nodePortAllocator = portallocator.NewPortAllocatorCustom(portRange, func(max int, rangeSpec string) allocator.Interface {
 		mem := allocator.NewAllocationMap(max, rangeSpec)
 		// TODO etcdallocator package to return a storage interface via the storageFactory
-		etcd := serviceallocator.NewEtcd(mem, "/ranges/"+cluster.Name+"servicenodeports", api.Resource("servicenodeportallocations"), storageConfig)
+		etcd := serviceallocator.NewEtcd(mem, "/ranges/"+cluster.Name+"/servicenodeports", api.Resource("servicenodeportallocations"), storageConfig)
 		serviceNodePortRegistry = etcd
 		return etcd
 	})

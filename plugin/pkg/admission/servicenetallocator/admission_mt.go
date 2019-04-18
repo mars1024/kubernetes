@@ -373,7 +373,7 @@ func (s *serviceNetAllocatorPlugin) handleServiceUpdate(service, oldService *api
 }
 
 func (s *serviceNetAllocatorPlugin) handleServiceDelete(service *api.Service, cluster *v1alpha1.MinionCluster, dryRun bool) error {
-	if !dryRun {
+	if dryRun {
 		return nil
 	}
 	if helper.IsServiceIPSet(service) {

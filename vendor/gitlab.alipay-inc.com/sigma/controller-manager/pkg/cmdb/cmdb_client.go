@@ -28,6 +28,7 @@ type ContainerInfo struct {
 	AppName           string            `json:"appName"`
 	DeployUnit        string            `json:"deployUnit"`
 	CpuNum            int64             `json:"cpuNum"`
+	CpuRequest        int64             `json:"cpuRequest"`
 	CpuIds            string            `json:"cpus"`
 	DiskSize          int64             `json:"diskSizeB"`
 	MemorySize        int64             `json:"memorySizeB"`
@@ -76,22 +77,22 @@ func (c *CMDBClient) AddContainerInfo(reqInfo []byte) error {
 // AddOneContainerInfo() add container info into one cmdb.
 func (c *CMDBClient) AddOneContainerInfo(reqInfo []byte, addr string) error {
 	requestUrl := fmt.Sprintf("%v/container/add", addr)
-	//glog.V(5).Infof("Method:%v, URL:%v", http.MethodPost, requestUrl)
+	glog.V(4).Infof("Method:%v, URL:%v， reqInfo:%v", http.MethodPost, requestUrl, string(reqInfo))
 	data := url.Values{"containerParams": {string(reqInfo)}}
 	req, err := http.NewRequest(http.MethodPost, requestUrl, strings.NewReader(data.Encode()))
 	if err != nil {
-		//glog.Errorf("Init new post request failed, err: %v", err)
+		glog.Errorf("Init new post request failed, err: %v", err)
 		return err
 	}
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := c.doHttpRequest(req)
 	if err != nil {
-		//glog.Errorf("Add container into cmdb failed, req:%v, err:%v", string(reqInfo), err)
+		glog.Errorf("Add container into cmdb failed, req:%v, err:%v", string(reqInfo), err)
 		return err
 	}
 	if resp.Code != 200 || !resp.Success {
-		//glog.Errorf("Add container into cmdb failed, resp:%v, req:%v", *resp, string(reqInfo))
+		glog.Errorf("Add container into cmdb failed, resp:%v, req:%v", *resp, string(reqInfo))
 		return fmt.Errorf("Add container into cmdb failed, resp:%v, req:%v", *resp, string(reqInfo))
 	}
 	return nil
@@ -117,22 +118,22 @@ func (c *CMDBClient) UpdateContainerInfo(reqInfo []byte) error {
 //UpdateOneContainerInfo() update container into one cmdb.
 func (c *CMDBClient) UpdateOneContainerInfo(reqInfo []byte, addr string) error {
 	boosUrl := fmt.Sprintf("%v/container/updateByContainerSn", addr)
-	//glog.V(5).Infof("Method:%v, URL:%v", http.MethodPost, boosUrl)
+	glog.V(4).Infof("Method:%v, URL:%v", http.MethodPost, boosUrl)
 	data := url.Values{"containerParams": {string(reqInfo)}}
 	req, err := http.NewRequest(http.MethodPost, boosUrl, strings.NewReader(data.Encode()))
 	if err != nil {
-		//glog.Errorf("Init new update request failed, err: %v", err)
+		glog.Errorf("Init new update request failed, err: %v", err)
 		return err
 	}
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := c.doHttpRequest(req)
 	if err != nil {
-		//glog.Errorf("Update cmdb failed, req:%v, err:%v", string(reqInfo), err)
+		glog.Errorf("Update cmdb failed, req:%v, err:%v", string(reqInfo), err)
 		return err
 	}
 	if resp.Code != 200 || !resp.Success {
-		//glog.Errorf("Update cmdb failed, resp:%v, req:%v", *resp, string(reqInfo))
+		glog.Errorf("Update cmdb failed, resp:%v, req:%v", *resp, string(reqInfo))
 		return fmt.Errorf("Update cmdb failed, resp:%v, req:%v", DumpJson(*resp), string(reqInfo))
 	}
 	return nil
@@ -158,22 +159,22 @@ func (c *CMDBClient) DeleteContainerInfo(sn string) error {
 //DeleteOneContainerInfo() delete container info from one cmdb.
 func (c *CMDBClient) DeleteOneContainerInfo(sn string, addr string) error {
 	bossUrl := fmt.Sprintf("%v/container/deleteByContainerSn?containerSn=%v", addr, sn)
-	glog.V(5).Infof("Method:%v, URL:%v", http.MethodPost, bossUrl)
+	glog.V(4).Infof("Method:%v, URL:%v", http.MethodPost, bossUrl)
 
 	req, err := http.NewRequest(http.MethodPost, bossUrl, nil)
 	if err != nil {
-		//glog.Errorf("Init new delete request failed, err: %v", err)
+		glog.Errorf("Init new delete request failed, err: %v", err)
 		return err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := c.doHttpRequest(req)
 	if err != nil {
-		//glog.Errorf("Delete container %v from cmdb failed, err:%v", sn, err)
+		glog.Errorf("Delete container %v from cmdb failed, err:%v", sn, err)
 		return err
 	}
 	if resp.Code != 200 || !resp.Success {
-		//glog.Errorf("Delete container %v from cmdb failed, resp:%v", sn, *resp)
+		glog.Errorf("Delete container %v from cmdb failed, resp:%v", sn, *resp)
 		return fmt.Errorf("Delete container %v from cmdb failed, resp:%v", sn, DumpJson(*resp))
 	}
 	return nil
@@ -193,7 +194,6 @@ func (c *CMDBClient) GetContainerStatus(sn string) (int, error) {
 			glog.Errorf("[CMDBClient] Get container %v info from cmdb %v failed, err:%v", sn, addr, err)
 			return 0, err
 		}
-		glog.Infof("url:%v, sn:%v, info:%v", addr, sn, DumpJson(cmdbResp))
 		if cmdbResp == nil {
 			glog.Errorf("[CMDBClient] Get container %v info from cmdb %v is nil, info:%v", sn, addr, cmdbResp)
 			return 0, err
@@ -238,17 +238,17 @@ func (c *CMDBClient) GetContainerInfo(sn string) ([]*CMDBResp, error) {
 //GetOneContainerInfo() get container info from one cmdb.
 func (c *CMDBClient) GetOneContainerInfo(sn string, addr string) (*CMDBResp, error) {
 	bossUrl := fmt.Sprintf("%v/container/getByContainerSn?containerSn=%v", addr, sn)
-	//glog.V(5).Infof("Method:%v, URL:%v", http.MethodPost, bossUrl)
+	glog.V(4).Infof("Method:%v, URL:%v", http.MethodGet, bossUrl)
 
 	req, err := http.NewRequest(http.MethodGet, bossUrl, nil)
 	if err != nil {
-		//glog.Errorf("Init new post request failed, err: %v", err)
+		glog.Errorf("Init new post request failed, err: %v", err)
 		return nil, err
 	}
 
 	cmdbResp, err := c.doHttpRequest(req)
 	if err != nil {
-		//glog.Errorf("get container %v info failed, %v", sn, err)
+		glog.Errorf("get container %v info failed, %v", sn, err)
 		return nil, err
 	}
 
@@ -261,19 +261,19 @@ func (c *CMDBClient) doHttpRequest(req *http.Request) (*CMDBResp, error) {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		//glog.Errorf("Send request failed, err:%v", err)
+		glog.Errorf("Send request failed, err:%v", err)
 		return nil, err
 	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		//glog.Errorf("Read response body failed, err:%v", err)
+		glog.Errorf("Read response body failed, err:%v", err)
 		return nil, err
 	}
 	cmdbResp := &CMDBResp{}
 	err = json.Unmarshal(body, cmdbResp)
 	if err != nil {
-		//glog.Errorf("Unmarshal response body failed, err:%v", err)
+		glog.Errorf("Unmarshal response body failed, body:%v, err:%v", string(body), err)
 		return nil, err
 	}
 	return cmdbResp, nil

@@ -139,11 +139,11 @@ func (n *ContainerState) Admit(attributes admission.Attributes) (err error) {
 	}
 
 	op := attributes.GetOperation()
-	if op != admission.Create && op != admission.Update {
+	if op != admission.Update && op != admission.Create {
 		return apierrors.NewBadRequest("ContainerState Admission only handles Update event")
 	}
 
-	glog.V(10).Infof("ContainerState validateUpdate pod: %#v", pod)
+	glog.V(10).Infof("ContainerState admit Update pod: %#v", pod)
 	if pod.Annotations == nil {
 		return nil
 	}

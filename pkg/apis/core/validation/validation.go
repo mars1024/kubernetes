@@ -3556,37 +3556,20 @@ func ValidatePodUpdate(newPod, oldPod *core.Pod) field.ErrorList {
 	mungedPod := *oldPod
 
 	// munge spec.containers[*].name
-	var newContainers []core.Container
-	// currently only supports adding containers to a pod
-	// TODO: if removing containers in a pod is supported, that means we're as well allowing
 	// 		* changing container's name
 	//		* switching containers' order in Pod.Spec.Containers
 	//      then removing below for loop.
-	for ix, container := range mungedPod.Spec.Containers {
-		if len(mungedPod.Spec.Containers) > len(newPod.Spec.Containers) {
-			// delete container validation.
-			container.Name = mungedPod.Spec.Containers[ix].Name
-		} else {
-			// add container validation.
-			container.Name = newPod.Spec.Containers[ix].Name
-		}
-		newContainers = append(newContainers, container)
-	}
-	mungedPod.Spec.Containers = newContainers
+
+	// container order validation, old containers relative order cannot be changed.  for example
+	// if munged pod containers [a b c], new pod containers must be [a b c d]/[a d b c], [b a c d] is not allowed.
+	// get oldContainer Orders.
+	oldPod.Spec.Containers = GetPodContainerOrder(newPod.Spec.Containers, oldPod.Spec.Containers, true)
+	// get newContainer Orders.
+	mungedPod.Spec.Containers = GetPodContainerOrder(mungedPod.Spec.Containers, newPod.Spec.Containers, false)
 
 	// munge spec.initContainers[*].name
-	var newInitContainers []core.Container
-	for ix, container := range mungedPod.Spec.InitContainers {
-		if len(mungedPod.Spec.InitContainers) > len(newPod.Spec.InitContainers) {
-			// delete container validation.
-			container.Name = mungedPod.Spec.InitContainers[ix].Name
-		} else {
-			// add container validation.
-			container.Name = newPod.Spec.InitContainers[ix].Name
-		}
-		newInitContainers = append(newInitContainers, container)
-	}
-	mungedPod.Spec.InitContainers = newInitContainers
+	oldPod.Spec.InitContainers = GetPodContainerOrder(newPod.Spec.InitContainers, oldPod.Spec.InitContainers, true)
+	mungedPod.Spec.InitContainers = GetPodContainerOrder(mungedPod.Spec.InitContainers, newPod.Spec.InitContainers, false)
 
 	// munge spec.nodeSelector
 	mungedPod.Spec.NodeSelector = newPod.Spec.NodeSelector
@@ -3627,6 +3610,23 @@ func ValidatePodUpdate(newPod, oldPod *core.Pod) field.ErrorList {
 	}
 
 	return allErrs
+}
+
+func GetPodContainerOrder(targetContainers []core.Container, baseContainers []core.Container, baseOrder bool) []core.Container {
+	var orderdContainers []core.Container
+	for _, baseContainer := range baseContainers {
+		for _, tc := range targetContainers {
+			if tc.Name == baseContainer.Name {
+				if baseOrder {
+					orderdContainers = append(orderdContainers, baseContainer)
+				} else {
+					orderdContainers = append(orderdContainers, tc)
+				}
+				break
+			}
+		}
+	}
+	return orderdContainers
 }
 
 // ValidateContainerStateTransition test to if any illegal container state transitions are being attempted

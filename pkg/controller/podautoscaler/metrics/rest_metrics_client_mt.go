@@ -12,13 +12,13 @@ import (
 func (c *resourceMetricsClient) ShallowCopyWithTenant(tenant multitenancy.TenantInfo) interface{} {
 	copied := *c
 	copied.client = c.client.(meta.TenantWise).ShallowCopyWithTenant(tenant).(v1beta1.PodMetricsesGetter)
-	return &c
+	return &copied
 }
 
 func (c *customMetricsClient) ShallowCopyWithTenant(tenant multitenancy.TenantInfo) interface{} {
 	copied := *c
 	copied.client = c.client.(meta.TenantWise).ShallowCopyWithTenant(tenant).(custom_metrics.CustomMetricsClient)
-	return &c
+	return &copied
 }
 
 func (c *HeapsterMetricsClient) ShallowCopyWithTenant(tenant multitenancy.TenantInfo) interface{} {
@@ -36,8 +36,8 @@ func (c *externalMetricsClient) ShallowCopyWithTenant(tenant multitenancy.Tenant
 
 func (c *restMetricsClient) ShallowCopyWithTenant(tenant multitenancy.TenantInfo) interface{} {
 	copied := *c
-	copied.resourceMetricsClient = c.ShallowCopyWithTenant(tenant).(*resourceMetricsClient)
-	copied.customMetricsClient = c.ShallowCopyWithTenant(tenant).(*customMetricsClient)
+	copied.resourceMetricsClient = c.resourceMetricsClient.ShallowCopyWithTenant(tenant).(*resourceMetricsClient)
+	copied.customMetricsClient = c.customMetricsClient.ShallowCopyWithTenant(tenant).(*customMetricsClient)
 	copied.externalMetricsClient = c.externalMetricsClient.ShallowCopyWithTenant(tenant).(*externalMetricsClient)
-	return &c
+	return &copied
 }

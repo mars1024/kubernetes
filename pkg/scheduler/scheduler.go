@@ -151,6 +151,8 @@ type Config struct {
 
 	// Disable pod preemption or not.
 	DisablePreemption bool
+
+	GetClient func() clientset.Interface
 }
 
 // NewFromConfigurator returns a new scheduler that is created entirely by the Configurator.  Assumes Create() is implemented.

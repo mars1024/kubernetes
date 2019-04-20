@@ -1228,7 +1228,23 @@ func (c *configFactory) CreateFromKeys(predicateKeys, priorityKeys sets.String, 
 		c.disablePreemption,
 		c.percentageOfNodesToScore,
 	)
-
+	// TODO(yuzhi.wx) use feature gate to isolate the cpu binding logic
+	algo = core.NewGenericSchedulerExtend(
+		c.schedulerCache,
+		c.equivalencePodCache,
+		c.podQueue,
+		predicateFuncs,
+		predicateMetaProducer,
+		priorityConfigs,
+		priorityMetaProducer,
+		extenders,
+		c.volumeBinder,
+		c.pVCLister,
+		c.alwaysCheckAllPredicates,
+		c.disablePreemption,
+		c.percentageOfNodesToScore,
+		c.client,
+	)
 	podBackoff := util.CreateDefaultPodBackoff()
 	return &scheduler.Config{
 		SchedulerCache: c.schedulerCache,

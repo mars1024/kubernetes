@@ -209,6 +209,13 @@ func (sched *Scheduler) schedule(pod *v1.Pod) (string, error) {
 		})
 		return "", err
 	}
+	if algo, ok := sched.config.Algorithm.(*core.GenericSchedulerExtend); ok {
+		// TODO(yuzhi.wx) Consider running it in background
+		err = algo.Allocate(pod, host)
+		if err != nil {
+			glog.Error(err)
+		}
+	}
 	return host, err
 }
 
@@ -450,7 +457,10 @@ func (sched *Scheduler) scheduleOne() {
 	}
 	// bind the pod to its host asynchronously (we can do this b/c of the assumption step above).
 	go func() {
+		// TODO(yuzhi.wx) patch the pod and node with specified annotation
+		// so that kubelet is able to behave correctly
 		// Bind volumes first before Pod
+
 		if !allBound {
 			err = sched.bindVolumes(assumedPod)
 			if err != nil {

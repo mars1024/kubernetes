@@ -20,7 +20,7 @@ func TestNewCPUAllocator_ShareCPUSet_First(t *testing.T) {
 	}
 	t.Logf("allocated %v for pod %s", result, newPod.Name)
 	// Add this manual to mock real case
-	by := genAllocSpecAnnotation(newPod, result)
+	by := GenAllocSpecAnnotation(newPod, result)
 	t.Logf("pod will update with annotation %s", string(by))
 	newPod.Annotations[sigmak8sapi.AnnotationPodAllocSpec] = string(by)
 	nodeInfo.AddPod(newPod)
@@ -47,7 +47,7 @@ func TestNewCPUAllocator_ShareCPUSet(t *testing.T) {
 	}
 	t.Logf("allocated %v for pod %s", result, newPod.Name)
 	// Add this manual to mock real case
-	by := genAllocSpecAnnotation(newPod, result)
+	by := GenAllocSpecAnnotation(newPod, result)
 	t.Logf("pod will update with annotation %s", string(by))
 	newPod.Annotations[sigmak8sapi.AnnotationPodAllocSpec] = string(by)
 	nodeInfo.AddPod(newPod)
@@ -78,7 +78,7 @@ func TestNewCPUAllocator_Exclusive(t *testing.T) {
 	}
 	t.Logf("allocated %v for pod %s", result, newPod.Name)
 	// Add this manual to mock real case
-	by := genAllocSpecAnnotation(newPod, result)
+	by := GenAllocSpecAnnotation(newPod, result)
 	t.Logf("pod will update with annotation %s", string(by))
 	newPod.Annotations[sigmak8sapi.AnnotationPodAllocSpec] = string(by)
 	nodeInfo.AddPod(newPod)

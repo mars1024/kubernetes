@@ -198,6 +198,25 @@ func (sched *Scheduler) Config() *Config {
 
 // schedule implements the scheduling algorithm and returns the suggested host.
 func (sched *Scheduler) schedule(pod *v1.Pod) (string, error) {
+	if util.IsInplaceUpdatePod(pod) {
+		if algo, ok := sched.config.Algorithm.(*core.GenericSchedulerExtend); ok {
+			err := algo.HandleInplacePodUpdate(pod)
+			if err != nil {
+				pod = pod.DeepCopy()
+				sched.config.Error(pod, err)
+				sched.config.Recorder.Eventf(pod, v1.EventTypeWarning, "FailedScheduling", "%v", err)
+				sched.config.PodConditionUpdater.Update(pod, &v1.PodCondition{
+					Type:    v1.PodScheduled,
+					Status:  v1.ConditionFalse,
+					Reason:  v1.PodReasonUnschedulable,
+					Message: err.Error(),
+				})
+				return "", err
+			}
+		}
+		return pod.Spec.Hostname, nil
+	}
+
 	host, err := sched.config.Algorithm.Schedule(pod, sched.config.NodeLister)
 	if err != nil {
 		pod = pod.DeepCopy()

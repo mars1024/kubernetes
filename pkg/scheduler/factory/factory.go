@@ -68,7 +68,6 @@ import (
 	multitenancycache "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/cache"
 	multitenancymeta "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/meta"
 	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
-	multitenancycache "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/cache"
 )
 
 const (
@@ -728,6 +727,10 @@ func (c *configFactory) addPodToCache(obj interface{}) {
 
 	c.podQueue.AssignedPodAdded(pod)
 
+	if util.IsInplaceUpdatePod(pod) {
+		c.addPodToSchedulingQueue(pod)
+	}
+
 	// NOTE: Updating equivalence cache of addPodToCache has been
 	// handled optimistically in: pkg/scheduler/scheduler.go#assume()
 }
@@ -749,6 +752,12 @@ func (c *configFactory) updatePodInCache(oldObj, newObj interface{}) {
 	// before invalidating equivalencePodCache.
 	if err := c.schedulerCache.UpdatePod(oldPod, newPod); err != nil {
 		glog.Errorf("scheduler cache UpdatePod failed: %v", err)
+	}
+
+	if util.IsInplaceUpdatePod(newPod) {
+		// Store old pod spec in annotations.
+		util.StoreLastSpecIfNeeded(oldPod, newPod)
+		c.updatePodInSchedulingQueue(oldPod, newPod)
 	}
 
 	c.invalidateCachedPredicatesOnUpdatePod(newPod, oldPod)
@@ -838,6 +847,10 @@ func (c *configFactory) deletePodFromCache(obj interface{}) {
 	// before invalidating equivalencePodCache.
 	if err := c.schedulerCache.RemovePod(pod); err != nil {
 		glog.Errorf("scheduler cache RemovePod failed: %v", err)
+	}
+
+	if util.IsInplaceUpdatePod(pod) {
+		c.deletePodFromSchedulingQueue(pod)
 	}
 
 	c.invalidateCachedPredicatesOnDeletePod(pod)

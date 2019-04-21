@@ -94,9 +94,9 @@ func IsSharedCPUSetPod(pod *v1.Pod) bool {
 	return !IsExclusiveContainer(pod, nil)
 }
 
-// genAllocSpecAnnotation create the annotation for each container in pod
+// GenAllocSpecAnnotation create the annotation for each container in pod
 // NOTE: simge-cerebellum set same CPUIDs for all containers
-func genAllocSpecAnnotation(pod *v1.Pod, containerCPUs ContainerCPUAssignments) []byte {
+func GenAllocSpecAnnotation(pod *v1.Pod, containerCPUs ContainerCPUAssignments) []byte {
 	// Set CPUIDs to pod annotations.
 	allocSpec := util.AllocSpecFromPod(pod)
 
@@ -118,7 +118,7 @@ func genAllocSpecAnnotation(pod *v1.Pod, containerCPUs ContainerCPUAssignments) 
 
 	b, err := json.Marshal(allocSpec)
 	if err != nil {
-		glog.Errorf("[genAllocSpecAnnotation] json.Marshal failed: %v", err)
+		glog.Errorf("[GenAllocSpecAnnotation] json.Marshal failed: %v", err)
 		return nil
 	}
 	return b
@@ -138,7 +138,7 @@ func MakePodCPUPatch(pod *v1.Pod, containerCPUs ContainerCPUAssignments) []byte 
 	//
 	//	// Update alloc spec if needed for inplace update processing.
 	//	if alloc.ResourceAllocated.CPU.IsCPUSet {
-	//		val := string(genAllocSpecAnnotation(pod, alloc.ResourceAllocated.CPU.Set))
+	//		val := string(GenAllocSpecAnnotation(pod, alloc.ResourceAllocated.CPU.Set))
 	//		pod.Annotations[sigmak8s.AnnotationPodAllocSpec] = val
 	//	}
 	//
@@ -149,7 +149,7 @@ func MakePodCPUPatch(pod *v1.Pod, containerCPUs ContainerCPUAssignments) []byte 
 	//if !hasPodChanged {
 	//	return []byte{}
 	//}
-	val := string(genAllocSpecAnnotation(pod, containerCPUs))
+	val := string(GenAllocSpecAnnotation(pod, containerCPUs))
 	pod.Annotations[sigmak8sapi.AnnotationPodAllocSpec] = val
 	patch, err := util.CreatePodPatch(podCopy, pod)
 	if err != nil {

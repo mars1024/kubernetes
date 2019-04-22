@@ -372,11 +372,14 @@ func (c *Cacher) Watch(ctx context.Context, key string, resourceVersion string, 
 		chanSize = 1000
 	}
 
+	// Determine watch timeout('0' means deadline is not set, ignore checking)		// Determine watch timeout('0' means deadline is not set, ignore checking)
+	deadline, _ := ctx.Deadline()
+
 	// Create a watcher here to reduce memory allocations under lock,
 	// given that memory allocation may trigger GC and block the thread.
 	// Also note that emptyFunc is a placeholder, until we will be able
 	// to compute watcher.forget function (which has to happen under lock).
-	watcher := newCacheWatcher(chanSize, filterWithAttrsFunction(key, pred), emptyFunc, c.versioner)
+	watcher := newCacheWatcher(chanSize, filterWithAttrsFunction(key, pred), emptyFunc, c.versioner, deadline, false, c.objectType)
 
 	// We explicitly use thread unsafe version and do locking ourself to ensure that
 	// no new events will be processed in the meantime. The watchCache will be unlocked
@@ -893,17 +896,27 @@ type cacheWatcher struct {
 	stopped   bool
 	forget    func()
 	versioner storage.Versioner
+
+	// The watcher will be closed by server after the deadline,
+	// save it here to send bookmark events before that.
+	deadline            time.Time
+	allowWatchBookmarks bool
+	// Object type of the cache watcher interests
+	objectType reflect.Type
 }
 
-func newCacheWatcher(chanSize int, filter filterWithAttrsFunc, forget func(), versioner storage.Versioner) *cacheWatcher {
+func newCacheWatcher(chanSize int, filter filterWithAttrsFunc, forget func(), versioner storage.Versioner, deadline time.Time, allowWatchBookmarks bool, objectType reflect.Type) *cacheWatcher {
 	return &cacheWatcher{
-		input:     make(chan *watchCacheEvent, chanSize),
-		result:    make(chan watch.Event, chanSize),
-		done:      make(chan struct{}),
-		filter:    filter,
-		stopped:   false,
-		forget:    forget,
-		versioner: versioner,
+		input:               make(chan *watchCacheEvent, chanSize),
+		result:              make(chan watch.Event, chanSize),
+		done:                make(chan struct{}),
+		filter:              filter,
+		stopped:             false,
+		forget:              forget,
+		versioner:           versioner,
+		deadline:            deadline,
+		allowWatchBookmarks: allowWatchBookmarks,
+		objectType:          objectType,
 	}
 }
 
@@ -1033,16 +1046,12 @@ func (c *cacheWatcher) process(ctx context.Context, initEvents []*watchCacheEven
 	for _, event := range initEvents {
 		c.sendWatchCacheEvent(event)
 	}
+	objType := c.objectType.String()
 	if len(initEvents) > 0 {
-		objType := reflect.TypeOf(initEvents[0].Object).String()
 		initCounter.WithLabelValues(objType).Add(float64(len(initEvents)))
 	}
 	processingTime := time.Since(startTime)
 	if processingTime > initProcessThreshold {
-		objType := "<null>"
-		if len(initEvents) > 0 {
-			objType = reflect.TypeOf(initEvents[0].Object).String()
-		}
 		glog.V(2).Infof("processing %d initEvents of %s took %v", len(initEvents), objType, processingTime)
 	}
 

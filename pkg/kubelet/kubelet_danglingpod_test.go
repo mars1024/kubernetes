@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"testing"
 
+	"k8s.io/kubernetes/pkg/scheduler/algorithm/predicates"
+
 	"github.com/stretchr/testify/assert"
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	"k8s.io/api/core/v1"
@@ -354,9 +356,21 @@ func TestSyncDanglingPods(t *testing.T) {
 		},
 	}
 
+	// Do this because in SyncDanglingPods func , we get node by kubelet.GetNode and which get node info by kubelet.nodeInfo
+	// so we should add a fake node info, and the node must be get from kubeclient , because sigmautil.UpdateDanglingPods func
+	// update by kubeclient.
+	clientNode, err := kubelet.kubeClient.CoreV1().Nodes().Get(string(kubelet.nodeName), metav1.GetOptions{})
+	assert.NoError(t, err, "get node error")
+
+	kubelet.nodeInfo = predicates.FakeNodeInfo(*clientNode)
+
 	kubelet.SyncDanglingPods()
 
-	actualDanglingPods, err := sigmautil.GetDanglingPods(kubelet.kubeClient, string(kubelet.nodeName))
+	getNode := func() (*v1.Node, error) {
+		return kubelet.kubeClient.CoreV1().Nodes().Get(string(kubelet.nodeName), metav1.GetOptions{})
+	}
+
+	actualDanglingPods, err := sigmautil.GetDanglingPods(getNode)
 	assert.Equal(t, err, nil)
 
 	actualDanlingPodsMap := map[string]sigmak8sapi.DanglingPod{}

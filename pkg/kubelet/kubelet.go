@@ -698,8 +698,7 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		klet.runtimeClassManager,
 		kubeCfg.UserinfoScriptPath,
 		klet.podManager,
-		klet.kubeClient,
-		string(klet.nodeName),
+		klet.GetNode,
 	)
 	if err != nil {
 		return nil, err

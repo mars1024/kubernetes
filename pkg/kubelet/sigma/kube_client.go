@@ -6,16 +6,16 @@ import (
 
 	"github.com/golang/glog"
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	clientset "k8s.io/client-go/kubernetes"
 )
 
 // GetDanglingPods can get dangling pods from apiserver.
-func GetDanglingPods(kubeClient clientset.Interface, nodeName string) ([]sigmak8sapi.DanglingPod, error) {
-	node, err := kubeClient.CoreV1().Nodes().Get(string(nodeName), metav1.GetOptions{})
+func GetDanglingPods(getNode func() (*v1.Node, error)) ([]sigmak8sapi.DanglingPod, error) {
+	node, err := getNode()
 	if err != nil {
-		glog.Warningf("Failed to get node: %s", nodeName)
+		glog.Warningf("Failed to get node %v", err)
 		return []sigmak8sapi.DanglingPod{}, err
 	}
 	danglingPods, err := GetDanglingPodsFromNodeAnnotation(node)

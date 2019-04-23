@@ -1,6 +1,7 @@
 package webhookcainjector
 
 import (
+	"encoding/base64"
 	"fmt"
 	"testing"
 	"time"
@@ -95,9 +96,9 @@ func TestAdmitValidating(t *testing.T) {
 			validate: func(o *admissionregistration.ValidatingWebhookConfiguration) {
 				for i := range o.Webhooks {
 					if _, ok := shouldMutateNames[o.Webhooks[i].Name]; ok {
-						assert.Equal(t, ca, string(o.Webhooks[i].ClientConfig.CABundle))
+						assert.Equal(t, ca, base64.StdEncoding.EncodeToString(o.Webhooks[i].ClientConfig.CABundle))
 					} else {
-						assert.NotEqual(t, ca, string(o.Webhooks[i].ClientConfig.CABundle))
+						assert.NotEqual(t, ca, base64.StdEncoding.EncodeToString(o.Webhooks[i].ClientConfig.CABundle))
 					}
 				}
 			},
@@ -109,9 +110,9 @@ func TestAdmitValidating(t *testing.T) {
 			validate: func(o *admissionregistration.ValidatingWebhookConfiguration) {
 				for i := range o.Webhooks {
 					if _, ok := shouldMutateNames[o.Webhooks[i].Name]; ok {
-						assert.Equal(t, "", string(o.Webhooks[i].ClientConfig.CABundle))
+						assert.Equal(t, "", base64.StdEncoding.EncodeToString(o.Webhooks[i].ClientConfig.CABundle))
 					} else {
-						assert.NotEqual(t, "", string(o.Webhooks[i].ClientConfig.CABundle))
+						assert.NotEqual(t, "", base64.StdEncoding.EncodeToString(o.Webhooks[i].ClientConfig.CABundle))
 					}
 				}
 			},
@@ -177,9 +178,9 @@ func TestAdmitMutating(t *testing.T) {
 			validate: func(o *admissionregistration.MutatingWebhookConfiguration) {
 				for i := range o.Webhooks {
 					if _, ok := shouldMutateNames[o.Webhooks[i].Name]; ok {
-						assert.Equal(t, ca, string(o.Webhooks[i].ClientConfig.CABundle))
+						assert.Equal(t, ca, base64.StdEncoding.EncodeToString(o.Webhooks[i].ClientConfig.CABundle))
 					} else {
-						assert.NotEqual(t, ca, string(o.Webhooks[i].ClientConfig.CABundle))
+						assert.NotEqual(t, ca, base64.StdEncoding.EncodeToString(o.Webhooks[i].ClientConfig.CABundle))
 					}
 				}
 			},
@@ -191,9 +192,9 @@ func TestAdmitMutating(t *testing.T) {
 			validate: func(o *admissionregistration.MutatingWebhookConfiguration) {
 				for i := range o.Webhooks {
 					if _, ok := shouldMutateNames[o.Webhooks[i].Name]; ok {
-						assert.Equal(t, "", string(o.Webhooks[i].ClientConfig.CABundle))
+						assert.Equal(t, "", base64.StdEncoding.EncodeToString(o.Webhooks[i].ClientConfig.CABundle))
 					} else {
-						assert.NotEqual(t, "", string(o.Webhooks[i].ClientConfig.CABundle))
+						assert.NotEqual(t, "", base64.StdEncoding.EncodeToString(o.Webhooks[i].ClientConfig.CABundle))
 					}
 				}
 			},

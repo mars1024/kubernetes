@@ -42,6 +42,7 @@ import (
 	"k8s.io/kubernetes/pkg/controller"
 
 	"github.com/golang/glog"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/meta"
 )
 
 const (
@@ -119,15 +120,20 @@ type NoExecuteTaintManager struct {
 
 func deletePodHandler(c clientset.Interface, emitEventFunc func(types.NamespacedName)) func(args *WorkArgs) error {
 	return func(args *WorkArgs) error {
+		copiedClient := c
 		ns := args.NamespacedName.Namespace
 		name := args.NamespacedName.Name
-		glog.V(0).Infof("NoExecuteTaintManager is deleting Pod: %v", args.NamespacedName.String())
+		tenantInfo := args.TenantInfo
+		if tenantInfo != nil {
+			copiedClient = c.(meta.TenantWise).ShallowCopyWithTenant(tenantInfo).(clientset.Interface)
+		}
+		glog.V(0).Infof("NoExecuteTaintManager is deleting Pod: %v tenant : %v", args.NamespacedName.String(), tenantInfo)
 		if emitEventFunc != nil {
 			emitEventFunc(args.NamespacedName)
 		}
 		var err error
 		for i := 0; i < retries; i++ {
-			err = c.CoreV1().Pods(ns).Delete(name, &metav1.DeleteOptions{})
+			err = copiedClient.CoreV1().Pods(ns).Delete(name, &metav1.DeleteOptions{})
 			if err == nil {
 				break
 			}

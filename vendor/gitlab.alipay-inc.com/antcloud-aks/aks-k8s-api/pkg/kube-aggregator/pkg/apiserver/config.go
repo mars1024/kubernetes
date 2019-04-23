@@ -22,6 +22,7 @@ const (
 	AggregationEnableBasic         = "CAFE_BASIC_ENABLED"
 	AggregationEnableCafeExtension = "CAFE_EXTENSION_ENABLED"
 	AggregationEnableCafeCluster   = "CAFE_CLUSTER_ENABLED"
+	AggregationEnableCafeMetrics   = "CAFE_METRICS_ENABLED"
 )
 
 // Complete fills in any fields not set that are required to have valid data. It's mutating the receiver.
@@ -152,6 +153,19 @@ func apiServicesToRegister(delegateAPIServer genericapiserver.DelegationTarget, 
 			Spec: apiregistration.APIServiceSpec{
 				Group:                "cafe.sofastack.io",
 				Version:              "v1",
+				GroupPriorityMinimum: 1000,
+				VersionPriority:      100,
+			},
+		})
+	}
+	if len(os.Getenv(AggregationEnableCafeMetrics)) > 0 {
+		registration.AddAPIServiceToSyncOnStart(&apiregistration.APIService{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "v1beta1.metrics.k8s.io",
+			},
+			Spec: apiregistration.APIServiceSpec{
+				Group:                "metrics.k8s.io",
+				Version:              "v1beta1",
 				GroupPriorityMinimum: 1000,
 				VersionPriority:      100,
 			},

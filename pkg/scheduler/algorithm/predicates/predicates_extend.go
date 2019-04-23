@@ -16,18 +16,22 @@ limitations under the License.
 package predicates
 
 import (
+	"github.com/golang/glog"
 	"k8s.io/api/core/v1"
 	"k8s.io/kubernetes/pkg/scheduler/algorithm"
 	"k8s.io/kubernetes/pkg/scheduler/algorithm/allocators"
 	schedulercache "k8s.io/kubernetes/pkg/scheduler/cache"
 )
 
+const (
+	// PodCPUSetResourceFitPred defines the name of predicate PodCPUSetResourceFit.
+	PodCPUSetResourceFitPred = "PodCPUSetResourceFit"
+)
+
 //Pod fields used:
-//- resource request (cpu, mem, storage, extended)
+//- resource request (cpu)
 //- overquota
-//- app-storage-spec
-//TODO yuzhi.wx(filter unwanted request)
-func PodCPUResourceFit(pod *v1.Pod, meta algorithm.PredicateMetadata, nodeInfo *schedulercache.NodeInfo) (bool, []algorithm.PredicateFailureReason, error) {
+func PodCPUSetResourceFit(pod *v1.Pod, meta algorithm.PredicateMetadata, nodeInfo *schedulercache.NodeInfo) (bool, []algorithm.PredicateFailureReason, error) {
 	//if util.AllocSpecFromPod(pod) == nil {
 	//	// Native pod should be check CPUSet
 	//	return true, []algorithm.PredicateFailureReason{}, nil
@@ -44,6 +48,7 @@ func PodCPUResourceFit(pod *v1.Pod, meta algorithm.PredicateMetadata, nodeInfo *
 	// max Pod limit should not exceed non-exclusive pool size
 	nonExclusivePoolSize := nodePool.GetNonExclusiveCPUSet().Size()
 	if isCPUSetPod(pod) {
+		glog.V(5).Infof("[PodCPUSetResourceFit]predicating CPUSet pod %s/%s", pod.Namespace, pod.Name)
 		if allocators.IsExclusiveContainer(pod, nil) {
 			exCPUs := (podRequest.MilliCPU + 999) / 1000
 			actualCPUs := nodePool.AvailableCPUs()
@@ -60,12 +65,13 @@ func PodCPUResourceFit(pod *v1.Pod, meta algorithm.PredicateMetadata, nodeInfo *
 			// 2. check request
 			maxRequestMilli := int64(float64(allowedLimit) * overRatio * 1000)
 			if podRequest.MilliCPU+nodePool.GetAllocatedSharedCPUSetReq() > maxRequestMilli {
-				predicateFails = append(predicateFails, NewInsufficientCPUSetError("shared-cpuset", podRequest.MilliCPU, nodePool.GetAllocatedSharedCPUSetReq(), maxRequestMilli))
+				predicateFails = append(predicateFails, NewInsufficientCPUSetError("shared-request", podRequest.MilliCPU, nodePool.GetAllocatedSharedCPUSetReq(), maxRequestMilli))
 			}
 		}
 
 	} else {
 		// native containers in CPUSet pod, only check CPUShare
+		glog.V(5).Infof("[PodCPUSetResourceFit]predicating CPUShare pod %s/%s", pod.Namespace, pod.Name)
 		newRequested := podRequest.MilliCPU + nodePool.GetAllocatedCPUShare()
 		allowedCPUSharePoolSize := nodePool.GetCPUSharePoolCPUSet().Size()
 		allowedMillCPUShare := int64(float64(allowedCPUSharePoolSize) * overRatio * 1000)

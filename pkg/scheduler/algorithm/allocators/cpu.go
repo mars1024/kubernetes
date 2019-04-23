@@ -157,7 +157,7 @@ func (allocator *CPUAllocator) allocateShareCPUSet(pod *v1.Pod, container *v1.Co
 	currentCPUSetMilli := int64(float64(allocator.pool.GetSharedCPUSet().Size()) * 1000 * overRatio)
 	if newRequested <= currentCPUSetMilli && numCPUs <= allocator.pool.GetSharedCPUSet().Size() { // current cpuset is enough for the container
 		// Step 1: calculate current cpuset, if available, get the least used cpuset
-		glog.V(5).Infof("taking %d CPUs from existing shared CPUSet pool")
+		glog.V(5).Infof("taking %d CPUs from existing shared CPUSet pool", numCPUs)
 		existing := allocator.pool.LeaseUsedSharedCPUSet(numCPUs)
 		return existing, nil
 	} else {
@@ -166,7 +166,7 @@ func (allocator *CPUAllocator) allocateShareCPUSet(pod *v1.Pod, container *v1.Co
 		// Step 2.1: if request not enough
 		neededMilli := newRequested - currentCPUSetMilli
 		neededNumCPUsForReq := int((float64(neededMilli) + (1000*overRatio - 1)) / 1000) // New from pool
-
+		glog.V(5).Infof("needed number of CPUs from requests: %d", neededNumCPUsForReq)
 		neededNumCPUs := neededNumCPUsForReq
 		if neededForLimit := numCPUs - (allocator.pool.GetSharedCPUSet().Size() + neededNumCPUsForReq); neededForLimit > 0 {
 			// Container limit is larger than existing Shared CPUSet pool
@@ -176,6 +176,7 @@ func (allocator *CPUAllocator) allocateShareCPUSet(pod *v1.Pod, container *v1.Co
 			}
 
 		}
+		glog.V(3).Infof("allocating %s (%d) CPUs for pod %s", neededNumCPUs, ContainerName(pod, container))
 		ret, err := takeByTopology(allocator.pool.Topology(), allocator.pool.GetCPUSharePoolCPUSet(), neededNumCPUs)
 		if err != nil {
 			err = fmt.Errorf("[CPUAllocator]failed to allocate %d CPUs from CPUShare pool: %s", neededNumCPUs, err.Error())

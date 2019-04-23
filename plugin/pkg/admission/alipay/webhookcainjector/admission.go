@@ -1,7 +1,6 @@
 package webhookcainjector
 
 import (
-	"encoding/base64"
 	"fmt"
 	"io"
 
@@ -135,7 +134,7 @@ func (i *WebhookCAInjector) getCAFromKubeConfig() ([]byte, error) {
 		return nil, fmt.Errorf("kubeConfig.Clusters[\"\"].CertificateAuthorityData must contain CA Data")
 	}
 
-	return []byte(base64.StdEncoding.EncodeToString(ca)), nil
+	return ca, nil
 }
 
 func shouldIgnore(attributes admission.Attributes) bool {

@@ -63,6 +63,7 @@ func init() {
 const legacyAPIServiceName = "v1."
 
 const BasicAPIServerIPAddressEnv = "BASIC_APISERVER_IP_ADDRESS"
+const CafeMetricsAPIServerIPAddressEnv = "CAFE_METRICS_APISERVER_IP_ADDRESS"
 
 type ExtraConfig struct {
 	// ProxyClientCert/Key are the client cert used to identify this proxy. Backing APIServices use
@@ -164,14 +165,14 @@ func (c completedConfig) NewWithDelegate(delegationTarget genericapiserver.Deleg
 	)
 
 	s := &APIAggregator{
-		GenericAPIServer:         genericServer,
-		delegateHandler:          delegationTarget.UnprotectedHandler(),
-		proxyClientCert:          c.ExtraConfig.ProxyClientCert,
-		proxyClientKey:           c.ExtraConfig.ProxyClientKey,
-		proxyTransport:           c.ExtraConfig.ProxyTransport,
-		proxyHandlers:            map[string]*proxyHandler{},
-		handledGroups:            sets.String{},
-		lister:                   informerFactory.Apiregistration().InternalVersion().APIServices().Lister(),
+		GenericAPIServer: genericServer,
+		delegateHandler:  delegationTarget.UnprotectedHandler(),
+		proxyClientCert:  c.ExtraConfig.ProxyClientCert,
+		proxyClientKey:   c.ExtraConfig.ProxyClientKey,
+		proxyTransport:   c.ExtraConfig.ProxyTransport,
+		proxyHandlers:    map[string]*proxyHandler{},
+		handledGroups:    sets.String{},
+		lister:           informerFactory.Apiregistration().InternalVersion().APIServices().Lister(),
 		APIRegistrationInformers: informerFactory,
 		serviceResolver:          c.ExtraConfig.ServiceResolver,
 	}
@@ -197,11 +198,13 @@ func (c completedConfig) NewWithDelegate(delegationTarget genericapiserver.Deleg
 	cafeExtensionProxyHandler := newLocalProxyHandler("127.0.0.1", 7443, "https")
 	cafeClusterProxyHandler := newLocalProxyHandler("127.0.0.1", 8443, "https")
 	cafeBasicProxyHandler := newLocalProxyHandler(os.Getenv(BasicAPIServerIPAddressEnv), 80, "http")
+	cafeMetricsHandler := newLocalProxyHandler(os.Getenv(CafeMetricsAPIServerIPAddressEnv), 6443, "https")
 
 	s.GenericAPIServer.Handler.NonGoRestfulMux.UnlistedHandlePrefix("/apis/apps.cafe.cloud.alipay.com/", cafeExtensionProxyHandler)
 	s.GenericAPIServer.Handler.NonGoRestfulMux.UnlistedHandlePrefix("/apis/cluster.cafe.cloud.alipay.com/", cafeExtensionProxyHandler)
 	s.GenericAPIServer.Handler.NonGoRestfulMux.UnlistedHandlePrefix("/apis/cluster.aks.cafe.sofastack.io/", cafeClusterProxyHandler)
 	s.GenericAPIServer.Handler.NonGoRestfulMux.UnlistedHandlePrefix("/apis/cafe.sofastack.io/", cafeBasicProxyHandler)
+	s.GenericAPIServer.Handler.NonGoRestfulMux.UnlistedHandlePrefix("/apis/metrics.k8s.io/", cafeMetricsHandler)
 
 	s.GenericAPIServer.Handler.NonGoRestfulMux.Handle("/apis", apisHandler)
 	s.GenericAPIServer.Handler.NonGoRestfulMux.UnlistedHandle("/apis/", apisHandler)

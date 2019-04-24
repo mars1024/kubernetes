@@ -2,6 +2,7 @@ package allocators
 
 import (
 	"fmt"
+	"github.com/golang/glog"
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -77,6 +78,73 @@ func TestCPUPool_Initialize(t *testing.T) {
 	top := pool.Topology()
 	if top.NumCPUs != 64 {
 		t.Errorf("incorrect NumCPUs, expected 64 actual %d", top.NumCPUs)
+	}
+}
+
+func TestGetNonExclusiveCPUSet(t *testing.T) {
+	nodeInfo, err := makeNodeInfo()
+	if err != nil {
+		t.Errorf(err.Error())
+	}
+	pool := NewCPUPool(nodeInfo)
+	ret := pool.GetNonExclusiveCPUSet().Size()
+	if ret != 64 {
+		t.Errorf("cpuset size should be 64, actual %d", ret)
+	}
+}
+
+func TestGetAllocatedCPUShare(t *testing.T) {
+	pod := makePod("1000m", "2")
+	pod2 := makePod("2000m", "2")
+	nodeInfo, err := makeNodeInfo(pod, pod2)
+	if err != nil {
+		t.Errorf(err.Error())
+	}
+	pool := NewCPUPool(nodeInfo)
+	ret := pool.GetAllocatedCPUShare()
+	if ret != 3000 {
+		t.Errorf("CPUShare should be 3000, actual %d", ret)
+	}
+	nodeInfo, err = makeNodeInfo()
+	pool = NewCPUPool(nodeInfo)
+
+	overRatio := 1.0
+	reti := int(float64(pool.GetAllocatedCPUShare()+int64(overRatio*float64(1000)-1)) / (overRatio * 1000))
+	if reti != 0 {
+		t.Errorf("CPUNums should be 0, actual %d", reti)
+	}
+	nonExclusivePoolSize := 64
+	r := nonExclusivePoolSize - int(float64(pool.GetAllocatedCPUShare()+int64(overRatio*float64(1000)-1))/(overRatio*1000))
+	glog.V(3).Infof("[DEBUG] %d", r)
+}
+
+func TestCPUShareOccupiedCPUs(t *testing.T) {
+	pod := makePod("1000m", "2")
+	pod2 := makePod("2000m", "2")
+	nodeInfo, _ := makeNodeInfo(pod, pod2)
+	pool := NewCPUPool(nodeInfo)
+
+	ratio := pool.NodeOverRatio()
+	if ratio != 1 {
+		t.Errorf("over ratio should be 1, acutal: %f", ratio)
+	}
+	ret := pool.CPUShareOccupiedCPUs()
+	if ret != 3 {
+		t.Errorf("should be rounded up %d, acutal: %d", 3, ret)
+	}
+
+	/// With over ratio
+	nodeInfo.Node().Labels = make(map[string]string, 0)
+	nodeInfo.Node().Labels[sigmak8sapi.LabelCPUOverQuota] = "2.0"
+	pool = NewCPUPool(nodeInfo)
+
+	ratio = pool.NodeOverRatio()
+	if ratio != 2 {
+		t.Errorf("over ratio should be 1, acutal: %f", ratio)
+	}
+	ret = pool.CPUShareOccupiedCPUs()
+	if ret != 2 {
+		t.Errorf("should be rounded up %d, acutal: %d", 2, ret)
 	}
 }
 

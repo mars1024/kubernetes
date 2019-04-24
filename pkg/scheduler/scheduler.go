@@ -214,7 +214,7 @@ func (sched *Scheduler) schedule(pod *v1.Pod) (string, error) {
 				return "", err
 			}
 		}
-		return pod.Spec.Hostname, nil
+		return pod.Spec.NodeName, nil
 	}
 
 	host, err := sched.config.Algorithm.Schedule(pod, sched.config.NodeLister)
@@ -229,13 +229,6 @@ func (sched *Scheduler) schedule(pod *v1.Pod) (string, error) {
 			Message: err.Error(),
 		})
 		return "", err
-	}
-	if algo, ok := sched.config.Algorithm.(*core.GenericSchedulerExtend); ok {
-		// TODO(yuzhi.wx) Consider running it in background
-		err = algo.Allocate(pod, host)
-		if err != nil {
-			glog.Error(err)
-		}
 	}
 	return host, err
 }
@@ -478,7 +471,15 @@ func (sched *Scheduler) scheduleOne() {
 	}
 	// bind the pod to its host asynchronously (we can do this b/c of the assumption step above).
 	go func() {
-		// TODO(yuzhi.wx) patch the pod and node with specified annotation
+		if util.IsInplaceUpdatePod(assumedPod) {
+			return
+		}
+		// Patch the CPUSet allocator result before binding pod to host
+		err = sched.PatchAllocators(pod, suggestedHost)
+		if err != nil {
+			glog.Errorf("failed to allocate CPUSet for pod (%v), not binding there", err)
+			return
+		}
 		// so that kubelet is able to behave correctly
 		// Bind volumes first before Pod
 

@@ -31,9 +31,10 @@ type CPUPool struct {
 	nodeInfo        *cache.NodeInfo
 	shareCntRef     CPUCntRef // CPU count ref by CPU ID
 	exclusiveCntRef CPUCntRef // ex CPU count ref by CPU ID
-	// cached the Node CPUSet
+	// cached the Node state
 	cachedNodeCPUSet *cpuset.CPUSet
 	top              *topology.CPUTopology
+	overRatio        float64
 }
 
 type CPUCntRef map[int]int
@@ -211,9 +212,15 @@ func (pool *CPUPool) GetCPUSharePoolCPUSet() cpuset.CPUSet {
 
 // AvailableCPUs returns available CPU count for exclusive container
 func (pool *CPUPool) AvailableCPUs() int {
-	return pool.GetCPUSharePoolCPUSet().Size() - int(pool.GetAllocatedCPUShare()/1000)
+	return pool.GetCPUSharePoolCPUSet().Size() - pool.CPUShareOccupiedCPUs()
 }
 
+// CPUShareOccupiedCPUs returns CPU Numbers ocupied by CPUShare pods with rounded up
+// also includes the over ratio
+func (pool *CPUPool) CPUShareOccupiedCPUs() int {
+	overRatio := pool.NodeOverRatio()
+	return int(float64(pool.GetAllocatedCPUShare()+int64(overRatio*float64(1000)-1)) / (overRatio * 1000))
+}
 func (pool *CPUPool) GetAllocatedCPUShare() int64 {
 	pods := pool.nodeInfo.Pods()
 	//cpuRatios, _ := util.CPUOverQuotaRatio(pool.nodeInfo.Node())
@@ -258,6 +265,14 @@ func (pool *CPUPool) GetAllocatedSharedCPUSetReq() int64 {
 		allocated += milliCPU
 	}
 	return allocated
+}
+
+func (pool *CPUPool) NodeOverRatio() float64 {
+	if pool.overRatio == 0 {
+		value, _ := util.CPUOverQuotaRatio(pool.nodeInfo.Node())
+		return value
+	}
+	return pool.overRatio
 }
 
 func (pool *CPUPool) parseNodeCPUInfo(node *v1.Node) (*topology.CPUTopology, error) {

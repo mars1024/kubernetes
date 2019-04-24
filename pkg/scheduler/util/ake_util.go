@@ -74,3 +74,23 @@ func CPUOverQuotaRatio(node *v1.Node) (float64, bool) {
 	}
 	return 1.0, false
 }
+
+
+
+func MemoryOverQuotaRatio(node *v1.Node) (float64, bool) {
+	if v, exists := node.Labels[sigmak8sapi.LabelMemOverQuota]; exists {
+		if ratio, err := strconv.ParseFloat(v, 64); err == nil {
+			return ratio, true
+		}
+	}
+	return 1.0, false
+}
+
+func EphemeralStorageOverQuotaRatio(node *v1.Node) (float64, bool) {
+	if v, exists := node.Labels[sigmak8sapi.LabelDiskOverQuota]; exists {
+		if ratio, err := strconv.ParseFloat(v, 64); err == nil {
+			return ratio, true
+		}
+	}
+	return 1.0, false
+}

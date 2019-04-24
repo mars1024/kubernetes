@@ -43,8 +43,8 @@ func PodCPUSetResourceFit(pod *v1.Pod, meta algorithm.PredicateMetadata, nodeInf
 	}
 	var predicateFails []algorithm.PredicateFailureReason
 
-	overRatio, _ := CPUOverQuotaRatio(nodeInfo)
 	nodePool := allocators.NewCPUPool(nodeInfo)
+	overRatio := nodePool.NodeOverRatio()
 	// max Pod limit should not exceed non-exclusive pool size
 	nonExclusivePoolSize := nodePool.GetNonExclusiveCPUSet().Size()
 	if isCPUSetPod(pod) {
@@ -58,7 +58,9 @@ func PodCPUSetResourceFit(pod *v1.Pod, meta algorithm.PredicateMetadata, nodeInf
 		} else { // over ratio
 			// 1. check maxLimit of pod
 			maxLimit := getPodMaxCPUCount(pod)
-			allowedLimit := nonExclusivePoolSize - int(float64(nodePool.GetAllocatedCPUShare()+int64(overRatio*float64(1000)))/overRatio)
+			allowedLimit := nonExclusivePoolSize - nodePool.CPUShareOccupiedCPUs()
+			glog.V(5).Infof("[DEBUG]maxLimit=%d, nonExclusivePoolSize=%d, allowedLimit=%d, GetAllocatedCPUShare=%d",
+				maxLimit, nonExclusivePoolSize, allowedLimit, nodePool.GetAllocatedCPUShare())
 			if maxLimit > allowedLimit {
 				predicateFails = append(predicateFails, NewInsufficientCPUSetError("shared-cpuset", int64(maxLimit), int64(nodePool.GetSharedCPUSet().Size()), int64(allowedLimit)))
 			}

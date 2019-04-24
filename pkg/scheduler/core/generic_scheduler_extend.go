@@ -100,7 +100,7 @@ func (ge *GenericSchedulerExtend) inplaceUpdateReallocate(pod *v1.Pod) (string, 
 	}
 
 	// Call PodFitsResources to check resources.
-	if fit, predicateFails, _ := predicates.PodFitsResources(pod, nil, nodeInfo); !fit {
+	if fit, predicateFails, _ := predicates.PodCPUSetResourceFit(pod, nil, nodeInfo); !fit {
 		return "", fmt.Errorf("failed to fit resource in inplace update processing with predicateFails: %+v", predicateFails)
 	}
 

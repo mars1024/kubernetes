@@ -98,14 +98,12 @@ func WithMaxInFlightLimit(
 	handler http.Handler,
 	nonMutatingLimit int,
 	mutatingLimit int,
-	watchLimit int,
 	longRunningRequestCheck apirequest.LongRunningRequestCheck,
 ) http.Handler {
 	startOnce.Do(startRecordingUsage)
-	if nonMutatingLimit == 0 && mutatingLimit == 0 && watchLimit == 0 {
+	if nonMutatingLimit == 0 && mutatingLimit == 0 {
 		return handler
 	}
-	var watchChan chan bool
 	var nonMutatingChan chan bool
 	var mutatingChan chan bool
 	if nonMutatingLimit != 0 {
@@ -113,9 +111,6 @@ func WithMaxInFlightLimit(
 	}
 	if mutatingLimit != 0 {
 		mutatingChan = make(chan bool, mutatingLimit)
-	}
-	if watchLimit != 0 {
-		watchChan = make(chan bool, watchLimit)
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -128,36 +123,7 @@ func WithMaxInFlightLimit(
 
 		// Skip tracking long running events.
 		if longRunningRequestCheck != nil && longRunningRequestCheck(r, requestInfo) {
-			if watchChan == nil {
-				handler.ServeHTTP(w, r)
-				return
-			}
-			select {
-			case watchChan <- true:
-				defer func() {
-					<-watchChan
-				}()
-				handler.ServeHTTP(w, r)
-			default:
-				isSigmalet := false
-				if currUser, ok := apirequest.UserFrom(ctx); ok {
-					for _, group := range currUser.GetGroups() {
-						if group == user.NodesGroup {
-							isSigmalet = true
-							break
-						}
-					}
-				}
-
-				//at this point we're about to return a 429, BUT not all actors should be rate limited.
-				//we are now focusing on sigmalet
-				if isSigmalet {
-					metrics.DroppedRequests.WithLabelValues(metrics.WatchKind).Inc()
-					tooManyRequests(r, w)
-				} else {
-					handler.ServeHTTP(w, r)
-				}
-			}
+			handler.ServeHTTP(w, r)
 			return
 		}
 

@@ -17,3 +17,33 @@ func (sched *Scheduler) PatchAllocators(pod *v1.Pod, suggestedHost string) error
 	}
 	return err
 }
+
+func (sched *Scheduler) setPodAllocSpec(id, allocSpec string) {
+	sched.inplacelock.Lock()
+	defer sched.inplacelock.Unlock()
+
+	if sched.inplacePodAllocSpec == nil {
+		sched.inplacePodAllocSpec = map[string]string{}
+	}
+	sched.inplacePodAllocSpec[id] = allocSpec
+}
+
+func (sched *Scheduler) clearPodAllocSpec(id string) {
+	sched.inplacelock.Lock()
+	defer sched.inplacelock.Unlock()
+
+	if sched.inplacePodAllocSpec == nil {
+		return
+	}
+	delete(sched.inplacePodAllocSpec, id)
+}
+
+func (sched *Scheduler) getPodAllocSpec(id string) string {
+	sched.inplacelock.Lock()
+	defer sched.inplacelock.Unlock()
+
+	if sched.inplacePodAllocSpec == nil {
+		return ""
+	}
+	return sched.inplacePodAllocSpec[id]
+}

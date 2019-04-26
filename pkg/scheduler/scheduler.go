@@ -17,6 +17,7 @@ limitations under the License.
 package scheduler
 
 import (
+	"sync"
 	"time"
 
 	"k8s.io/api/core/v1"
@@ -38,10 +39,11 @@ import (
 	"k8s.io/kubernetes/pkg/scheduler/util"
 	"k8s.io/kubernetes/pkg/scheduler/volumebinder"
 
+	"github.com/golang/glog"
+
+	sigmaapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
 	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
-
-	"github.com/golang/glog"
 )
 
 // Binder knows how to write a binding.
@@ -68,6 +70,10 @@ type PodPreemptor interface {
 // nodes that they fit on and writes bindings back to the api server.
 type Scheduler struct {
 	config *Config
+
+	// used for inplace update pod only
+	inplacelock         sync.Mutex
+	inplacePodAllocSpec map[string]string
 }
 
 // StopEverything closes the scheduler config's StopEverything channel, to shut
@@ -168,7 +174,8 @@ func NewFromConfigurator(c Configurator, modifiers ...func(c *Config)) (*Schedul
 	}
 	// From this point on the config is immutable to the outside.
 	s := &Scheduler{
-		config: cfg,
+		config:              cfg,
+		inplacePodAllocSpec: map[string]string{},
 	}
 	metrics.Register()
 	return s, nil
@@ -178,7 +185,8 @@ func NewFromConfigurator(c Configurator, modifiers ...func(c *Config)) (*Schedul
 func NewFromConfig(config *Config) *Scheduler {
 	metrics.Register()
 	return &Scheduler{
-		config: config,
+		config:              config,
+		inplacePodAllocSpec: map[string]string{},
 	}
 }
 
@@ -200,7 +208,7 @@ func (sched *Scheduler) Config() *Config {
 func (sched *Scheduler) schedule(pod *v1.Pod) (string, error) {
 	if util.IsInplaceUpdatePod(pod) {
 		if algo, ok := sched.config.Algorithm.(*core.GenericSchedulerExtend); ok {
-			err := algo.HandleInplacePodUpdate(pod)
+			allocSpec, err := algo.HandleInplacePodUpdate(pod)
 			if err != nil {
 				pod = pod.DeepCopy()
 				sched.config.Error(pod, err)
@@ -213,6 +221,7 @@ func (sched *Scheduler) schedule(pod *v1.Pod) (string, error) {
 				})
 				return "", err
 			}
+			sched.setPodAllocSpec(string(pod.UID), allocSpec)
 		}
 		return pod.Spec.NodeName, nil
 	}
@@ -434,6 +443,18 @@ func (sched *Scheduler) scheduleOne() {
 	start := time.Now()
 	suggestedHost, err := sched.schedule(pod)
 	if err != nil {
+		// handle inplace update pod
+		defer func() {
+			assumed := pod.DeepCopy()
+			glog.Errorf("setting inplace update pod %s/%s as failed due to %v", pod.Namespace, pod.Name, err)
+			// Set inplace update state to "failed".
+			assumed.Annotations[sigmaapi.AnnotationPodInplaceUpdateState] = sigmaapi.InplaceUpdateStateFailed
+			if err := util.PatchPod(sched.config.GetClient(), pod, assumed); err != nil {
+				glog.Error(err)
+			}
+			sched.clearPodAllocSpec(string(pod.UID))
+		}()
+
 		// schedule() may have failed because the pod would not fit on any host, so we try to
 		// preempt, with the expectation that the next time the pod is tried for scheduling it
 		// will fit due to the preemption. It is also possible that a different pod will schedule
@@ -472,6 +493,17 @@ func (sched *Scheduler) scheduleOne() {
 	// bind the pod to its host asynchronously (we can do this b/c of the assumption step above).
 	go func() {
 		if util.IsInplaceUpdatePod(assumedPod) {
+			defer sched.clearPodAllocSpec(string(assumedPod.UID))
+			// Set inplace update state to "accepted".
+			glog.V(4).Infof("setting inplace update pod %s/%s as accepted", pod.Namespace, pod.Name)
+			assumedPod.Annotations[sigmaapi.AnnotationPodInplaceUpdateState] = sigmaapi.InplaceUpdateStateAccepted
+			allocSpec := sched.getPodAllocSpec(string(assumedPod.UID))
+			if len(allocSpec) > 0 {
+				assumedPod.Annotations[sigmaapi.AnnotationPodAllocSpec] = allocSpec
+			}
+			if err := util.PatchPod(sched.config.GetClient(), pod, assumedPod); err != nil {
+				glog.Error(err)
+			}
 			return
 		}
 		// Patch the CPUSet allocator result before binding pod to host

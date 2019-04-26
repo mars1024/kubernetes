@@ -16,8 +16,6 @@ import (
 	"k8s.io/kubernetes/pkg/scheduler/core/equivalence"
 	"k8s.io/kubernetes/pkg/scheduler/util"
 	"k8s.io/kubernetes/pkg/scheduler/volumebinder"
-
-	sigmaapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 )
 
 const (
@@ -118,39 +116,26 @@ func (ge *GenericSchedulerExtend) inplaceUpdateReallocate(pod *v1.Pod) (string, 
 	return string(allocators.GenAllocSpecAnnotation(pod, cpuAssignments)), nil
 }
 
-func (ge *GenericSchedulerExtend) HandleInplacePodUpdate(pod *v1.Pod) error {
-	var err error
-	var allocSpec string
-	assumed := pod.DeepCopy()
-	allocSpec, err = ge.inplaceUpdateReallocate(pod)
+func (ge *GenericSchedulerExtend) HandleInplacePodUpdate(pod *v1.Pod) (string, error) {
+	allocSpec, err := ge.inplaceUpdateReallocate(pod)
 	if err != nil {
-		glog.V(4).Infof("setting inplace update pod %s/%s as failed due to %v", pod.Namespace, pod.Name, err)
-		// Set inplace update state to "failed".
-		assumed.Annotations[sigmaapi.AnnotationPodInplaceUpdateState] = sigmaapi.InplaceUpdateStateFailed
+		assumed := pod.DeepCopy()
 		// Set assumed resource to last spec.
 		lastSpec := util.LastSpecFromPod(assumed)
 		if lastSpec == nil || len(lastSpec.Containers) != len(assumed.Spec.Containers) {
-			return fmt.Errorf("get unexpected lastSpec from pod %s/%s: %v", pod.Namespace, pod.Name, lastSpec.Containers)
+			return "", fmt.Errorf("get unexpected lastSpec from pod %s/%s: %v", pod.Namespace, pod.Name, lastSpec.Containers)
 		}
 		// Reset resource value.
 		for idx, _ := range assumed.Spec.Containers {
 			assumed.Spec.Containers[idx].Resources = lastSpec.Containers[idx].Resources
 		}
-		if err := ge.cache.AssumePod(assumed); err != nil {
+		err = ge.cache.AssumePod(assumed)
+		if err != nil {
 			glog.Error(fmt.Errorf("failed to assume inplace-update pod %s/%s: %v", pod.Namespace, pod.Name, err))
 		}
-	} else {
-		// Set inplace update state to "accepted".
-		glog.V(4).Infof("setting inplace update pod %s/%s as accepted", pod.Namespace, pod.Name)
-		assumed.Annotations[sigmaapi.AnnotationPodInplaceUpdateState] = sigmaapi.InplaceUpdateStateAccepted
-		if len(allocSpec) > 0 {
-			assumed.Annotations[sigmaapi.AnnotationPodAllocSpec] = allocSpec
-		}
+		return "", err
 	}
-	if err = util.PatchPod(ge.client, pod, assumed); err != nil {
-		glog.Error(err)
-	}
-	return err
+	return allocSpec, nil
 }
 
 // NewGenericScheduler creates a genericScheduler object.

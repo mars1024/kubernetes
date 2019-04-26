@@ -129,8 +129,6 @@ const (
 	ReadOnlyKind = "readOnly"
 	// MutatingKind is a string identifying mutating request kind
 	MutatingKind = "mutating"
-	// WatchKind is a string identifying watch request kind
-	WatchKind = "watch"
 )
 
 var registerMetrics sync.Once

@@ -30,7 +30,7 @@ import (
 	apirequest "k8s.io/apiserver/pkg/endpoints/request"
 )
 
-func createMaxInflightServer(callsWg, blockWg *sync.WaitGroup, disableCallsWg *bool, disableCallsWgMutex *sync.Mutex, nonMutating, mutating, watchLimit int) *httptest.Server {
+func createMaxInflightServer(callsWg, blockWg *sync.WaitGroup, disableCallsWg *bool, disableCallsWgMutex *sync.Mutex, nonMutating, mutating int) *httptest.Server {
 	longRunningRequestCheck := BasicLongRunningRequestCheck(sets.NewString("watch"), sets.NewString("proxy"))
 
 	requestInfoFactory := &apirequest.RequestInfoFactory{APIPrefixes: sets.NewString("apis", "api"), GrouplessAPIPrefixes: sets.NewString("api")}
@@ -50,7 +50,6 @@ func createMaxInflightServer(callsWg, blockWg *sync.WaitGroup, disableCallsWg *b
 		}),
 		nonMutating,
 		mutating,
-		watchLimit,
 		longRunningRequestCheck,
 	)
 	handler = withFakeUser(handler)
@@ -101,7 +100,7 @@ func TestMaxInFlightNonMutating(t *testing.T) {
 	waitForCalls := true
 	waitForCallsMutex := sync.Mutex{}
 
-	server := createMaxInflightServer(calls, block, &waitForCalls, &waitForCallsMutex, AllowedNonMutatingInflightRequestsNo, 1, 0)
+	server := createMaxInflightServer(calls, block, &waitForCalls, &waitForCallsMutex, AllowedNonMutatingInflightRequestsNo, 1)
 	defer server.Close()
 
 	// These should hang, but not affect accounting.  use a query param match
@@ -164,80 +163,6 @@ func TestMaxInFlightNonMutating(t *testing.T) {
 	}
 }
 
-func TestMaxInFlightWatch(t *testing.T) {
-	const AllowedWatchRequestsNo = 3
-
-	calls := &sync.WaitGroup{}
-	calls.Add(AllowedWatchRequestsNo)
-
-	// Responses is used to wait until all responses are
-	// received. This prevents some async requests getting EOF
-	// errors from prematurely closing the server
-	responses := &sync.WaitGroup{}
-	responses.Add(AllowedWatchRequestsNo + 2)
-
-	// Block is used to keep requests in flight for as long as we need to. All requests will
-	// be unblocked at the same time.
-	block := &sync.WaitGroup{}
-	block.Add(1)
-
-	waitForCalls := true
-	waitForCallsMutex := sync.Mutex{}
-
-	server := createMaxInflightServer(calls, block, &waitForCalls, &waitForCallsMutex, 0, 1, AllowedWatchRequestsNo)
-	defer server.Close()
-
-	// These should hang and affect accounting because it is watch request
-	for i := 0; i < AllowedWatchRequestsNo; i++ {
-		// These should hang waiting on block...
-		go func() {
-			if err := expectHTTPGet(server.URL+"/api/v1/namespaces/default/wait?watch=true", http.StatusOK); err != nil {
-				t.Error(err)
-			}
-			responses.Done()
-		}()
-	}
-	// We wait for all calls to be received by the server
-	calls.Wait()
-
-	// We should allow a single mutating request.
-	if err := expectHTTPPost(server.URL+"/dontwait", http.StatusOK); err != nil {
-		t.Error(err)
-	}
-
-	// Disable calls notifications in the server
-	waitForCallsMutex.Lock()
-	waitForCalls = false
-	waitForCallsMutex.Unlock()
-
-	// watch request don't block normal user
-	for i := 0; i < 2; i++ {
-		go func() {
-			if err := expectHTTPGet(server.URL+"/api/v1/namespaces/default/wait1?watch=true", http.StatusOK); err != nil {
-				t.Error(err)
-			}
-			responses.Done()
-		}()
-	}
-
-	// Do this multiple times to show that rate limit rejected requests don't block.
-	for i := 0; i < 2; i++ {
-		if err := expectHTTPGet(server.URL+"/api/v1/namespaces/default/wait?watch=true", http.StatusTooManyRequests, user.NodesGroup); err != nil {
-			t.Error(err)
-		}
-	}
-
-	// Let all hanging requests finish
-	block.Done()
-
-	// Show that we recover from being blocked up.
-	// Too avoid flakyness we need to wait until at least one of the requests really finishes.
-	responses.Wait()
-	if err := expectHTTPGet(server.URL, http.StatusOK); err != nil {
-		t.Error(err)
-	}
-}
-
 func TestMaxInFlightMutating(t *testing.T) {
 	const AllowedMutatingInflightRequestsNo = 3
 
@@ -255,7 +180,7 @@ func TestMaxInFlightMutating(t *testing.T) {
 	waitForCalls := true
 	waitForCallsMutex := sync.Mutex{}
 
-	server := createMaxInflightServer(calls, block, &waitForCalls, &waitForCallsMutex, 1, AllowedMutatingInflightRequestsNo, 0)
+	server := createMaxInflightServer(calls, block, &waitForCalls, &waitForCallsMutex, 1, AllowedMutatingInflightRequestsNo)
 	defer server.Close()
 
 	// These should hang and be accounted, i.e. saturate the server
@@ -299,17 +224,8 @@ func TestMaxInFlightMutating(t *testing.T) {
 }
 
 // We use GET as a sample non-mutating request.
-func expectHTTPGet(url string, code int, groups ...string) error {
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		return err
-	}
-	for _, group := range groups {
-		req.Header.Add("Groups", group)
-	}
-
-	r, err := http.DefaultClient.Do(req)
-
+func expectHTTPGet(url string, code int) error {
+	r, err := http.Get(url)
 	if err != nil {
 		return fmt.Errorf("unexpected error: %v", err)
 	}
@@ -356,7 +272,7 @@ func TestMaxInFlightSkipsMasters(t *testing.T) {
 	waitForCalls := true
 	waitForCallsMutex := sync.Mutex{}
 
-	server := createMaxInflightServer(calls, block, &waitForCalls, &waitForCallsMutex, 1, AllowedMutatingInflightRequestsNo, 0)
+	server := createMaxInflightServer(calls, block, &waitForCalls, &waitForCallsMutex, 1, AllowedMutatingInflightRequestsNo)
 	defer server.Close()
 
 	// These should hang and be accounted, i.e. saturate the server

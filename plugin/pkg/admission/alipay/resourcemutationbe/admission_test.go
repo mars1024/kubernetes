@@ -1,6 +1,7 @@
 package resourcemutationbe
 
 import (
+	"fmt"
 	"testing"
 
 	log "github.com/golang/glog"
@@ -81,7 +82,7 @@ func TestResourceMutationBE(t *testing.T) {
 					cpuRequest:        10,
 					cpuLimit:          20,
 					expectedCPUShares: 10,
-					expectedCPUQuota:  1000,
+					expectedCPUQuota:  2000,
 				},
 				"c2": testContainer{
 					cpuRequest:        1,
@@ -97,13 +98,13 @@ func TestResourceMutationBE(t *testing.T) {
 					cpuRequest:        1000,
 					cpuLimit:          2000,
 					expectedCPUShares: 1024,
-					expectedCPUQuota:  100000,
+					expectedCPUQuota:  200000,
 				},
 				"c2": testContainer{
 					cpuRequest:        100,
 					cpuLimit:          200,
 					expectedCPUShares: 102,
-					expectedCPUQuota:  10000,
+					expectedCPUQuota:  20000,
 				},
 			},
 		},
@@ -113,7 +114,7 @@ func TestResourceMutationBE(t *testing.T) {
 					cpuRequest:        1000,
 					cpuLimit:          2000,
 					expectedCPUShares: 1024,
-					expectedCPUQuota:  100000,
+					expectedCPUQuota:  200000,
 				},
 				"c2": testContainer{
 					cpuRequest:        2000,
@@ -125,7 +126,7 @@ func TestResourceMutationBE(t *testing.T) {
 					cpuRequest:        10,
 					cpuLimit:          20,
 					expectedCPUShares: 10,
-					expectedCPUQuota:  1000,
+					expectedCPUQuota:  2000,
 				},
 			},
 		},
@@ -170,12 +171,14 @@ func TestResourceMutationBE(t *testing.T) {
 						continue
 					}
 
+					cpusharesErr := fmt.Sprintf("case[%d] cpushares[%d] should be equal to expected[%d]",
+						i, ac.HostConfig.CpuShares, tc.expectedCPUShares)
+					cpuquotaErr := fmt.Sprintf("case[%d] cpuquota[%d] should be equal to expected[%d]",
+						i, ac.HostConfig.CpuQuota, tc.expectedCPUQuota)
 					log.Infof("host config of container[%s]: %+v", ac.Name, ac.HostConfig)
 					log.Infof("resource of container[%s]: %+v", ac.Name, ac.Resource)
-					assert.Equal(t, tc.expectedCPUShares, ac.HostConfig.CpuShares,
-						"cpushares should be equal to expected")
-					assert.Equal(t, tc.expectedCPUQuota, ac.HostConfig.CpuQuota,
-						"cpuquota should be equal to expected")
+					assert.Equal(t, tc.expectedCPUShares, ac.HostConfig.CpuShares, cpusharesErr)
+					assert.Equal(t, tc.expectedCPUQuota, ac.HostConfig.CpuQuota, cpuquotaErr)
 					assert.Equal(t, sigmak8sapi.CPUBindStrategyAllCPUs, ac.Resource.CPU.BindingStrategy,
 						"cpu binding strategy should be equal to expected")
 				}

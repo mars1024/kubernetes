@@ -445,14 +445,16 @@ func (sched *Scheduler) scheduleOne() {
 	if err != nil {
 		// handle inplace update pod
 		defer func() {
-			assumed := pod.DeepCopy()
-			glog.Errorf("setting inplace update pod %s/%s as failed due to %v", pod.Namespace, pod.Name, err)
-			// Set inplace update state to "failed".
-			assumed.Annotations[sigmaapi.AnnotationPodInplaceUpdateState] = sigmaapi.InplaceUpdateStateFailed
-			if err := util.PatchPod(sched.config.GetClient(), pod, assumed); err != nil {
-				glog.Error(err)
+			if util.IsInplaceUpdatePod(pod) {
+				assumed := pod.DeepCopy()
+				glog.Errorf("setting inplace update pod %s/%s as failed due to %v", pod.Namespace, pod.Name, err)
+				// Set inplace update state to "failed".
+				assumed.Annotations[sigmaapi.AnnotationPodInplaceUpdateState] = sigmaapi.InplaceUpdateStateFailed
+				if err := util.PatchPod(sched.config.GetClient(), pod, assumed); err != nil {
+					glog.Error(err)
+				}
+				sched.clearPodAllocSpec(string(pod.UID))
 			}
-			sched.clearPodAllocSpec(string(pod.UID))
 		}()
 
 		// schedule() may have failed because the pod would not fit on any host, so we try to
@@ -493,7 +495,19 @@ func (sched *Scheduler) scheduleOne() {
 	// bind the pod to its host asynchronously (we can do this b/c of the assumption step above).
 	go func() {
 		if util.IsInplaceUpdatePod(assumedPod) {
-			defer sched.clearPodAllocSpec(string(assumedPod.UID))
+			defer func() {
+				glog.V(1).Infof("[Inplace Update Pod] cleaning scheduler cache for pod %s/%s", assumedPod.Namespace, assumedPod.Name)
+				sched.clearPodAllocSpec(string(assumedPod.UID))
+				if err := sched.config.SchedulerCache.FinishBinding(assumedPod); err != nil {
+					glog.Errorf("[Inplace Update Pod] scheduler cache FinishBinding failed: %v", err)
+				}
+				if err := sched.config.SchedulerCache.ForgetPod(assumedPod); err != nil {
+					glog.Errorf("[Inplace Update Pod] scheduler cache ForgetPod failed: %v", err)
+				}
+				sched.config.Error(assumedPod, err)
+				sched.config.Recorder.Eventf(assumedPod, v1.EventTypeWarning, "FailedScheduling", "[Inplace Update Pod] Binding rejected: %v", err)
+			}()
+
 			// Set inplace update state to "accepted".
 			glog.V(4).Infof("setting inplace update pod %s/%s as accepted", pod.Namespace, pod.Name)
 			assumedPod.Annotations[sigmaapi.AnnotationPodInplaceUpdateState] = sigmaapi.InplaceUpdateStateAccepted

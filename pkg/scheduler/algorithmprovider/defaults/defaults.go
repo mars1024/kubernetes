@@ -189,6 +189,9 @@ func defaultPredicates() sets.String {
 				return predicates.NewVolumeBindingPredicate(args.VolumeBinder)
 			},
 		),
+		// Fit is to check exclusive/shared CPUSet workloads
+		// @owner: yuzhi.wx
+		factory.RegisterFitPredicate(predicates.PodCPUSetResourceFitPred, predicates.PodCPUSetResourceFit),
 	)
 }
 

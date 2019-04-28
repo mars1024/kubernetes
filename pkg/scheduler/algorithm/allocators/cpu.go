@@ -154,11 +154,12 @@ func (allocator *CPUAllocator) allocateShareCPUSet(pod *v1.Pod, container *v1.Co
 	req := container.Resources.Requests[v1.ResourceCPU]
 	numCPUs := ContainerCPUCount(container) // it is already round up, ex 1700m => 2
 	reqMilli := req.MilliValue()
+	glog.V(5).Infof("[DEBUG]: numCPUs=%d, reqMilli=%d(pod=%s)", numCPUs, reqMilli , ContainerName(pod, container))
 	newRequestedMilli := int64(float64(reqMilli + allocator.pool.GetAllocatedSharedCPUSetReq()))
 	currentCPUSetMilli := int64(float64(allocator.pool.GetSharedCPUSet().Size()) * 1000 * overRatio)
 	if newRequestedMilli <= currentCPUSetMilli && numCPUs <= allocator.pool.GetSharedCPUSet().Size() { // current cpuset is enough for the container
 		// Step 1: calculate current cpuset, if available, get the least used cpuset
-		glog.V(5).Infof("[CPUAllocator]taking %d CPUs from existing shared CPUSet pool", numCPUs)
+		glog.V(5).Infof("[CPUAllocator]taking %d CPUs from existing shared CPUSet pool(pod=%s)", numCPUs, ContainerName(pod, container))
 		existing := allocator.pool.LeaseUsedSharedCPUSet(numCPUs)
 		return existing, nil
 	} else {
@@ -169,12 +170,12 @@ func (allocator *CPUAllocator) allocateShareCPUSet(pod *v1.Pod, container *v1.Co
 		glog.V(5).Infof("[DEBUG]: newRequestedMilli=%d, currentCPUSetMilli=%d, neededMilli=%d", newRequestedMilli, currentCPUSetMilli, neededMilli)
 
 		neededNumCPUsForReq := int((float64(neededMilli) + (1000*overRatio - 1)) / (overRatio * 1000)) // New from pool
-		glog.V(5).Infof("[CPUAllocator]needed number of new CPUs for CPU requests: %d", neededNumCPUsForReq)
+		glog.V(5).Infof("[CPUAllocator]needed number of new CPUs for pod(%s) of CPU requests: %d", neededNumCPUsForReq, ContainerName(pod, container))
 		neededNumCPUs := neededNumCPUsForReq
 		var neededForLimit int
 		if neededForLimit = numCPUs - (allocator.pool.GetSharedCPUSet().Size() + neededNumCPUsForReq); neededForLimit > 0 {
 			// Container limit is larger than existing Shared CPUSet pool
-			glog.V(5).Infof("[CPUAllocator]also taking %d new CPUs for CPU limits", neededForLimit)
+			glog.V(5).Infof("[CPUAllocator]also taking %d new CPUs for pod(%s) of CPU limits", neededForLimit, ContainerName(pod, container))
 			neededNumCPUs += neededForLimit
 
 		}

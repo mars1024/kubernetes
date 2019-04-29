@@ -318,7 +318,7 @@ func podMatchesScopeFunc(selector api.ScopedResourceSelectorRequirement, object 
 	case api.ResourceQuotaScopePriorityClass:
 		return podMatchesSelector(pod, selector)
 	}
-	return podMatchesSelector(pod, selector)
+	return podMatchesGenericSelector(pod, selector)
 }
 
 // PodUsageFunc returns the quota usage for a pod.
@@ -384,8 +384,18 @@ func podMatchesSelector(pod *api.Pod, selector api.ScopedResourceSelectorRequire
 	if len(pod.Spec.PriorityClassName) != 0 {
 		m = map[string]string{string(api.ResourceQuotaScopePriorityClass): pod.Spec.PriorityClassName}
 	}
+
 	if labelSelector.Matches(labels.Set(m)) {
 		return true, nil
+	}
+
+	return false, nil
+}
+
+func podMatchesGenericSelector(pod *api.Pod, selector api.ScopedResourceSelectorRequirement) (bool, error) {
+	labelSelector, err := helper.ScopedResourceSelectorRequirementsAsSelector(selector)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse and convert selector: %v", err)
 	}
 
 	// do general label selector with pod labels.

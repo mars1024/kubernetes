@@ -43,7 +43,7 @@ func doDiskQuotaTestCase(f *framework.Framework, testCase *diskQuotaTestCase) {
 var _ = Describe("[sigma-kubelet][disk-quota] check disk quota", func() {
 	f := framework.NewDefaultFramework("sigma-kubelet")
 
-	// RequestEphemeralStorage is defined, container has diskquota.
+	// RequestEphemeralStorage is defined, container has no diskquota.
 	It("[smoke] check disk quota: RequestEphemeralStorage is defined", func() {
 		pod := generateRunningPod()
 		resources := v1.ResourceRequirements{
@@ -56,7 +56,7 @@ var _ = Describe("[sigma-kubelet][disk-quota] check disk quota", func() {
 			pod:            pod,
 			checkCommand:   "df -h | grep '/$' | awk '{print $2}'",
 			resultKeywords: []string{"2.0G"},
-			checkMethod:    checkMethodEqual,
+			checkMethod:    checkMethodNotEqual,
 		}
 		doDiskQuotaTestCase(f, &testCase)
 	})
@@ -77,7 +77,7 @@ var _ = Describe("[sigma-kubelet][disk-quota] check disk quota", func() {
 		}
 		doDiskQuotaTestCase(f, &testCase)
 	})
-	// RequestEphemeralStorage and LimitEphemeralStorage are defined, container's diskquota is equal to RequestEphemeralStorage.
+	// RequestEphemeralStorage and LimitEphemeralStorage are defined, container's diskquota is equal to limitEphemeralStorage.
 	It("check disk quota: RequestEphemeralStorage and LimitEphemeralStorage are defined", func() {
 		pod := generateRunningPod()
 		resources := v1.ResourceRequirements{
@@ -92,7 +92,7 @@ var _ = Describe("[sigma-kubelet][disk-quota] check disk quota", func() {
 		testCase := diskQuotaTestCase{
 			pod:            pod,
 			checkCommand:   "df -h | grep '/$' | awk '{print $2}'",
-			resultKeywords: []string{"1.0G"},
+			resultKeywords: []string{"2.0G"},
 			checkMethod:    checkMethodEqual,
 		}
 		doDiskQuotaTestCase(f, &testCase)

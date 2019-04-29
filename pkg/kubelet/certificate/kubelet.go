@@ -25,6 +25,8 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+
 	certificates "k8s.io/api/certificates/v1beta1"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -32,6 +34,7 @@ import (
 	clientcertificates "k8s.io/client-go/kubernetes/typed/certificates/v1beta1"
 	"k8s.io/client-go/util/certificate"
 	kubeletconfig "k8s.io/kubernetes/pkg/kubelet/apis/config"
+	"k8s.io/kubernetes/pkg/kubelet/certificate/bootstrap"
 	"k8s.io/kubernetes/pkg/kubelet/metrics"
 )
 
@@ -67,10 +70,19 @@ func NewKubeletServerCertificateManager(kubeClient clientset.Interface, kubeCfg 
 		if len(hostnames) == 0 && len(ips) == 0 {
 			return nil
 		}
+		org := []string{"system:nodes"}
+		if len(bootstrap.ClusterID) > 0 {
+			// this mean tenant info is completed
+			org = append(org,
+				fmt.Sprintf("%s%s", multitenancy.X509CertificateClusterIDPrefix, bootstrap.ClusterID),
+				fmt.Sprintf("%s%s", multitenancy.X509CertificateWorkspaceIDPrefix, bootstrap.WorkspaceID),
+				fmt.Sprintf("%s%s", multitenancy.X509CertificateTenantIDPrefix, bootstrap.TenantID),
+			)
+		}
 		return &x509.CertificateRequest{
 			Subject: pkix.Name{
 				CommonName:   fmt.Sprintf("system:node:%s", nodeName),
-				Organization: []string{"system:nodes"},
+				Organization: org,
 			},
 			DNSNames:    hostnames,
 			IPAddresses: ips,
@@ -165,11 +177,20 @@ func NewKubeletClientCertificateManager(certDirectory string, nodeName types.Nod
 	)
 	prometheus.MustRegister(certificateExpiration)
 
+	org := []string{"system:nodes"}
+	if len(bootstrap.ClusterID) > 0 {
+		// this mean tenant info is completed
+		org = append(org,
+			fmt.Sprintf("%s%s", multitenancy.X509CertificateClusterIDPrefix, bootstrap.ClusterID),
+			fmt.Sprintf("%s%s", multitenancy.X509CertificateWorkspaceIDPrefix, bootstrap.WorkspaceID),
+			fmt.Sprintf("%s%s", multitenancy.X509CertificateTenantIDPrefix, bootstrap.TenantID),
+		)
+	}
 	m, err := certificate.NewManager(&certificate.Config{
 		Template: &x509.CertificateRequest{
 			Subject: pkix.Name{
 				CommonName:   fmt.Sprintf("system:node:%s", nodeName),
-				Organization: []string{"system:nodes"},
+				Organization: org,
 			},
 		},
 		Usages: []certificates.KeyUsage{

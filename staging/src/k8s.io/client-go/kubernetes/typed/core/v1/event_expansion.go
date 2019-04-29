@@ -163,6 +163,7 @@ func (e *EventSinkImpl) Create(event *v1.Event) (*v1.Event, error) {
 			debug.PrintStack()
 			return nil, err
 		}
+		event = event.DeepCopy()
 		return e.Interface.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(*events).CreateWithEventNamespace(event)
 	}
 	return e.Interface.CreateWithEventNamespace(event)
@@ -175,6 +176,7 @@ func (e *EventSinkImpl) Update(event *v1.Event) (*v1.Event, error) {
 			debug.PrintStack()
 			return nil, err
 		}
+		event = event.DeepCopy()
 		multitenancyutil.TransformTenantInfoToAnnotationsIncremental(tenant, &event.Annotations)
 		return e.Interface.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(*events).UpdateWithEventNamespace(event)
 	}
@@ -188,6 +190,7 @@ func (e *EventSinkImpl) Patch(event *v1.Event, data []byte) (*v1.Event, error) {
 			debug.PrintStack()
 			return nil, err
 		}
+		event = event.DeepCopy()
 		multitenancyutil.TransformTenantInfoToAnnotationsIncremental(tenant, &event.Annotations)
 		return e.Interface.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(*events).PatchWithEventNamespace(event, data)
 	}

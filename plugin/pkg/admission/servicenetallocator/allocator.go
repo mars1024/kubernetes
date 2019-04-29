@@ -20,20 +20,17 @@ import (
 	"net"
 	"sync"
 
-	"k8s.io/kubernetes/pkg/registry/core/service/ipallocator"
-	ipallocatorcontroller "k8s.io/kubernetes/pkg/registry/core/service/ipallocator/controller"
-	"k8s.io/kubernetes/pkg/registry/core/service/portallocator"
-	portallocatorcontroller "k8s.io/kubernetes/pkg/registry/core/service/portallocator/controller"
-	utilnet "k8s.io/apimachinery/pkg/util/net"
-	api "k8s.io/kubernetes/pkg/apis/core"
-	serviceallocator "k8s.io/kubernetes/pkg/registry/core/service/allocator/storage"
-	"k8s.io/kubernetes/pkg/registry/core/service/allocator"
-	coreclient "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/typed/core/internalversion"
-
 	"gitlab.alipay-inc.com/antcloud-aks/cafe-kubernetes-extension/pkg/apis/cluster/v1alpha1"
-	"k8s.io/kubernetes/pkg/registry/core/rangeallocation"
-	"k8s.io/apiserver/pkg/server/storage"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	utilnet "k8s.io/apimachinery/pkg/util/net"
+	"k8s.io/apiserver/pkg/server/storage"
+	api "k8s.io/kubernetes/pkg/apis/core"
+	coreclient "k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/typed/core/internalversion"
+	"k8s.io/kubernetes/pkg/registry/core/rangeallocation"
+	"k8s.io/kubernetes/pkg/registry/core/service/allocator"
+	serviceallocator "k8s.io/kubernetes/pkg/registry/core/service/allocator/storage"
+	"k8s.io/kubernetes/pkg/registry/core/service/ipallocator"
+	"k8s.io/kubernetes/pkg/registry/core/service/portallocator"
 )
 
 type AllocatorFactory struct {
@@ -70,10 +67,14 @@ func (af *AllocatorFactory) IPAllocatorForCluster(cluster *v1alpha1.MinionCluste
 		serviceClusterIPRegistry = etcd
 		return etcd
 	})
-	repairClusterIPs := ipallocatorcontroller.NewRepair(0, serviceGetter, eventGetter, cidr, serviceClusterIPRegistry)
-	if err := repairClusterIPs.RunOnce(); err != nil {
-		return nil, err
-	}
+
+	// DIRTY-HACK(zuoxiu.jm): disabling repairing
+	/*
+		repairClusterIPs := ipallocatorcontroller.NewRepair(0, serviceGetter, eventGetter, cidr, serviceClusterIPRegistry)
+		if err := repairClusterIPs.RunOnce(); err != nil {
+			return nil, err
+		}
+	*/
 	af.ipAllocators[cluster.Name] = serviceClusterIPAllocator
 
 	return serviceClusterIPAllocator, nil
@@ -107,10 +108,14 @@ func (af *AllocatorFactory) NodePortAllocatorForCluster(cluster *v1alpha1.Minion
 		serviceNodePortRegistry = etcd
 		return etcd
 	})
+
+	// DIRTY-HACK(zuoxiu.jm): disabling repairing
+	/*
 	repairNodePorts := portallocatorcontroller.NewRepair(0, serviceGetter, eventGetter, portRange, serviceNodePortRegistry)
 	if err := repairNodePorts.RunOnce(); err != nil {
 		return nil, err
 	}
+	*/
 
 	nodePortAllocator = portallocator.NewPortAllocator(portRange)
 	af.portAllocators[cluster.Name] = nodePortAllocator

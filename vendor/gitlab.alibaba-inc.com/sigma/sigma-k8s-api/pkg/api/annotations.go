@@ -74,4 +74,7 @@ const (
 
         // AnnotationDisableCascadingDeletion indicates whether such resource disabled cascading-deletion
         AnnotationDisableCascadingDeletion = "sigma.ali/disable-cascading-deletion"
+
+	// AnnotationEnableAppRulesInjection indicates wether to inject apprules into this resource.
+	AnnotationEnableAppRulesInjection = "sigma.ali/enable-apprules-injection"
 )

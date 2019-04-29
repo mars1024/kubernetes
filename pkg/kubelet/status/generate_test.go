@@ -21,10 +21,14 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	"k8s.io/api/core/v1"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 )
 
 func TestGenerateContainersReadyCondition(t *testing.T) {
+	utilfeature.DefaultFeatureGate.Set("IgnoreSidecarContainerReady=true")
+
 	tests := []struct {
 		spec              *v1.PodSpec
 		containerStatuses []v1.ContainerStatus
@@ -63,6 +67,27 @@ func TestGenerateContainersReadyCondition(t *testing.T) {
 			containerStatuses: []v1.ContainerStatus{
 				getReadyStatus("1234"),
 				getReadyStatus("5678"),
+			},
+			podPhase:    v1.PodRunning,
+			expectReady: getPodCondition(v1.ContainersReady, v1.ConditionTrue, "", ""),
+		},
+		{
+			spec: &v1.PodSpec{
+				Containers: []v1.Container{
+					{Name: "1234"},
+					{Name: "5678",
+						Env: []v1.EnvVar{
+							{
+								Name:  sigmak8sapi.EnvIgnoreReady,
+								Value: "true",
+							},
+						},
+					},
+				},
+			},
+			containerStatuses: []v1.ContainerStatus{
+				getReadyStatus("1234"),
+				getNotReadyStatus("5678"),
 			},
 			podPhase:    v1.PodRunning,
 			expectReady: getPodCondition(v1.ContainersReady, v1.ConditionTrue, "", ""),

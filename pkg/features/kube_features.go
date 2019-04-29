@@ -445,6 +445,12 @@ const (
 	//
 	// Filter the sidecar containers when calculate pod's QoS class
 	PodLevelResourceQuota utilfeature.Feature = "PodLevelResourceQuota"
+
+	// owner: @yaowei.cyw (yaowei.cyw@alibaba-inc.com)
+	// alpha: v1.12
+	//
+	// when generate pod ready, ignore sidecar container ready
+	IgnoreSidecarContainerReady utilfeature.Feature = "IgnoreSidecarContainerReady"
 )
 
 func init() {
@@ -455,8 +461,8 @@ func init() {
 // To add a new feature, define a key for it above and add it here. The features will be
 // available throughout Kubernetes binaries.
 var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureSpec{
-	AppArmor:                                    {Default: true, PreRelease: utilfeature.Beta},
-	DynamicKubeletConfig:                        {Default: true, PreRelease: utilfeature.Beta},
+	AppArmor:             {Default: true, PreRelease: utilfeature.Beta},
+	DynamicKubeletConfig: {Default: true, PreRelease: utilfeature.Beta},
 	ExperimentalHostUserNamespaceDefaultingGate: {Default: false, PreRelease: utilfeature.Beta},
 	ExperimentalCriticalPodAnnotation:           {Default: false, PreRelease: utilfeature.Alpha},
 	DevicePlugins:                               {Default: true, PreRelease: utilfeature.Beta},
@@ -522,6 +528,7 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	DefaultHashVersionTo110:                     {Default: false, PreRelease: utilfeature.Alpha},
 	DisableRejectPod:                            {Default: false, PreRelease: utilfeature.Alpha},
 	PodLevelResourceQuota:                       {Default: false, PreRelease: utilfeature.Alpha},
+	IgnoreSidecarContainerReady:                 {Default: false, PreRelease: utilfeature.Alpha},
 
 	// inherited features from generic apiserver, relisted here to get a conflict if it is changed
 	// unintentionally on either side:

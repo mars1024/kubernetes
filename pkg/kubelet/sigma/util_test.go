@@ -142,3 +142,67 @@ func TestIsPodJob(t *testing.T) {
 		assert.Equal(t, IsPodJob(test.pod), test.isPodJob)
 	}
 }
+
+func TestIsContainerReadyIgnore(t *testing.T) {
+	tests := []struct {
+		message                string
+		container              *v1.Container
+		isContainerReadyIgnore bool
+	}{
+		{
+			message:                "container is nil",
+			container:              nil,
+			isContainerReadyIgnore: false,
+		},
+		{
+			message: "container env is nil",
+			container: &v1.Container{
+				Name: "bar",
+			},
+			isContainerReadyIgnore: false,
+		},
+		{
+			message: "container have env, but not have sidecar env",
+			container: &v1.Container{
+				Name: "bar",
+				Env: []v1.EnvVar{
+					{
+						Name:  "a",
+						Value: "b",
+					},
+				},
+			},
+			isContainerReadyIgnore: false,
+		},
+		{
+			message: "container have sidecar env, but value is invalid",
+			container: &v1.Container{
+				Name: "bar",
+				Env: []v1.EnvVar{
+					{
+						Name:  sigmak8sapi.EnvIgnoreReady,
+						Value: "b",
+					},
+				},
+			},
+			isContainerReadyIgnore: false,
+		},
+		{
+			message: "container have sidecar env, value is true, should ignore",
+			container: &v1.Container{
+				Name: "bar",
+				Env: []v1.EnvVar{
+					{
+						Name:  sigmak8sapi.EnvIgnoreReady,
+						Value: "true",
+					},
+				},
+			},
+			isContainerReadyIgnore: true,
+		},
+	}
+	for _, test := range tests {
+		t.Logf("case %s", test.message)
+		assert.Equal(t, test.isContainerReadyIgnore, IsContainerReadyIgnore(test.container))
+	}
+}

@@ -38,7 +38,6 @@ import (
 	"k8s.io/client-go/transport"
 	certutil "k8s.io/client-go/util/cert"
 	"k8s.io/client-go/util/certificate"
-	"k8s.io/client-go/util/certificate/csr"
 )
 
 const tmpPrivateKeyFile = "kubelet-client.key.tmp"
@@ -102,7 +101,7 @@ func LoadClientCert(kubeconfigPath string, bootstrapPath string, certDir string,
 		glog.Warningf("Error waiting for apiserver to come up: %v", err)
 	}
 
-	certData, err := csr.RequestNodeCertificate(bootstrapClient.CertificateSigningRequests(), keyData, nodeName)
+	certData, err := requestNodeCertificateExtended(bootstrapClientConfig, bootstrapClient.CertificateSigningRequests(), keyData, nodeName)
 	if err != nil {
 		return err
 	}

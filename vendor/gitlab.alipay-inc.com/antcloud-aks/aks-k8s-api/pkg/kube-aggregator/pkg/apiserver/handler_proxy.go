@@ -24,6 +24,7 @@ import (
 
 	"github.com/golang/glog"
 
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/httpstream"
 	"k8s.io/apimachinery/pkg/util/httpstream/spdy"
@@ -36,7 +37,6 @@ import (
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/transport"
 	apiregistrationapi "k8s.io/kube-aggregator/pkg/apis/apiregistration"
-	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 	"k8s.io/kube-aggregator/pkg/apiserver"
 )
 
@@ -235,6 +235,9 @@ func (r *proxyHandler) updateAPIService(apiService *apiregistrationapi.APIServic
 	newInfo.proxyRoundTripper, newInfo.transportBuildingError = restclient.TransportFor(newInfo.restConfig)
 	if newInfo.transportBuildingError != nil {
 		glog.Warning(newInfo.transportBuildingError.Error())
+	}
+	if r.handlingInfo[multitenancyutil.GetHashFromTenant(tenant)] == nil {
+		r.handlingInfo[multitenancyutil.GetHashFromTenant(tenant)] = &atomic.Value{}
 	}
 	r.handlingInfo[multitenancyutil.GetHashFromTenant(tenant)].Store(newInfo)
 }

@@ -37,7 +37,6 @@ import (
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/transport"
 	apiregistrationapi "k8s.io/kube-aggregator/pkg/apis/apiregistration"
-	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 	"k8s.io/kube-aggregator/pkg/apiserver"
 )
 

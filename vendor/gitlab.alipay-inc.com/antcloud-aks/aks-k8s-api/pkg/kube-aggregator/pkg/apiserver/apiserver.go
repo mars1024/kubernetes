@@ -27,22 +27,22 @@ import (
 	serverstorage "k8s.io/apiserver/pkg/server/storage"
 	"k8s.io/client-go/pkg/version"
 
+	openapicontroller "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/kube-aggregator/pkg/controllers/openapi"
+	statuscontrollers "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/kube-aggregator/pkg/controllers/status"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
+	"k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/kube-aggregator/pkg/apis/apiregistration"
 	"k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	"k8s.io/kube-aggregator/pkg/apis/apiregistration/v1beta1"
+	"k8s.io/kube-aggregator/pkg/apiserver"
 	aggregatorscheme "k8s.io/kube-aggregator/pkg/apiserver/scheme"
 	"k8s.io/kube-aggregator/pkg/client/clientset_generated/internalclientset"
 	informers "k8s.io/kube-aggregator/pkg/client/informers/internalversion"
 	listers "k8s.io/kube-aggregator/pkg/client/listers/apiregistration/internalversion"
-	openapicontroller "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/kube-aggregator/pkg/controllers/openapi"
-	statuscontrollers "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/kube-aggregator/pkg/controllers/status"
 	apiservicerest "k8s.io/kube-aggregator/pkg/registry/apiservice/rest"
-	"k8s.io/kube-aggregator/pkg/apiserver"
-	"k8s.io/apiserver/pkg/util/feature"
-	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
-	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
-	"sync/atomic"
 	"os"
+	"sync/atomic"
 )
 
 func init() {
@@ -200,11 +200,19 @@ func (c completedConfig) NewWithDelegate(delegationTarget genericapiserver.Deleg
 	cafeBasicProxyHandler := newLocalProxyHandler(os.Getenv(BasicAPIServerIPAddressEnv), 80, "http")
 	cafeMetricsHandler := newLocalProxyHandler(os.Getenv(CafeMetricsAPIServerIPAddressEnv), 6443, "https")
 
-	s.GenericAPIServer.Handler.NonGoRestfulMux.UnlistedHandlePrefix("/apis/apps.cafe.cloud.alipay.com/", cafeExtensionProxyHandler)
-	s.GenericAPIServer.Handler.NonGoRestfulMux.UnlistedHandlePrefix("/apis/cluster.cafe.cloud.alipay.com/", cafeExtensionProxyHandler)
-	s.GenericAPIServer.Handler.NonGoRestfulMux.UnlistedHandlePrefix("/apis/cluster.aks.cafe.sofastack.io/", cafeClusterProxyHandler)
-	s.GenericAPIServer.Handler.NonGoRestfulMux.UnlistedHandlePrefix("/apis/cafe.sofastack.io/", cafeBasicProxyHandler)
-	s.GenericAPIServer.Handler.NonGoRestfulMux.UnlistedHandlePrefix("/apis/metrics.k8s.io/", cafeMetricsHandler)
+	if len(os.Getenv(AggregationEnableCafeExtension)) > 0 {
+		s.GenericAPIServer.Handler.NonGoRestfulMux.UnlistedHandlePrefix("/apis/apps.cafe.cloud.alipay.com/", cafeExtensionProxyHandler)
+		s.GenericAPIServer.Handler.NonGoRestfulMux.UnlistedHandlePrefix("/apis/cluster.cafe.cloud.alipay.com/", cafeExtensionProxyHandler)
+	}
+	if len(os.Getenv(AggregationEnableCafeCluster)) > 0 {
+		s.GenericAPIServer.Handler.NonGoRestfulMux.UnlistedHandlePrefix("/apis/cluster.aks.cafe.sofastack.io/", cafeClusterProxyHandler)
+	}
+	if len(os.Getenv(AggregationEnableBasic)) > 0 {
+		s.GenericAPIServer.Handler.NonGoRestfulMux.UnlistedHandlePrefix("/apis/cafe.sofastack.io/", cafeBasicProxyHandler)
+	}
+	if len(os.Getenv(AggregationEnableCafeMetrics)) > 0 {
+		s.GenericAPIServer.Handler.NonGoRestfulMux.UnlistedHandlePrefix("/apis/metrics.k8s.io/", cafeMetricsHandler)
+	}
 
 	s.GenericAPIServer.Handler.NonGoRestfulMux.Handle("/apis", apisHandler)
 	s.GenericAPIServer.Handler.NonGoRestfulMux.UnlistedHandle("/apis/", apisHandler)

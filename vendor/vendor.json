@@ -423,34 +423,34 @@
 			"revisionTime": "2019-04-23T12:30:27Z"
 		},
 		{
-			"checksumSHA1": "0hdZayRUEjVqng3SKhReLbFQ3Ek=",
+			"checksumSHA1": "8P6UcmFQcMh5zb0lk/1pF/WmOoo=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/kube-aggregator/pkg/apiserver",
-			"revision": "172c283a12ab076f7168d99adab94f7ce24c549e",
-			"revisionTime": "2019-04-23T12:30:27Z"
+			"revision": "756a4f56a3b6bbd6e20d97d970b677c20a9e38db",
+			"revisionTime": "2019-04-30T08:20:32Z"
 		},
 		{
 			"checksumSHA1": "K8+G1V4leN1kbadl/4a+4gNoQGo=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/kube-aggregator/pkg/controllers",
-			"revision": "172c283a12ab076f7168d99adab94f7ce24c549e",
-			"revisionTime": "2019-04-23T12:30:27Z"
+			"revision": "756a4f56a3b6bbd6e20d97d970b677c20a9e38db",
+			"revisionTime": "2019-04-30T08:20:32Z"
 		},
 		{
 			"checksumSHA1": "waHv9H1VcASZXQgvFpShdpfx1XE=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/kube-aggregator/pkg/controllers/autoregister",
-			"revision": "172c283a12ab076f7168d99adab94f7ce24c549e",
-			"revisionTime": "2019-04-23T12:30:27Z"
+			"revision": "756a4f56a3b6bbd6e20d97d970b677c20a9e38db",
+			"revisionTime": "2019-04-30T08:20:32Z"
 		},
 		{
 			"checksumSHA1": "J7x5x/FaVloY/iit22e2IpmDKTo=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/kube-aggregator/pkg/controllers/openapi",
-			"revision": "172c283a12ab076f7168d99adab94f7ce24c549e",
-			"revisionTime": "2019-04-23T12:30:27Z"
+			"revision": "756a4f56a3b6bbd6e20d97d970b677c20a9e38db",
+			"revisionTime": "2019-04-30T08:20:32Z"
 		},
 		{
 			"checksumSHA1": "YBBjgVwtUrl57xfRRYY8HJvfBoU=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/kube-aggregator/pkg/controllers/status",
-			"revision": "172c283a12ab076f7168d99adab94f7ce24c549e",
-			"revisionTime": "2019-04-23T12:30:27Z"
+			"revision": "756a4f56a3b6bbd6e20d97d970b677c20a9e38db",
+			"revisionTime": "2019-04-30T08:20:32Z"
 		},
 		{
 			"checksumSHA1": "e4sEHsguP2Tu/jcYcrDENBaOrq4=",

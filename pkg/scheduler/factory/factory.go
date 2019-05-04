@@ -63,10 +63,11 @@ import (
 	"k8s.io/kubernetes/pkg/scheduler/core/equivalence"
 	"k8s.io/kubernetes/pkg/scheduler/util"
 	"k8s.io/kubernetes/pkg/scheduler/volumebinder"
+
 	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancycache "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/cache"
 	multitenancymeta "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/meta"
 	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
-	multitenancycache "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/cache"
 )
 
 const (
@@ -726,6 +727,10 @@ func (c *configFactory) addPodToCache(obj interface{}) {
 
 	c.podQueue.AssignedPodAdded(pod)
 
+	if util.IsInplaceUpdatePod(pod) {
+		c.addPodToSchedulingQueue(pod)
+	}
+
 	// NOTE: Updating equivalence cache of addPodToCache has been
 	// handled optimistically in: pkg/scheduler/scheduler.go#assume()
 }
@@ -747,6 +752,12 @@ func (c *configFactory) updatePodInCache(oldObj, newObj interface{}) {
 	// before invalidating equivalencePodCache.
 	if err := c.schedulerCache.UpdatePod(oldPod, newPod); err != nil {
 		glog.Errorf("scheduler cache UpdatePod failed: %v", err)
+	}
+
+	if util.IsInplaceUpdatePod(newPod) {
+		// Store old pod spec in annotations.
+		util.StoreLastSpecIfNeeded(oldPod, newPod)
+		c.updatePodInSchedulingQueue(oldPod, newPod)
 	}
 
 	c.invalidateCachedPredicatesOnUpdatePod(newPod, oldPod)
@@ -836,6 +847,10 @@ func (c *configFactory) deletePodFromCache(obj interface{}) {
 	// before invalidating equivalencePodCache.
 	if err := c.schedulerCache.RemovePod(pod); err != nil {
 		glog.Errorf("scheduler cache RemovePod failed: %v", err)
+	}
+
+	if util.IsInplaceUpdatePod(pod) {
+		c.deletePodFromSchedulingQueue(pod)
 	}
 
 	c.invalidateCachedPredicatesOnDeletePod(pod)
@@ -1228,7 +1243,23 @@ func (c *configFactory) CreateFromKeys(predicateKeys, priorityKeys sets.String, 
 		c.disablePreemption,
 		c.percentageOfNodesToScore,
 	)
-
+	// TODO(yuzhi.wx) use feature gate to isolate the cpu binding logic
+	algo = core.NewGenericSchedulerExtend(
+		c.schedulerCache,
+		c.equivalencePodCache,
+		c.podQueue,
+		predicateFuncs,
+		predicateMetaProducer,
+		priorityConfigs,
+		priorityMetaProducer,
+		extenders,
+		c.volumeBinder,
+		c.pVCLister,
+		c.alwaysCheckAllPredicates,
+		c.disablePreemption,
+		c.percentageOfNodesToScore,
+		c.client,
+	)
 	podBackoff := util.CreateDefaultPodBackoff()
 	return &scheduler.Config{
 		SchedulerCache: c.schedulerCache,
@@ -1237,6 +1268,7 @@ func (c *configFactory) CreateFromKeys(predicateKeys, priorityKeys sets.String, 
 		NodeLister:          &nodeLister{c.nodeLister},
 		Algorithm:           algo,
 		GetBinder:           c.getBinderFunc(extenders),
+		GetClient:           c.GetClient,
 		PodConditionUpdater: &podConditionUpdater{c.client},
 		PodPreemptor:        &podPreemptor{c.client},
 		WaitForCacheSync: func() bool {

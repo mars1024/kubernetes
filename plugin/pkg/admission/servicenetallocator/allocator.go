@@ -112,7 +112,6 @@ func (af *AllocatorFactory) NodePortAllocatorForCluster(cluster *v1alpha1.Minion
 		return nil, err
 	}
 
-	nodePortAllocator = portallocator.NewPortAllocator(portRange)
 	af.portAllocators[cluster.Name] = nodePortAllocator
 	return nodePortAllocator, nil
 }

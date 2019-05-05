@@ -28,6 +28,7 @@ import (
 
 	authorization "k8s.io/api/authorization/v1beta1"
 	capi "k8s.io/api/certificates/v1beta1"
+	utilset "k8s.io/apimachinery/pkg/util/sets"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	certificatesinformers "k8s.io/client-go/informers/certificates/v1beta1"
 	clientset "k8s.io/client-go/kubernetes"
@@ -185,8 +186,15 @@ var kubeletClientUsages = []capi.KeyUsage{
 }
 
 func isNodeClientCert(csr *capi.CertificateSigningRequest, x509cr *x509.CertificateRequest) bool {
-	if !reflect.DeepEqual([]string{"system:nodes"}, x509cr.Subject.Organization) {
-		return false
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		orgSet := utilset.NewString(x509cr.Subject.Organization...)
+		if !orgSet.Has("system:nodes") {
+			return false
+		}
+	} else {
+		if !reflect.DeepEqual([]string{"system:nodes"}, x509cr.Subject.Organization) {
+			return false
+		}
 	}
 	if (len(x509cr.DNSNames) > 0) || (len(x509cr.EmailAddresses) > 0) || (len(x509cr.IPAddresses) > 0) {
 		return false
@@ -217,8 +225,15 @@ var kubeletServerUsages = []capi.KeyUsage{
 }
 
 func isSelfNodeServerCert(csr *capi.CertificateSigningRequest, x509cr *x509.CertificateRequest) bool {
-	if !reflect.DeepEqual([]string{"system:nodes"}, x509cr.Subject.Organization) {
-		return false
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		orgSet := utilset.NewString(x509cr.Subject.Organization...)
+		if !orgSet.Has("system:nodes") {
+			return false
+		}
+	} else {
+		if !reflect.DeepEqual([]string{"system:nodes"}, x509cr.Subject.Organization) {
+			return false
+		}
 	}
 	if len(x509cr.DNSNames) == 0 || len(x509cr.IPAddresses) == 0 {
 		return false

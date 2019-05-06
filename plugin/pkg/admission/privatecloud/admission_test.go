@@ -109,11 +109,13 @@ func TestAdmit(t *testing.T) {
 		namespaces      []*api.Namespace
 		targetNamespace string
 		shouldAccept    bool
+		emptyTenant     bool
 	}{
-		"should not admit when missing tenant info from namespace": {
+		"should admit when missing tenant info from namespace": {
 			namespaces:      []*api.Namespace{nsWithEmptyTenantInfo.DeepCopy()},
 			targetNamespace: nsWithEmptyTenantInfo.Name,
-			shouldAccept:    false,
+			shouldAccept:    true,
+			emptyTenant:     true,
 		},
 		"should admit when the namespace has tenant info": {
 			namespaces:      []*api.Namespace{nsWithEmptyTenantInfo.DeepCopy(), nsWithTenantInfo.DeepCopy()},
@@ -130,10 +132,11 @@ func TestAdmit(t *testing.T) {
 			targetNamespace: nsWithTenantLabels.Name,
 			shouldAccept:    true,
 		},
-		"should not admit when the namespace has incomplete tenant info": {
+		"should admit when the namespace has incomplete tenant info": {
 			namespaces:      []*api.Namespace{nsWithEmptyTenantInfo.DeepCopy(), nsWithIncompleteTenantInfo.DeepCopy()},
 			targetNamespace: nsWithIncompleteTenantInfo.Name,
-			shouldAccept:    false,
+			shouldAccept:    true,
+			emptyTenant:     true,
 		},
 	}
 
@@ -150,7 +153,7 @@ func TestAdmit(t *testing.T) {
 		} else {
 			if !tc.shouldAccept {
 				t.Fatalf("should not be admitted")
-			} else {
+			} else if !tc.emptyTenant {
 				currentTenantInfo, err := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
 				if err != nil {
 					t.Fatalf("unexpected err when getting tenantInfo: %v", err)

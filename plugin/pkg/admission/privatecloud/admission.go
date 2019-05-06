@@ -89,14 +89,15 @@ func (plugin *privateCloudPlugin) Admit(a admission.Attributes) error {
 
 	namespace, err := plugin.lister.Get(a.GetNamespace())
 	if err != nil {
-		return fmt.Errorf("getting namespace %q failed: %v", a.GetNamespace(), err)
+		glog.Warningf("getting namespace %q failed: %v", a.GetNamespace(), err)
+		return nil
 	}
 
 	glog.V(5).Infof("Trying to get tenant info from namespace %q...", namespace.Name)
 	tenant, err := getTenantInfoFromLabelsOrAnnotations(*namespace)
 	if err != nil {
-		glog.Errorf("Failed to get tenant info from namespace %q with error: %v", namespace.Name, err)
-		return err
+		glog.Warningf("Failed to get tenant info from namespace %q with error: %v", namespace.Name, err)
+		return nil
 	}
 
 	glog.V(5).Infof("Trying to inject tenant info %+v to %s/%s/%s labels", tenant, a.GetNamespace(), a.GetResource(), a.GetName())

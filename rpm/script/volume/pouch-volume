@@ -18,6 +18,30 @@
 POUCH_ROOT=${POUCH_ROOT_OVERRIDE:=/home/t4/pouch}
 GRAPH_ROOT=${POUCH_ROOT}/containerd/root/io.containerd.snapshotter.v1.overlayfs/snapshots
 
+detect_pouch_config() {
+    driver=$(pouch info | grep -o -P "Storage Driver: (\S+)")
+    root_dir=$(pouch info | grep -o -P "Pouch Root Dir: (\S+)")
+    driver=${driver/Storage Driver: /}
+    root_dir=${root_dir/Pouch Root Dir: /}
+
+    if [[ -n "$root_dir" ]];then
+        POUCH_ROOT="${root_dir}"
+    else
+        err "{ \"status\": \"Failure\", \"message\": \"Failed to get root dir of pouch\"}"
+        exit 4
+    fi
+
+    if [[ "$driver" == "overlayfs" ]]; then
+        GRAPH_ROOT=${POUCH_ROOT}/containerd/root/io.containerd.snapshotter.v1.overlayfs/snapshots
+    elif [[ "$driver" == "overlay1fs" ]]; then
+        GRAPH_ROOT=${POUCH_ROOT}/containerd/root/io.containerd.snapshotter.v1.overlay1fs/snapshots
+    else
+        err "{ \"status\": \"Failure\", \"message\": \"Unknown storage driver type ${driver}\"}"
+        exit 5
+    fi
+
+}
+
 usage() {
     err "Invalid usage. Usage: "
     err "\t$0 init"
@@ -70,8 +94,9 @@ domount() {
                 cp -rp ${CTHOME}${IMAGEPATH} ${MNTPATH}
             fi
         else
+            detect_pouch_config
             mergedPath=`echo ${IMAGE//\//__}`
-            mergedDir=/home/t4/pouch-volume/${mergedPath}
+            mergedDir=${POUCH_ROOT}/${mergedPath}
             if [[ ! -d ${mergedDir} ]]; then
                 mkdir -p ${mergedDir}
             fi

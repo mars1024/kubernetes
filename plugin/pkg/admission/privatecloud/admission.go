@@ -85,6 +85,12 @@ func (plugin *privateCloudPlugin) Admit(a admission.Attributes) error {
 		if err != nil {
 			return err
 		}
+
+		glog.V(5).Infof("Checking tenant annotations...")
+		err = checkTenantAnnotations(a.GetObject(), a.GetOldObject())
+		if err != nil {
+			return err
+		}
 	}
 
 	namespace, err := plugin.lister.Get(a.GetNamespace())
@@ -227,10 +233,49 @@ func checkTenantLabels(newObj runtime.Object, oldObj runtime.Object) error {
 
 	var errMsg string
 	if len(deletedField) != 0 {
-		errMsg += fmt.Sprintf("not allowed to delete tenant field: %s;", strings.Join(deletedField, ","))
+		errMsg += fmt.Sprintf("not allowed to delete tenant label: %s;", strings.Join(deletedField, ","))
 	}
 	if len(changedField) != 0 {
-		errMsg += fmt.Sprintf("not allowed to modify tenant field: %s;", strings.Join(changedField, ","))
+		errMsg += fmt.Sprintf("not allowed to modify tenant label: %s;", strings.Join(changedField, ","))
+	}
+
+	if len(errMsg) > 0 {
+		return errors.NewBadRequest(errMsg)
+	}
+
+	return nil
+}
+
+func checkTenantAnnotations(newObj runtime.Object, oldObj runtime.Object) error {
+	accessor := meta.NewAccessor()
+	newAnnotations, err := accessor.Annotations(newObj)
+	if err != nil {
+		return err
+	}
+	oldAnnotations, err := accessor.Annotations(oldObj)
+	if err != nil {
+		return err
+	}
+
+	deletedField := []string{}
+	changedField := []string{}
+	tenantAnnotations := []string{multitenancy.MultiTenancyAnnotationKeyWorkspaceID, multitenancy.MultiTenancyAnnotationKeyClusterID, multitenancy.MultiTenancyAnnotationKeyTenantID}
+	for _, ann := range tenantAnnotations {
+		changed, deleted := inspectChangedField(oldAnnotations, newAnnotations, ann)
+		if changed {
+			changedField = append(changedField, ann)
+		}
+		if deleted {
+			deletedField = append(deletedField, ann)
+		}
+	}
+
+	var errMsg string
+	if len(deletedField) != 0 {
+		errMsg += fmt.Sprintf("not allowed to delete tenant annotation: %s;", strings.Join(deletedField, ","))
+	}
+	if len(changedField) != 0 {
+		errMsg += fmt.Sprintf("not allowed to modify tenant annotation: %s;", strings.Join(changedField, ","))
 	}
 
 	if len(errMsg) > 0 {

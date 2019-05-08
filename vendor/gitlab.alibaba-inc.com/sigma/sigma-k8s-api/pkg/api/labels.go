@@ -59,5 +59,5 @@ const (
 	LabelPodGroupName = "scheduling.sigma.ali/pod-group-name"
 
 	// If true, the pod belongs to pod.
-	LabelPodIsJob = "sigma.ali/job"
+	LabelPodIsJob = "meta.k8s.alipay.com/job"
 )

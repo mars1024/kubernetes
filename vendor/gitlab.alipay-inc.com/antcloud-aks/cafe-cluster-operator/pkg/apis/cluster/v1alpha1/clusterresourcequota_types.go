@@ -20,27 +20,8 @@ import (
 	"log"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/api/core/v1"
 )
-
-// A ResourceQuotaScope defines a filter that must match each object tracked by a quota
-type ResourceQuotaScope string
-
-const (
-	// Match all pod objects where spec.activeDeadlineSeconds
-	ResourceQuotaScopeTerminating ResourceQuotaScope = "Terminating"
-	// Match all pod objects where !spec.activeDeadlineSeconds
-	ResourceQuotaScopeNotTerminating ResourceQuotaScope = "NotTerminating"
-	// Match all pod objects that have best effort quality of service
-	ResourceQuotaScopeBestEffort ResourceQuotaScope = "BestEffort"
-	// Match all pod objects that do not have best effort quality of service
-	ResourceQuotaScopeNotBestEffort ResourceQuotaScope = "NotBestEffort"
-	// Match all pod objects that have priority class mentioned
-	ResourceQuotaScopePriorityClass ResourceQuotaScope = "PriorityClass"
-)
-
-// ResourceList is a set of (resource name, quantity) pairs.
-type ResourceList map[string]resource.Quantity
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -48,92 +29,46 @@ type ResourceList map[string]resource.Quantity
 
 // ClusterResourceQuota
 // +k8s:openapi-gen=true
-// +resource:path=clusterresourcequota,strategy=ClusterResourceQuotaStrategy
+// +resource:path=clusterresourcequotas,strategy=ClusterResourceQuotaStrategy
 type ClusterResourceQuota struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   ClusterResourceQuotaSpec   `json:"spec,omitempty"`
+	// Spec defines the desired quota
+	Spec ClusterResourceQuotaSpec `json:"spec,omitempty"`
+
+	// Status defines the actual enforced quota and its current usage
 	Status ClusterResourceQuotaStatus `json:"status,omitempty"`
 }
 
 // ClusterResourceQuotaSpec defines the desired quota restrictions
 type ClusterResourceQuotaSpec struct {
-	// hard is the set of desired hard limits for each named resource.
-	// More info: https://kubernetes.io/docs/concepts/policy/resource-quotas/
-	// +optional
-	Hard map[string]resource.Quantity `json:"hard,omitempty" protobuf:"bytes,1,rep,name=hard"`
-	// A collection of filters that must match each object tracked by a quota.
-	// If not specified, the quota matches all objects.
-	// +optional
-	Scopes []ResourceQuotaScope `json:"scopes,omitempty" protobuf:"bytes,2,rep,name=scopes,casttype=ResourceQuotaScope"`
-	// scopeSelector is also a collection of filters like scopes that must match each object tracked by a quota
-	// but expressed using ScopeSelectorOperator in combination with possible values.
-	// For a resource to match, both scopes AND scopeSelector (if specified in spec), must be matched.
-	// +optional
-	ScopeSelector *ScopeSelector `json:"scopeSelector,omitempty" protobuf:"bytes,3,opt,name=scopeSelector"`
+	// Selector is the selector used to match namespaces.
+	Selector ClusterResourceQuotaSelector `json:"selector"`
+	// Quota defines the desired quota
+	Quota v1.ResourceQuotaSpec `json:"quota"`
 }
 
-// A scope selector represents the AND of the selectors represented
-// by the scoped-resource selector requirements.
-type ScopeSelector struct {
-	// A list of scope selector requirements by scope of the resources.
-	// +optional
-	MatchExpressions []ScopedResourceSelectorRequirement `json:"matchExpressions,omitempty" protobuf:"bytes,1,rep,name=matchExpressions"`
+// ClusterResourceQuotaSelector is used to select namespaces.
+type ClusterResourceQuotaSelector struct {
+	AnnotationSelector map[string]string `json:"annotationSelector,omitempty"`
 }
-
-// A scoped-resource selector requirement is a selector that contains values, a scope name, and an operator
-// that relates the scope name and values.
-type ScopedResourceSelectorRequirement struct {
-	// The name of the scope that the selector applies to.
-	ScopeName ResourceQuotaScope `json:"scopeName" protobuf:"bytes,1,opt,name=scopeName"`
-	// Represents a scope's relationship to a set of values.
-	// Valid operators are In, NotIn, Exists, DoesNotExist.
-	Operator ScopeSelectorOperator `json:"operator" protobuf:"bytes,2,opt,name=operator,casttype=ScopedResourceSelectorOperator"`
-	// An array of string values. If the operator is In or NotIn,
-	// the values array must be non-empty. If the operator is Exists or DoesNotExist,
-	// the values array must be empty.
-	// This array is replaced during a strategic merge patch.
-	// +optional
-	Values []string `json:"values,omitempty" protobuf:"bytes,3,rep,name=values"`
-}
-
-// A scope selector operator is the set of operators that can be used in
-// a scope selector requirement.
-type ScopeSelectorOperator string
-
-const (
-	ScopeSelectorOpIn           ScopeSelectorOperator = "In"
-	ScopeSelectorOpNotIn        ScopeSelectorOperator = "NotIn"
-	ScopeSelectorOpExists       ScopeSelectorOperator = "Exists"
-	ScopeSelectorOpDoesNotExist ScopeSelectorOperator = "DoesNotExist"
-)
 
 // ClusterResourceQuotaStatus defines the actual enforced quota and its current usage
 type ClusterResourceQuotaStatus struct {
 	// Total defines the actual enforced quota and its current usage across all namespaces
-	Total ResourceQuotaStatus
+	Total v1.ResourceQuotaStatus `json:"total"`
 
 	// Namespaces slices the usage by namespace.  This division allows for quick resolution of
 	// deletion reconciliation inside of a single project without requiring a recalculation
 	// across all projects.  This map can be used to pull the deltas for a given project.
-	Namespaces ResourceQuotasStatusByNamespace
+	Namespaces []NamespaceResourceQuotaStatus `json:"namespaces"`
 }
 
-// ResourceQuotaStatus defines the enforced hard limits and observed use.
-type ResourceQuotaStatus struct {
-	// Hard is the set of enforced hard limits for each named resource.
-	// More info: https://kubernetes.io/docs/concepts/policy/resource-quotas/
-	// +optional
-	Hard map[string]resource.Quantity `json:"hard,omitempty" protobuf:"bytes,1,rep,name=hard"`
-	// Used is the current observed total usage of the resource in the namespace.
-	// +optional
-	Used map[string]resource.Quantity `json:"used,omitempty" protobuf:"bytes,2,rep,name=used"`
-}
-
-// ResourceQuotasStatusByNamespace provides type correct methods
-type ResourceQuotasStatusByNamespace struct {
-	//orderedMap orderedMap
+// NamespaceResourceQuotaStatus contains details for the current status of this namespace
+type NamespaceResourceQuotaStatus struct {
+	Name   string                 `json:"name"`
+	Status v1.ResourceQuotaStatus `json:"status"`
 }
 
 // DefaultingFunction sets default ClusterResourceQuota field values

@@ -13,6 +13,7 @@ type ClusterV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	BucketsGetter
 	BucketBindingsGetter
+	ClusterResourceQuotasGetter
 }
 
 // ClusterV1alpha1Client is used to interact with features provided by the cluster.aks.cafe.sofastack.io group.
@@ -26,6 +27,10 @@ func (c *ClusterV1alpha1Client) Buckets() BucketInterface {
 
 func (c *ClusterV1alpha1Client) BucketBindings() BucketBindingInterface {
 	return newBucketBindings(c)
+}
+
+func (c *ClusterV1alpha1Client) ClusterResourceQuotas() ClusterResourceQuotaInterface {
+	return newClusterResourceQuotas(c)
 }
 
 // NewForConfig creates a new ClusterV1alpha1Client for the given config.

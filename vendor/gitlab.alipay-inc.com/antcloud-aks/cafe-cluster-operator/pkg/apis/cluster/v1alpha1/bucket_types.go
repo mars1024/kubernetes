@@ -18,15 +18,8 @@ package v1alpha1
 
 import (
 	"log"
-	"context"
-
-	"k8s.io/apimachinery/pkg/runtime"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/validation/field"
-
-	"gitlab.alipay-inc.com/antcloud-aks/cafe-cluster-operator/pkg/apis/cluster"
-	"gitlab.alipay-inc.com/antcloud-aks/cafe-cluster-operator/pkg/apis/cluster/v1alpha1/validation"
 )
 
 // +genclient
@@ -35,7 +28,7 @@ import (
 
 // Bucket
 // +k8s:openapi-gen=true
-// +resource:path=buckets,strategy=BucketStrategy
+// +resource:path=buckets,rest=BucketREST
 type Bucket struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -58,19 +51,6 @@ type BucketSpec struct {
 type BucketStatus struct {
 	Phase string `json:"phase,omitempty"`
 }
-
-// Validate checks that an instance of Bucket is well formed
-func (BucketStrategy) Validate(ctx context.Context, obj runtime.Object) field.ErrorList {
-	o := obj.(*cluster.Bucket)
-	log.Printf("Validating fields for Bucket %s\n", o.Name)
-	// perform validation here and add to errors using field.Invalid
-	errors := validation.ValidateBucket(o)
-	return errors
-}
-
-func (BucketStrategy) NamespaceScoped() bool { return false }
-
-func (BucketStatusStrategy) NamespaceScoped() bool { return false }
 
 // DefaultingFunction sets default Bucket field values
 func (BucketSchemeFns) DefaultingFunction(o interface{}) {

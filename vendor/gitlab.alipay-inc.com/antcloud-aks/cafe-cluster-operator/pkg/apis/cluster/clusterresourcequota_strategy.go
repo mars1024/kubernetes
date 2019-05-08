@@ -14,16 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1alpha1
+package cluster
 
 import (
 	"context"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-
-	"gitlab.alipay-inc.com/antcloud-aks/cafe-cluster-operator/pkg/apis/cluster"
-	"gitlab.alipay-inc.com/antcloud-aks/cafe-cluster-operator/pkg/apis/cluster/v1alpha1/validation"
 )
 
 // NamespaceScoped is false for ClusterResourceQuota.
@@ -45,24 +42,24 @@ func (ClusterResourceQuotaStrategy) Canonicalize(obj runtime.Object) {
 
 // PrepareForCreate clears fields that are not allowed to be set by end users on creation.
 func (ClusterResourceQuotaStrategy) PrepareForCreate(ctx context.Context, obj runtime.Object) {
-	quota := obj.(*cluster.ClusterResourceQuota)
-	quota.Status = cluster.ClusterResourceQuotaStatus{}
+	quota := obj.(*ClusterResourceQuota)
+	quota.Status = ClusterResourceQuotaStatus{}
 }
 
 // Validate checks that an instance of ClusterResourceQuota is well formed
 func (ClusterResourceQuotaStrategy) Validate(ctx context.Context, obj runtime.Object) field.ErrorList {
-	o := obj.(*cluster.ClusterResourceQuota)
+	o := obj.(*ClusterResourceQuota)
 	allErrs := field.ErrorList{}
 
 	// perform validation here and add to errors using field.Invalid
-	allErrs = append(allErrs, validation.ValidateClusterResourceQuota(o)...)
+	allErrs = append(allErrs, ValidateClusterResourceQuota(o)...)
 	return allErrs
 }
 
 // PrepareForUpdate clears fields that are not allowed to be set by end users on update.
 func (ClusterResourceQuotaStrategy) PrepareForUpdate(ctx context.Context, obj, old runtime.Object) {
-	curr := obj.(*cluster.ClusterResourceQuota)
-	prev := old.(*cluster.ClusterResourceQuota)
+	curr := obj.(*ClusterResourceQuota)
+	prev := old.(*ClusterResourceQuota)
 
 	curr.Status = prev.Status
 }
@@ -83,8 +80,8 @@ func (ClusterResourceQuotaStatusStrategy) PrepareForCreate(ctx context.Context, 
 }
 
 func (ClusterResourceQuotaStatusStrategy) PrepareForUpdate(ctx context.Context, obj, old runtime.Object) {
-	curr := obj.(*cluster.ClusterResourceQuota)
-	prev := obj.(*cluster.ClusterResourceQuota)
+	curr := obj.(*ClusterResourceQuota)
+	prev := obj.(*ClusterResourceQuota)
 
 	curr.Spec = prev.Spec
 }

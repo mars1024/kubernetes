@@ -8,7 +8,6 @@ import (
 	unsafe "unsafe"
 
 	cluster "gitlab.alipay-inc.com/antcloud-aks/cafe-cluster-operator/pkg/apis/cluster"
-	resource "k8s.io/apimachinery/pkg/api/resource"
 	conversion "k8s.io/apimachinery/pkg/conversion"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
@@ -80,26 +79,6 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}); err != nil {
 		return err
 	}
-	if err := s.AddGeneratedConversionFunc((*BucketBindingStatusStrategy)(nil), (*cluster.BucketBindingStatusStrategy)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1alpha1_BucketBindingStatusStrategy_To_cluster_BucketBindingStatusStrategy(a.(*BucketBindingStatusStrategy), b.(*cluster.BucketBindingStatusStrategy), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*cluster.BucketBindingStatusStrategy)(nil), (*BucketBindingStatusStrategy)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_cluster_BucketBindingStatusStrategy_To_v1alpha1_BucketBindingStatusStrategy(a.(*cluster.BucketBindingStatusStrategy), b.(*BucketBindingStatusStrategy), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*BucketBindingStrategy)(nil), (*cluster.BucketBindingStrategy)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1alpha1_BucketBindingStrategy_To_cluster_BucketBindingStrategy(a.(*BucketBindingStrategy), b.(*cluster.BucketBindingStrategy), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*cluster.BucketBindingStrategy)(nil), (*BucketBindingStrategy)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_cluster_BucketBindingStrategy_To_v1alpha1_BucketBindingStrategy(a.(*cluster.BucketBindingStrategy), b.(*BucketBindingStrategy), scope)
-	}); err != nil {
-		return err
-	}
 	if err := s.AddGeneratedConversionFunc((*BucketList)(nil), (*cluster.BucketList)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_v1alpha1_BucketList_To_cluster_BucketList(a.(*BucketList), b.(*cluster.BucketList), scope)
 	}); err != nil {
@@ -140,26 +119,6 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}); err != nil {
 		return err
 	}
-	if err := s.AddGeneratedConversionFunc((*BucketStatusStrategy)(nil), (*cluster.BucketStatusStrategy)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1alpha1_BucketStatusStrategy_To_cluster_BucketStatusStrategy(a.(*BucketStatusStrategy), b.(*cluster.BucketStatusStrategy), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*cluster.BucketStatusStrategy)(nil), (*BucketStatusStrategy)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_cluster_BucketStatusStrategy_To_v1alpha1_BucketStatusStrategy(a.(*cluster.BucketStatusStrategy), b.(*BucketStatusStrategy), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*BucketStrategy)(nil), (*cluster.BucketStrategy)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1alpha1_BucketStrategy_To_cluster_BucketStrategy(a.(*BucketStrategy), b.(*cluster.BucketStrategy), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*cluster.BucketStrategy)(nil), (*BucketStrategy)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_cluster_BucketStrategy_To_v1alpha1_BucketStrategy(a.(*cluster.BucketStrategy), b.(*BucketStrategy), scope)
-	}); err != nil {
-		return err
-	}
 	if err := s.AddGeneratedConversionFunc((*ClusterResourceQuota)(nil), (*cluster.ClusterResourceQuota)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_v1alpha1_ClusterResourceQuota_To_cluster_ClusterResourceQuota(a.(*ClusterResourceQuota), b.(*cluster.ClusterResourceQuota), scope)
 	}); err != nil {
@@ -177,6 +136,16 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}
 	if err := s.AddGeneratedConversionFunc((*cluster.ClusterResourceQuotaList)(nil), (*ClusterResourceQuotaList)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_cluster_ClusterResourceQuotaList_To_v1alpha1_ClusterResourceQuotaList(a.(*cluster.ClusterResourceQuotaList), b.(*ClusterResourceQuotaList), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*ClusterResourceQuotaSelector)(nil), (*cluster.ClusterResourceQuotaSelector)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_ClusterResourceQuotaSelector_To_cluster_ClusterResourceQuotaSelector(a.(*ClusterResourceQuotaSelector), b.(*cluster.ClusterResourceQuotaSelector), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*cluster.ClusterResourceQuotaSelector)(nil), (*ClusterResourceQuotaSelector)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_cluster_ClusterResourceQuotaSelector_To_v1alpha1_ClusterResourceQuotaSelector(a.(*cluster.ClusterResourceQuotaSelector), b.(*ClusterResourceQuotaSelector), scope)
 	}); err != nil {
 		return err
 	}
@@ -200,63 +169,13 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}); err != nil {
 		return err
 	}
-	if err := s.AddGeneratedConversionFunc((*ClusterResourceQuotaStatusStrategy)(nil), (*cluster.ClusterResourceQuotaStatusStrategy)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1alpha1_ClusterResourceQuotaStatusStrategy_To_cluster_ClusterResourceQuotaStatusStrategy(a.(*ClusterResourceQuotaStatusStrategy), b.(*cluster.ClusterResourceQuotaStatusStrategy), scope)
+	if err := s.AddGeneratedConversionFunc((*NamespaceResourceQuotaStatus)(nil), (*cluster.NamespaceResourceQuotaStatus)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1alpha1_NamespaceResourceQuotaStatus_To_cluster_NamespaceResourceQuotaStatus(a.(*NamespaceResourceQuotaStatus), b.(*cluster.NamespaceResourceQuotaStatus), scope)
 	}); err != nil {
 		return err
 	}
-	if err := s.AddGeneratedConversionFunc((*cluster.ClusterResourceQuotaStatusStrategy)(nil), (*ClusterResourceQuotaStatusStrategy)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_cluster_ClusterResourceQuotaStatusStrategy_To_v1alpha1_ClusterResourceQuotaStatusStrategy(a.(*cluster.ClusterResourceQuotaStatusStrategy), b.(*ClusterResourceQuotaStatusStrategy), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*ClusterResourceQuotaStrategy)(nil), (*cluster.ClusterResourceQuotaStrategy)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1alpha1_ClusterResourceQuotaStrategy_To_cluster_ClusterResourceQuotaStrategy(a.(*ClusterResourceQuotaStrategy), b.(*cluster.ClusterResourceQuotaStrategy), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*cluster.ClusterResourceQuotaStrategy)(nil), (*ClusterResourceQuotaStrategy)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_cluster_ClusterResourceQuotaStrategy_To_v1alpha1_ClusterResourceQuotaStrategy(a.(*cluster.ClusterResourceQuotaStrategy), b.(*ClusterResourceQuotaStrategy), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*ResourceQuotaStatus)(nil), (*cluster.ResourceQuotaStatus)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1alpha1_ResourceQuotaStatus_To_cluster_ResourceQuotaStatus(a.(*ResourceQuotaStatus), b.(*cluster.ResourceQuotaStatus), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*cluster.ResourceQuotaStatus)(nil), (*ResourceQuotaStatus)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_cluster_ResourceQuotaStatus_To_v1alpha1_ResourceQuotaStatus(a.(*cluster.ResourceQuotaStatus), b.(*ResourceQuotaStatus), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*ResourceQuotasStatusByNamespace)(nil), (*cluster.ResourceQuotasStatusByNamespace)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1alpha1_ResourceQuotasStatusByNamespace_To_cluster_ResourceQuotasStatusByNamespace(a.(*ResourceQuotasStatusByNamespace), b.(*cluster.ResourceQuotasStatusByNamespace), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*cluster.ResourceQuotasStatusByNamespace)(nil), (*ResourceQuotasStatusByNamespace)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_cluster_ResourceQuotasStatusByNamespace_To_v1alpha1_ResourceQuotasStatusByNamespace(a.(*cluster.ResourceQuotasStatusByNamespace), b.(*ResourceQuotasStatusByNamespace), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*ScopeSelector)(nil), (*cluster.ScopeSelector)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1alpha1_ScopeSelector_To_cluster_ScopeSelector(a.(*ScopeSelector), b.(*cluster.ScopeSelector), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*cluster.ScopeSelector)(nil), (*ScopeSelector)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_cluster_ScopeSelector_To_v1alpha1_ScopeSelector(a.(*cluster.ScopeSelector), b.(*ScopeSelector), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*ScopedResourceSelectorRequirement)(nil), (*cluster.ScopedResourceSelectorRequirement)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1alpha1_ScopedResourceSelectorRequirement_To_cluster_ScopedResourceSelectorRequirement(a.(*ScopedResourceSelectorRequirement), b.(*cluster.ScopedResourceSelectorRequirement), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*cluster.ScopedResourceSelectorRequirement)(nil), (*ScopedResourceSelectorRequirement)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_cluster_ScopedResourceSelectorRequirement_To_v1alpha1_ScopedResourceSelectorRequirement(a.(*cluster.ScopedResourceSelectorRequirement), b.(*ScopedResourceSelectorRequirement), scope)
+	if err := s.AddGeneratedConversionFunc((*cluster.NamespaceResourceQuotaStatus)(nil), (*NamespaceResourceQuotaStatus)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_cluster_NamespaceResourceQuotaStatus_To_v1alpha1_NamespaceResourceQuotaStatus(a.(*cluster.NamespaceResourceQuotaStatus), b.(*NamespaceResourceQuotaStatus), scope)
 	}); err != nil {
 		return err
 	}
@@ -413,46 +332,6 @@ func Convert_cluster_BucketBindingStatus_To_v1alpha1_BucketBindingStatus(in *clu
 	return autoConvert_cluster_BucketBindingStatus_To_v1alpha1_BucketBindingStatus(in, out, s)
 }
 
-func autoConvert_v1alpha1_BucketBindingStatusStrategy_To_cluster_BucketBindingStatusStrategy(in *BucketBindingStatusStrategy, out *cluster.BucketBindingStatusStrategy, s conversion.Scope) error {
-	out.DefaultStatusStorageStrategy = in.DefaultStatusStorageStrategy
-	return nil
-}
-
-// Convert_v1alpha1_BucketBindingStatusStrategy_To_cluster_BucketBindingStatusStrategy is an autogenerated conversion function.
-func Convert_v1alpha1_BucketBindingStatusStrategy_To_cluster_BucketBindingStatusStrategy(in *BucketBindingStatusStrategy, out *cluster.BucketBindingStatusStrategy, s conversion.Scope) error {
-	return autoConvert_v1alpha1_BucketBindingStatusStrategy_To_cluster_BucketBindingStatusStrategy(in, out, s)
-}
-
-func autoConvert_cluster_BucketBindingStatusStrategy_To_v1alpha1_BucketBindingStatusStrategy(in *cluster.BucketBindingStatusStrategy, out *BucketBindingStatusStrategy, s conversion.Scope) error {
-	out.DefaultStatusStorageStrategy = in.DefaultStatusStorageStrategy
-	return nil
-}
-
-// Convert_cluster_BucketBindingStatusStrategy_To_v1alpha1_BucketBindingStatusStrategy is an autogenerated conversion function.
-func Convert_cluster_BucketBindingStatusStrategy_To_v1alpha1_BucketBindingStatusStrategy(in *cluster.BucketBindingStatusStrategy, out *BucketBindingStatusStrategy, s conversion.Scope) error {
-	return autoConvert_cluster_BucketBindingStatusStrategy_To_v1alpha1_BucketBindingStatusStrategy(in, out, s)
-}
-
-func autoConvert_v1alpha1_BucketBindingStrategy_To_cluster_BucketBindingStrategy(in *BucketBindingStrategy, out *cluster.BucketBindingStrategy, s conversion.Scope) error {
-	out.DefaultStorageStrategy = in.DefaultStorageStrategy
-	return nil
-}
-
-// Convert_v1alpha1_BucketBindingStrategy_To_cluster_BucketBindingStrategy is an autogenerated conversion function.
-func Convert_v1alpha1_BucketBindingStrategy_To_cluster_BucketBindingStrategy(in *BucketBindingStrategy, out *cluster.BucketBindingStrategy, s conversion.Scope) error {
-	return autoConvert_v1alpha1_BucketBindingStrategy_To_cluster_BucketBindingStrategy(in, out, s)
-}
-
-func autoConvert_cluster_BucketBindingStrategy_To_v1alpha1_BucketBindingStrategy(in *cluster.BucketBindingStrategy, out *BucketBindingStrategy, s conversion.Scope) error {
-	out.DefaultStorageStrategy = in.DefaultStorageStrategy
-	return nil
-}
-
-// Convert_cluster_BucketBindingStrategy_To_v1alpha1_BucketBindingStrategy is an autogenerated conversion function.
-func Convert_cluster_BucketBindingStrategy_To_v1alpha1_BucketBindingStrategy(in *cluster.BucketBindingStrategy, out *BucketBindingStrategy, s conversion.Scope) error {
-	return autoConvert_cluster_BucketBindingStrategy_To_v1alpha1_BucketBindingStrategy(in, out, s)
-}
-
 func autoConvert_v1alpha1_BucketList_To_cluster_BucketList(in *BucketList, out *cluster.BucketList, s conversion.Scope) error {
 	out.ListMeta = in.ListMeta
 	out.Items = *(*[]cluster.Bucket)(unsafe.Pointer(&in.Items))
@@ -541,46 +420,6 @@ func Convert_cluster_BucketStatus_To_v1alpha1_BucketStatus(in *cluster.BucketSta
 	return autoConvert_cluster_BucketStatus_To_v1alpha1_BucketStatus(in, out, s)
 }
 
-func autoConvert_v1alpha1_BucketStatusStrategy_To_cluster_BucketStatusStrategy(in *BucketStatusStrategy, out *cluster.BucketStatusStrategy, s conversion.Scope) error {
-	out.DefaultStatusStorageStrategy = in.DefaultStatusStorageStrategy
-	return nil
-}
-
-// Convert_v1alpha1_BucketStatusStrategy_To_cluster_BucketStatusStrategy is an autogenerated conversion function.
-func Convert_v1alpha1_BucketStatusStrategy_To_cluster_BucketStatusStrategy(in *BucketStatusStrategy, out *cluster.BucketStatusStrategy, s conversion.Scope) error {
-	return autoConvert_v1alpha1_BucketStatusStrategy_To_cluster_BucketStatusStrategy(in, out, s)
-}
-
-func autoConvert_cluster_BucketStatusStrategy_To_v1alpha1_BucketStatusStrategy(in *cluster.BucketStatusStrategy, out *BucketStatusStrategy, s conversion.Scope) error {
-	out.DefaultStatusStorageStrategy = in.DefaultStatusStorageStrategy
-	return nil
-}
-
-// Convert_cluster_BucketStatusStrategy_To_v1alpha1_BucketStatusStrategy is an autogenerated conversion function.
-func Convert_cluster_BucketStatusStrategy_To_v1alpha1_BucketStatusStrategy(in *cluster.BucketStatusStrategy, out *BucketStatusStrategy, s conversion.Scope) error {
-	return autoConvert_cluster_BucketStatusStrategy_To_v1alpha1_BucketStatusStrategy(in, out, s)
-}
-
-func autoConvert_v1alpha1_BucketStrategy_To_cluster_BucketStrategy(in *BucketStrategy, out *cluster.BucketStrategy, s conversion.Scope) error {
-	out.DefaultStorageStrategy = in.DefaultStorageStrategy
-	return nil
-}
-
-// Convert_v1alpha1_BucketStrategy_To_cluster_BucketStrategy is an autogenerated conversion function.
-func Convert_v1alpha1_BucketStrategy_To_cluster_BucketStrategy(in *BucketStrategy, out *cluster.BucketStrategy, s conversion.Scope) error {
-	return autoConvert_v1alpha1_BucketStrategy_To_cluster_BucketStrategy(in, out, s)
-}
-
-func autoConvert_cluster_BucketStrategy_To_v1alpha1_BucketStrategy(in *cluster.BucketStrategy, out *BucketStrategy, s conversion.Scope) error {
-	out.DefaultStorageStrategy = in.DefaultStorageStrategy
-	return nil
-}
-
-// Convert_cluster_BucketStrategy_To_v1alpha1_BucketStrategy is an autogenerated conversion function.
-func Convert_cluster_BucketStrategy_To_v1alpha1_BucketStrategy(in *cluster.BucketStrategy, out *BucketStrategy, s conversion.Scope) error {
-	return autoConvert_cluster_BucketStrategy_To_v1alpha1_BucketStrategy(in, out, s)
-}
-
 func autoConvert_v1alpha1_ClusterResourceQuota_To_cluster_ClusterResourceQuota(in *ClusterResourceQuota, out *cluster.ClusterResourceQuota, s conversion.Scope) error {
 	out.ObjectMeta = in.ObjectMeta
 	if err := Convert_v1alpha1_ClusterResourceQuotaSpec_To_cluster_ClusterResourceQuotaSpec(&in.Spec, &out.Spec, s); err != nil {
@@ -635,10 +474,31 @@ func Convert_cluster_ClusterResourceQuotaList_To_v1alpha1_ClusterResourceQuotaLi
 	return autoConvert_cluster_ClusterResourceQuotaList_To_v1alpha1_ClusterResourceQuotaList(in, out, s)
 }
 
+func autoConvert_v1alpha1_ClusterResourceQuotaSelector_To_cluster_ClusterResourceQuotaSelector(in *ClusterResourceQuotaSelector, out *cluster.ClusterResourceQuotaSelector, s conversion.Scope) error {
+	out.AnnotationSelector = *(*map[string]string)(unsafe.Pointer(&in.AnnotationSelector))
+	return nil
+}
+
+// Convert_v1alpha1_ClusterResourceQuotaSelector_To_cluster_ClusterResourceQuotaSelector is an autogenerated conversion function.
+func Convert_v1alpha1_ClusterResourceQuotaSelector_To_cluster_ClusterResourceQuotaSelector(in *ClusterResourceQuotaSelector, out *cluster.ClusterResourceQuotaSelector, s conversion.Scope) error {
+	return autoConvert_v1alpha1_ClusterResourceQuotaSelector_To_cluster_ClusterResourceQuotaSelector(in, out, s)
+}
+
+func autoConvert_cluster_ClusterResourceQuotaSelector_To_v1alpha1_ClusterResourceQuotaSelector(in *cluster.ClusterResourceQuotaSelector, out *ClusterResourceQuotaSelector, s conversion.Scope) error {
+	out.AnnotationSelector = *(*map[string]string)(unsafe.Pointer(&in.AnnotationSelector))
+	return nil
+}
+
+// Convert_cluster_ClusterResourceQuotaSelector_To_v1alpha1_ClusterResourceQuotaSelector is an autogenerated conversion function.
+func Convert_cluster_ClusterResourceQuotaSelector_To_v1alpha1_ClusterResourceQuotaSelector(in *cluster.ClusterResourceQuotaSelector, out *ClusterResourceQuotaSelector, s conversion.Scope) error {
+	return autoConvert_cluster_ClusterResourceQuotaSelector_To_v1alpha1_ClusterResourceQuotaSelector(in, out, s)
+}
+
 func autoConvert_v1alpha1_ClusterResourceQuotaSpec_To_cluster_ClusterResourceQuotaSpec(in *ClusterResourceQuotaSpec, out *cluster.ClusterResourceQuotaSpec, s conversion.Scope) error {
-	out.Hard = *(*map[string]resource.Quantity)(unsafe.Pointer(&in.Hard))
-	out.Scopes = *(*[]cluster.ResourceQuotaScope)(unsafe.Pointer(&in.Scopes))
-	out.ScopeSelector = (*cluster.ScopeSelector)(unsafe.Pointer(in.ScopeSelector))
+	if err := Convert_v1alpha1_ClusterResourceQuotaSelector_To_cluster_ClusterResourceQuotaSelector(&in.Selector, &out.Selector, s); err != nil {
+		return err
+	}
+	out.Quota = in.Quota
 	return nil
 }
 
@@ -648,9 +508,10 @@ func Convert_v1alpha1_ClusterResourceQuotaSpec_To_cluster_ClusterResourceQuotaSp
 }
 
 func autoConvert_cluster_ClusterResourceQuotaSpec_To_v1alpha1_ClusterResourceQuotaSpec(in *cluster.ClusterResourceQuotaSpec, out *ClusterResourceQuotaSpec, s conversion.Scope) error {
-	out.Hard = *(*map[string]resource.Quantity)(unsafe.Pointer(&in.Hard))
-	out.Scopes = *(*[]ResourceQuotaScope)(unsafe.Pointer(&in.Scopes))
-	out.ScopeSelector = (*ScopeSelector)(unsafe.Pointer(in.ScopeSelector))
+	if err := Convert_cluster_ClusterResourceQuotaSelector_To_v1alpha1_ClusterResourceQuotaSelector(&in.Selector, &out.Selector, s); err != nil {
+		return err
+	}
+	out.Quota = in.Quota
 	return nil
 }
 
@@ -660,12 +521,8 @@ func Convert_cluster_ClusterResourceQuotaSpec_To_v1alpha1_ClusterResourceQuotaSp
 }
 
 func autoConvert_v1alpha1_ClusterResourceQuotaStatus_To_cluster_ClusterResourceQuotaStatus(in *ClusterResourceQuotaStatus, out *cluster.ClusterResourceQuotaStatus, s conversion.Scope) error {
-	if err := Convert_v1alpha1_ResourceQuotaStatus_To_cluster_ResourceQuotaStatus(&in.Total, &out.Total, s); err != nil {
-		return err
-	}
-	if err := Convert_v1alpha1_ResourceQuotasStatusByNamespace_To_cluster_ResourceQuotasStatusByNamespace(&in.Namespaces, &out.Namespaces, s); err != nil {
-		return err
-	}
+	out.Total = in.Total
+	out.Namespaces = *(*[]cluster.NamespaceResourceQuotaStatus)(unsafe.Pointer(&in.Namespaces))
 	return nil
 }
 
@@ -675,12 +532,8 @@ func Convert_v1alpha1_ClusterResourceQuotaStatus_To_cluster_ClusterResourceQuota
 }
 
 func autoConvert_cluster_ClusterResourceQuotaStatus_To_v1alpha1_ClusterResourceQuotaStatus(in *cluster.ClusterResourceQuotaStatus, out *ClusterResourceQuotaStatus, s conversion.Scope) error {
-	if err := Convert_cluster_ResourceQuotaStatus_To_v1alpha1_ResourceQuotaStatus(&in.Total, &out.Total, s); err != nil {
-		return err
-	}
-	if err := Convert_cluster_ResourceQuotasStatusByNamespace_To_v1alpha1_ResourceQuotasStatusByNamespace(&in.Namespaces, &out.Namespaces, s); err != nil {
-		return err
-	}
+	out.Total = in.Total
+	out.Namespaces = *(*[]NamespaceResourceQuotaStatus)(unsafe.Pointer(&in.Namespaces))
 	return nil
 }
 
@@ -689,126 +542,24 @@ func Convert_cluster_ClusterResourceQuotaStatus_To_v1alpha1_ClusterResourceQuota
 	return autoConvert_cluster_ClusterResourceQuotaStatus_To_v1alpha1_ClusterResourceQuotaStatus(in, out, s)
 }
 
-func autoConvert_v1alpha1_ClusterResourceQuotaStatusStrategy_To_cluster_ClusterResourceQuotaStatusStrategy(in *ClusterResourceQuotaStatusStrategy, out *cluster.ClusterResourceQuotaStatusStrategy, s conversion.Scope) error {
-	out.DefaultStatusStorageStrategy = in.DefaultStatusStorageStrategy
+func autoConvert_v1alpha1_NamespaceResourceQuotaStatus_To_cluster_NamespaceResourceQuotaStatus(in *NamespaceResourceQuotaStatus, out *cluster.NamespaceResourceQuotaStatus, s conversion.Scope) error {
+	out.Name = in.Name
+	out.Status = in.Status
 	return nil
 }
 
-// Convert_v1alpha1_ClusterResourceQuotaStatusStrategy_To_cluster_ClusterResourceQuotaStatusStrategy is an autogenerated conversion function.
-func Convert_v1alpha1_ClusterResourceQuotaStatusStrategy_To_cluster_ClusterResourceQuotaStatusStrategy(in *ClusterResourceQuotaStatusStrategy, out *cluster.ClusterResourceQuotaStatusStrategy, s conversion.Scope) error {
-	return autoConvert_v1alpha1_ClusterResourceQuotaStatusStrategy_To_cluster_ClusterResourceQuotaStatusStrategy(in, out, s)
+// Convert_v1alpha1_NamespaceResourceQuotaStatus_To_cluster_NamespaceResourceQuotaStatus is an autogenerated conversion function.
+func Convert_v1alpha1_NamespaceResourceQuotaStatus_To_cluster_NamespaceResourceQuotaStatus(in *NamespaceResourceQuotaStatus, out *cluster.NamespaceResourceQuotaStatus, s conversion.Scope) error {
+	return autoConvert_v1alpha1_NamespaceResourceQuotaStatus_To_cluster_NamespaceResourceQuotaStatus(in, out, s)
 }
 
-func autoConvert_cluster_ClusterResourceQuotaStatusStrategy_To_v1alpha1_ClusterResourceQuotaStatusStrategy(in *cluster.ClusterResourceQuotaStatusStrategy, out *ClusterResourceQuotaStatusStrategy, s conversion.Scope) error {
-	out.DefaultStatusStorageStrategy = in.DefaultStatusStorageStrategy
+func autoConvert_cluster_NamespaceResourceQuotaStatus_To_v1alpha1_NamespaceResourceQuotaStatus(in *cluster.NamespaceResourceQuotaStatus, out *NamespaceResourceQuotaStatus, s conversion.Scope) error {
+	out.Name = in.Name
+	out.Status = in.Status
 	return nil
 }
 
-// Convert_cluster_ClusterResourceQuotaStatusStrategy_To_v1alpha1_ClusterResourceQuotaStatusStrategy is an autogenerated conversion function.
-func Convert_cluster_ClusterResourceQuotaStatusStrategy_To_v1alpha1_ClusterResourceQuotaStatusStrategy(in *cluster.ClusterResourceQuotaStatusStrategy, out *ClusterResourceQuotaStatusStrategy, s conversion.Scope) error {
-	return autoConvert_cluster_ClusterResourceQuotaStatusStrategy_To_v1alpha1_ClusterResourceQuotaStatusStrategy(in, out, s)
-}
-
-func autoConvert_v1alpha1_ClusterResourceQuotaStrategy_To_cluster_ClusterResourceQuotaStrategy(in *ClusterResourceQuotaStrategy, out *cluster.ClusterResourceQuotaStrategy, s conversion.Scope) error {
-	out.DefaultStorageStrategy = in.DefaultStorageStrategy
-	return nil
-}
-
-// Convert_v1alpha1_ClusterResourceQuotaStrategy_To_cluster_ClusterResourceQuotaStrategy is an autogenerated conversion function.
-func Convert_v1alpha1_ClusterResourceQuotaStrategy_To_cluster_ClusterResourceQuotaStrategy(in *ClusterResourceQuotaStrategy, out *cluster.ClusterResourceQuotaStrategy, s conversion.Scope) error {
-	return autoConvert_v1alpha1_ClusterResourceQuotaStrategy_To_cluster_ClusterResourceQuotaStrategy(in, out, s)
-}
-
-func autoConvert_cluster_ClusterResourceQuotaStrategy_To_v1alpha1_ClusterResourceQuotaStrategy(in *cluster.ClusterResourceQuotaStrategy, out *ClusterResourceQuotaStrategy, s conversion.Scope) error {
-	out.DefaultStorageStrategy = in.DefaultStorageStrategy
-	return nil
-}
-
-// Convert_cluster_ClusterResourceQuotaStrategy_To_v1alpha1_ClusterResourceQuotaStrategy is an autogenerated conversion function.
-func Convert_cluster_ClusterResourceQuotaStrategy_To_v1alpha1_ClusterResourceQuotaStrategy(in *cluster.ClusterResourceQuotaStrategy, out *ClusterResourceQuotaStrategy, s conversion.Scope) error {
-	return autoConvert_cluster_ClusterResourceQuotaStrategy_To_v1alpha1_ClusterResourceQuotaStrategy(in, out, s)
-}
-
-func autoConvert_v1alpha1_ResourceQuotaStatus_To_cluster_ResourceQuotaStatus(in *ResourceQuotaStatus, out *cluster.ResourceQuotaStatus, s conversion.Scope) error {
-	out.Hard = *(*map[string]resource.Quantity)(unsafe.Pointer(&in.Hard))
-	out.Used = *(*map[string]resource.Quantity)(unsafe.Pointer(&in.Used))
-	return nil
-}
-
-// Convert_v1alpha1_ResourceQuotaStatus_To_cluster_ResourceQuotaStatus is an autogenerated conversion function.
-func Convert_v1alpha1_ResourceQuotaStatus_To_cluster_ResourceQuotaStatus(in *ResourceQuotaStatus, out *cluster.ResourceQuotaStatus, s conversion.Scope) error {
-	return autoConvert_v1alpha1_ResourceQuotaStatus_To_cluster_ResourceQuotaStatus(in, out, s)
-}
-
-func autoConvert_cluster_ResourceQuotaStatus_To_v1alpha1_ResourceQuotaStatus(in *cluster.ResourceQuotaStatus, out *ResourceQuotaStatus, s conversion.Scope) error {
-	out.Hard = *(*map[string]resource.Quantity)(unsafe.Pointer(&in.Hard))
-	out.Used = *(*map[string]resource.Quantity)(unsafe.Pointer(&in.Used))
-	return nil
-}
-
-// Convert_cluster_ResourceQuotaStatus_To_v1alpha1_ResourceQuotaStatus is an autogenerated conversion function.
-func Convert_cluster_ResourceQuotaStatus_To_v1alpha1_ResourceQuotaStatus(in *cluster.ResourceQuotaStatus, out *ResourceQuotaStatus, s conversion.Scope) error {
-	return autoConvert_cluster_ResourceQuotaStatus_To_v1alpha1_ResourceQuotaStatus(in, out, s)
-}
-
-func autoConvert_v1alpha1_ResourceQuotasStatusByNamespace_To_cluster_ResourceQuotasStatusByNamespace(in *ResourceQuotasStatusByNamespace, out *cluster.ResourceQuotasStatusByNamespace, s conversion.Scope) error {
-	return nil
-}
-
-// Convert_v1alpha1_ResourceQuotasStatusByNamespace_To_cluster_ResourceQuotasStatusByNamespace is an autogenerated conversion function.
-func Convert_v1alpha1_ResourceQuotasStatusByNamespace_To_cluster_ResourceQuotasStatusByNamespace(in *ResourceQuotasStatusByNamespace, out *cluster.ResourceQuotasStatusByNamespace, s conversion.Scope) error {
-	return autoConvert_v1alpha1_ResourceQuotasStatusByNamespace_To_cluster_ResourceQuotasStatusByNamespace(in, out, s)
-}
-
-func autoConvert_cluster_ResourceQuotasStatusByNamespace_To_v1alpha1_ResourceQuotasStatusByNamespace(in *cluster.ResourceQuotasStatusByNamespace, out *ResourceQuotasStatusByNamespace, s conversion.Scope) error {
-	return nil
-}
-
-// Convert_cluster_ResourceQuotasStatusByNamespace_To_v1alpha1_ResourceQuotasStatusByNamespace is an autogenerated conversion function.
-func Convert_cluster_ResourceQuotasStatusByNamespace_To_v1alpha1_ResourceQuotasStatusByNamespace(in *cluster.ResourceQuotasStatusByNamespace, out *ResourceQuotasStatusByNamespace, s conversion.Scope) error {
-	return autoConvert_cluster_ResourceQuotasStatusByNamespace_To_v1alpha1_ResourceQuotasStatusByNamespace(in, out, s)
-}
-
-func autoConvert_v1alpha1_ScopeSelector_To_cluster_ScopeSelector(in *ScopeSelector, out *cluster.ScopeSelector, s conversion.Scope) error {
-	out.MatchExpressions = *(*[]cluster.ScopedResourceSelectorRequirement)(unsafe.Pointer(&in.MatchExpressions))
-	return nil
-}
-
-// Convert_v1alpha1_ScopeSelector_To_cluster_ScopeSelector is an autogenerated conversion function.
-func Convert_v1alpha1_ScopeSelector_To_cluster_ScopeSelector(in *ScopeSelector, out *cluster.ScopeSelector, s conversion.Scope) error {
-	return autoConvert_v1alpha1_ScopeSelector_To_cluster_ScopeSelector(in, out, s)
-}
-
-func autoConvert_cluster_ScopeSelector_To_v1alpha1_ScopeSelector(in *cluster.ScopeSelector, out *ScopeSelector, s conversion.Scope) error {
-	out.MatchExpressions = *(*[]ScopedResourceSelectorRequirement)(unsafe.Pointer(&in.MatchExpressions))
-	return nil
-}
-
-// Convert_cluster_ScopeSelector_To_v1alpha1_ScopeSelector is an autogenerated conversion function.
-func Convert_cluster_ScopeSelector_To_v1alpha1_ScopeSelector(in *cluster.ScopeSelector, out *ScopeSelector, s conversion.Scope) error {
-	return autoConvert_cluster_ScopeSelector_To_v1alpha1_ScopeSelector(in, out, s)
-}
-
-func autoConvert_v1alpha1_ScopedResourceSelectorRequirement_To_cluster_ScopedResourceSelectorRequirement(in *ScopedResourceSelectorRequirement, out *cluster.ScopedResourceSelectorRequirement, s conversion.Scope) error {
-	out.ScopeName = cluster.ResourceQuotaScope(in.ScopeName)
-	out.Operator = cluster.ScopeSelectorOperator(in.Operator)
-	out.Values = *(*[]string)(unsafe.Pointer(&in.Values))
-	return nil
-}
-
-// Convert_v1alpha1_ScopedResourceSelectorRequirement_To_cluster_ScopedResourceSelectorRequirement is an autogenerated conversion function.
-func Convert_v1alpha1_ScopedResourceSelectorRequirement_To_cluster_ScopedResourceSelectorRequirement(in *ScopedResourceSelectorRequirement, out *cluster.ScopedResourceSelectorRequirement, s conversion.Scope) error {
-	return autoConvert_v1alpha1_ScopedResourceSelectorRequirement_To_cluster_ScopedResourceSelectorRequirement(in, out, s)
-}
-
-func autoConvert_cluster_ScopedResourceSelectorRequirement_To_v1alpha1_ScopedResourceSelectorRequirement(in *cluster.ScopedResourceSelectorRequirement, out *ScopedResourceSelectorRequirement, s conversion.Scope) error {
-	out.ScopeName = ResourceQuotaScope(in.ScopeName)
-	out.Operator = ScopeSelectorOperator(in.Operator)
-	out.Values = *(*[]string)(unsafe.Pointer(&in.Values))
-	return nil
-}
-
-// Convert_cluster_ScopedResourceSelectorRequirement_To_v1alpha1_ScopedResourceSelectorRequirement is an autogenerated conversion function.
-func Convert_cluster_ScopedResourceSelectorRequirement_To_v1alpha1_ScopedResourceSelectorRequirement(in *cluster.ScopedResourceSelectorRequirement, out *ScopedResourceSelectorRequirement, s conversion.Scope) error {
-	return autoConvert_cluster_ScopedResourceSelectorRequirement_To_v1alpha1_ScopedResourceSelectorRequirement(in, out, s)
+// Convert_cluster_NamespaceResourceQuotaStatus_To_v1alpha1_NamespaceResourceQuotaStatus is an autogenerated conversion function.
+func Convert_cluster_NamespaceResourceQuotaStatus_To_v1alpha1_NamespaceResourceQuotaStatus(in *cluster.NamespaceResourceQuotaStatus, out *NamespaceResourceQuotaStatus, s conversion.Scope) error {
+	return autoConvert_cluster_NamespaceResourceQuotaStatus_To_v1alpha1_NamespaceResourceQuotaStatus(in, out, s)
 }

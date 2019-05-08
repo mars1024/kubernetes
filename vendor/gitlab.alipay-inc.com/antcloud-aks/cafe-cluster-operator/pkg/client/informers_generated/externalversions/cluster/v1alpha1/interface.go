@@ -12,6 +12,8 @@ type Interface interface {
 	Buckets() BucketInformer
 	// BucketBindings returns a BucketBindingInformer.
 	BucketBindings() BucketBindingInformer
+	// ClusterResourceQuotas returns a ClusterResourceQuotaInformer.
+	ClusterResourceQuotas() ClusterResourceQuotaInformer
 }
 
 type version struct {
@@ -33,4 +35,9 @@ func (v *version) Buckets() BucketInformer {
 // BucketBindings returns a BucketBindingInformer.
 func (v *version) BucketBindings() BucketBindingInformer {
 	return &bucketBindingInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// ClusterResourceQuotas returns a ClusterResourceQuotaInformer.
+func (v *version) ClusterResourceQuotas() ClusterResourceQuotaInformer {
+	return &clusterResourceQuotaInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }

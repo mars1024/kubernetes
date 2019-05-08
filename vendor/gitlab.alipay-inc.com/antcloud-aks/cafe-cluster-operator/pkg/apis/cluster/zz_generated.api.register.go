@@ -23,7 +23,7 @@ import (
 	"fmt"
 
 	"github.com/kubernetes-incubator/apiserver-builder-alpha/pkg/builders"
-	apiresource "k8s.io/apimachinery/pkg/api/resource"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -57,13 +57,13 @@ var (
 		func() runtime.Object { return &BucketBindingList{} },
 	)
 	InternalClusterResourceQuota = builders.NewInternalResource(
-		"clusterresourcequota",
+		"clusterresourcequotas",
 		"ClusterResourceQuota",
 		func() runtime.Object { return &ClusterResourceQuota{} },
 		func() runtime.Object { return &ClusterResourceQuotaList{} },
 	)
 	InternalClusterResourceQuotaStatus = builders.NewInternalResourceStatus(
-		"clusterresourcequota",
+		"clusterresourcequotas",
 		"ClusterResourceQuotaStatus",
 		func() runtime.Object { return &ClusterResourceQuota{} },
 		func() runtime.Object { return &ClusterResourceQuotaList{} },
@@ -98,8 +98,6 @@ func Resource(resource string) schema.GroupResource {
 }
 
 type PriorityBand string
-type ResourceQuotaScope string
-type ScopeSelectorOperator string
 
 // +genclient
 // +genclient:nonNamespaced
@@ -128,32 +126,22 @@ type BucketStatus struct {
 }
 
 type ClusterResourceQuotaStatus struct {
-	Total      ResourceQuotaStatus
-	Namespaces ResourceQuotasStatusByNamespace
+	Total      corev1.ResourceQuotaStatus
+	Namespaces []NamespaceResourceQuotaStatus
 }
 
 type ClusterResourceQuotaSpec struct {
-	Hard          map[string]apiresource.Quantity
-	Scopes        []ResourceQuotaScope
-	ScopeSelector *ScopeSelector
+	Selector ClusterResourceQuotaSelector
+	Quota    corev1.ResourceQuotaSpec
 }
 
-type ResourceQuotasStatusByNamespace struct {
+type NamespaceResourceQuotaStatus struct {
+	Name   string
+	Status corev1.ResourceQuotaStatus
 }
 
-type ScopeSelector struct {
-	MatchExpressions []ScopedResourceSelectorRequirement
-}
-
-type ResourceQuotaStatus struct {
-	Hard map[string]apiresource.Quantity
-	Used map[string]apiresource.Quantity
-}
-
-type ScopedResourceSelectorRequirement struct {
-	ScopeName ResourceQuotaScope
-	Operator  ScopeSelectorOperator
-	Values    []string
+type ClusterResourceQuotaSelector struct {
+	AnnotationSelector map[string]string
 }
 
 type BucketSpec struct {

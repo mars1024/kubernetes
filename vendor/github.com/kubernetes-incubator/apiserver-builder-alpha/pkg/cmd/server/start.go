@@ -17,36 +17,40 @@ limitations under the License.
 package server
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"io"
+	"net/http"
+	"os"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
-	"github.com/kubernetes-incubator/apiserver-builder-alpha/pkg/apiserver"
-	"github.com/kubernetes-incubator/apiserver-builder-alpha/pkg/builders"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	genericapiserver "k8s.io/apiserver/pkg/server"
-	genericoptions "k8s.io/apiserver/pkg/server/options"
-
-	"bytes"
-	"net/http"
-	"os"
-
-	"github.com/kubernetes-incubator/apiserver-builder-alpha/pkg/validators"
-	"k8s.io/apimachinery/pkg/util/wait"
+	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
 	openapinamer "k8s.io/apiserver/pkg/endpoints/openapi"
+	"k8s.io/apiserver/pkg/features"
+	"k8s.io/apiserver/pkg/server"
+	genericapiserver "k8s.io/apiserver/pkg/server"
+	genericfilters "k8s.io/apiserver/pkg/server/filters"
+	genericoptions "k8s.io/apiserver/pkg/server/options"
+	"k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/apiserver/pkg/util/logs"
 	"k8s.io/klog"
 	openapi "k8s.io/kube-openapi/pkg/common"
+
+	"github.com/kubernetes-incubator/apiserver-builder-alpha/pkg/apiserver"
+	"github.com/kubernetes-incubator/apiserver-builder-alpha/pkg/builders"
+	"github.com/kubernetes-incubator/apiserver-builder-alpha/pkg/validators"
 )
 
 var GetOpenApiDefinition openapi.GetOpenAPIDefinitions
 
 type ServerOptions struct {
-	RecommendedOptions *genericoptions.RecommendedOptions
-	APIBuilders        []*builders.APIGroupBuilder
+	RecommendedOptions     *genericoptions.RecommendedOptions
+	APIBuilders            []*builders.APIGroupBuilder
+	InsecureServingOptions *genericoptions.DeprecatedInsecureServingOptionsWithLoopback
 
 	PrintBearerToken bool
 	PrintOpenapi     bool
@@ -62,14 +66,15 @@ type PostStartHook struct {
 }
 
 // StartApiServer starts an apiserver hosting the provider apis and openapi definitions.
-func StartApiServer(etcdPath string, apis []*builders.APIGroupBuilder, openapidefs openapi.GetOpenAPIDefinitions, title, version string) {
+func StartApiServer(etcdPath string, apis []*builders.APIGroupBuilder, openapidefs openapi.GetOpenAPIDefinitions, title, version string, tweakConfigFuncs ...func(apiServer *apiserver.Config) error) {
 	logs.InitLogs()
 	defer logs.FlushLogs()
 
 	GetOpenApiDefinition = openapidefs
 
+	signalCh := genericapiserver.SetupSignalHandler()
 	// To disable providers, manually specify the list provided by getKnownProviders()
-	cmd, _ := NewCommandStartServer(etcdPath, os.Stdout, os.Stderr, apis, wait.NeverStop, title, version)
+	cmd, _ := NewCommandStartServer(etcdPath, os.Stdout, os.Stderr, apis, signalCh, title, version, tweakConfigFuncs...)
 
 	cmd.Flags().AddFlagSet(pflag.CommandLine)
 	if err := cmd.Execute(); err != nil {
@@ -92,13 +97,17 @@ func NewServerOptions(etcdPath string, out, errOut io.Writer, b []*builders.APIG
 
 	o.RecommendedOptions.Authorization.RemoteKubeConfigFileOptional = true
 	o.RecommendedOptions.Authentication.RemoteKubeConfigFileOptional = true
+	o.InsecureServingOptions = func() *genericoptions.DeprecatedInsecureServingOptionsWithLoopback {
+		o := genericoptions.DeprecatedInsecureServingOptions{}
+		return o.WithLoopback()
+	}()
 
 	return o
 }
 
 // NewCommandStartMaster provides a CLI handler for 'start master' command
 func NewCommandStartServer(etcdPath string, out, errOut io.Writer, builders []*builders.APIGroupBuilder,
-	stopCh <-chan struct{}, title, version string) (*cobra.Command, *ServerOptions) {
+	stopCh <-chan struct{}, title, version string, tweakConfigFuncs ...func(apiServer *apiserver.Config) error) (*cobra.Command, *ServerOptions) {
 	o := NewServerOptions(etcdPath, out, errOut, builders)
 
 	// Support overrides
@@ -112,7 +121,7 @@ func NewCommandStartServer(etcdPath string, out, errOut io.Writer, builders []*b
 			if err := o.Validate(args); err != nil {
 				return err
 			}
-			if err := o.RunServer(stopCh, title, version); err != nil {
+			if err := o.RunServer(stopCh, title, version, tweakConfigFuncs...); err != nil {
 				return err
 			}
 			return nil
@@ -128,6 +137,8 @@ func NewCommandStartServer(etcdPath string, out, errOut io.Writer, builders []*b
 		"Setup delegated auth")
 	//flags.StringVar(&o.Kubeconfig, "kubeconfig", "", "Kubeconfig of apiserver to talk to.")
 	o.RecommendedOptions.AddFlags(flags)
+	o.InsecureServingOptions.AddFlags(flags)
+	feature.DefaultFeatureGate.AddFlag(flags)
 
 	klogFlags := flag.NewFlagSet("klog", flag.ExitOnError)
 	klog.InitFlags(klogFlags)
@@ -161,7 +172,10 @@ func applyOptions(config *genericapiserver.Config, applyTo ...func(*genericapise
 	return nil
 }
 
-func (o ServerOptions) Config() (*apiserver.Config, error) {
+func (o ServerOptions) Config(tweakConfigFuncs ...func(config *apiserver.Config) error) (*apiserver.Config, error) {
+	// switching pagination according to the feature-gate
+	o.RecommendedOptions.Etcd.StorageConfig.Paging = feature.DefaultFeatureGate.Enabled(features.APIListChunking)
+
 	// TODO have a "real" external address
 	if err := o.RecommendedOptions.SecureServing.MaybeDefaultWithSelfSignedCerts(
 		"localhost", nil, nil); err != nil {
@@ -211,12 +225,25 @@ func (o ServerOptions) Config() (*apiserver.Config, error) {
 		}
 	}
 
-	config := &apiserver.Config{GenericConfig: serverConfig}
+	var insecureServingInfo *genericapiserver.DeprecatedInsecureServingInfo
+	if err := o.InsecureServingOptions.ApplyTo(&insecureServingInfo, &serverConfig.LoopbackClientConfig); err != nil {
+		return nil, err
+	}
+
+	config := &apiserver.Config{
+		GenericConfig:       serverConfig,
+		InsecureServingInfo: insecureServingInfo,
+	}
+	for _, tweakConfigFunc := range tweakConfigFuncs {
+		if err := tweakConfigFunc(config); err != nil {
+			return nil, err
+		}
+	}
 	return config, nil
 }
 
-func (o *ServerOptions) RunServer(stopCh <-chan struct{}, title, version string) error {
-	config, err := o.Config()
+func (o *ServerOptions) RunServer(stopCh <-chan struct{}, title, version string, tweakConfigFuncs ...func(apiserver *apiserver.Config) error) error {
+	config, err := o.Config(tweakConfigFuncs...)
 	if err != nil {
 		return err
 	}
@@ -240,17 +267,19 @@ func (o *ServerOptions) RunServer(stopCh <-chan struct{}, title, version string)
 	config.GenericConfig.OpenAPIConfig.Info.Title = title
 	config.GenericConfig.OpenAPIConfig.Info.Version = version
 
-	server, err := config.Complete().New()
+	genericServer, err := config.Complete().New()
 	if err != nil {
 		return err
 	}
 
 	for _, h := range o.PostStartHooks {
-		server.GenericAPIServer.AddPostStartHook(h.Name, h.Fn)
+		if err := genericServer.GenericAPIServer.AddPostStartHook(h.Name, h.Fn); err != nil {
+			return err
+		}
 	}
 
-	s := server.GenericAPIServer.PrepareRun()
-	err = validators.OpenAPI.SetSchema(readOpenapi(config.GenericConfig.LoopbackClientConfig.BearerToken, server.GenericAPIServer.Handler))
+	s := genericServer.GenericAPIServer.PrepareRun()
+	err = validators.OpenAPI.SetSchema(readOpenapi(config.GenericConfig.LoopbackClientConfig.BearerToken, genericServer.GenericAPIServer.Handler))
 	if o.PrintOpenapi {
 		fmt.Printf("%s", validators.OpenAPI.OpenApi)
 		os.Exit(0)
@@ -259,9 +288,22 @@ func (o *ServerOptions) RunServer(stopCh <-chan struct{}, title, version string)
 		return err
 	}
 
-	s.Run(stopCh)
+	if config.InsecureServingInfo != nil {
+		c := config.GenericConfig
+		handler := s.GenericAPIServer.UnprotectedHandler()
+		handler = genericapifilters.WithAudit(handler, c.AuditBackend, c.AuditPolicyChecker, c.LongRunningFunc)
+		handler = genericapifilters.WithAuthentication(handler, server.InsecureSuperuser{}, nil)
+		handler = genericfilters.WithCORS(handler, c.CorsAllowedOriginList, nil, nil, nil, "true")
+		handler = genericfilters.WithTimeoutForNonLongRunningRequests(handler, c.LongRunningFunc, c.RequestTimeout)
+		handler = genericfilters.WithMaxInFlightLimit(handler, c.MaxRequestsInFlight, c.MaxMutatingRequestsInFlight, c.LongRunningFunc)
+		handler = genericapifilters.WithRequestInfo(handler, server.NewRequestInfoResolver(c))
+		handler = genericfilters.WithPanicRecovery(handler)
+		if err := config.InsecureServingInfo.Serve(handler, config.GenericConfig.RequestTimeout, stopCh); err != nil {
+			return err
+		}
+	}
 
-	return nil
+	return s.Run(stopCh)
 }
 
 func readOpenapi(bearerToken string, handler *genericapiserver.APIServerHandler) string {

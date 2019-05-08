@@ -18,15 +18,7 @@ package v1alpha1
 
 import (
 	"log"
-	"context"
-
-	"k8s.io/apimachinery/pkg/runtime"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/validation/field"
-
-	"gitlab.alipay-inc.com/antcloud-aks/cafe-cluster-operator/pkg/apis/cluster"
-	"gitlab.alipay-inc.com/antcloud-aks/cafe-cluster-operator/pkg/apis/cluster/v1alpha1/validation"
 )
 
 // +genclient
@@ -35,7 +27,7 @@ import (
 
 // BucketBinding
 // +k8s:openapi-gen=true
-// +resource:path=bucketbindings,strategy=BucketBindingStrategy
+// +resource:path=bucketbindings,rest=BucketBindingREST
 type BucketBinding struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -63,19 +55,6 @@ type BucketBindingRule struct {
 type BucketBindingStatus struct {
 	Phase string `json:"phase,omitempty"`
 }
-
-// Validate checks that an instance of BucketBinding is well formed
-func (BucketBindingStrategy) Validate(ctx context.Context, obj runtime.Object) field.ErrorList {
-	o := obj.(*cluster.BucketBinding)
-	log.Printf("Validating fields for BucketBinding %s\n", o.Name)
-	// perform validation here and add to errors using field.Invalid
-	errors := validation.ValidateBucketBinding(o)
-	return errors
-}
-
-func (BucketBindingStrategy) NamespaceScoped() bool { return false }
-
-func (BucketBindingStatusStrategy) NamespaceScoped() bool { return false }
 
 // DefaultingFunction sets default BucketBinding field values
 func (BucketBindingSchemeFns) DefaultingFunction(o interface{}) {

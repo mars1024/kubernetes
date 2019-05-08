@@ -20,6 +20,10 @@ func (c *FakeClusterV1alpha1) BucketBindings() v1alpha1.BucketBindingInterface {
 	return &FakeBucketBindings{c}
 }
 
+func (c *FakeClusterV1alpha1) ClusterResourceQuotas() v1alpha1.ClusterResourceQuotaInterface {
+	return &FakeClusterResourceQuotas{c}
+}
+
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
 func (c *FakeClusterV1alpha1) RESTClient() rest.Interface {

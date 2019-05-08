@@ -439,6 +439,12 @@ const (
 	//
 	// Disable the admit function to avoid reject pod.
 	DisableRejectPod utilfeature.Feature = "DisableRejectPod"
+
+	// owner: @zhongyuan.zxy (zhongyuan.zxy@alibaba-inc.com)
+	// alpha: v1.12
+	//
+	// Filter the sidecar containers when calculate pod's QoS class
+	PodLevelResourceQuota utilfeature.Feature = "PodLevelResourceQuota"
 )
 
 func init() {
@@ -515,6 +521,7 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	DisableChangePodStatusByNodeReadyCondition:  {Default: true, PreRelease: utilfeature.Beta},
 	DefaultHashVersionTo110:                     {Default: false, PreRelease: utilfeature.Alpha},
 	DisableRejectPod:                            {Default: false, PreRelease: utilfeature.Alpha},
+	PodLevelResourceQuota:                       {Default: false, PreRelease: utilfeature.Alpha},
 
 	// inherited features from generic apiserver, relisted here to get a conflict if it is changed
 	// unintentionally on either side:

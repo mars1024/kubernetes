@@ -57,4 +57,7 @@ const (
 
 	// pod group of pod
 	LabelPodGroupName = "scheduling.sigma.ali/pod-group-name"
+
+	// If true, the pod belongs to pod.
+	LabelPodIsJob = "sigma.ali/job"
 )

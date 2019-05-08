@@ -12,13 +12,13 @@ const (
 	AKEApiServiceAddrAnn = "apiservice.cafe.sofastack.io/address"
 )
 
-func parseAKEApiService(serverAddr string) (string, string, error) {
+func parseAKEApiService(serverAddr string) (string, string, string, error) {
 	if !strings.HasPrefix(serverAddr, "https://") && !strings.HasPrefix(serverAddr, "http://") {
 		serverAddr = "https://" + serverAddr
 	}
 	serverUrl, err := url.Parse(serverAddr)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
-	return serverUrl.Host, serverUrl.Hostname(), nil
+	return serverUrl.Scheme, serverUrl.Host, serverUrl.Hostname(), nil
 }

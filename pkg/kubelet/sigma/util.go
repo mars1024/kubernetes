@@ -62,3 +62,16 @@ func IsPodDockerVMMode(pod *v1.Pod) bool {
 
 	return pod.Labels[sigmak8sapi.LabelServerType] == sigmak8sapi.PodLabelDockerVM
 }
+
+// IsPodJob can judge pod is a job or not.
+func IsPodJob(pod *v1.Pod) bool {
+	if pod == nil || len(pod.Labels) == 0 {
+		return false
+	}
+
+	if pod.Labels[sigmak8sapi.LabelPodIsJob] == "true" {
+		return true
+	}
+
+	return false
+}

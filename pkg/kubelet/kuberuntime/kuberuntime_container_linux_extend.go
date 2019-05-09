@@ -47,10 +47,10 @@ func applyExtendContainerConfig(pod *v1.Pod, container *v1.Container, config *ru
 // applyDiskQuota can set diskQuota in containerConfig.
 // Resources field of containerConfig should not be nil.
 func applyDiskQuota(pod *v1.Pod, container *v1.Container, imageStatus *runtimeapi.Image, lc *runtimeapi.LinuxContainerConfig) error {
-	// Set "/" quota as the size of ephemeral storage in requests.
-	requestEphemeralStorage, requestESExists := container.Resources.Requests[v1.ResourceEphemeralStorage]
-	if !requestESExists || requestEphemeralStorage.IsZero() {
-		glog.V(4).Infof("request requestEphemeralStorage is not defined in pod: %q, ignore to setup diskquota", format.Pod(pod))
+	// Set "/" quota as the size of ephemeral storage in limits.
+	limitEphemeralStorage, limitESExists := container.Resources.Limits[v1.ResourceEphemeralStorage]
+	if !limitESExists || limitEphemeralStorage.IsZero() {
+		glog.V(4).Infof("limitEphemeralStorage is not defined in pod: %q, ignore to setup diskquota", format.Pod(pod))
 		return nil
 	}
 
@@ -106,10 +106,10 @@ func applyDiskQuota(pod *v1.Pod, container *v1.Container, imageStatus *runtimeap
 			diskQuotaKey = diskQuotaKey + "&" + path
 		}
 
-		lc.Resources.DiskQuota[diskQuotaKey] = getDiskSize(requestEphemeralStorage.String())
+		lc.Resources.DiskQuota[diskQuotaKey] = getDiskSize(limitEphemeralStorage.String())
 	} else {
 		// Set DiskQuota in the format such as "/=10g" if DiskQuotaMode is "/".
-		lc.Resources.DiskQuota[string(diskQuotaMode)] = getDiskSize(requestEphemeralStorage.String())
+		lc.Resources.DiskQuota[string(diskQuotaMode)] = getDiskSize(limitEphemeralStorage.String())
 	}
 
 	glog.V(0).Infof("Set ResourceQuota with %v for container %s in pod %s", lc.Resources.DiskQuota, container.Name, format.Pod(pod))

@@ -54,6 +54,11 @@ type Manager interface {
 	// and inactive device plugin resources previously registered on the node.
 	GetCapacity() (v1.ResourceList, v1.ResourceList, []string)
 	GetWatcherHandler() watcher.PluginHandler
+
+	// ShouldResetExtendedResourceCapacity returns whether the extended resources should be reset or not,
+	// depending on the checkpoint file availability. Absence of the checkpoint file strongly indicates
+	// the node has been recreated.
+	ShouldResetExtendedResourceCapacity() bool
 }
 
 // DeviceRunContainerOptions contains the combined container runtime settings to consume its allocated devices.

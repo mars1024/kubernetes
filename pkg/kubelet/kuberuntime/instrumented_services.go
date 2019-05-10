@@ -185,11 +185,11 @@ func (in instrumentedRuntimeService) RunPodSandbox(config *runtimeapi.PodSandbox
 	return out, err
 }
 
-func (in instrumentedRuntimeService) StartPodSandbox(podSandboxID string) error {
+func (in instrumentedRuntimeService) StartPodSandbox(podSandboxID string, config *runtimeapi.PodSandboxConfig) error {
 	const operation = "start_podsandbox"
 	defer recordOperation(operation, time.Now())
 
-	err := in.service.StartPodSandbox(podSandboxID)
+	err := in.service.StartPodSandbox(podSandboxID, config)
 	recordError(operation, err)
 	return err
 }

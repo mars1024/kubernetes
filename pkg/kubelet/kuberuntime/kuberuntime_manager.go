@@ -987,7 +987,14 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 			glog.Warningf("Stop sandbox %s failed: %v", podSandboxID, err)
 		}
 
-		if err := m.runtimeService.StartPodSandbox(podSandboxID); err != nil {
+		podSandboxConfig, err := m.generatePodSandboxConfig(pod, podContainerChanges.Attempt)
+		if err != nil {
+			message := fmt.Sprintf("GeneratePodSandboxConfig for pod %q for restart failed: %v", format.Pod(pod), err)
+			glog.Error(message)
+			return
+		}
+
+		if err := m.runtimeService.StartPodSandbox(podSandboxID, podSandboxConfig); err != nil {
 			glog.Errorf("Failed to start sandbox %s", podSandboxID)
 			result.Fail(err)
 			return

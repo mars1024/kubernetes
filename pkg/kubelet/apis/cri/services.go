@@ -70,7 +70,7 @@ type PodSandboxManager interface {
 	RunPodSandbox(config *runtimeapi.PodSandboxConfig, runtimeHandler string) (string, error)
 	// StartPodSandbox Start a sandbox pod which was forced to stop by external factors.
 	// Network plugin returns same IPs when input same pod names and namespaces
-	StartPodSandbox(podSandboxID string) error
+	StartPodSandbox(podSandboxID string, config *runtimeapi.PodSandboxConfig) error
 	// StopPodSandbox stops the sandbox. If there are any running containers in the
 	// sandbox, they should be force terminated.
 	StopPodSandbox(podSandboxID string) error

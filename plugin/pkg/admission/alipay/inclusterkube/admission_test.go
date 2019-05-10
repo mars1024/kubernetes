@@ -128,7 +128,7 @@ func TestAdmit(t *testing.T) {
 			},
 			validate: func(pod *core.Pod) {
 				assert.Equal(t, pod.Spec.DNSConfig,
-					&core.PodDNSConfig{Searches: []string{"default.svc.eu95.alipay.net", "svc.eu95.alipay.net"}})
+					&core.PodDNSConfig{Searches: []string{"default.svc.eu95.alipay.net", "svc.eu95.alipay.net", "eu95.alipay.net"}})
 			},
 		},
 		{
@@ -145,7 +145,7 @@ func TestAdmit(t *testing.T) {
 			},
 			validate: func(pod *core.Pod) {
 				assert.Equal(t, pod.Spec.DNSConfig,
-					&core.PodDNSConfig{Searches: []string{"stable.alipay.net", "default.svc.eu95.alipay.net", "svc.eu95.alipay.net"}})
+					&core.PodDNSConfig{Searches: []string{"stable.alipay.net", "default.svc.eu95.alipay.net", "svc.eu95.alipay.net", "eu95.alipay.net"}})
 			},
 		},
 		{

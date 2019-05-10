@@ -22,6 +22,7 @@ import (
 	"k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/apiserver/pkg/storage/etcd"
+	kapierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	quotalister "gitlab.alipay-inc.com/antcloud-aks/cafe-cluster-operator/pkg/client/listers_generated/cluster/v1alpha1"
 	clusterapi "gitlab.alipay-inc.com/antcloud-aks/cafe-cluster-operator/pkg/apis/cluster/v1alpha1"
@@ -135,6 +136,9 @@ func (e *clusterQuotaAccessor) checkCache(clusterQuota *clusterapi.ClusterResour
 func (e *clusterQuotaAccessor) GetQuotas(cluster, namespace string) ([]v1.ResourceQuota, error) {
 	clusterQuota, err := e.clusterQuotaLister.Get(cluster)
 	if err != nil {
+		if kapierrors.IsNotFound(err) {
+			return []v1.ResourceQuota{}, nil
+		}
 		return nil, err
 	}
 

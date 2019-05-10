@@ -76,7 +76,10 @@ func (r *ObjectMetaReconcile) Admit(a admission.Attributes) error {
 		if existsInOldObject {
 			annotations[key] = oldAccessor.GetAnnotations()[key]
 		} else {
-			delete(annotations, key)
+			// Hack: disable aks.cafe.sofastack.io/mc reconcile for data rectification
+			if key != multitenancy.AnnotationCafeMinionClusterID {
+				delete(annotations, key)
+			}
 		}
 	}
 	accessor.SetAnnotations(annotations)

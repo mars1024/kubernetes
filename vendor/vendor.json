@@ -867,10 +867,10 @@
 			"revisionTime": "2019-01-29T09:47:17Z"
 		},
 		{
-			"checksumSHA1": "l8nvd8jhX90SsyN5irXf7m5ncKU=",
+			"checksumSHA1": "PNsEU2DNw5TGaLHpObtbAI7efOQ=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/cafe-kubernetes-extension/plugin/admission/objectmetareconcile",
-			"revision": "83f9e301ccf1866c7bd35b51b67b0ac3f8f46dd7",
-			"revisionTime": "2019-04-12T08:16:38Z"
+			"revision": "a1670d3f133145f11dd758b9cea9d85e24aac136",
+			"revisionTime": "2019-05-10T07:21:44Z"
 		},
 		{
 			"checksumSHA1": "Vx2aVy62r33XB72O/IqPwUt31W8=",

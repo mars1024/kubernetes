@@ -173,7 +173,8 @@ func (i *AlipayInClusterKubernetes) HandleInClusterDNSSearchDomain(pod *core.Pod
 	glog.V(4).Infof("inject dns search domain for pod %s/%s", ns, pod.Name)
 	pod.Spec.DNSConfig.Searches = append(pod.Spec.DNSConfig.Searches,
 		fmt.Sprintf("%s.svc.%s", ns, i.clusterDomain),
-		fmt.Sprintf("svc.%s", i.clusterDomain))
+		fmt.Sprintf("svc.%s", i.clusterDomain),
+		i.clusterDomain)
 }
 
 func shouldIgnore(attributes admission.Attributes) bool {

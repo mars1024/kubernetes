@@ -26,6 +26,8 @@ import (
 	"strings"
 	"testing"
 
+	"gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
+
 	"github.com/golang/glog"
 
 	"k8s.io/kubernetes/pkg/util/slice"
@@ -172,6 +174,10 @@ func TestGetDiskInfo(t *testing.T) {
 
 		if !slice.ContainsString(foundDfDisk.MountPoints, disk.MountPoint, nil) {
 			t.Errorf("disk %s could not find the mount point from df, cadvisor got %s, df mount points: %v", disk.Device, disk.MountPoint, foundDfDisk.MountPoints)
+		}
+
+		if api.DiskTypeSSD != disk.DiskType {
+			t.Errorf("disk %s is not SSD, if the testing is running on HDD machine, we can treat it PASS", disk.Device)
 		}
 	}
 }

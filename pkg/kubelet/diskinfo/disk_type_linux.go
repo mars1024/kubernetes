@@ -39,8 +39,8 @@ func getDeviceTypes() (map[string]api.DiskType, error) {
 		return nil, err
 	}
 
-	ret := make(map[string]api.DiskType, len(devices))
-	for _, device := range devices {
+	ret := make(map[string]api.DiskType, len(strings.Fields(string(devices))))
+	for _, device := range strings.Fields(string(devices)) {
 		rotationPath := fmt.Sprintf("/sys/block/%s/queue/rotational", string(device))
 		cmd := cmdExecutor.Command("cat", rotationPath)
 		out, err := cmd.CombinedOutput()

@@ -693,14 +693,14 @@
 		{
 			"checksumSHA1": "v/zitCd5dVRDRs8EcPIntP6ANt4=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/cafe-cluster-operator/plugin/admission",
-			"revision": "c4af57d68b26371df38f3e690259b03109390778",
-			"revisionTime": "2019-04-24T08:47:40Z"
+			"revision": "903397efb313795bc13961b47661c1fa5fd74125",
+			"revisionTime": "2019-05-10T04:49:11Z"
 		},
 		{
-			"checksumSHA1": "Vw+1Oy8Yds6x9NWOKoKroJZz9WA=",
+			"checksumSHA1": "p2Z7u+6diOitu2gvIKlmtBCorOc=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/cafe-cluster-operator/plugin/admission/clusterresourcequota",
-			"revision": "c4af57d68b26371df38f3e690259b03109390778",
-			"revisionTime": "2019-04-24T08:47:40Z"
+			"revision": "903397efb313795bc13961b47661c1fa5fd74125",
+			"revisionTime": "2019-05-10T04:49:11Z"
 		},
 		{
 			"checksumSHA1": "4PIYguc3/cPzZ9790sJQS/SCRWc=",

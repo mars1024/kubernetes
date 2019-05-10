@@ -451,6 +451,12 @@ const (
 	//
 	// when generate pod ready, ignore sidecar container ready
 	IgnoreSidecarContainerReady utilfeature.Feature = "IgnoreSidecarContainerReady"
+
+	// owner: @fankang.fk (fankang.fk@alipay.com)
+	// alpha: v1.12
+	//
+	// always try to recreate sandbox even if the restart policy is Never
+	EnsurePodSuccess utilfeature.Feature = "EnsurePodSuccess"
 )
 
 func init() {
@@ -529,6 +535,7 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	DisableRejectPod:                            {Default: false, PreRelease: utilfeature.Alpha},
 	PodLevelResourceQuota:                       {Default: false, PreRelease: utilfeature.Alpha},
 	IgnoreSidecarContainerReady:                 {Default: false, PreRelease: utilfeature.Alpha},
+	EnsurePodSuccess:                            {Default: false, PreRelease: utilfeature.Alpha},
 
 	// inherited features from generic apiserver, relisted here to get a conflict if it is changed
 	// unintentionally on either side:

@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 
 	"github.com/golang/glog"
@@ -36,7 +37,6 @@ import (
 	"k8s.io/apiserver/pkg/endpoints/handlers/responsewriters"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/server/httplog"
-	"reflect"
 )
 
 // WithImpersonation is a filter that will inspect and check requests that attempt to change the user.Info for their requests
@@ -134,6 +134,11 @@ func WithImpersonation(handler http.Handler, a authorizer.Authorizer, s runtime.
 			// When impersonating a non-anonymous user, if no groups were specified
 			// include the system:authenticated group in the impersonated user info
 			groups = append(groups, user.AllAuthenticated)
+		}
+
+		// mark the admin-impersonated users in the groups
+		if (multitenancyutil.IsMultiTenancyWiseAdmin(requestor.GetName()) && reflect.DeepEqual(requestingAdminTenant, multitenancy.GlobalAdminTenant)) || multitenancyutil.IsMultiTenancyWiseTenant(requestingAdminTenant) {
+			groups = append(groups, multitenancy.UserGroupMultiTenancyImpersonated)
 		}
 
 		newUser := &user.DefaultInfo{

@@ -371,44 +371,44 @@
 		{
 			"checksumSHA1": "Ke0gDL/YfT4PqtYYk4c6V0geiro=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/apiextensions-apiserver/pkg/apiserver",
-			"revision": "172c283a12ab076f7168d99adab94f7ce24c549e",
-			"revisionTime": "2019-04-23T12:30:27Z"
+			"revision": "711b7364ff56a8c852d9150c66bd040e7ee7d4df",
+			"revisionTime": "2019-05-13T06:09:05Z"
 		},
 		{
 			"checksumSHA1": "3kToFu3iTxbZJYbFp9Zo/ddQ9i4=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/apiextensions-apiserver/pkg/controller/establish",
-			"revision": "172c283a12ab076f7168d99adab94f7ce24c549e",
-			"revisionTime": "2019-04-23T12:30:27Z"
+			"revision": "711b7364ff56a8c852d9150c66bd040e7ee7d4df",
+			"revisionTime": "2019-05-13T06:09:05Z"
 		},
 		{
 			"checksumSHA1": "BDRHXjRO0IMh4Dkj0xs8eFJkSyM=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/apiextensions-apiserver/pkg/controller/finalizer",
-			"revision": "172c283a12ab076f7168d99adab94f7ce24c549e",
-			"revisionTime": "2019-04-23T12:30:27Z"
+			"revision": "711b7364ff56a8c852d9150c66bd040e7ee7d4df",
+			"revisionTime": "2019-05-13T06:09:05Z"
 		},
 		{
 			"checksumSHA1": "U30Kgke+lE5JpB8zjHwzONjffDE=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/apiextensions-apiserver/pkg/controller/status",
-			"revision": "172c283a12ab076f7168d99adab94f7ce24c549e",
-			"revisionTime": "2019-04-23T12:30:27Z"
+			"revision": "711b7364ff56a8c852d9150c66bd040e7ee7d4df",
+			"revisionTime": "2019-05-13T06:09:05Z"
 		},
 		{
 			"checksumSHA1": "a8kEDggKntk7H6sZyBGSK+Umtv4=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/apiextensions-apiserver/pkg/util",
-			"revision": "172c283a12ab076f7168d99adab94f7ce24c549e",
-			"revisionTime": "2019-04-23T12:30:27Z"
+			"revision": "711b7364ff56a8c852d9150c66bd040e7ee7d4df",
+			"revisionTime": "2019-05-13T06:09:05Z"
 		},
 		{
 			"checksumSHA1": "/E+PhI6Rybn5tbgf6njUiIUFzn4=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/controller/garbagecollector",
-			"revision": "172c283a12ab076f7168d99adab94f7ce24c549e",
-			"revisionTime": "2019-04-23T12:30:27Z"
+			"revision": "711b7364ff56a8c852d9150c66bd040e7ee7d4df",
+			"revisionTime": "2019-05-13T06:09:05Z"
 		},
 		{
 			"checksumSHA1": "RwmkrvxnRujojdlYlXONgcmxajQ=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/controller/garbagecollector/metaonly",
-			"revision": "172c283a12ab076f7168d99adab94f7ce24c549e",
-			"revisionTime": "2019-04-23T12:30:27Z"
+			"revision": "711b7364ff56a8c852d9150c66bd040e7ee7d4df",
+			"revisionTime": "2019-05-13T06:09:05Z"
 		},
 		{
 			"checksumSHA1": "4E2UMKKkL2i7Yg2Drk+WPyzduro=",
@@ -425,56 +425,56 @@
 		{
 			"checksumSHA1": "8P6UcmFQcMh5zb0lk/1pF/WmOoo=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/kube-aggregator/pkg/apiserver",
-			"revision": "756a4f56a3b6bbd6e20d97d970b677c20a9e38db",
-			"revisionTime": "2019-04-30T08:20:32Z"
+			"revision": "711b7364ff56a8c852d9150c66bd040e7ee7d4df",
+			"revisionTime": "2019-05-13T06:09:05Z"
 		},
 		{
 			"checksumSHA1": "+SIf/DKZujvrNo1GkMtzbY1VuYk=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/controller/nodelifecycle/scheduler",
-			"revision": "f6b0cc0da827d843bddd29eb0c91d029650e9ee0",
-			"revisionTime": "2019-04-11T12:12:44Z"
+			"revision": "711b7364ff56a8c852d9150c66bd040e7ee7d4df",
+			"revisionTime": "2019-05-13T06:09:05Z"
 		},
 		{
 			"checksumSHA1": "8P6UcmFQcMh5zb0lk/1pF/WmOoo=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/kube-aggregator/pkg/apiserver",
-			"revision": "756a4f56a3b6bbd6e20d97d970b677c20a9e38db",
-			"revisionTime": "2019-04-30T08:20:32Z"
+			"revision": "711b7364ff56a8c852d9150c66bd040e7ee7d4df",
+			"revisionTime": "2019-05-13T06:09:05Z"
 		},
 		{
 			"checksumSHA1": "K8+G1V4leN1kbadl/4a+4gNoQGo=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/kube-aggregator/pkg/controllers",
-			"revision": "756a4f56a3b6bbd6e20d97d970b677c20a9e38db",
-			"revisionTime": "2019-04-30T08:20:32Z"
+			"revision": "711b7364ff56a8c852d9150c66bd040e7ee7d4df",
+			"revisionTime": "2019-05-13T06:09:05Z"
 		},
 		{
 			"checksumSHA1": "waHv9H1VcASZXQgvFpShdpfx1XE=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/kube-aggregator/pkg/controllers/autoregister",
-			"revision": "756a4f56a3b6bbd6e20d97d970b677c20a9e38db",
-			"revisionTime": "2019-04-30T08:20:32Z"
+			"revision": "711b7364ff56a8c852d9150c66bd040e7ee7d4df",
+			"revisionTime": "2019-05-13T06:09:05Z"
 		},
 		{
 			"checksumSHA1": "J7x5x/FaVloY/iit22e2IpmDKTo=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/kube-aggregator/pkg/controllers/openapi",
-			"revision": "756a4f56a3b6bbd6e20d97d970b677c20a9e38db",
-			"revisionTime": "2019-04-30T08:20:32Z"
+			"revision": "711b7364ff56a8c852d9150c66bd040e7ee7d4df",
+			"revisionTime": "2019-05-13T06:09:05Z"
 		},
 		{
 			"checksumSHA1": "YBBjgVwtUrl57xfRRYY8HJvfBoU=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/kube-aggregator/pkg/controllers/status",
-			"revision": "756a4f56a3b6bbd6e20d97d970b677c20a9e38db",
-			"revisionTime": "2019-04-30T08:20:32Z"
+			"revision": "711b7364ff56a8c852d9150c66bd040e7ee7d4df",
+			"revisionTime": "2019-05-13T06:09:05Z"
 		},
 		{
 			"checksumSHA1": "e4sEHsguP2Tu/jcYcrDENBaOrq4=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/master/controller/crdregistration",
-			"revision": "172c283a12ab076f7168d99adab94f7ce24c549e",
-			"revisionTime": "2019-04-23T12:30:27Z"
+			"revision": "711b7364ff56a8c852d9150c66bd040e7ee7d4df",
+			"revisionTime": "2019-05-13T06:09:05Z"
 		},
 		{
-			"checksumSHA1": "bAmzUZ/jbvTzCsCSFIvMFAwVIEI=",
+			"checksumSHA1": "hkO8I5xZeSGRCYMfJEAlL+CDkks=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy",
-			"revision": "172c283a12ab076f7168d99adab94f7ce24c549e",
-			"revisionTime": "2019-04-23T12:30:27Z"
+			"revision": "711b7364ff56a8c852d9150c66bd040e7ee7d4df",
+			"revisionTime": "2019-05-13T06:09:05Z"
 		},
 		{
 			"checksumSHA1": "RTGPVontgcKA9IRTmFeBeVgI96g=",
@@ -485,8 +485,8 @@
 		{
 			"checksumSHA1": "Xq8EkboE7ql49/ct42PCvj1lKng=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/admission/multitenancyrestriction",
-			"revision": "f6b0cc0da827d843bddd29eb0c91d029650e9ee0",
-			"revisionTime": "2019-04-11T12:12:44Z"
+			"revision": "711b7364ff56a8c852d9150c66bd040e7ee7d4df",
+			"revisionTime": "2019-05-13T06:09:05Z"
 		},
 		{
 			"checksumSHA1": "wU3VKYfpxK5GjPqykpsz5p5W/Ig=",
@@ -497,68 +497,68 @@
 		{
 			"checksumSHA1": "JOLvhyNxEVjAghSOKSw5zn6Tezs=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/auth/authorizer/bypassadmin",
-			"revision": "172c283a12ab076f7168d99adab94f7ce24c549e",
-			"revisionTime": "2019-04-23T12:30:27Z"
+			"revision": "711b7364ff56a8c852d9150c66bd040e7ee7d4df",
+			"revisionTime": "2019-05-13T06:09:05Z"
 		},
 		{
 			"checksumSHA1": "JOLvhyNxEVjAghSOKSw5zn6Tezs=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/auth/authorizer/bypassadmin",
-			"revision": "f6b0cc0da827d843bddd29eb0c91d029650e9ee0",
-			"revisionTime": "2019-04-11T12:12:44Z"
+			"revision": "711b7364ff56a8c852d9150c66bd040e7ee7d4df",
+			"revisionTime": "2019-05-13T06:09:05Z"
 		},
 		{
 			"checksumSHA1": "ZSLrtsjhGi2ZHC54fyIOm/52TpM=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/cache",
-			"revision": "172c283a12ab076f7168d99adab94f7ce24c549e",
-			"revisionTime": "2019-04-23T12:30:27Z"
+			"revision": "711b7364ff56a8c852d9150c66bd040e7ee7d4df",
+			"revisionTime": "2019-05-13T06:09:05Z"
 		},
 		{
 			"checksumSHA1": "Pom3qp3L5RbZfP2W8lVP2ZvX5Tk=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/copy",
-			"revision": "172c283a12ab076f7168d99adab94f7ce24c549e",
-			"revisionTime": "2019-04-23T12:30:27Z"
+			"revision": "711b7364ff56a8c852d9150c66bd040e7ee7d4df",
+			"revisionTime": "2019-05-13T06:09:05Z"
 		},
 		{
-			"checksumSHA1": "47AJvJpMz1M3Q4FAkGnf5TcRjbA=",
+			"checksumSHA1": "82ss0ZZ/gHcR+ka4/IjJj6WO0Zc=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/filter",
-			"revision": "172c283a12ab076f7168d99adab94f7ce24c549e",
-			"revisionTime": "2019-04-23T12:30:27Z"
+			"revision": "ae12c0a593c509008b4f6eedc7f0b123d8e9802e",
+			"revisionTime": "2019-05-13T09:08:02Z"
 		},
 		{
 			"checksumSHA1": "M4+Cjj1jiQ/BVcau39uWqVykl7Q=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/meta",
-			"revision": "172c283a12ab076f7168d99adab94f7ce24c549e",
-			"revisionTime": "2019-04-23T12:30:27Z"
+			"revision": "711b7364ff56a8c852d9150c66bd040e7ee7d4df",
+			"revisionTime": "2019-05-13T06:09:05Z"
 		},
 		{
 			"checksumSHA1": "AqLqSAouAXeGBZs8iG/0FOK2omo=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/registry",
-			"revision": "172c283a12ab076f7168d99adab94f7ce24c549e",
-			"revisionTime": "2019-04-23T12:30:27Z"
+			"revision": "711b7364ff56a8c852d9150c66bd040e7ee7d4df",
+			"revisionTime": "2019-05-13T06:09:05Z"
 		},
 		{
 			"checksumSHA1": "Q/1bemkWH3AIKd37RsN+up1749k=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/resolver",
-			"revision": "172c283a12ab076f7168d99adab94f7ce24c549e",
-			"revisionTime": "2019-04-23T12:30:27Z"
+			"revision": "711b7364ff56a8c852d9150c66bd040e7ee7d4df",
+			"revisionTime": "2019-05-13T06:09:05Z"
 		},
 		{
 			"checksumSHA1": "mNkYz9vpQWbb1BgbRhZx7zNfkN0=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/serviceaccount",
-			"revision": "172c283a12ab076f7168d99adab94f7ce24c549e",
-			"revisionTime": "2019-04-23T12:30:27Z"
+			"revision": "711b7364ff56a8c852d9150c66bd040e7ee7d4df",
+			"revisionTime": "2019-05-13T06:09:05Z"
 		},
 		{
 			"checksumSHA1": "fKkSEtzsgiV3WCZYmJ8HhzvHFBA=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/transport",
-			"revision": "172c283a12ab076f7168d99adab94f7ce24c549e",
-			"revisionTime": "2019-04-23T12:30:27Z"
+			"revision": "711b7364ff56a8c852d9150c66bd040e7ee7d4df",
+			"revisionTime": "2019-05-13T06:09:05Z"
 		},
 		{
 			"checksumSHA1": "hXJXJn6bGOST9UcHFp8v5+snq8o=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util",
-			"revision": "172c283a12ab076f7168d99adab94f7ce24c549e",
-			"revisionTime": "2019-04-23T12:30:27Z"
+			"revision": "711b7364ff56a8c852d9150c66bd040e7ee7d4df",
+			"revisionTime": "2019-05-13T06:09:05Z"
 		},
 		{
 			"checksumSHA1": "Ln2YWDwyIR6iZB7Mhgj0X9IibpU=",

@@ -12,6 +12,10 @@ const (
 )
 
 const (
+	UserGroupMultiTenancyImpersonated = "multitenancy:impersonated"
+)
+
+const (
 	GlobalAdminTenantNamePrefix = "admin::"
 
 	//Deprecated

@@ -533,6 +533,7 @@ func DefaultBuildHandlerChain(apiHandler http.Handler, c *Config) http.Handler {
 	handler := genericapifilters.WithAuthorization(apiHandler, c.Authorization.Authorizer, c.Serializer)
 	handler = genericfilters.WithMaxInFlightLimit(handler, c.MaxRequestsInFlight, c.MaxMutatingRequestsInFlight, c.LongRunningFunc)
 	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		handler = multitenancyfilter.WithResourceWhiteList(handler)
 		handler = multitenancyfilter.WithImpersonation(handler, c.Authorization.Authorizer, c.Serializer)
 	} else {
 		handler = genericapifilters.WithImpersonation(handler, c.Authorization.Authorizer, c.Serializer)

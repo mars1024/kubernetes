@@ -145,7 +145,7 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][inplace-update][Serial]", func() 
 		podMemory1 := allocatableMemory * 5 / 10
 		podDisk1 := allocatableDisk * 5 / 10
 
-		podCPU2 := allocatableCPU * 75 / 100
+		podCPU2 := ((allocatableCPU * 75 / 100) / 1000) * 1000
 		podMemory2 := allocatableMemory * 75 / 100
 		podDisk2 := allocatableDisk * 75 / 100
 
@@ -203,9 +203,9 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][inplace-update][Serial]", func() 
 		podsToDelete = append(podsToDelete, pod)
 		Expect(err).NotTo(HaveOccurred())
 
-		doUpdateWithNewResource(cs, pod, resourceRequirements2)
-		doUpdateWithNewResource(cs, pod, resourceRequirements3)
-		doUpdateWithNewResource(cs, pod, resourceRequirements1)
+		doUpdateWithNewResource(cs, pod, resourceRequirements2, true)
+		doUpdateWithNewResource(cs, pod, resourceRequirements3, true)
+		doUpdateWithNewResource(cs, pod, resourceRequirements1, true)
 
 		name = "inplace-update-" + string(uuid.NewUUID()) + "-2"
 		pod2 := createPausePod(f, pausePodConfig{
@@ -231,9 +231,85 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][inplace-update][Serial]", func() 
 			Expect(err).NotTo(HaveOccurred(), "delete pod should succeed")
 		}
 	})
+
+	It("[smoke][p0][bvt][ant] scheduler_inplace_update_002 inplace update with a huge resource will be failed.", func() {
+		nodeName := GetNodeThatCanRunPod(f)
+		framework.Logf("get one node to schedule, nodeName: %s", nodeName)
+
+		// Apply node label to each node
+		nodeAffinityKey := "node-for-resource-e2e-test-" + string(uuid.NewUUID())
+		framework.AddOrUpdateLabelOnNode(cs, nodeName, nodeAffinityKey, nodeName)
+		framework.ExpectNodeHasLabel(cs, nodeName, nodeAffinityKey, nodeName)
+		defer framework.RemoveLabelOffNode(cs, nodeName, nodeAffinityKey)
+
+		allocatableCPU := nodeToAllocatableMapCPU[nodeName]
+		allocatableMemory := nodeToAllocatableMapMem[nodeName]
+		allocatableDisk := nodeToAllocatableMapEphemeralStorage[nodeName]
+
+		podCPU1 := allocatableCPU * 5 / 10
+		podMemory1 := allocatableMemory * 5 / 10
+		podDisk1 := allocatableDisk * 5 / 10
+
+		// Request a huge resource.
+		podCPUHuge := allocatableCPU * 2
+		podMemoryHuge := allocatableMemory * 2
+		podDiskHuge := allocatableDisk * 2
+
+		By("Request a pod with CPU/Memory/EphemeralStorage.")
+		podsToDelete := []*v1.Pod{}
+		resourceList1 := v1.ResourceList{
+			v1.ResourceCPU:              *resource.NewMilliQuantity(podCPU1, resource.DecimalSI),
+			v1.ResourceMemory:           *resource.NewQuantity(podMemory1, resource.BinarySI),
+			v1.ResourceEphemeralStorage: *resource.NewQuantity(podDisk1, resource.BinarySI),
+		}
+
+		// 50% node resource
+		resourceRequirements1 := v1.ResourceRequirements{
+			Limits:   resourceList1,
+			Requests: resourceList1,
+		}
+
+		resourceListHuge := v1.ResourceList{
+			v1.ResourceCPU:              *resource.NewMilliQuantity(podCPUHuge, resource.DecimalSI),
+			v1.ResourceMemory:           *resource.NewQuantity(podMemoryHuge, resource.BinarySI),
+			v1.ResourceEphemeralStorage: *resource.NewQuantity(podDiskHuge, resource.BinarySI),
+		}
+
+		resourceRequirementsHuge := v1.ResourceRequirements{
+			Limits:   resourceListHuge,
+			Requests: resourceListHuge,
+		}
+
+		name := "inplace-update-" + string(uuid.NewUUID()) + "-1"
+		pod := createPausePod(f, pausePodConfig{
+			Name:      name,
+			Resources: &resourceRequirements1,
+			Annotations: map[string]string{
+				sigmak8sapi.AnnotationPodAllocSpec: formatAllocSpecStringWithSpreadStrategy(
+					name, sigmak8sapi.SpreadStrategySameCoreFirst),
+			},
+			Affinity: util.GetAffinityNodeSelectorRequirement(nodeAffinityKey, []string{nodeName}),
+		})
+
+		framework.Logf("expect pod-1 to be scheduled successfully.")
+		err := framework.WaitTimeoutForPodRunningInNamespace(cs, pod.Name, pod.Namespace, waitForPodRunningTimeout)
+		podsToDelete = append(podsToDelete, pod)
+		Expect(err).NotTo(HaveOccurred())
+
+		doUpdateWithNewResource(cs, pod, resourceRequirementsHuge, false)
+
+		for _, pod := range podsToDelete {
+			if pod == nil {
+				continue
+			}
+			err := util.DeletePod(f.ClientSet, pod)
+			Expect(err).NotTo(HaveOccurred(), "delete pod should succeed")
+		}
+	})
 })
 
-func doUpdateWithNewResource(client clientset.Interface, pod *v1.Pod, resource v1.ResourceRequirements) {
+func doUpdateWithNewResource(client clientset.Interface, pod *v1.Pod,
+	resource v1.ResourceRequirements, expectedResult bool) {
 	pod, err := client.CoreV1().Pods(pod.Namespace).Get(pod.Name, metav1.GetOptions{})
 	if err != nil {
 		Expect(err).NotTo(HaveOccurred(), "get scheduled pod should succeed")
@@ -255,8 +331,15 @@ func doUpdateWithNewResource(client clientset.Interface, pod *v1.Pod, resource v
 		Expect(err).NotTo(HaveOccurred(), "update pod should succeed")
 	}
 
-	err = wait.PollImmediate(5*time.Second, 5*time.Minute, checkInplaceUpdateIsAccepted(client, pod))
-	Expect(err).NotTo(HaveOccurred(), "inplace update should succeed")
+	if expectedResult {
+		err = wait.PollImmediate(5*time.Second, 5*time.Minute, checkInplaceUpdateIsAccepted(client, pod))
+		Expect(err).NotTo(HaveOccurred(), "inplace update should succeed")
+		return
+	}
+
+	err = wait.PollImmediate(5*time.Second, 5*time.Minute, checkInplaceUpdateIsFailed(client, pod))
+	Expect(err).NotTo(HaveOccurred(), "inplace update should failed")
+
 }
 
 func checkInplaceUpdateIsAccepted(client clientset.Interface, pod *v1.Pod) wait.ConditionFunc {
@@ -295,6 +378,27 @@ func checkInplaceUpdateIsAccepted(client clientset.Interface, pod *v1.Pod) wait.
 		}
 
 		framework.Logf("checkInplaceUpdateIsAccepted, state: %s", state)
+		return true, nil
+	}
+}
+
+func checkInplaceUpdateIsFailed(client clientset.Interface, pod *v1.Pod) wait.ConditionFunc {
+	return func() (bool, error) {
+		pod, err := client.CoreV1().Pods(pod.Namespace).Get(pod.Name, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+
+		state, ok := pod.Annotations[sigmak8sapi.AnnotationPodInplaceUpdateState]
+		if !ok {
+			return false, nil
+		}
+
+		if state != sigmak8sapi.InplaceUpdateStateFailed {
+			framework.Logf("checkInplaceUpdateIsFailed, state: %s", state)
+			return false, nil
+		}
+
 		return true, nil
 	}
 }

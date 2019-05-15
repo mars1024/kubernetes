@@ -81,12 +81,6 @@ func (l *Lifecycle) Admit(a admission.Attributes) error {
 		return errors.NewForbidden(a.GetResource().GroupResource(), a.GetName(), fmt.Errorf("this namespace may not be deleted"))
 	}
 
-	// TODO(zuoxiu.jm): Events creation is constantly failed by this controller so we trim it and leave the immortal
-	// namespace protection part.
-	if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
-		return nil
-	}
-
 	// always allow non-namespaced resources
 	if len(a.GetNamespace()) == 0 && a.GetKind().GroupKind() != v1.SchemeGroupVersion.WithKind("Namespace").GroupKind() {
 		return nil

@@ -212,6 +212,7 @@ func (c completedConfig) NewWithDelegate(delegationTarget genericapiserver.Deleg
 	if len(os.Getenv(AggregationEnableCafeExtension)) > 0 {
 		s.GenericAPIServer.Handler.NonGoRestfulMux.UnlistedHandlePrefix("/apis/apps.cafe.cloud.alipay.com/", cafeExtensionProxyHandler)
 		s.GenericAPIServer.Handler.NonGoRestfulMux.UnlistedHandlePrefix("/apis/cluster.cafe.cloud.alipay.com/", cafeExtensionProxyHandler)
+		s.GenericAPIServer.Handler.NonGoRestfulMux.UnlistedHandlePrefix("/apis/serverless.cafe.cloud.alipay.com/", cafeExtensionProxyHandler)
 	}
 	if len(os.Getenv(AggregationEnableCafeCluster)) > 0 {
 		s.GenericAPIServer.Handler.NonGoRestfulMux.UnlistedHandlePrefix("/apis/cluster.aks.cafe.sofastack.io/", cafeClusterProxyHandler)

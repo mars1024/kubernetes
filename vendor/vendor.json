@@ -435,10 +435,10 @@
 			"revisionTime": "2019-05-13T06:09:05Z"
 		},
 		{
-			"checksumSHA1": "8P6UcmFQcMh5zb0lk/1pF/WmOoo=",
+			"checksumSHA1": "dna1jJ/zd5XOS5uJLti88775+Ng=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/kube-aggregator/pkg/apiserver",
-			"revision": "711b7364ff56a8c852d9150c66bd040e7ee7d4df",
-			"revisionTime": "2019-05-13T06:09:05Z"
+			"revision": "ece72ca057297589e972ef59221dd47c70cacfa8",
+			"revisionTime": "2019-05-15T14:09:15Z"
 		},
 		{
 			"checksumSHA1": "K8+G1V4leN1kbadl/4a+4gNoQGo=",

@@ -503,9 +503,9 @@ func (sched *Scheduler) scheduleOne() {
 				}
 				if err := sched.config.SchedulerCache.ForgetPod(assumedPod); err != nil {
 					glog.Errorf("[Inplace Update Pod] scheduler cache ForgetPod failed: %v", err)
+					sched.config.Error(assumedPod, err)
+					sched.config.Recorder.Eventf(assumedPod, v1.EventTypeWarning, "FailedInplaceUpdate", "[Inplace Update Pod] Binding rejected: %v", err)
 				}
-				sched.config.Error(assumedPod, err)
-				sched.config.Recorder.Eventf(assumedPod, v1.EventTypeWarning, "FailedScheduling", "[Inplace Update Pod] Binding rejected: %v", err)
 			}()
 
 			// Set inplace update state to "accepted".

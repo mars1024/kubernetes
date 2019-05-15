@@ -90,18 +90,21 @@ func (ge *GenericSchedulerExtend) inplaceUpdateReallocate(pod *v1.Pod) (string, 
 	if isAssumed, _ := ge.cache.IsAssumedPod(pod); isAssumed {
 		err = ge.cache.ForgetPod(pod)
 	} else {
-		err = ge.cache.RemovePod(pod)
+		ge.cache.RemovePod(pod)
 	}
 	if err != nil {
-		glog.Errorf("failed to remove pod %s/%s from cache", pod.Namespace, pod.Name)
+		glog.Errorf("[inplaceUpdateReallocate]failed to forget/remove pod %s/%s from cache: %s", pod.Namespace, pod.Name, err.Error())
 		return "", err
 	}
 
 	// Call PodFitsResources to check resources.
 	if fit, predicateFails, _ := predicates.PodCPUSetResourceFit(pod, nil, nodeInfo); !fit {
-		return "", fmt.Errorf("failed to fit resource in inplace update processing with predicateFails: %+v", predicateFails)
+		return "", fmt.Errorf("failed to fit resource[PodCPUSetResourceFit] in inplace update processing with predicateFails: %+v", predicateFails)
 	}
 
+	if fit, predicateFails, _ := predicates.PodFitsResources(pod, nil, nodeInfo); !fit {
+		return "", fmt.Errorf("failed to fit resource[PodFitsResources] in inplace update processing with predicateFails: %+v", predicateFails)
+	}
 	// If CPU value is not changed, return immediately.
 	if !util.IsCPUResourceChanged(lastSpec, &pod.Spec) {
 		glog.V(4).Infof("CPU resource not changed or this is a cpushare request, return immediately")

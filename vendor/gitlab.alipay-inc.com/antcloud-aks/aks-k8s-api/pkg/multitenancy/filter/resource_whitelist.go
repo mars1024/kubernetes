@@ -53,6 +53,9 @@ var (
 
 		{"rbac.authorization.k8s.io", "clusterroles"},
 		{"rbac.authorization.k8s.io", "clusterrolebindings"},
+
+		{"cafe.sofastack.io", "serviceinstances"},
+		{"cafe.sofastack.io", "servicebindings"},
 	}
 )
 

@@ -9,13 +9,13 @@ import (
 	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	authnuser "k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/endpoints/request"
 )
 
 var (
 	// See complete list/doc at: https://yuque.antfin-inc.com/antcloud-paas/aks/wpc0po
 	AKSSupportedResources = []schema.GroupResource{
-
 		// namespace-scoped
 		{"", "pods"},
 		{"", "services"},
@@ -61,6 +61,18 @@ func WithResourceWhiteList(delegate http.Handler) http.Handler {
 		reqInfo, _ := request.RequestInfoFrom(req.Context())
 		user, _ := request.UserFrom(req.Context())
 		tenant, _ := multitenancyutil.TransformTenantInfoFromUser(user)
+
+		for _, group := range user.GetGroups() {
+			if group == authnuser.NodesGroup {
+				delegate.ServeHTTP(w, req)
+				return
+			}
+		}
+
+		if user.GetName() == authnuser.KubeProxy {
+			delegate.ServeHTTP(w, req)
+			return
+		}
 
 		// non-resource requests are always allowed, such as discovery
 		if !reqInfo.IsResourceRequest {

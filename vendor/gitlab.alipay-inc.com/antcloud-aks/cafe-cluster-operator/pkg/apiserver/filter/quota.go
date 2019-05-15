@@ -1,12 +1,14 @@
 package filter
 
 import (
+	"context"
 	"sync"
+	"time"
+
+	"github.com/golang/glog"
+
 	cluster "gitlab.alipay-inc.com/antcloud-aks/cafe-cluster-operator/pkg/apis/cluster/v1alpha1"
 	"gitlab.alipay-inc.com/antcloud-aks/cafe-cluster-operator/pkg/apiserver/filter/metrics"
-	"context"
-	"github.com/golang/glog"
-	"time"
 )
 
 type quotaTracker struct {
@@ -57,6 +59,9 @@ func (c *quotaTracker) GetReservedQuota(bkt *cluster.Bucket) (quotaReleaseFunc f
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	bktName := bkt.Name
+
+	metrics.MonitorRemainingReservedQuota("reserved", bktName, bkt.Spec.Priority, c.remainingReservedQuota[bktName])
+
 	if c.remainingReservedQuota[bktName] > 0 {
 		c.remainingReservedQuota[bktName]--
 		metrics.MonitorAcquireReservedQuota("reserved", bktName, bkt.Spec.Priority)
@@ -93,6 +98,7 @@ func (c *quotaTracker) GetSharedQuota(bkt *cluster.Bucket) (quotaReleaseFunc fun
 	defer c.lock.Unlock()
 	matched := false
 	for i := 0; i < len(cluster.AllPriorities); i++ {
+		metrics.MonitorRemainingReservedQuota("shared", "", cluster.AllPriorities[i], c.remainingSharedQuota[string(cluster.AllPriorities[i])] )
 		if cluster.AllPriorities[i] != bkt.Spec.Priority && !matched {
 			continue
 		}

@@ -583,16 +583,16 @@
 			"revision": ""
 		},
 		{
-			"checksumSHA1": "+A7BekckODaetn+2eDSv2rKigEA=",
+			"checksumSHA1": "VcofqEtUd2u79QosPoq71E5uQaw=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/cafe-cluster-operator/pkg/apiserver/filter",
-			"revision": "c4af57d68b26371df38f3e690259b03109390778",
-			"revisionTime": "2019-04-24T08:47:40Z"
+			"revision": "ff98be090a095c7d13331778cc0d75ef29df7082",
+			"revisionTime": "2019-05-15T12:48:29Z"
 		},
 		{
-			"checksumSHA1": "/uu3uQan2xGShyqVXDts/5vuNNI=",
+			"checksumSHA1": "HqwhSHfUyzic1jhpd3kd6UjvQ/8=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/cafe-cluster-operator/pkg/apiserver/filter/metrics",
-			"revision": "c4af57d68b26371df38f3e690259b03109390778",
-			"revisionTime": "2019-04-24T08:47:40Z"
+			"revision": "ff98be090a095c7d13331778cc0d75ef29df7082",
+			"revisionTime": "2019-05-15T12:48:29Z"
 		},
 		{
 			"checksumSHA1": "ekVisDF9yAtaFx5BirL6DbNQGWQ=",

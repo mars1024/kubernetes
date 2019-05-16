@@ -117,7 +117,7 @@ func TestApplyDiskQuota(t *testing.T) {
 					},
 				},
 			},
-			expectedDiskQuota: map[string]string{".*": "5g"},
+			expectedDiskQuota: map[string]string{"/": "5g"},
 		},
 		"pod has diskquota and the quota mode is '.*'": {
 			pod: &v1.Pod{
@@ -147,7 +147,7 @@ func TestApplyDiskQuota(t *testing.T) {
 					},
 				},
 			},
-			expectedDiskQuota: map[string]string{".*": "5g"},
+			expectedDiskQuota: map[string]string{"/": "5g"},
 		},
 		"pod has diskquota and the quota mode is '/'": {
 			pod: &v1.Pod{
@@ -207,7 +207,7 @@ func TestApplyDiskQuota(t *testing.T) {
 					},
 				},
 			},
-			expectedDiskQuota: map[string]string{".*": "5g"},
+			expectedDiskQuota: map[string]string{"/": "5g"},
 		},
 		"pod has no ResourceEphemeralStorage defined and the quota mode is '.*'": {
 			pod: &v1.Pod{
@@ -260,7 +260,7 @@ func TestApplyDiskQuota(t *testing.T) {
 			},
 		}
 		container := &testCase.pod.Spec.Containers[0]
-		applyDiskQuota(testCase.pod, container, containerConfig.Linux)
+		applyDiskQuota(testCase.pod, container, nil, containerConfig.Linux)
 
 		if len(containerConfig.Linux.Resources.DiskQuota) == 0 && len(testCase.expectedDiskQuota) == 0 {
 			continue
@@ -873,7 +873,7 @@ func TestApplyExtendContainerResource(t *testing.T) {
 			},
 		}
 		container := &testCase.pod.Spec.Containers[0]
-		applyExtendContainerResource(testCase.pod, container, containerConfig.Linux, true)
+		applyExtendContainerResource(testCase.pod, container, nil, containerConfig.Linux, true)
 
 		if reflect.DeepEqual(containerConfig.Linux.Resources.MemorySwappiness, testCase.expectedContainerResourceConfig.MemorySwappiness) {
 			containerConfig.Linux.Resources.MemorySwappiness = nil

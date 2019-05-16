@@ -863,7 +863,9 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	if err != nil {
 		return nil, err
 	}
-	klet.admitHandlers.AddPodAdmitHandler(oversold)
+	if !utilfeature.DefaultFeatureGate.Enabled(features.DisableRejectPod) {
+		klet.admitHandlers.AddPodAdmitHandler(oversold)
+	}
 
 	// enable active deadline handler
 	activeDeadlineHandler, err := newActiveDeadlineHandler(klet.statusManager, kubeDeps.Recorder, klet.clock)

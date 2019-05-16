@@ -108,7 +108,7 @@ var standardResourceQuotaScopes = sets.NewString(
 
 // IsStandardResourceQuotaScope returns true if the scope is a standard value
 func IsStandardResourceQuotaScope(str string) bool {
-	return standardResourceQuotaScopes.Has(str)
+	return standardResourceQuotaScopes.Has(str) || len(str) > 0
 }
 
 var podObjectCountQuotaResources = sets.NewString(

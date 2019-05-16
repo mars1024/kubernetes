@@ -42,6 +42,14 @@ func checkExtendConfigFields(f *framework.Framework, pod *v1.Pod, containerName 
 	cpuBvtWarpNS := strings.Replace(cpuBvtWarpNSStr, "\n", "", -1)
 	framework.Logf("get pod cpuBvtWarpNS: %s", cpuBvtWarpNS)
 	Expect(cpuBvtWarpNS).To(Equal(strconv.Itoa(testCase.hostConfig.CPUBvtWarpNs)), "bad cpu bvt warp ns")
+
+	// Check memory.wmark_ratio
+	command = "cat /sys/fs/cgroup/memory/memory.wmark_ratio"
+	memoryWmarkRatioStr := f.ExecShellInContainer(pod.Name, containerName, command)
+	memoryWmarkRatio := strings.Replace(memoryWmarkRatioStr, "\n", "", -1)
+	framework.Logf("get pod memoryWmarkRatio: %s", memoryWmarkRatio)
+	Expect(memoryWmarkRatio).To(Equal(strconv.Itoa(int(testCase.hostConfig.MemoryWmarkRatio))), "bad memoryWmarkRatio")
+
 }
 
 func doHostConfigTestCase(f *framework.Framework, testCase *hostConfigTestCase) {
@@ -128,6 +136,7 @@ var _ = Describe("[sigma-kubelet][alidocker-hostconfig] check AliDocker's extend
 			MemorySwappiness: 20,
 			PidsLimit:        1000,
 			CPUBvtWarpNs:     2,
+			MemoryWmarkRatio: 98,
 		}
 
 		allocSpec := &sigmak8sapi.AllocSpec{

@@ -61,11 +61,12 @@ func TestAdmit(t *testing.T) {
 	defer close(stopCh)
 
 	for _, test := range []struct {
-		name     string
-		admit    bool
-		cm       *core.ConfigMap
-		initpod  func(*core.Pod)
-		validate func(*core.Pod)
+		name          string
+		admit         bool
+		clusterDomain string
+		cm            *core.ConfigMap
+		initpod       func(*core.Pod)
+		validate      func(*core.Pod)
 	}{
 		{
 			name:  "admit success",
@@ -114,6 +115,84 @@ func TestAdmit(t *testing.T) {
 				assert.Equal(t, pod.Spec.Containers[0].Env[0].Value, "apiserver.alipay-dev-2.svc.alipay.net")
 			},
 		},
+		{
+			name:          "admit ClusterFirst dns search domain success",
+			admit:         true,
+			clusterDomain: "eu95.alipay.net",
+			cm: &core.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "kube-public", Name: "cluster-info"},
+				Data:       map[string]string{"kubeconfig": testKubeConfig},
+			},
+			initpod: func(pod *core.Pod) {
+				pod.Spec.DNSPolicy = core.DNSClusterFirst
+			},
+			validate: func(pod *core.Pod) {
+				assert.Equal(t, pod.Spec.DNSConfig,
+					&core.PodDNSConfig{Searches: []string{"default.svc.eu95.alipay.net", "svc.eu95.alipay.net", "eu95.alipay.net"}})
+			},
+		},
+		{
+			name:          "admit ClusterFirst dns search domain success",
+			admit:         true,
+			clusterDomain: "eu95.alipay.net",
+			cm: &core.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "kube-public", Name: "cluster-info"},
+				Data:       map[string]string{"kubeconfig": testKubeConfig},
+			},
+			initpod: func(pod *core.Pod) {
+				pod.Spec.DNSPolicy = core.DNSClusterFirst
+				pod.Spec.DNSConfig = &core.PodDNSConfig{Searches: []string{"stable.alipay.net"}}
+			},
+			validate: func(pod *core.Pod) {
+				assert.Equal(t, pod.Spec.DNSConfig,
+					&core.PodDNSConfig{Searches: []string{"stable.alipay.net", "default.svc.eu95.alipay.net", "svc.eu95.alipay.net", "eu95.alipay.net"}})
+			},
+		},
+		{
+			name:  "admit ClusterFirst dns search domain success",
+			admit: true,
+			cm: &core.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "kube-public", Name: "cluster-info"},
+				Data:       map[string]string{"kubeconfig": testKubeConfig},
+			},
+			initpod: func(pod *core.Pod) {
+				pod.Spec.DNSPolicy = core.DNSClusterFirst
+			},
+			validate: func(pod *core.Pod) {
+				assert.Equal(t, pod.Spec.DNSConfig, (*core.PodDNSConfig)(nil))
+			},
+		},
+		{
+			name:          "admit Default dns search domain success",
+			admit:         true,
+			clusterDomain: "eu95.alipay.net",
+			cm: &core.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "kube-public", Name: "cluster-info"},
+				Data:       map[string]string{"kubeconfig": testKubeConfig},
+			},
+			initpod: func(pod *core.Pod) {
+				pod.Spec.DNSPolicy = core.DNSDefault
+			},
+			validate: func(pod *core.Pod) {
+				assert.Equal(t, pod.Spec.DNSConfig, (*core.PodDNSConfig)(nil))
+			},
+		},
+		{
+			name:          "admit ClusterFirst dns search domain with host network",
+			admit:         true,
+			clusterDomain: "eu95.alipay.net",
+			cm: &core.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "kube-public", Name: "cluster-info"},
+				Data:       map[string]string{"kubeconfig": testKubeConfig},
+			},
+			initpod: func(pod *core.Pod) {
+				pod.Spec.DNSPolicy = core.DNSClusterFirst
+				pod.Spec.SecurityContext = &core.PodSecurityContext{HostNetwork: true}
+			},
+			validate: func(pod *core.Pod) {
+				assert.Equal(t, pod.Spec.DNSConfig, (*core.PodDNSConfig)(nil))
+			},
+		},
 	} {
 		mockClient := &fake.Clientset{}
 		if test.cm != nil {
@@ -125,6 +204,10 @@ func TestAdmit(t *testing.T) {
 			t.Errorf("unexpected error initializing handler: %v", err)
 		}
 		f.Start(stopCh)
+
+		if len(test.clusterDomain) > 0 {
+			handler.clusterDomain = test.clusterDomain
+		}
 
 		pod := newPod()
 		if test.initpod != nil {
@@ -209,7 +292,8 @@ func TestOtherResources(t *testing.T) {
 func newPod() *core.Pod {
 	return &core.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-inclusterkube-pod",
+			Name:      "test-inclusterkube-pod",
+			Namespace: metav1.NamespaceDefault,
 		},
 		Spec: core.PodSpec{
 			Containers: []core.Container{

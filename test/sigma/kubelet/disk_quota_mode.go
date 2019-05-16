@@ -109,7 +109,7 @@ var _ = Describe("[sigma-kubelet][disk-quota-mode] check disk quota", func() {
 		testCase := diskQuotaModeTestCase{
 			pod: pod,
 			expectDockerDiskQuota: "2g",
-			expectPouchDiskQuota:  ".*:2g",
+			expectPouchDiskQuota:  "2g",
 		}
 		doDiskQuotaModeTestCase(f, &testCase)
 	})
@@ -146,7 +146,7 @@ var _ = Describe("[sigma-kubelet][disk-quota-mode] check disk quota", func() {
 		testCase := diskQuotaModeTestCase{
 			pod: pod,
 			expectDockerDiskQuota: "2g",
-			expectPouchDiskQuota:  ".*:2g",
+			expectPouchDiskQuota:  "2g",
 		}
 		doDiskQuotaModeTestCase(f, &testCase)
 	})

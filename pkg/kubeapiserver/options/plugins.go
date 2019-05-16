@@ -22,7 +22,6 @@ package options
 import (
 	// Cloud providers
 	_ "k8s.io/kubernetes/pkg/cloudprovider/providers"
-
 	// Admission policies
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/admission"
@@ -85,6 +84,7 @@ import (
 	alipaysetdefault "k8s.io/kubernetes/plugin/pkg/admission/alipay/setdefault"
 	alipaysetdefaulthostconfig "k8s.io/kubernetes/plugin/pkg/admission/alipay/setdefaulthostconfig"
 	alipaysidecar "k8s.io/kubernetes/plugin/pkg/admission/alipay/sidecar"
+	alipaywebhookcainjector "k8s.io/kubernetes/plugin/pkg/admission/alipay/webhookcainjector"
 	alipayzappinfo "k8s.io/kubernetes/plugin/pkg/admission/alipay/zappinfo"
 )
 
@@ -151,6 +151,7 @@ var AllOrderedPlugins = []string{
 	alipayresourcemutationbe.PluginName,   // Alipay resource mutation admission for best effort
 	alipayrouter.PluginName,               // Alipay router mutation admission for container router configuration.
 	alipayreadinessgate.PluginName,        // Alipay readiness fate mutation admission for pod condition.
+	alipaywebhookcainjector.PluginName,    // Alipay Webhook CA injector
 }
 
 // RegisterAllAdmissionPlugins registers all admission plugins and
@@ -212,6 +213,7 @@ func RegisterAllAdmissionPlugins(plugins *admission.Plugins) {
 	alipayresourcemutationbe.Register(plugins)
 	alipayrouter.Register(plugins)
 	alipayreadinessgate.Register(plugins)
+	alipaywebhookcainjector.Register(plugins)
 }
 
 // DefaultOffAdmissionPlugins get admission plugins off by default for kube-apiserver.

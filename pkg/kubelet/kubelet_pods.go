@@ -1271,6 +1271,9 @@ func (kl *Kubelet) GetKubeletContainerLogs(ctx context.Context, podFullName, con
 func getPhase(spec *v1.PodSpec, info []v1.ContainerStatus, pod *v1.Pod) v1.PodPhase {
 	// if container terminate as user's expect, it should be considered as waiting to start
 	haveContainerStateAnnotation, containerDesiredState, _ := sigmautil.GetContainerDesiredStateFromAnnotation(pod)
+
+	isPodJob := sigmautil.IsPodJob(pod)
+
 	initialized := 0
 	pendingInitialization := 0
 	failedInitialization := 0
@@ -1323,7 +1326,7 @@ func getPhase(spec *v1.PodSpec, info []v1.ContainerStatus, pod *v1.Pod) v1.PodPh
 			running++
 		case containerStatus.State.Terminated != nil:
 			// it terminate as user expect, it should be considered as waiting to start
-			if haveContainerStateAnnotation && containerExistInDesiredState(containerDesiredState, container.Name) {
+			if !isPodJob && haveContainerStateAnnotation && containerExistInDesiredState(containerDesiredState, container.Name) {
 				waiting++
 			} else {
 				stopped++
@@ -1336,7 +1339,7 @@ func getPhase(spec *v1.PodSpec, info []v1.ContainerStatus, pod *v1.Pod) v1.PodPh
 		case containerStatus.State.Waiting != nil:
 			if containerStatus.LastTerminationState.Terminated != nil {
 				// it terminate as user expect, it should be considered as waiting to start
-				if haveContainerStateAnnotation && containerExistInDesiredState(containerDesiredState, container.Name) {
+				if !isPodJob && haveContainerStateAnnotation && containerExistInDesiredState(containerDesiredState, container.Name) {
 					waiting++
 				} else {
 					stopped++

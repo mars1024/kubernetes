@@ -1262,6 +1262,10 @@ func (dsc *DaemonSetsController) updateDaemonSetStatus(ds *apps.DaemonSet, hash 
 		return fmt.Errorf("error storing status for daemon set %#v: %v", ds, err)
 	}
 
+	// Resync the DaemonSet after MinReadySeconds as a last line of defense to guard against clock-skew.
+	if ds.Spec.MinReadySeconds > 0 && numberReady != numberAvailable {
+		dsc.enqueueDaemonSetAfter(ds, time.Duration(ds.Spec.MinReadySeconds)*time.Second)
+	}
 	return nil
 }
 

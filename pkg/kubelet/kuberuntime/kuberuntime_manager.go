@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"time"
 
 	"github.com/golang/glog"
@@ -27,7 +28,7 @@ import (
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	sigmautil "k8s.io/kubernetes/pkg/kubelet/sigma"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubetypes "k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -500,7 +501,10 @@ func (m *kubeGenericRuntimeManager) containerChanged(container *v1.Container, co
 	expectedHash := kubecontainer.HashContainerWithHashVersion(container, containerStatus.HashVersion, &containerStatus.Hash)
 	needToRestart = containerStatus.Hash != expectedHash
 	if needToRestart == false {
-		newResources := m.generateLinuxContainerResources(container, pod)
+		newResources, err := m.generateLinuxContainerResources(container, pod)
+		if err != nil {
+			return expectedHash, containerStatus.Hash, needToRestart, needToResize
+		}
 		changed, restartNeeded := computeResourceChanges(newResources, containerStatus)
 		if len(changed) > 0 {
 			needToRestart = restartNeeded
@@ -538,19 +542,11 @@ func computeResourceChanges(lc *runtimeapi.LinuxContainerResources, containerSta
 		resourceChanged[v1.ResourceMemory] = true
 	}
 
-	// Compare rootfs quota only
-	// Pouch's DiskQuota
-	//"DiskQuota": {
-	//   ".*": "3g",
-	//   "/var/lib/mysql": "3g",
-	//   "/var/run/secrets/kubernetes.io/serviceaccount": "3g"
-	//},
-	expectedDiskQuotaRootFsAndVolume := lc.DiskQuota[string(sigmak8sapi.DiskQuotaModeRootFsAndVolume)]
-	currentDiskQuotaRootFsAndVolume := currentResources.DiskQuota[string(sigmak8sapi.DiskQuotaModeRootFsAndVolume)]
-	expectedDiskQuotaRootFsOnly := lc.DiskQuota[string(sigmak8sapi.DiskQuotaModeRootFsOnly)]
-	currentDiskQuotaRootFsOnly := currentResources.DiskQuota[string(sigmak8sapi.DiskQuotaModeRootFsOnly)]
-	if expectedDiskQuotaRootFsAndVolume != currentDiskQuotaRootFsAndVolume ||
-		expectedDiskQuotaRootFsOnly != currentDiskQuotaRootFsOnly {
+	if lc.MemorySwappiness != currentResources.MemorySwappiness {
+		resourceChanged[v1.ResourceMemory] = true
+	}
+
+	if !reflect.DeepEqual(lc.DiskQuota, currentResources.DiskQuota) {
 		resourceChanged[v1.ResourceEphemeralStorage] = true
 	}
 
@@ -601,7 +597,7 @@ func (m *kubeGenericRuntimeManager) computePodActions(pod *v1.Pod, podStatus *ku
 	// If we need to (re-)create the pod sandbox, everything will need to be
 	// killed and recreated, and init containers should be purged.
 	if createPodSandbox {
-		if !shouldRestartOnFailure(pod) && attempt != 0 {
+		if !utilfeature.DefaultFeatureGate.Enabled(features.EnsurePodSuccess) && !shouldRestartOnFailure(pod) && attempt != 0 {
 			// Should not restart the pod, just return.
 			changes.CreateSandbox = false
 			return changes
@@ -624,7 +620,7 @@ func (m *kubeGenericRuntimeManager) computePodActions(pod *v1.Pod, podStatus *ku
 
 	// If we need to start the pod sandbox, everything will need to be restarted.
 	if startPodSandbox {
-		if !shouldRestartOnFailure(pod) && attempt != 0 {
+		if !utilfeature.DefaultFeatureGate.Enabled(features.EnsurePodSuccess) && !shouldRestartOnFailure(pod) && attempt != 0 {
 			// Should not restart the pod, just return.
 			return changes
 		}
@@ -991,7 +987,14 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 			glog.Warningf("Stop sandbox %s failed: %v", podSandboxID, err)
 		}
 
-		if err := m.runtimeService.StartPodSandbox(podSandboxID); err != nil {
+		podSandboxConfig, err := m.generatePodSandboxConfig(pod, podContainerChanges.Attempt)
+		if err != nil {
+			message := fmt.Sprintf("GeneratePodSandboxConfig for pod %q for restart failed: %v", format.Pod(pod), err)
+			glog.Error(message)
+			return
+		}
+
+		if err := m.runtimeService.StartPodSandbox(podSandboxID, podSandboxConfig); err != nil {
 			glog.Errorf("Failed to start sandbox %s", podSandboxID)
 			result.Fail(err)
 			return

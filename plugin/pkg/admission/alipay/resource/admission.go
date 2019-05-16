@@ -3,11 +3,16 @@ package resource
 import (
 	"fmt"
 	"io"
+	"strconv"
 
 	"github.com/golang/glog"
 	"k8s.io/apiserver/pkg/admission"
 	"k8s.io/kubernetes/pkg/apis/core"
 
+	alipaysigmak8sapi "gitlab.alipay-inc.com/sigma/apis/pkg/apis"
+	"k8s.io/kubernetes/pkg/client/informers/informers_generated/internalversion"
+	corelisters "k8s.io/kubernetes/pkg/client/listers/core/internalversion"
+	kubeapiserveradmission "k8s.io/kubernetes/pkg/kubeapiserver/admission"
 	sigmabe "k8s.io/kubernetes/plugin/pkg/admission/alipay/resourcemutationbe"
 )
 
@@ -17,7 +22,8 @@ const (
 )
 
 var (
-	_ admission.ValidationInterface = &AlipayResourceAdmission{}
+	_ admission.ValidationInterface                           = &AlipayResourceAdmission{}
+	_ kubeapiserveradmission.WantsInternalKubeInformerFactory = &AlipayResourceAdmission{}
 )
 
 // Register is used to register current plugin to APIServer
@@ -30,12 +36,26 @@ func Register(plugins *admission.Plugins) {
 // AlipayResourceAdmission is the main struct to validate pod resource setting
 type AlipayResourceAdmission struct {
 	*admission.Handler
+
+	nsLister corelisters.NamespaceLister
 }
 
 func newAlipayResourceAdmission() *AlipayResourceAdmission {
 	return &AlipayResourceAdmission{
 		Handler: admission.NewHandler(admission.Create),
 	}
+}
+
+func (a *AlipayResourceAdmission) SetInternalKubeInformerFactory(f internalversion.SharedInformerFactory) {
+	a.nsLister = f.Core().InternalVersion().Namespaces().Lister()
+	a.SetReadyFunc(f.Core().InternalVersion().Namespaces().Informer().HasSynced)
+}
+
+func (a *AlipayResourceAdmission) ValidateInitialization() error {
+	if a.nsLister == nil {
+		return fmt.Errorf("missing namespaceLister")
+	}
+	return nil
 }
 
 // Validate checks if user provided proper resource.
@@ -46,16 +66,35 @@ func (a *AlipayResourceAdmission) Validate(attr admission.Attributes) (err error
 	if shouldIgnore(attr) {
 		return nil
 	}
+	if !a.WaitForReady() {
+		return admission.NewForbidden(attr, fmt.Errorf("not yet ready to handle request"))
+	}
 
 	pod, ok := attr.GetObject().(*core.Pod)
 	if !ok {
 		return admission.NewForbidden(attr, fmt.Errorf("unexpected resource"))
 	}
 
+	ns, err := a.nsLister.Get(attr.GetNamespace())
+	if err != nil {
+		return admission.NewForbidden(attr, err)
+	}
+	if shouldSkipValidation(ns) {
+		return nil
+	}
+
 	if err = validatePodResource(pod); err != nil {
 		return admission.NewForbidden(attr, err)
 	}
 	return nil
+}
+
+func shouldSkipValidation(ns *core.Namespace) bool {
+	if ns.Annotations == nil {
+		return false
+	}
+	v, _ := strconv.ParseBool(ns.Annotations[alipaysigmak8sapi.SkipResourceAdmission])
+	return v
 }
 
 func validatePodResource(pod *core.Pod) error {

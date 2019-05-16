@@ -7,7 +7,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -61,7 +61,7 @@ func doInplaceUpdateContainerResourceTestCase(f *framework.Framework, testCase *
 		Expect(state).Should(Equal(sigmak8sapi.InplaceUpdateStateSucceeded))
 
 		if testCase.expectDiskQuota != "" {
-			time.Sleep(time.Second * 10)
+			time.Sleep(time.Second * 30)
 			// Check DiskQuota.
 			checkCommand := "df -h | grep '/$' | awk '{print $2}'"
 			result := f.ExecShellInContainer(testPod.Name, containerName, checkCommand)
@@ -85,12 +85,9 @@ var _ = Describe("[sigma-kubelet] inplace_update_001 update container's resource
 	It("update container's resource requirement without QoS class change", func() {
 		testCase := InplaceUpdateContainerResourceTestCase{
 			pod:           generateRunningPodWithInitResource(initResource),
-			patchData:     `{"spec":{"containers":[{"name":"pod-base","resources":{"requests": {"cpu": "1000m", "memory": "256Mi"}, "limits": {"cpu": "1000m", "memory": "256Mi"}}}]}}`,
+			patchData:     fmt.Sprintf(`{"metadata":{"annotations":{%q:%q}},"spec":{"containers":[{"name":"pod-base","resources":{"requests": {"cpu": "1000m", "memory": "256Mi"}, "limits": {"cpu": "1000m", "memory": "256Mi"}}}]}}`, sigmak8sapi.AnnotationPodInplaceUpdateState, sigmak8sapi.InplaceUpdateStateAccepted),
 			expectSuccess: true,
 		}
-
-		testCase.pod.Annotations = make(map[string]string)
-		testCase.pod.Annotations[sigmak8sapi.AnnotationPodInplaceUpdateState] = sigmak8sapi.InplaceUpdateStateAccepted
 
 		doInplaceUpdateContainerResourceTestCase(f, &testCase)
 	})
@@ -157,12 +154,28 @@ var _ = Describe("[sigma-kubelet] [Disruptive] inplace_update_004 update contain
 		// The maximum allowed cpu-shares is 262144
 		testCase := InplaceUpdateContainerResourceTestCase{
 			pod:           generateRunningPodWithInitResource(initResource),
-			patchData:     `{"spec":{"containers":[{"name":"pod-base","resources":{"requests": {"cpu": "20000", "memory": "256Mi"}, "limits": {"cpu": "20000", "memory": "256Mi"}}}]}}`,
+			patchData:     fmt.Sprintf(`{"metadata":{"annotations":{%q:%q}},"spec":{"containers":[{"name":"pod-base","resources":{"requests": {"cpu": "2000", "memory": "256Mi"}, "limits": {"cpu": "2000", "memory": "256Mi"}}}]}}`, sigmak8sapi.AnnotationPodInplaceUpdateState, sigmak8sapi.InplaceUpdateStateAccepted),
 			expectSuccess: false,
 		}
 
-		testCase.pod.Annotations = make(map[string]string)
-		testCase.pod.Annotations[sigmak8sapi.AnnotationPodInplaceUpdateState] = sigmak8sapi.InplaceUpdateStateAccepted
+		doInplaceUpdateContainerResourceTestCase(f, &testCase)
+	})
+})
+
+var _ = Describe("[sigma-kubelet] inplace_update_005 update container's memory swappiness in annotation should be ok", func() {
+	f := framework.NewDefaultFramework("sigma-kubelet")
+	initResource := getResourceRequirements(getResourceList("500m", "128Mi"), getResourceList("500m", "128Mi"))
+	It("update container's resource requirement without QoS class change", func() {
+		pod := generateRunningPodWithInitResource(initResource)
+		testCase := InplaceUpdateContainerResourceTestCase{
+			pod: pod,
+			patchData: fmt.Sprintf(`{"metadata": {"annotations": {%q:%q, %q:%q}}}`,
+				sigmak8sapi.AnnotationPodInplaceUpdateState, sigmak8sapi.InplaceUpdateStateAccepted,
+				sigmak8sapi.AnnotationPodAllocSpec, fmt.Sprintf(`{"containers":[{"name":"%s","hostConfig":{"memorySwappiness": 0}}]}`, pod.Spec.Containers[0].Name),
+			),
+			expectSuccess: true,
+		}
+
 		doInplaceUpdateContainerResourceTestCase(f, &testCase)
 	})
 })

@@ -375,6 +375,8 @@ message StopPodSandboxRequest {
 message StartPodSandboxRequest {
     // ID of the PodSandbox to start.
     string pod_sandbox_id = 1;
+	// Configuration for creating a PodSandbox.
+	PodSandboxConfig config = 100;
 }
 
 message StartPodSandboxResponse {}

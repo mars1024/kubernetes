@@ -86,8 +86,9 @@ func doDNSTestCase(f *framework.Framework, testCase *dnsTestCase) {
 	_, err = util.ResponseFromStarAgentTask(stopCommand, hostIP, hostSn)
 	Expect(err).NotTo(HaveOccurred(), "stop container failed")
 
-	// Wait 60 second to get all containers are started.
-	time.Sleep(time.Duration(60) * time.Second)
+	// Wait 90 second to get all containers are started.
+	// TODO: find a better way to check.
+	time.Sleep(time.Duration(90) * time.Second)
 
 	// Get container's resolv.conf.
 	result = f.ExecShellInContainer(testPod.Name, containerName, testCase.checkCommand)

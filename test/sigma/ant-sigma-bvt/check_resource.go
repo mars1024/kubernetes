@@ -116,6 +116,8 @@ func CheckAdapterUpgradeResource(f *framework.Framework, testPod *v1.Pod, upgrad
 	Expect(err).NotTo(HaveOccurred(), "[AdapterLifeCycle] get pod list failed.")
 	framework.Logf("newPod env:%v", upPod.Spec.Containers[0].Env)
 	cmd := []string{"env"}
+	// waiting for env is export.
+	time.Sleep(time.Second * 10)
 	stdout, _, err := RetryExec(f, testPod, cmd, "check_env", 10, 2)
 	Expect(err).NotTo(HaveOccurred(), "[AdapterLifeCycle] [upgrade] get 3.1 pod env error")
 	isEqual := CompareENV(upgradeConfig.Env, stdout)

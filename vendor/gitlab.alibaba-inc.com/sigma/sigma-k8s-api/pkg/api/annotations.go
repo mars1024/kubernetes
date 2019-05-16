@@ -71,4 +71,10 @@ const (
 	// AnnotationPodPendingTimeSeconds is annotation key of pod pending, with this key,
 	// sigmalet will skip pod create, the value is timeout seconds, zero represent without limit
 	AnnotationPodPendingTimeSeconds = "pod.beta1.sigma.ali/pending-time-seconds"
+
+        // AnnotationDisableCascadingDeletion indicates whether such resource disabled cascading-deletion
+        AnnotationDisableCascadingDeletion = "sigma.ali/disable-cascading-deletion"
+
+	// AnnotationEnableAppRulesInjection indicates wether to inject apprules into this resource.
+	AnnotationEnableAppRulesInjection = "sigma.ali/enable-apprules-injection"
 )

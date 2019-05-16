@@ -443,7 +443,7 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][resource][Serial]", func() {
 				cpushare:        true,
 			},
 			{
-				cleanIndexes: []int{2},
+				cleanIndexes: []int{3},
 				requestType:  cleanResource,
 			},
 			{
@@ -458,7 +458,7 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][resource][Serial]", func() {
 		}
 
 		testContext := &testContext{
-			caseName:  "resourceMix003",
+			caseName:  "resourceMix004",
 			cs:        cs,
 			localInfo: nil,
 			f:         f,

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"strings"
 
 	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
 	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
@@ -56,6 +57,12 @@ var (
 
 		{"cafe.sofastack.io", "serviceinstances"},
 		{"cafe.sofastack.io", "servicebindings"},
+
+		{"apiextensions.k8s.io", "customresourcedefinitions"},
+	}
+	AKSSupportedGroupSuffixes = []string{
+		".istio.io",
+		".knative.dev",
 	}
 )
 
@@ -98,6 +105,14 @@ func WithResourceWhiteList(delegate http.Handler) http.Handler {
 		// checking whether the tenant is impersonated by an admin
 		for _, group := range user.GetGroups() {
 			if group == multitenancy.UserGroupMultiTenancyImpersonated {
+				delegate.ServeHTTP(w, req)
+				return
+			}
+		}
+
+		// supported group suffix
+		for _, groupSuffix := range AKSSupportedGroupSuffixes {
+			if strings.HasSuffix(reqInfo.APIGroup, groupSuffix) {
 				delegate.ServeHTTP(w, req)
 				return
 			}

@@ -1,4 +1,4 @@
-//+build !multitenancy
+//+build multitenancy
 
 /*
 Copyright 2014 The Kubernetes Authors.
@@ -19,7 +19,13 @@ limitations under the License.
 package cache
 
 import (
+	"fmt"
+	"runtime/debug"
+
 	"github.com/golang/glog"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancycache "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/cache"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -113,12 +119,19 @@ func NewGenericLister(indexer Indexer, resource schema.GroupResource) GenericLis
 type genericLister struct {
 	indexer  Indexer
 	resource schema.GroupResource
+	tenant   multitenancy.TenantInfo
 }
 
 func (s *genericLister) List(selector labels.Selector) (ret []runtime.Object, err error) {
-	err = ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(runtime.Object))
-	})
+	if s.tenant != nil {
+		err = multitenancycache.ListAllWithTenant(s.indexer, selector, s.tenant, func(m interface{}) {
+			ret = append(ret, m.(runtime.Object))
+		})
+	} else {
+		err = ListAll(s.indexer, selector, func(m interface{}) {
+			ret = append(ret, m.(runtime.Object))
+		})
+	}
 	return ret, err
 }
 
@@ -141,17 +154,29 @@ type genericNamespaceLister struct {
 	indexer   Indexer
 	namespace string
 	resource  schema.GroupResource
+	tenant    multitenancy.TenantInfo
 }
 
 func (s *genericNamespaceLister) List(selector labels.Selector) (ret []runtime.Object, err error) {
-	err = ListAllByNamespace(s.indexer, s.namespace, selector, func(m interface{}) {
+	if s.tenant == nil {
+		debug.PrintStack()
+		// fail hard so that we don't allow any namespaced lister w/o tenant
+		return nil, fmt.Errorf("cannot namespaced list resources w/o specifying tenant")
+	}
+	err = multitenancycache.ListAllByNamespaceWithTenant(s.indexer, s.namespace, selector, s.tenant, func(m interface{}) {
 		ret = append(ret, m.(runtime.Object))
 	})
 	return ret, err
 }
 
 func (s *genericNamespaceLister) Get(name string) (runtime.Object, error) {
-	obj, exists, err := s.indexer.GetByKey(s.namespace + "/" + name)
+	if s.tenant == nil {
+		// fail hard so that we don't allow any cluster-scoped get w/o tenant
+		debug.PrintStack()
+		return nil, fmt.Errorf("cannot get initializerconfiguration w/o specifying tenant")
+	}
+
+	obj, exists, err := s.indexer.GetByKey(multitenancyutil.TransformTenantInfoToJointString(s.tenant, "/") + "/" + name)
 	if err != nil {
 		return nil, err
 	}
@@ -159,4 +184,17 @@ func (s *genericNamespaceLister) Get(name string) (runtime.Object, error) {
 		return nil, errors.NewNotFound(s.resource, name)
 	}
 	return obj.(runtime.Object), nil
+}
+
+// multitenancy
+func (s *genericLister) ShallowCopyWithTenant(tenant multitenancy.TenantInfo) interface{} {
+	copied := *s
+	copied.tenant = tenant
+	return &copied
+}
+
+func (s *genericNamespaceLister) ShallowCopyWithTenant(tenant multitenancy.TenantInfo) interface{} {
+	copied := *s
+	copied.tenant = tenant
+	return &copied
 }

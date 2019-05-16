@@ -1,21 +1,21 @@
 package apiserver
 
 import (
-	"k8s.io/kube-aggregator/pkg/apiserver"
 	"k8s.io/apimachinery/pkg/version"
+	"k8s.io/kube-aggregator/pkg/apiserver"
 
-	genericapiserver "k8s.io/apiserver/pkg/server"
-	apiextensionsinformers "k8s.io/apiextensions-apiserver/pkg/client/informers/internalversion"
-	apiregistrationclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/internalclientset/typed/apiregistration/internalversion"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"strings"
-	"k8s.io/kube-aggregator/pkg/apis/apiregistration"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"github.com/golang/glog"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/kube-aggregator/pkg/controllers/autoregister"
 	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/master/controller/crdregistration"
 	multitenancycrdregistration "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/master/controller/crdregistration"
-	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/kube-aggregator/pkg/controllers/autoregister"
+	apiextensionsinformers "k8s.io/apiextensions-apiserver/pkg/client/informers/internalversion"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	genericapiserver "k8s.io/apiserver/pkg/server"
+	"k8s.io/kube-aggregator/pkg/apis/apiregistration"
+	apiregistrationclient "k8s.io/kube-aggregator/pkg/client/clientset_generated/internalclientset/typed/apiregistration/internalversion"
 	"os"
+	"strings"
 )
 
 const (
@@ -130,7 +130,17 @@ func apiServicesToRegister(delegateAPIServer genericapiserver.DelegationTarget, 
 				VersionPriority:      100,
 			},
 		})
-
+		registration.AddAPIServiceToSyncOnStart(&apiregistration.APIService{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "v1.serverless.cafe.cloud.alipay.com",
+			},
+			Spec: apiregistration.APIServiceSpec{
+				Group:                "serverless.cafe.cloud.alipay.com",
+				Version:              "v1",
+				GroupPriorityMinimum: 1000,
+				VersionPriority:      100,
+			},
+		})
 	}
 	if len(os.Getenv(AggregationEnableCafeCluster)) > 0 {
 		registration.AddAPIServiceToSyncOnStart(&apiregistration.APIService{

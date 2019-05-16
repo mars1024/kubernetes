@@ -519,10 +519,10 @@
 			"revisionTime": "2019-05-13T06:09:05Z"
 		},
 		{
-			"checksumSHA1": "59lWGwPNoB3xcMAEJvsgaZoM6tI=",
+			"checksumSHA1": "t2FzMwhPBRD7eyGSr9EfgUoFgYs=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/filter",
-			"revision": "e6ac44b6168a54d06bdfc0665d22d7277de15864",
-			"revisionTime": "2019-05-15T09:31:53Z"
+			"revision": "4bb8e40ac0f01e48b8f1b125e4ca00c3ec142fd2",
+			"revisionTime": "2019-05-16T04:53:43Z"
 		},
 		{
 			"checksumSHA1": "M4+Cjj1jiQ/BVcau39uWqVykl7Q=",

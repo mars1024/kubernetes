@@ -803,10 +803,10 @@
 			"versionExact": "master"
 		},
 		{
-			"checksumSHA1": "87TVzjFNry9SUPaAHAnkLEjKJ0g=",
+			"checksumSHA1": "xH+acAeWyz//y7F2r/gbyyNPrCI=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/cafe-kubernetes-extension/plugin/admission/clusterinjection",
-			"revision": "83f9e301ccf1866c7bd35b51b67b0ac3f8f46dd7",
-			"revisionTime": "2019-04-12T08:16:38Z"
+			"revision": "fb76e420a1eb037328a2320935dba2f880530419",
+			"revisionTime": "2019-05-17T07:58:16Z"
 		},
 		{
 			"checksumSHA1": "nu2S+yIOytAwfojGEVtmtz6elxM=",

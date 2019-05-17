@@ -24,7 +24,6 @@ import (
 
 	"github.com/golang/glog"
 	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
-	multitenancycache "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/cache"
 	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -124,7 +123,7 @@ type genericLister struct {
 
 func (s *genericLister) List(selector labels.Selector) (ret []runtime.Object, err error) {
 	if s.tenant != nil {
-		err = multitenancycache.ListAllWithTenant(s.indexer, selector, s.tenant, func(m interface{}) {
+		err = internalListAllWithTenant(s.indexer, selector, s.tenant, func(m interface{}) {
 			ret = append(ret, m.(runtime.Object))
 		})
 	} else {
@@ -163,7 +162,7 @@ func (s *genericNamespaceLister) List(selector labels.Selector) (ret []runtime.O
 		// fail hard so that we don't allow any namespaced lister w/o tenant
 		return nil, fmt.Errorf("cannot namespaced list resources w/o specifying tenant")
 	}
-	err = multitenancycache.ListAllByNamespaceWithTenant(s.indexer, s.namespace, selector, s.tenant, func(m interface{}) {
+	err = internalListAllByNamespaceWithTenant(s.indexer, s.namespace, selector, s.tenant, func(m interface{}) {
 		ret = append(ret, m.(runtime.Object))
 	})
 	return ret, err
@@ -197,4 +196,47 @@ func (s *genericNamespaceLister) ShallowCopyWithTenant(tenant multitenancy.Tenan
 	copied := *s
 	copied.tenant = tenant
 	return &copied
+}
+
+// HACK(zuoxiu.jm): copied the following internal type/function for resolving the cyclic dependencies
+const (
+	internalTenantIndex          string = "tenant"
+	internalTenantNamespaceIndex string = "tenant_namespace"
+)
+
+func internalListAllWithTenant(index Indexer, selector labels.Selector, tenant multitenancy.TenantInfo, appendFunc AppendFunc) error {
+	items, err := index.Index(internalTenantIndex, &metav1.ObjectMeta{Annotations: multitenancyutil.TransformTenantInfoToAnnotations(tenant)})
+	if err != nil {
+		return err
+	}
+	for _, m := range items {
+		metadata, err := meta.Accessor(m)
+		if err != nil {
+			return err
+		}
+		if selector.Matches(labels.Set(metadata.GetLabels())) {
+			appendFunc(m)
+		}
+	}
+	return nil
+}
+
+func internalListAllByNamespaceWithTenant(index Indexer, namespace string, selector labels.Selector, tenant multitenancy.TenantInfo, appendFunc AppendFunc) error {
+	items, err := index.Index(internalTenantNamespaceIndex, &metav1.ObjectMeta{
+		Namespace:   namespace,
+		Annotations: multitenancyutil.TransformTenantInfoToAnnotations(tenant),
+	})
+	if err != nil {
+		return err
+	}
+	for _, m := range items {
+		metadata, err := meta.Accessor(m)
+		if err != nil {
+			return err
+		}
+		if selector.Matches(labels.Set(metadata.GetLabels())) {
+			appendFunc(m)
+		}
+	}
+	return nil
 }

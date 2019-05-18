@@ -898,7 +898,7 @@ func (nc *Controller) tryUpdateNodeHealth(node *v1.Node) (time.Duration, v1.Node
 	}
 
 	savedNodeHealth, found := nc.nodeHealthMap[node.Name]
-	glog.Infof("savedNodeHealth of node %s is %+v", node.Name, savedNodeHealth)
+	glog.Infof("tryUpdateNodeHealth get savedNodeHealth %+v of node %s", savedNodeHealth, node.Name)
 	// There are following cases to check:
 	// - both saved and new status have no Ready Condition set - we leave everything as it is,
 	// - saved status have no Ready Condition, but current one does - Controller was restarted with Node data already present in etcd,
@@ -1040,7 +1040,7 @@ func (nc *Controller) tryUpdateNodeHealth(node *v1.Node) (time.Duration, v1.Node
 
 		_, currentCondition := v1node.GetNodeCondition(&node.Status, v1.NodeReady)
 		if !apiequality.Semantic.DeepEqual(currentCondition, &observedReadyCondition) {
-			glog.Infof("update node %s status %+v", currentCondition)
+			glog.Infof("tryUpdateNodeHealth update node %s status %+v", node.Name, currentCondition)
 			if _, err = nc.kubeClient.CoreV1().Nodes().UpdateStatus(node); err != nil {
 				glog.Errorf("Error updating node %s: %v", node.Name, err)
 				return gracePeriod, observedReadyCondition, currentReadyCondition, err
@@ -1055,6 +1055,8 @@ func (nc *Controller) tryUpdateNodeHealth(node *v1.Node) (time.Duration, v1.Node
 		}
 	}
 
+	glog.Infof("tryUpdateNodeHealth get gracePeriod %d last observed condition %+v and current ready condition %+v of node %s", gracePeriod.Seconds(),
+		observedCondition, currentReadyCondition, node.Name)
 	return gracePeriod, observedReadyCondition, currentReadyCondition, err
 }
 

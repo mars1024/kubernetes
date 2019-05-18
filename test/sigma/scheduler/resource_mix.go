@@ -452,7 +452,7 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][resource][Serial]", func() {
 				ethstorage:      requestedDisk,
 				requestType:     requestTypeSigma,
 				affinityConfig:  map[string][]string{"ali.SpecifiedNcIps": {nodeIP}, "ali.AllocateMode": {"host"}},
-				shouldScheduled: false,
+				shouldScheduled: true,
 				cpushare:        true,
 			},
 		}

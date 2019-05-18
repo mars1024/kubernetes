@@ -558,6 +558,10 @@ func DumpSchedulerState(f *framework.Framework, cnt int) {
 		if index > cnt && cnt != 0 {
 			break
 		}
+		swarm.DumpNodeState(node.Name)
+		if env.Tester == env.TesterAnt {
+			continue
+		}
 		allocplan := swarm.GetHostPod(node.Name)
 		logrus.Infof("******** Output of scheduler allocplan")
 		tmp, _ := json.MarshalIndent(allocplan, "  ", "  ")

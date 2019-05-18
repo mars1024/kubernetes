@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/kubernetes/staging/src/k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/kubernetes/test/e2e/framework"
+	"k8s.io/kubernetes/test/sigma/env"
 	"k8s.io/kubernetes/test/sigma/util"
 )
 
@@ -22,6 +23,43 @@ var maps = &sync.Map{}
 // 做一个 cache 生命周期是每一次跑 case
 // 机房->真实可调度的机器列表
 var schedulerInfoMap = &sync.Map{}
+
+func DumpNodeState(hostSn string) {
+	if hostSn == "" {
+		return
+	}
+	site := ""
+	if value, ok := maps.Load(hostSn); !ok {
+		nsInfo, err := util.QueryArmory(fmt.Sprintf("sn=='%v'", hostSn))
+		if err != nil {
+			framework.Logf("[ERR]: QueryArmory return err: %s", err)
+			return
+		}
+		if len(nsInfo) != 1 {
+			framework.Logf("[ERR]: sn: %s not in armory", hostSn)
+			return
+		}
+		maps.Store(hostSn, &nsInfo[0])
+		site = strings.ToLower(nsInfo[0].Site)
+	} else {
+		site = strings.ToLower(value.(*util.ArmoryInfo).Site)
+	}
+
+	if schedulerInfo, err := getSchedulerInfo(site); err == nil {
+		clusterStateUrl := fmt.Sprintf("http://%s:%s//state/nodes/%s",
+			schedulerInfo.HostIp, schedulerInfo.Port, hostSn)
+		rawNodeState, err := http.Get(clusterStateUrl)
+		if err != nil {
+			framework.Logf("GetHostPod url: %s, err: %v", clusterStateUrl, err)
+			return
+		}
+		nodeState, _ := ioutil.ReadAll(rawNodeState.Body)
+		if len(nodeState) == 0 {
+			return
+		}
+		framework.Logf("node %s state:[%s]", hostSn, string(nodeState))
+	}
+}
 
 func GetHostPod(hostSn string) map[string]*sigma.AllocPlan {
 	if hostSn == "" {
@@ -47,6 +85,10 @@ func GetHostPod(hostSn string) map[string]*sigma.AllocPlan {
 	if schedulerInfo, err := getSchedulerInfo(site); err == nil {
 		url := fmt.Sprintf("http://%s:%s/host/%s/pod",
 			schedulerInfo.HostIp, schedulerInfo.Port, hostSn)
+		if env.GetTester() == env.TesterAnt {
+			url = fmt.Sprintf("http://%s:%s/host/%s/plan",
+				schedulerInfo.HostIp, schedulerInfo.Port, hostSn)
+		}
 		res, err := http.Get(url)
 		if err != nil {
 			framework.Logf("GetHostPod url: %s, err: %v", url, err)

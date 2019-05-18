@@ -20,6 +20,7 @@ import (
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	"gitlab.alibaba-inc.com/sigma/sigma-k8s-extensions/pkg/apis/apps/v1beta1"
 	extclientset "gitlab.alibaba-inc.com/sigma/sigma-k8s-extensions/pkg/client/clientset"
+	alipayapis "gitlab.alipay-inc.com/sigma/apis/pkg/apis"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -536,6 +537,10 @@ func initPausePodFromResourceCase(tc *testContext, caseIndex int, test resourceC
 				},
 			}
 		}
+		if config.Labels == nil {
+			config.Labels = make(map[string]string)
+		}
+		config.Labels[alipayapis.LabelPromotionKeepAliveMemory] = fmt.Sprintf("%d", test.keepAliveMemory)
 		setAllocSpecRequest = true
 	}
 

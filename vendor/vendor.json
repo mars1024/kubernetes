@@ -301,10 +301,16 @@
 			"revisionTime": "2019-01-21T08:50:27Z"
 		},
 		{
-			"checksumSHA1": "ubVLSPFOxoT4tDEvalmv3JckBns=",
+			"checksumSHA1": "bLHkfGWsuX1vymblAdh5FwGf53g=",
 			"path": "gitlab.alipay-inc.com/sigma/apis/pkg/apis",
-			"revision": "6416a7ab4a0affa3f34cfe3aa98c5922a7a92e0b",
-			"revisionTime": "2019-03-14T03:34:20Z"
+			"revision": "9d6675700a00eb39cd190f9d9112c903232b162d",
+			"revisionTime": "2019-05-15T14:51:48Z"
+		},
+		{
+			"checksumSHA1": "NSkWstJQMqaeR2GYjXn5UCEFRzU=",
+			"path": "gitlab.alipay-inc.com/sigma/apis/pkg/v2",
+			"revision": "9d6675700a00eb39cd190f9d9112c903232b162d",
+			"revisionTime": "2019-05-15T14:51:48Z"
 		},
 		{
 			"checksumSHA1": "7y2gX6w9W1xC09Rjn4FVRCbtPFw=",

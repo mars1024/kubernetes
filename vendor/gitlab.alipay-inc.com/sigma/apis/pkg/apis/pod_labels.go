@@ -42,6 +42,19 @@ const (
 	// Right now, it is set to pod from PAAS.
 	// See doc: https://yuque.antfin-inc.com/sys/sigma3.x/scrh0f#7eddfda9
 	LabelPodAppCPUProfile = CustomAlipayPrefix + "/app-cpu-profile"
+
+	// LabelRuntimeClass indicates runtime-class value, e.g. runsc/runc
+	LabelRuntimeClass = CustomAlipayPrefix + "/runtime-class"
+
+	// LabelBaselinePCI is the pci base line for all app,
+	// true or false
+	LabelBaselinePCI = MetaAlipayPrefix + "/baseline-pci"
+
+	// LabelIsSystemAgent indicates that if pod is a system agent, true or false
+	LabelIsSystemAgent = "pod." + AlipayGroupName + "/is-system-agent"
+
+	// LabelPromotionKeepAliveMemory indicates the keep alive memory of a pod in bytes.
+	LabelPromotionKeepAliveMemory = "com.alipay.acs.container.promotion.keepAliveMemory"
 )
 
 // Readiness Gate.

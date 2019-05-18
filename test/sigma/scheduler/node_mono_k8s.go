@@ -192,6 +192,9 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][node-mono][Serial]", func() {
 		   否则，如果有多个主机，则调度成功，且没有调度到 nodeA
 	*/
 	It("[smoke][p0][bvt] node_mono_002 Two different node mono pods should not be scheduled in the same node", func() {
+		if env.Tester == env.TesterAnt {
+			Skip("Ant env has daemonset pod, so this case will failed always, just skip.")
+		}
 		By("create a mono pod")
 		appName := "app-" + string(uuid.NewUUID())
 		duName := "du-" + appName
@@ -282,6 +285,9 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][node-mono][Serial]", func() {
 		   否则，如果有多个主机，则调度成功，且没有调度到 nodeA
 	*/
 	It("node_mono_003 A node mono pod should fail to be scheduled to the node with ordinary pod", func() {
+		if env.Tester == env.TesterAnt {
+			Skip("Ant env has daemonset pod, so this case will failed always, just skip.")
+		}
 		By("create a ordinary pod")
 		pod := runPausePod(f, pausePodConfig{
 			Name: "non-mono-pod-" + string(uuid.NewUUID()),

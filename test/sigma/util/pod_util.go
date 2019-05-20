@@ -324,7 +324,7 @@ func UnsuspendContainer(client clientset.Interface, pod *v1.Pod, namespace strin
 }
 
 func patchContainerToDesiredState(client clientset.Interface, pod *v1.Pod, namespace, containerName,
-successStr string, desiredContainerState sigmak8sapi.ContainerState) error {
+	successStr string, desiredContainerState sigmak8sapi.ContainerState) error {
 	patchData, err := GenerateContainerStatePatchData(containerName, desiredContainerState)
 	if err != nil {
 		return err
@@ -448,4 +448,26 @@ func WaitTimeoutForContainerUpdateRetryCount(client clientset.Interface, pod *v1
 	}
 
 	return nil
+}
+
+//  DeletePodWithTimeout delete pod by using k8s api, and check whether pod is really deleted within the timeout.
+func DeletePodWithTimeout(client clientset.Interface, pod *v1.Pod, timeout time.Duration) error {
+	err := client.CoreV1().Pods(pod.Namespace).Delete(pod.Name, metav1.NewDeleteOptions(5))
+	if err != nil {
+		return err
+	}
+	t := time.Now()
+	for {
+		_, err := client.CoreV1().Pods(pod.Namespace).Get(pod.Name, metav1.GetOptions{})
+		if err != nil && strings.Contains(err.Error(), "not found") {
+			framework.Logf("pod %s has been removed", pod.Name)
+			return nil
+		}
+		if time.Since(t) >= timeout {
+			return fmt.Errorf("Gave up waiting for pod %s is removed after %v seconds",
+				pod.Name, time.Since(t).Seconds())
+		}
+		framework.Logf("Retrying to check whether pod %s is removed", pod.Name)
+		time.Sleep(5 * time.Second)
+	}
 }

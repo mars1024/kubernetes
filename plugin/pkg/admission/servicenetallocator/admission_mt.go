@@ -44,6 +44,7 @@ import (
 	admissioninitializer "k8s.io/kubernetes/pkg/kubeapiserver/admission"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	"k8s.io/apiserver/pkg/server/storage"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 )
 
 const (
@@ -120,11 +121,13 @@ func (s *serviceNetAllocatorPlugin) SetStorageFactory(factory storage.StorageFac
 }
 
 func (s *serviceNetAllocatorPlugin) ValidateInitialization() error {
-	if s.lister == nil {
-		return fmt.Errorf("%s requires a lister", PluginName)
-	}
-	if s.coreClient == nil {
-		return fmt.Errorf("%s requires a client", PluginName)
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		if s.lister == nil {
+			return fmt.Errorf("%s requires a lister", PluginName)
+		}
+		if s.coreClient == nil {
+			return fmt.Errorf("%s requires a client", PluginName)
+		}
 	}
 	return nil
 }

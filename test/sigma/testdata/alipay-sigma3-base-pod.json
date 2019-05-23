@@ -3,12 +3,12 @@
   "apiVersion": "v1",
   "metadata": {
     "name": "test-bvt-container-lvcsuv1v-eu95",
-    "namespace": "test-bvt-container",
+    "namespace": "alipay-test-bvt",
     "creationTimestamp": null,
     "labels": {
       "meta.k8s.alipay.com/app-deploy-unit": "myapp-prod",
       "sigma.ali/deploy-unit": "myapp-prod",
-      "sigma.ali/app-name": "alipay-test-bvt-container",
+      "sigma.ali/app-name": "alipay-test-bvt",
       "meta.k8s.alipay.com/zone": "GZ",
       "sigma.ali/instance-group": "sigma-alipay-test",
       "ali.host.dns": "true"

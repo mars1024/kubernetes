@@ -22,16 +22,15 @@ var timeOut time.Duration
 
 var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 	f := framework.NewDefaultFramework("sigma-ant-bvt")
-	appName := "alipay-test-bvt-container"
 	enableOverQuota := IsEnableOverQuota()
 	timeOut = GetOperatingTimeOut()
 	framework.Logf("EnableOverQuota:%v, timeOut:%v, Default:%v, concurrent:%v", enableOverQuota, timeOut, timeOut*time.Minute, GetConcurrentNum())
 	BeforeEach(func() {
 		CheckAdapterParameters()
-		By(fmt.Sprintf("first make sure no pod exists in namespace %s", appName))
-		err := CheckPodNameSpace(f.ClientSet, appName)
+		By(fmt.Sprintf("first make sure no pod exists in namespace %s", AppName))
+		err := CheckPodNameSpace(f.ClientSet, AppName)
 		Expect(err).ShouldNot(HaveOccurred(), "check namespace error")
-		err = util.DeleteAllPodsInNamespace(f.ClientSet, appName)
+		err = util.DeleteAllPodsInNamespace(f.ClientSet, AppName)
 		Expect(err).ShouldNot(HaveOccurred(), "delete all pods of test namespace error")
 		site, err = GetNodeSite(f.ClientSet)
 		Expect(err).To(BeNil(), "get node labels site failed.")
@@ -128,7 +127,6 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 		name := "simga-bvt-test-" + time.Now().Format("20160607123450")
 		pod, err := LoadAlipayBasePod(name, k8sApi.ContainerStateRunning, enableOverQuota)
 		Expect(err).To(BeNil(), "Load create container config failed.")
-		pod.Namespace = appName
 		pod.Labels[k8sApi.LabelSite] = site
 		By("Create sigma3.1 pod.")
 		err = CreateSigmaPod(f.ClientSet, pod)
@@ -259,7 +257,6 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 				name := fmt.Sprintf("simga-bvt-test-%d", time.Now().UnixNano())
 				pod, err := LoadAlipayBasePod(name, k8sApi.ContainerStateRunning, enableOverQuota)
 				Expect(err).To(BeNil(), "Load create container config failed.")
-				pod.Namespace = appName
 				pod.Labels[k8sApi.LabelSite] = site
 				By("Create sigma3.1 pod.")
 				err = CreateSigmaPod(f.ClientSet, pod)

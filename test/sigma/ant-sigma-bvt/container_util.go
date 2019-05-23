@@ -69,6 +69,7 @@ func LoadBaseCreateFile(file string) (*dockerclient.ContainerConfig, error) {
 		framework.Logf("Unmarshal sigma2.0 content failed, %+v", err)
 		return nil, err
 	}
+	config.Labels["ali.AppName"] = AppName
 	return config, nil
 }
 

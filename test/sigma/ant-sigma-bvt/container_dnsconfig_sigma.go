@@ -9,26 +9,25 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/pborman/uuid"
+	"github.com/samalba/dockerclient"
 	k8sApi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/sigma/util"
-	"github.com/samalba/dockerclient"
-
 )
 
+const AppName = "alipay-test-bvt"
 var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 	f := framework.NewDefaultFramework("sigma-ant-bvt")
-	appName := "alipay-test-bvt-container"
 	enableOverQuota := IsEnableOverQuota()
 	framework.Logf("EnableOverQuota:%v", enableOverQuota)
 	BeforeEach(func() {
 		CheckAdapterParameters()
-		By(fmt.Sprintf("first make sure no pod exists in namespace %s", appName))
-		err := CheckPodNameSpace(f.ClientSet, appName)
+		By(fmt.Sprintf("first make sure no pod exists in namespace %s", AppName))
+		err := CheckPodNameSpace(f.ClientSet, AppName)
 		Expect(err).ShouldNot(HaveOccurred(), "check namespace error")
-		err = util.DeleteAllPodsInNamespace(f.ClientSet, appName)
+		err = util.DeleteAllPodsInNamespace(f.ClientSet, AppName)
 		Expect(err).ShouldNot(HaveOccurred(), "delete all pods of test namespace error")
 		site, err = GetNodeSite(f.ClientSet)
 		Expect(err).To(BeNil(), "get node labels site failed.")
@@ -68,7 +67,6 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 		name := "simga-bvt-test-" + time.Now().Format("20160607123450")
 		pod, err := LoadAlipayBasePod(name, k8sApi.ContainerStateRunning, enableOverQuota)
 		Expect(err).To(BeNil(), "Load create container config failed.")
-		pod.Namespace = appName
 		pod.Labels[k8sApi.LabelSite] = site
 		pod.Spec.DNSConfig.Nameservers = []string{"8.8.8.8"}
 		//start
@@ -80,15 +78,14 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 		name := "simga-bvt-test-" + time.Now().Format("20160607123450")
 		pod, err := LoadAlipayBasePod(name, k8sApi.ContainerStateRunning, enableOverQuota)
 		Expect(err).To(BeNil(), "Load create container config failed.")
-		pod.Namespace = appName
 		pod.Labels[k8sApi.LabelSite] = site
 		pod.Spec.DNSPolicy = v1.DNSNone
 		pod.Spec.DNSConfig = &v1.PodDNSConfig{
 			Nameservers: []string{"8.8.8.8"},
 			Searches:    []string{"test.alipay.net"},
-			Options:     []v1.PodDNSConfigOption{
+			Options: []v1.PodDNSConfigOption{
 				{
-					Name:  "test-timeout:2",
+					Name: "test-timeout:2",
 				},
 			},
 		}
@@ -97,9 +94,8 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 	})
 })
 
-
 //CheckAdapterDNSPolicy()
-func CheckAdapterDNSPolicy(f * framework.Framework, createConfig *dockerclient.ContainerConfig) {
+func CheckAdapterDNSPolicy(f *framework.Framework, createConfig *dockerclient.ContainerConfig) {
 	By("Create container.")
 	//create
 	pod, result := MustCreatePod(s, f.ClientSet, createConfig)
@@ -143,7 +139,6 @@ func CheckAdapterDNSPolicy(f * framework.Framework, createConfig *dockerclient.C
 	err = checkPodDelete(f.ClientSet, &pod)
 	Expect(err).To(BeNil(), "[AdapterLifeCycle] Delete container failed.")
 }
-
 
 func CheckSigma31DNSPolicy(f *framework.Framework, pod *v1.Pod) {
 	By("Create sigma3.1 pod.")

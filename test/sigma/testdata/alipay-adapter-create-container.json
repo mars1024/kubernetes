@@ -11,7 +11,7 @@
     "ali.NetPriority": "10",
     "test.container.type": "bvt",
     "ali.RegisterContainerAsHost": "true",
-    "ali.AppName": "alipay-test-bvt-container",
+    "ali.AppName": "alipay-test-bvt",
     "ali.CpuCount": "1",
     "ali.CpuQuota": "1",
     "ali.MemoryHardlimit": "1073741824",

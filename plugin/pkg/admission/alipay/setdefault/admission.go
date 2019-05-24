@@ -213,7 +213,9 @@ next:
 	// https://aone.alipay.com/issue/19065268
 	if qos.GetPodQOS(pod) == core.PodQOSGuaranteed && *guaranteedPodOOMScoreAdj != 0 {
 		for i := range allocSpec.Containers {
-			allocSpec.Containers[i].HostConfig.OomScoreAdj = *guaranteedPodOOMScoreAdj
+			if allocSpec.Containers[i].HostConfig.OomScoreAdj == 0 {
+				allocSpec.Containers[i].HostConfig.OomScoreAdj = *guaranteedPodOOMScoreAdj
+			}
 		}
 	}
 

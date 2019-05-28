@@ -439,6 +439,12 @@ const (
 	//
 	// Disable the admit function to avoid reject pod.
 	DisableRejectPod utilfeature.Feature = "DisableRejectPod"
+
+	// owner: @tongkai.ytk (tongkai.ytk@alibaba-inc.com)
+	// alpha: v1.12
+	//
+	// Disable the pod QoS validation function to avoid updating pod cpu request forbidden (such as VPA work).
+	DisableUpdatePodQOSValidation utilfeature.Feature = "DisableUpdatePodQOSValidation"
 )
 
 func init() {

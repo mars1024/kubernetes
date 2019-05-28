@@ -3515,7 +3515,6 @@ func ValidatePodUpdate(newPod, oldPod *core.Pod) field.ErrorList {
 	// 2.  spec.initContainers[*].* except name
 	// 3.  spec.* except nodeSelector, nodeName, hostname, subdomain, securityContext.hostNetwork, securityContext.hostIPC, securityContext.hostPID, securityContext.shareProcessNamespace, Qos
 
-
 	containerErrs, stop := ValidateContainerUpdates(newPod.Spec.Containers, oldPod.Spec.Containers, specPath.Child("containers"))
 	allErrs = append(allErrs, containerErrs...)
 	if stop {
@@ -3547,10 +3546,13 @@ func ValidatePodUpdate(newPod, oldPod *core.Pod) field.ErrorList {
 		allErrs = append(allErrs, field.Invalid(specPath.Child("activeDeadlineSeconds"), newPod.Spec.ActiveDeadlineSeconds, "must not update from a positive integer to nil value"))
 	}
 
-	containerErrs, stop = ValidateContainerQoSUpdate(newPod, oldPod, specPath.Child("containers"))
-	allErrs = append(allErrs, containerErrs...)
-	if stop {
-		return allErrs
+	// NOTE(tongkai.ytk): when DisableUpdatePodQOSValidation is open, do not validate pod QoS changing when do update.
+	if !utilfeature.DefaultFeatureGate.Enabled(features.DisableUpdatePodQOSValidation) {
+		containerErrs, stop = ValidateContainerQoSUpdate(newPod, oldPod, specPath.Child("containers"))
+		allErrs = append(allErrs, containerErrs...)
+		if stop {
+			return allErrs
+		}
 	}
 
 	// handle updateable fields by munging those fields prior to deep equal comparison.
@@ -3605,7 +3607,6 @@ func ValidatePodUpdate(newPod, oldPod *core.Pod) field.ErrorList {
 	} else { // mungedPod.Spec.SecurityContext == nil
 		mungedPod.Spec.SecurityContext = newPod.Spec.SecurityContext
 	}
-
 
 	allErrs = append(allErrs, validateOnlyAddedTolerations(newPod.Spec.Tolerations, oldPod.Spec.Tolerations, specPath.Child("tolerations"))...)
 

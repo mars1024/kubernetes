@@ -440,6 +440,12 @@ const (
 	// Disable the admit function to avoid reject pod.
 	DisableRejectPod utilfeature.Feature = "DisableRejectPod"
 
+	// owner: @tongkai.ytk (tongkai.ytk@alibaba-inc.com)
+	// alpha: v1.12
+	//
+	// Disable the pod QoS validation function to avoid updating pod cpu request forbidden (such as VPA work).
+	DisableUpdatePodQOSValidation utilfeature.Feature = "DisableUpdatePodQOSValidation"
+
 	// owner: @zhongyuan.zxy (zhongyuan.zxy@alibaba-inc.com)
 	// alpha: v1.12
 	//
@@ -469,6 +475,7 @@ func init() {
 var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureSpec{
 	AppArmor:             {Default: true, PreRelease: utilfeature.Beta},
 	DynamicKubeletConfig: {Default: true, PreRelease: utilfeature.Beta},
+
 	ExperimentalHostUserNamespaceDefaultingGate: {Default: false, PreRelease: utilfeature.Beta},
 	ExperimentalCriticalPodAnnotation:           {Default: false, PreRelease: utilfeature.Alpha},
 	DevicePlugins:                               {Default: true, PreRelease: utilfeature.Beta},
@@ -533,6 +540,7 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	DisableChangePodStatusByNodeReadyCondition:  {Default: true, PreRelease: utilfeature.Beta},
 	DefaultHashVersionTo110:                     {Default: false, PreRelease: utilfeature.Alpha},
 	DisableRejectPod:                            {Default: false, PreRelease: utilfeature.Alpha},
+	DisableUpdatePodQOSValidation:               {Default: false, PreRelease: utilfeature.Alpha},
 	PodLevelResourceQuota:                       {Default: false, PreRelease: utilfeature.Alpha},
 	IgnoreSidecarContainerReady:                 {Default: false, PreRelease: utilfeature.Alpha},
 	EnsurePodSuccess:                            {Default: false, PreRelease: utilfeature.Alpha},

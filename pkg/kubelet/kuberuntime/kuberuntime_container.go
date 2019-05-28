@@ -738,9 +738,17 @@ func (m *kubeGenericRuntimeManager) killContainer(pod *v1.Pod, containerID kubec
 		return err
 	}
 
+	timeout := int64(sigmautil.GetTimeoutSecondsFromPodAnnotation(pod, containerName, sigmak8sapi.PreStopHookTimeoutSeconds))
+	glog.V(2).Infof("Executing container %q pre-stop hook with %d second grace period for container %s in pod %s", containerID.String(), timeout, containerName, format.Pod(pod))
+
 	// Run the pre-stop lifecycle hooks if applicable and if there is enough time to run it
 	if containerSpec.Lifecycle != nil && containerSpec.Lifecycle.PreStop != nil && gracePeriod > 0 {
-		gracePeriod = gracePeriod - m.executePreStopHook(pod, containerID, containerSpec, gracePeriod)
+		if timeout > 0 {
+			m.executePreStopHook(pod, containerID, containerSpec, timeout)
+			gracePeriod = gracePeriod - timeout
+		} else {
+			gracePeriod = gracePeriod - m.executePreStopHook(pod, containerID, containerSpec, gracePeriod)
+		}
 	}
 	// always give containers a minimal shutdown window to avoid unnecessary SIGKILLs
 	if gracePeriod < minimumGracePeriodInSeconds {

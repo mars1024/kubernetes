@@ -43,6 +43,7 @@ func TestAdmitPod(t *testing.T) {
 		allocOutput       sigmaapi.AllocSpec
 		annotationsOutput map[string]string
 		err               string
+		action            admission.Operation
 	}{
 		{
 			name: "admit default",
@@ -92,7 +93,8 @@ func TestAdmitPod(t *testing.T) {
 			annotationsOutput: map[string]string{
 				sigmaapi.AnnotationNetPriority: "5",
 			},
-			err: "",
+			err:    "",
+			action: admission.Create,
 		},
 		{
 			name: "set cpu set spread strategy, disk type, gpu share mode, net-priority and cgroupParent",
@@ -147,7 +149,8 @@ func TestAdmitPod(t *testing.T) {
 			annotationsOutput: map[string]string{
 				sigmaapi.AnnotationNetPriority: "3",
 			},
-			err: "",
+			err:    "",
+			action: admission.Create,
 		},
 		{
 			name: "container not found in spec",
@@ -173,7 +176,8 @@ func TestAdmitPod(t *testing.T) {
 			annotationsOutput: map[string]string{
 				sigmaapi.AnnotationNetPriority: "5",
 			},
-			err: "container name0 not found",
+			err:    "container name0 not found",
+			action: admission.Create,
 		},
 		{
 			name: "nil annotation",
@@ -191,6 +195,53 @@ func TestAdmitPod(t *testing.T) {
 			annotationsOutput: map[string]string{
 				sigmaapi.AnnotationNetPriority: "5",
 			},
+			action: admission.Create,
+		},
+		{
+			name: "admit, container not found in allocSpec",
+			pod: api.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "123",
+					Namespace:   namespace,
+					Annotations: map[string]string{},
+				},
+				Spec: api.PodSpec{
+					Containers: []api.Container{
+						{Name: "name1"},
+						{Name: "name2"},
+					},
+				},
+			},
+			allocInput: sigmaapi.AllocSpec{
+				Containers: []sigmaapi.Container{
+					{
+						Name: "name1",
+					},
+					{
+						Name: "name3",
+					},
+					{
+						Name: "name4",
+					},
+				},
+			},
+			allocOutput: sigmaapi.AllocSpec{
+				Containers: []sigmaapi.Container{
+					{
+						Name: "name1",
+						Resource: sigmaapi.ResourceRequirements{
+							GPU: sigmaapi.GPUSpec{
+								ShareMode: sigmaapi.GPUShareModeExclusive,
+							},
+						},
+					},
+				},
+			},
+			annotationsOutput: map[string]string{
+				sigmaapi.AnnotationNetPriority: "5",
+			},
+			err:    "",
+			action: admission.Update,
 		},
 	}
 	for _, tc := range tests {
@@ -201,7 +252,7 @@ func TestAdmitPod(t *testing.T) {
 
 		err := handler.Admit(admission.NewAttributesRecord(&tc.pod, nil,
 			api.Kind("Pod").WithVersion("version"), tc.pod.Namespace, tc.pod.Name,
-			api.Resource("pods").WithVersion("version"), "", admission.Create, false, nil))
+			api.Resource("pods").WithVersion("version"), "", tc.action, false, nil))
 		if tc.err != "" {
 			if err != nil {
 				if !strings.Contains(err.Error(), tc.err) {
@@ -1707,6 +1758,125 @@ func TestValidatePod(t *testing.T) {
 				},
 			},
 			err: "the swap value shoule be larger than memory limit 20000",
+		},
+		{
+			name:   "pod update with container delete.",
+			action: admission.Update,
+			pod: api.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "123",
+					Namespace:   namespace,
+					Annotations: map[string]string{},
+				},
+				Spec: api.PodSpec{
+					Containers: []api.Container{
+						{
+							Name: "name1",
+							Resources: api.ResourceRequirements{
+								Requests: api.ResourceList{
+									api.ResourceCPU:    resource.MustParse("2"),
+									api.ResourceMemory: resource.MustParse("10000"),
+								},
+								Limits: api.ResourceList{
+									api.ResourceCPU:    resource.MustParse("2"),
+									api.ResourceMemory: resource.MustParse("20000"),
+								},
+							},
+						},
+					},
+				},
+			},
+			alloc: sigmaapi.AllocSpec{
+				Containers: []sigmaapi.Container{
+					{
+						Name: "name1",
+						Resource: sigmaapi.ResourceRequirements{
+							CPU: sigmaapi.CPUSpec{
+								CPUSet: &sigmaapi.CPUSetSpec{
+									SpreadStrategy: sigmaapi.SpreadStrategySameCoreFirst,
+									CPUIDs:         []int{1, 2},
+								},
+							},
+							GPU: sigmaapi.GPUSpec{
+								ShareMode: sigmaapi.GPUShareModeExclusive,
+							},
+						},
+						HostConfig: sigmaapi.HostConfigInfo{
+							MemorySwap: int64(30000),
+						},
+					},
+				},
+			},
+			oldPod: &api.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "123",
+					Namespace:   namespace,
+					Annotations: map[string]string{},
+				},
+				Spec: api.PodSpec{
+					Containers: []api.Container{
+						{
+							Name: "name1",
+							Resources: api.ResourceRequirements{
+								Requests: api.ResourceList{
+									api.ResourceCPU:    resource.MustParse("2"),
+									api.ResourceMemory: resource.MustParse("10000"),
+								},
+								Limits: api.ResourceList{
+									api.ResourceCPU:    resource.MustParse("2"),
+									api.ResourceMemory: resource.MustParse("20000"),
+								},
+							},
+						},
+						{
+							Name: "name2",
+							Resources: api.ResourceRequirements{
+								Requests: api.ResourceList{
+									api.ResourceCPU:    resource.MustParse("2"),
+									api.ResourceMemory: resource.MustParse("10000"),
+								},
+								Limits: api.ResourceList{
+									api.ResourceCPU:    resource.MustParse("2"),
+									api.ResourceMemory: resource.MustParse("20000"),
+								},
+							},
+						},
+					},
+				},
+			},
+			oldAlloc: &sigmaapi.AllocSpec{
+				Containers: []sigmaapi.Container{
+					{
+						Name: "name1",
+						Resource: sigmaapi.ResourceRequirements{
+							CPU: sigmaapi.CPUSpec{
+								CPUSet: &sigmaapi.CPUSetSpec{
+									SpreadStrategy: sigmaapi.SpreadStrategySameCoreFirst,
+									CPUIDs:         []int{1, 2},
+								},
+							},
+							GPU: sigmaapi.GPUSpec{
+								ShareMode: sigmaapi.GPUShareModeExclusive,
+							},
+						},
+					},
+					{
+						Name: "name2",
+						Resource: sigmaapi.ResourceRequirements{
+							CPU: sigmaapi.CPUSpec{
+								CPUSet: &sigmaapi.CPUSetSpec{
+									SpreadStrategy: sigmaapi.SpreadStrategySameCoreFirst,
+									CPUIDs:         []int{3, 4},
+								},
+							},
+							GPU: sigmaapi.GPUSpec{
+								ShareMode: sigmaapi.GPUShareModeExclusive,
+							},
+						},
+					},
+				},
+			},
+			err: "",
 		},
 	}
 	for i, tc := range tests {

@@ -659,12 +659,17 @@ var _ = Describe("[sigma-3.1][sigma-scheduler][node-affinity]", func() {
 		for _, v := range nodeList.Items {
 			nodes[v.Name] = v
 			nodeNames = append(nodeNames, v.Name)
-			sm, _ := v.Labels[api.LabelMachineModel]
-			machineTypes = append(machineTypes, sm)
+			if sm, ok := v.Labels[api.LabelMachineModel]; ok {
+				machineTypes = append(machineTypes, sm)
+			}
 		}
 
 		if len(nodeNames) < 2 {
 			Skip("Nodes number is less than 2, skip.")
+		}
+
+		if len(machineTypes) < 1 {
+			Skip("Nodes machine type num is less than 1, skip.")
 		}
 
 		aff := util.GetAffinityNodeSelectorRequirement(api.LabelMachineModel, machineTypes[:2])

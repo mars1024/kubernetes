@@ -109,11 +109,15 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][ant][smoke][colocation]", fun
 	// 4. 创建失败，报错混部资源不足；
 	// 5. 创建失败，报错混部资源不足；
 	It("[ant] colocation_mix_001: colocation pod in mix node.", func() {
+		if len(nodesInfo) == 0 {
+			Skip("no colocation node,skip")
+		}
 		framework.WaitForStableCluster(cs, masterNodes)
-
 		nodeName := GetNodeThatCanRunColocationPod(f)
 		Expect(nodeName).ToNot(BeNil())
-
+		if col, ok := nodesInfo[nodeName].Labels[alipaysigmak8sapi.LabelIsColocation]; !ok || col != "true" {
+			Skip("not colocation node,skip")
+		}
 		framework.Logf("get one colocation node to schedule, nodeName: %s", nodeName)
 
 		nodeNameUpper := strings.ToUpper(nodeName)
@@ -294,10 +298,15 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][ant][smoke][colocation]", fun
 	// 7. 非混部容器创建失败，调度器内存中资源状态正常（即非混部 CPU 资源分配达到上限）；
 	// 8. 结果同 4-7；
 	It("[ant] colocation_mix_002: colocation pod in mix node.", func() {
+		if len(nodesInfo) == 0 {
+			Skip("no colocation node,skip")
+		}
 		framework.WaitForStableCluster(cs, masterNodes)
 		nodeName := GetNodeThatCanRunColocationPod(f)
 		Expect(nodeName).ToNot(BeNil())
-
+		if col, ok := nodesInfo[nodeName].Labels[alipaysigmak8sapi.LabelIsColocation]; !ok || col != "true" {
+			Skip("not colocation node,skip")
+		}
 		framework.Logf("get one colocation node to schedule, nodeName: %s", nodeName)
 
 		nodeNameUpper := strings.ToUpper(nodeName)
@@ -512,10 +521,15 @@ var _ = Describe("[sigma-2.0+3.1][sigma-scheduler][ant][smoke][colocation]", fun
 	// 6. 容器创建失败（内存资源不足），调度器内存中资源状态正常；
 	// 7. 结果同 4-6；
 	It("[ant] colocation_mix_003: colocation pod in mix node.", func() {
+		if len(nodesInfo) == 0 {
+			Skip("no colocation node,skip")
+		}
 		framework.WaitForStableCluster(cs, masterNodes)
 		nodeName := GetNodeThatCanRunColocationPod(f)
 		Expect(nodeName).ToNot(BeNil())
-
+		if col, ok := nodesInfo[nodeName].Labels[alipaysigmak8sapi.LabelIsColocation]; !ok || col != "true" {
+			Skip("not colocation node,skip")
+		}
 		framework.Logf("get one colocation node to schedule, nodeName: %s", nodeName)
 
 		nodeNameUpper := strings.ToUpper(nodeName)

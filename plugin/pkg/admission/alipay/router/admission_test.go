@@ -98,7 +98,7 @@ func TestAdmit(t *testing.T) {
 			volumeExist:   false,
 			injectLabel:   false,
 			injectPublic:  false,
-			injectDefault: false,
+			injectDefault: true,
 		},
 	}
 	for _, tc := range tcs {
@@ -134,7 +134,7 @@ func TestAdmit(t *testing.T) {
 					assert.Equal(RouterVolumeDestination, container.VolumeMounts[0].MountPath)
 					assert.Equal(true, container.VolumeMounts[0].ReadOnly)
 				} else {
-					assert.Equal(0, len(container.Env))
+					assert.Equal(1, len(container.Env))
 				}
 			}
 		} else {

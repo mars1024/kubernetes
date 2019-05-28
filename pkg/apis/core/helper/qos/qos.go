@@ -21,7 +21,9 @@ package qos
 import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/sets"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/kubernetes/pkg/apis/core"
+	"k8s.io/kubernetes/pkg/features"
 )
 
 var supportedQoSComputeResources = sets.NewString(string(core.ResourceCPU), string(core.ResourceMemory))
@@ -40,6 +42,11 @@ func GetPodQOS(pod *core.Pod) core.PodQOSClass {
 	zeroQuantity := resource.MustParse("0")
 	isGuaranteed := true
 	for _, container := range pod.Spec.Containers {
+		if utilfeature.DefaultFeatureGate.Enabled(features.PodLevelResourceQuota) {
+			if isSidecarContainer(container) {
+				continue
+			}
+		}
 		// process requests
 		for name, quantity := range container.Resources.Requests {
 			if !isSupportedQoSComputeResource(name) {
@@ -94,4 +101,18 @@ func GetPodQOS(pod *core.Pod) core.PodQOSClass {
 		return core.PodQOSGuaranteed
 	}
 	return core.PodQOSBurstable
+}
+
+// isSidecarContainer checks if container is a sidecar one.
+func isSidecarContainer(container core.Container) bool {
+	isSidecarContainer := false
+	if len(container.Env) > 0 {
+		for _, env := range container.Env {
+			if env.Name == "IS_SIDECAR" && env.Value == "true" {
+				isSidecarContainer = true
+				break
+			}
+		}
+	}
+	return isSidecarContainer
 }

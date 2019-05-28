@@ -402,12 +402,12 @@ func MustUpdateContainer(s *AdapterServer, client clientset.Interface, pod *v1.P
 		reqInfo, err := json.Marshal(updateReq)
 		framework.Logf("Update pod %v, ReqInfo:%v", pod.Name, string(reqInfo))
 		Expect(err).NotTo(HaveOccurred(), "[AdapterLifeCycle]marshal upgrade ReqInfo failed.")
-
 		updateResp, message, err := s.UpdateContainer(pod.Name, reqInfo)
 		Expect(err).NotTo(HaveOccurred(), "[AdapterLifeCycle] update pod error.")
 		Expect(message).To(Equal(""), "[AdapterLifeCycle] update pod failed.")
 		Expect(updateResp).NotTo(BeNil(), "[AdapterLifeCycle] get update response failed.")
 		Expect(updateResp.Id).NotTo(BeEmpty(), "[AdapterLifeCycle] get updated pod sn failed.")
+		Expect(len(updateResp.Warnings)).To(BeZero(), "[AdapterLifeCycle] updated pod %v failed, err:%v", updateResp.Id, updateResp.Warnings)
 		close(ch)
 	}()
 	for {

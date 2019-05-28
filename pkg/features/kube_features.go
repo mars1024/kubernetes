@@ -445,6 +445,24 @@ const (
 	//
 	// Disable the pod QoS validation function to avoid updating pod cpu request forbidden (such as VPA work).
 	DisableUpdatePodQOSValidation utilfeature.Feature = "DisableUpdatePodQOSValidation"
+
+	// owner: @zhongyuan.zxy (zhongyuan.zxy@alibaba-inc.com)
+	// alpha: v1.12
+	//
+	// Filter the sidecar containers when calculate pod's QoS class
+	PodLevelResourceQuota utilfeature.Feature = "PodLevelResourceQuota"
+
+	// owner: @yaowei.cyw (yaowei.cyw@alibaba-inc.com)
+	// alpha: v1.12
+	//
+	// when generate pod ready, ignore sidecar container ready
+	IgnoreSidecarContainerReady utilfeature.Feature = "IgnoreSidecarContainerReady"
+
+	// owner: @fankang.fk (fankang.fk@alipay.com)
+	// alpha: v1.12
+	//
+	// always try to recreate sandbox even if the restart policy is Never
+	EnsurePodSuccess utilfeature.Feature = "EnsurePodSuccess"
 )
 
 func init() {
@@ -455,8 +473,9 @@ func init() {
 // To add a new feature, define a key for it above and add it here. The features will be
 // available throughout Kubernetes binaries.
 var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureSpec{
-	AppArmor:                                    {Default: true, PreRelease: utilfeature.Beta},
-	DynamicKubeletConfig:                        {Default: true, PreRelease: utilfeature.Beta},
+	AppArmor:             {Default: true, PreRelease: utilfeature.Beta},
+	DynamicKubeletConfig: {Default: true, PreRelease: utilfeature.Beta},
+
 	ExperimentalHostUserNamespaceDefaultingGate: {Default: false, PreRelease: utilfeature.Beta},
 	ExperimentalCriticalPodAnnotation:           {Default: false, PreRelease: utilfeature.Alpha},
 	DevicePlugins:                               {Default: true, PreRelease: utilfeature.Beta},
@@ -521,6 +540,10 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	DisableChangePodStatusByNodeReadyCondition:  {Default: true, PreRelease: utilfeature.Beta},
 	DefaultHashVersionTo110:                     {Default: false, PreRelease: utilfeature.Alpha},
 	DisableRejectPod:                            {Default: false, PreRelease: utilfeature.Alpha},
+	DisableUpdatePodQOSValidation:               {Default: false, PreRelease: utilfeature.Alpha},
+	PodLevelResourceQuota:                       {Default: false, PreRelease: utilfeature.Alpha},
+	IgnoreSidecarContainerReady:                 {Default: false, PreRelease: utilfeature.Alpha},
+	EnsurePodSuccess:                            {Default: false, PreRelease: utilfeature.Alpha},
 
 	// inherited features from generic apiserver, relisted here to get a conflict if it is changed
 	// unintentionally on either side:

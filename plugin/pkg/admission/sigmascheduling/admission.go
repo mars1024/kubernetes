@@ -121,19 +121,16 @@ func admitPod(attributes admission.Attributes) error {
 		return admission.NewForbidden(attributes,
 			fmt.Errorf("can not %s due to annotation %s json unmarshal error `%s`", op, sigmaapi.AnnotationPodAllocSpec, err))
 	}
+
+	// remove deleted containers from allocSpec, update operation only.
+	var err error
+	allocSpec.Containers, err = GetNewAllocContainer(pod, allocSpec.Containers, op)
+	if err != nil {
+		return admission.NewForbidden(attributes,
+			fmt.Errorf("can not %s due to annotation %s json unmarshal error `%s`", op, sigmaapi.AnnotationPodAllocSpec, err))
+	}
+	// admit
 	for idx, c := range allocSpec.Containers {
-		var found bool
-		for _, ctx := range pod.Spec.Containers {
-			if ctx.Name == c.Name {
-				found = true
-				break
-			}
-		}
-		if !found {
-			err := fmt.Errorf("container %s not found", c.Name)
-			return admission.NewForbidden(attributes,
-				fmt.Errorf("can not %s due to annotation %s json unmarshal error `%s`", op, sigmaapi.AnnotationPodAllocSpec, err))
-		}
 		if c.Resource.CPU.CPUSet != nil && c.Resource.CPU.CPUSet.SpreadStrategy == "" {
 			allocSpec.Containers[idx].Resource.CPU.CPUSet.SpreadStrategy = sigmaapi.SpreadStrategySpread
 		}
@@ -241,6 +238,10 @@ func validatePod(attributes admission.Attributes) error {
 			}
 		}
 		if !found {
+			// skip update admission.
+			if op == admission.Update {
+				continue
+			}
 			allErrs = append(allErrs, field.Invalid(containerField.Index(i), container.Name, "container not found"))
 		}
 
@@ -355,7 +356,21 @@ func validatePod(attributes admission.Attributes) error {
 			fmt.Errorf("can not %s annotation %s due to json unmarshal error `%s`", op, sigmaapi.AnnotationPodAllocSpec, err))
 	}
 
-	for i, container := range oldAllocSpec.Containers {
+	// 如果容器删除了，那么需要在下面的比较中index就不一致了，所以需要将oldAllocSpec更新下再比较
+	var err error
+	oldAllocSpec.Containers, err = GetNewAllocContainer(pod, oldAllocSpec.Containers, op)
+	if err != nil {
+		return admission.NewForbidden(attributes,
+			fmt.Errorf("can not %s annotation %s due to error `%s`", op, sigmaapi.AnnotationPodAllocSpec, err))
+	}
+	var containers []sigmaapi.Container
+	if len(oldAllocSpec.Containers) > len(allocSpec.Containers) {
+		containers = allocSpec.Containers
+	} else {
+		containers = oldAllocSpec.Containers
+	}
+
+	for i, container := range containers {
 		if container.Resource.CPU.CPUSet != nil && allocSpec.Containers[i].Resource.CPU.CPUSet != nil {
 			oldAllocSpec.Containers[i].Resource.CPU.CPUSet.CPUIDs = allocSpec.Containers[i].Resource.CPU.CPUSet.CPUIDs
 		} else if !(container.Resource.CPU.CPUSet == nil && allocSpec.Containers[i].Resource.CPU.CPUSet == nil) {
@@ -371,12 +386,32 @@ func validatePod(attributes admission.Attributes) error {
 	}
 
 	if !apiequality.Semantic.DeepEqual(allocSpec, oldAllocSpec) {
-		// TODO: Pinpoint the specific field that causes the invalid error after we have strategic merge diff
 		return admission.NewForbidden(attributes,
-			fmt.Errorf("can not %s annotation %s due to only cpuIDs, cpuset and memorySwap field can be updated", op, sigmaapi.AnnotationPodAllocSpec))
+			fmt.Errorf("can not %s annotation %s due to only cpuIDs, cpuset and memorySwap field can be updated.", op, sigmaapi.AnnotationPodAllocSpec))
 	}
 
 	return nil
+}
+
+// GetNewAllocContainer() delete containers from allocSpec if not in pod Spec.
+func GetNewAllocContainer(pod *api.Pod, containers []sigmaapi.Container, op admission.Operation) ([]sigmaapi.Container, error) {
+	var newContainer []sigmaapi.Container
+	for _, c := range containers {
+		var found bool
+		for _, ctx := range pod.Spec.Containers {
+			if ctx.Name == c.Name {
+				found = true
+				break
+			}
+		}
+		if found {
+			newContainer = append(newContainer, c)
+		}
+		if op != admission.Update && !found {
+			return nil, fmt.Errorf("container %s not found", c.Name)
+		}
+	}
+	return newContainer, nil
 }
 
 func findDuplicatedCPUIDs(cpusets *sigmaapi.CPUSetSpec) []string {

@@ -91,3 +91,118 @@ func TestIsPodDockerVMMode(t *testing.T) {
 		assert.Equal(t, IsPodDockerVMMode(test.pod), test.isDockerVMMode)
 	}
 }
+
+func TestIsPodJob(t *testing.T) {
+	tests := []struct {
+		message  string
+		pod      *v1.Pod
+		isPodJob bool
+	}{
+		{
+			message: "pod is job",
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "bar",
+					Namespace: "foo",
+					Labels:    map[string]string{sigmak8sapi.LabelPodIsJob: "true"},
+				},
+			},
+			isPodJob: true,
+		},
+		{
+			message: "pod is not job, label is nil",
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "bar",
+					Namespace: "foo",
+				},
+			},
+			isPodJob: false,
+		},
+		{
+			message: "pod is not job, label value is wrong",
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "bar",
+					Namespace: "foo",
+					Labels:    map[string]string{sigmak8sapi.LabelPodIsJob: "something_else"},
+				},
+			},
+			isPodJob: false,
+		},
+		{
+			message:  "pod is nil",
+			pod:      nil,
+			isPodJob: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Logf("case %s", test.message)
+		assert.Equal(t, IsPodJob(test.pod), test.isPodJob)
+	}
+}
+
+func TestIsContainerReadyIgnore(t *testing.T) {
+	tests := []struct {
+		message                string
+		container              *v1.Container
+		isContainerReadyIgnore bool
+	}{
+		{
+			message:                "container is nil",
+			container:              nil,
+			isContainerReadyIgnore: false,
+		},
+		{
+			message: "container env is nil",
+			container: &v1.Container{
+				Name: "bar",
+			},
+			isContainerReadyIgnore: false,
+		},
+		{
+			message: "container have env, but not have sidecar env",
+			container: &v1.Container{
+				Name: "bar",
+				Env: []v1.EnvVar{
+					{
+						Name:  "a",
+						Value: "b",
+					},
+				},
+			},
+			isContainerReadyIgnore: false,
+		},
+		{
+			message: "container have sidecar env, but value is invalid",
+			container: &v1.Container{
+				Name: "bar",
+				Env: []v1.EnvVar{
+					{
+						Name:  sigmak8sapi.EnvIgnoreReady,
+						Value: "b",
+					},
+				},
+			},
+			isContainerReadyIgnore: false,
+		},
+		{
+			message: "container have sidecar env, value is true, should ignore",
+			container: &v1.Container{
+				Name: "bar",
+				Env: []v1.EnvVar{
+					{
+						Name:  sigmak8sapi.EnvIgnoreReady,
+						Value: "true",
+					},
+				},
+			},
+			isContainerReadyIgnore: true,
+		},
+	}
+	for _, test := range tests {
+		t.Logf("case %s", test.message)
+		assert.Equal(t, test.isContainerReadyIgnore, IsContainerReadyIgnore(test.container))
+	}
+}

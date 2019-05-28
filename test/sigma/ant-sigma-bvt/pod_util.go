@@ -96,6 +96,7 @@ func LoadAlipayBasePod(name string, expectStatus k8sApi.ContainerState, enableOv
 	pod.Annotations[k8sApi.AnnotationContainerStateSpec] = string(stateSpecStr)
 	pod.Spec.Hostname = pod.Name
 	pod.Spec.DNSPolicy = v1.DNSDefault
+	pod.Namespace = AppName
 	return pod, nil
 }
 

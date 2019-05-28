@@ -163,7 +163,7 @@ func mutatePodResource(pod *core.Pod) error {
 			allocSpec.Containers[i].HostConfig.CPUBvtWarpNs = bestEffortCPUBvtWarpNs
 			allocSpec.Containers[i].HostConfig.CpuPeriod = QuotaPeriod
 			allocSpec.Containers[i].HostConfig.CpuQuota =
-				MilliCPUToQuota(cpuRequestMilliValue, QuotaPeriod)
+				MilliCPUToQuota(cpuLimitMilliValue, QuotaPeriod)
 			allocSpec.Containers[i].HostConfig.CpuShares =
 				MilliCPUToShares(cpuRequestMilliValue)
 			allocSpec.Containers[i].HostConfig.OomScoreAdj = bestEffortOOMScoreAdj

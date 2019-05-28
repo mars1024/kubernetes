@@ -2973,6 +2973,10 @@ func ValidatePod(pod *core.Pod) field.ErrorList {
 		}
 	}
 
+	if len(allErrs) > 0 {
+		glog.Errorf("Failed to validate pod: %+v, allErrs: %v", pod, allErrs)
+	}
+
 	return allErrs
 }
 

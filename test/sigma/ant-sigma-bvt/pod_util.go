@@ -15,6 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
+	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
 	"k8s.io/kubernetes/test/e2e/framework"
 	"k8s.io/kubernetes/test/sigma/util"
 )
@@ -315,6 +316,10 @@ func CheckUpdatePodReady(client clientset.Interface, pod *v1.Pod) wait.Condition
 			return false, err
 		}
 		if pod.Status.PodIP == "" {
+			return false, nil
+		}
+
+		if !podutil.IsPodReady(pod) {
 			return false, nil
 		}
 

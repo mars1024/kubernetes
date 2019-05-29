@@ -1,0 +1,26 @@
+
+stages:
+  - 代码检查
+
+静态扫描:
+  stage: 代码检查
+  plugin: CMD
+  pluginConfig:
+    encoding: UTF-8
+    taskKind: CMD_GOLANGCI_LINT
+
+单元测试:
+  aciTags: DOCKER
+  stage: 代码检查
+  agent:
+    docker:
+      image: reg.docker.alibaba-inc.com/caoyin/golang-dev:1.11.7
+  beforeScript:
+    - cd $WORKSPACE
+    - mkdir -p /go/src/gitlab.alipay-inc.com/sigma/clientset
+    - rm -rf /go/src/gitlab.alipay-inc.com/sigma/clientset
+    - cp -r $WORKSPACE /go/src/gitlab.alipay-inc.com/sigma/clientset
+  script:
+    - |
+      cd /go/src/gitlab.alipay-inc.com/sigma/clientset
+      make test

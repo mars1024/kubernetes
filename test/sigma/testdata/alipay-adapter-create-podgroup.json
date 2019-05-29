@@ -1,0 +1,137 @@
+{
+	"Name": "alipay-test-pg-bvt",
+    "Labels": {
+        "ali.BizName": "sigma-test-pg",
+        "ali.CpuSetMode": "default",
+        "ali.IncreaseReplica": "1",
+        "ali.MaxInstancePerHost": "2",
+        "ali.AppDeployUnit": "myapp-prod",
+        "ali.InstanceGroup": "sigma-alipay-test",
+        "ali.EnableOverQuota": "false",
+        "ali.NetPriority": "10",
+        "test.container.type": "bvt",
+        "ali.RegisterContainerAsHost": "true",
+        "ali.AppName": "alipay-test-pg-bvt",
+        "ali.CpuCount": "1",
+        "ali.CpuQuota": "1",
+        "ali.MemoryHardlimit": "1073741824",
+        "ali.MemoryPredict": "1073741824",
+        "ali.DiskSize": "1G",
+        "DiskQuota": "1g",
+        "ali.Async": "true",
+        "ali.host.dns": "true"
+    },
+    "Env": [
+        "SigmaTest=bvt"
+    ],
+    "ContainerConfigList": [
+        {
+            "Image": "reg.docker.alibaba-inc.com/sigma-api-bvt/nginx:1.13.5-alpine",
+            "Labels": {
+                "ali.BizName": "sigma-test-pg",
+                "ali.CpuSetMode": "default",
+                "ali.IncreaseReplica": "1",
+                "ali.MaxInstancePerHost": "2",
+                "ali.AppDeployUnit": "myapp-prod",
+                "ali.InstanceGroup": "sigma-alipay-test",
+                "ali.EnableOverQuota": "false",
+                "ali.NetPriority": "10",
+                "test.container.type": "bvt",
+                "ali.RegisterContainerAsHost": "true",
+                "ali.AppName": "alipay-test-pg-bvt-1",
+                "ali.CpuCount": "1",
+                "ali.CpuQuota": "1",
+                "ali.MemoryHardlimit": "1073741824",
+                "ali.MemoryPredict": "1073741824",
+                "ali.DiskSize": "1G",
+                "DiskQuota": "1g",
+                "ali.Async": "true",
+                "ali.host.dns": "true"
+            },
+            "Env": [
+                "SigmaTest=bvt"
+            ]
+        },
+        {
+            "Image": "reg.docker.alibaba-inc.com/sigma-api-bvt/nginx:1.13.5-alpine",
+            "Labels": {
+                "ali.BizName": "sigma-test-pg",
+                "ali.CpuSetMode": "default",
+                "ali.IncreaseReplica": "1",
+                "ali.MaxInstancePerHost": "2",
+                "ali.AppDeployUnit": "myapp-prod",
+                "ali.InstanceGroup": "sigma-alipay-test",
+                "ali.EnableOverQuota": "false",
+                "ali.NetPriority": "10",
+                "test.container.type": "bvt",
+                "ali.RegisterContainerAsHost": "true",
+                "ali.AppName": "alipay-test-pg-bvt-2",
+                "ali.CpuCount": "1",
+                "ali.CpuQuota": "1",
+                "ali.MemoryHardlimit": "1073741824",
+                "ali.MemoryPredict": "1073741824",
+                "ali.DiskSize": "1G",
+                "DiskQuota": "1g",
+                "ali.Async": "true",
+                "ali.host.dns": "true"
+            },
+            "Env": [
+                "SigmaTest=bvt"
+            ]
+        },
+        {
+            "Image": "reg.docker.alibaba-inc.com/sigma-api-bvt/nginx:1.13.5-alpine",
+            "Labels": {
+                "ali.BizName": "sigma-test-pg",
+                "ali.CpuSetMode": "default",
+                "ali.IncreaseReplica": "1",
+                "ali.MaxInstancePerHost": "2",
+                "ali.AppDeployUnit": "myapp-prod",
+                "ali.InstanceGroup": "sigma-alipay-test",
+                "ali.EnableOverQuota": "false",
+                "ali.NetPriority": "10",
+                "test.container.type": "bvt",
+                "ali.RegisterContainerAsHost": "true",
+                "ali.AppName": "alipay-test-pg-bvt-3",
+                "ali.CpuCount": "1",
+                "ali.CpuQuota": "1",
+                "ali.MemoryHardlimit": "1073741824",
+                "ali.MemoryPredict": "1073741824",
+                "ali.DiskSize": "1G",
+                "DiskQuota": "1g",
+                "ali.Async": "true",
+                "ali.host.dns": "true"
+            },
+            "Env": [
+                "SigmaTest=bvt"
+            ]
+        },
+        {
+            "Image": "reg.docker.alibaba-inc.com/sigma-api-bvt/nginx:1.13.5-alpine",
+            "Labels": {
+                "ali.BizName": "sigma-test-pg",
+                "ali.CpuSetMode": "default",
+                "ali.IncreaseReplica": "1",
+                "ali.MaxInstancePerHost": "2",
+                "ali.AppDeployUnit": "myapp-prod",
+                "ali.InstanceGroup": "sigma-alipay-test",
+                "ali.EnableOverQuota": "false",
+                "ali.NetPriority": "10",
+                "test.container.type": "bvt",
+                "ali.RegisterContainerAsHost": "true",
+                "ali.AppName": "alipay-test-pg-bvt-4",
+                "ali.CpuCount": "1",
+                "ali.CpuQuota": "1",
+                "ali.MemoryHardlimit": "1073741824",
+                "ali.MemoryPredict": "1073741824",
+                "ali.DiskSize": "1G",
+                "DiskQuota": "1g",
+                "ali.Async": "true",
+                "ali.host.dns": "true"
+            },
+            "Env": [
+                "SigmaTest=bvt"
+            ]
+        }
+    ]
+}

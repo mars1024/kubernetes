@@ -25,7 +25,6 @@ var (
 		{"", "configmaps"},
 		{"", "replicationcontrollers"},
 		{"", "serviceaccounts"},
-		{"", "resourcequotas"},
 		{"", "persistentvolumeclaims"},
 
 		{"extensions", "ingresses"},
@@ -59,6 +58,9 @@ var (
 		{"cafe.sofastack.io", "servicebindings"},
 
 		{"apiextensions.k8s.io", "customresourcedefinitions"},
+
+		{"admissionregistration.k8s.io", "mutatingwebhookconfigurations"},
+		{"admissionregistration.k8s.io", "validatingwebhookconfigurations"},
 	}
 	AKSSupportedGroupSuffixes = []string{
 		".istio.io",

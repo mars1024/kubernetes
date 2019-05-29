@@ -115,8 +115,7 @@ func checkPodDelete(kubeClient clientset.Interface, pod *v1.Pod) error {
 
 //GetCreateResultWithTimeOut() get adapter create result, return containerInfo if create succeed.
 func GetCreateResultWithTimeOut(client clientset.Interface, requestId string, timeout time.Duration, ns string) (*swarm.AllocResult, error) {
-	GetCreateResultWithTimeOutWithExpectState(client, requestId, timeout, ns, "success")
-	return nil, nil
+	return GetCreateResultWithTimeOutWithExpectState(client, requestId, timeout, ns, "success")
 }
 
 //GetCreateResultWithTimeOutWithExpectState() get adapter create result, return containerInfo if create succeed.

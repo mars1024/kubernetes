@@ -115,6 +115,12 @@ func checkPodDelete(kubeClient clientset.Interface, pod *v1.Pod) error {
 
 //GetCreateResultWithTimeOut() get adapter create result, return containerInfo if create succeed.
 func GetCreateResultWithTimeOut(client clientset.Interface, requestId string, timeout time.Duration, ns string) (*swarm.AllocResult, error) {
+	GetCreateResultWithTimeOutWithExpectState(client, requestId, timeout, ns, "success")
+	return nil, nil
+}
+
+//GetCreateResultWithTimeOutWithExpectState() get adapter create result, return containerInfo if create succeed.
+func GetCreateResultWithTimeOutWithExpectState(client clientset.Interface, requestId string, timeout time.Duration, ns string, expectState string) (*swarm.AllocResult, error) {
 	t := time.Now()
 	for {
 		task, body, err := s.GetAsyncJson(requestId)
@@ -127,7 +133,7 @@ func GetCreateResultWithTimeOut(client clientset.Interface, requestId string, ti
 			framework.Logf("finish to query sigma 2.0 request id[%s]", requestId)
 			for _, ac := range task.Actions {
 				framework.Logf("Actions:%#v", DumpJson(ac))
-				if ac.State != "success" {
+				if ac.State != expectState {
 					continue
 				}
 				result := &swarm.AllocResult{}

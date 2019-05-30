@@ -280,4 +280,79 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 		wg.Wait()
 		Expect(num).To(Equal(count), "[Sigma3.1LifeCycle] all create action should be succeed.")
 	})
+
+	It("[ant][sigma-alipay-bvt][smoke][adapter][mosn] test mosn use adapter.", func() {
+		// Step1: Load pod file.
+		configFile := filepath.Join(util.TestDataDir, "alipay-adapter-create-container.json")
+		framework.Logf("TestDir:%v", util.TestDataDir)
+		createConfig, err := LoadBaseCreateFile(configFile)
+		Expect(err).To(BeNil(), "Load create container config failed.")
+		createConfig.Labels["ali.Site"] = site
+		if enableOverQuota == "true" {
+			createConfig.Labels["ali.EnableOverQuota"] = enableOverQuota
+		}
+		// Add mosn image and zone.
+		createConfig.Labels["sidecar:mosn.image"] = "reg.docker.alibaba-inc.com/antmesh/mosn-dev:1.4.3-0b5be970-dev"
+		createConfig.Labels["com.alipay.cloudprovision.zone"] = "GZ00B"
+		framework.Logf("createConfig: %v", createConfig)
+
+		// Step2: Create pod by adaptor.
+		By("Create container.")
+		pod, result := MustCreatePod(s, f.ClientSet, createConfig)
+		defer util.DeletePod(f.ClientSet, &pod)
+
+		framework.Logf("[mosn] Create pod Info: %#v", DumpJson(pod))
+
+		// Mosn container injection failed if pod has only one container.
+		if len(pod.Spec.Containers) == 1 {
+			framework.Failf("Failed to inject mosn container, pod:  %#v", pod)
+		}
+
+		// Check pod after creation.
+		By("Check container after creation.")
+		CheckAdapterCreateResource(f, &pod, result, createConfig)
+		CheckDNSPolicy(f, &pod)
+
+		// Step3: Stop container.
+		By("Stop pod.")
+		MustOperatePod(s, f.ClientSet, result.ContainerSn, &pod, "stop", v1.PodPending)
+
+		// Step4: Start container.
+		By("Start pod.")
+		MustOperatePod(s, f.ClientSet, result.ContainerSn, &pod, "start", v1.PodRunning)
+
+		// Step5: Update container.
+		By("Update Pod, decrease resources.")
+		updateConfig := LoadUpdateConfig(1, 1073741824, "1G")
+		MustUpdate(s, f.ClientSet, &pod, updateConfig, timeOut*time.Minute)
+
+		// Check pod after update.
+		By("Check container after update.")
+		CheckAdapterUpdatedResource(f, &pod, updateConfig)
+		CheckDNSPolicy(f, &pod)
+
+		// Step7: Upgrade container.
+		By("Upgrade pod.")
+		requestId := string(uuid.NewRandom().String())
+		framework.Logf("[mosn] upgrade pod %#v, requestId:%v", pod, requestId)
+		upgradeConfig := NewUpgradeConfig("FOO=bar")
+		MustUpgradeContainer(s, result.ContainerSn, requestId, false, upgradeConfig)
+		//check status
+		err = util.WaitTimeoutForPodStatus(f.ClientSet, &pod, v1.PodRunning, 3*time.Minute)
+		Expect(err).To(BeNil(), "[mosn] Wait pod is running, timeout.")
+
+		// Check pod after upgrade.
+		By("Check container after upgrade.")
+		CheckAdapterUpgradeResource(f, &pod, upgradeConfig)
+		CheckDNSPolicy(f, &pod)
+
+		// TODO: Step8: Smooth upgrade mosn container.
+
+		// TODO: Step9: Upgrade mosn container.
+
+		// Step10: Delete container.
+		By("Delete pod.")
+		_, err = s.DeleteContainer(result.ContainerSn, true)
+		Expect(err).To(BeNil(), "[mosn] Delete container failed.")
+	})
 })

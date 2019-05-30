@@ -49,7 +49,7 @@ func CheckSigma20ResourceReomoved(f *framework.Framework, pod *v1.Pod, site stri
 	Expect(hostSn).NotTo(BeEmpty(), "hostSn must be added in node labels:%v", nodeInfo.Labels)
 	hostSn = swarm.GetNodeSN(hostSn)
 	Expect(hostSn).NotTo(BeEmpty(), "query hostSN from armory failed, hostSn:%v", hostSn)
-	slotId := pod.Labels["ali.SlotId"]
+	slotId := pod.Labels["custom.k8s.alipay.com/slot-id"]
 	Expect(slotId).NotTo(BeEmpty(), "SlotId must be specified in pod labels.")
 
 	By("check 2.0 container's allocplan is removed from etcd.")

@@ -345,7 +345,7 @@ func (m *kubeGenericRuntimeManager) generateContainerConfig(container *v1.Contai
 	} else if opts.Hostname != "" {
 		hostName = opts.Hostname
 	}
-	if hostName != "" {
+	if hostName != "" && !pod.Spec.HostNetwork {
 		// add hostname to env
 		envs = append(envs, &runtimeapi.KeyValue{
 			Key:   "HOSTNAME",

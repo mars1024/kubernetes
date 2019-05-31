@@ -465,7 +465,8 @@ const (
 	// always try to recreate sandbox even if the restart policy is Never
 	EnsurePodSuccess utilfeature.Feature = "EnsurePodSuccess"
 
-	// owner: @chenjun.cj (chenjun.cj@alipay.com)
+
+	// owner: @chenjun.cj (fankang.fk@alipay.com)
 	// alpha: v1.12
 	//
 	// add Pod.Spec.DNSConfig.Searches to Pod's /etc/resolv.conf at first
@@ -574,7 +575,6 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	DisableHostUTSMode:                          {Default: false, PreRelease: utilfeature.Alpha},
 	DisableDanglingPod:                          {Default: false, PreRelease: utilfeature.Alpha},
 	IgnoreUnwantedEvent:                         {Default: false, PreRelease: utilfeature.Alpha},
-
 	multitenancy.FeatureName:                    {Default: false, PreRelease: utilfeature.Alpha},
 
 	// inherited features from generic apiserver, relisted here to get a conflict if it is changed

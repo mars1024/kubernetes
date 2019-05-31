@@ -316,7 +316,13 @@ func mergeDNSOptions(existingDNSConfigOptions []string, dnsConfigOptions []v1.Po
 // This assumes existingDNSConfig and dnsConfig are not nil.
 func appendDNSConfig(existingDNSConfig *runtimeapi.DNSConfig, dnsConfig *v1.PodDNSConfig) *runtimeapi.DNSConfig {
 	existingDNSConfig.Servers = omitDuplicates(append(existingDNSConfig.Servers, dnsConfig.Nameservers...))
-	existingDNSConfig.Searches = omitDuplicates(append(existingDNSConfig.Searches, dnsConfig.Searches...))
+
+	if utilfeature.DefaultFeatureGate.Enabled(features.PodSearchesFirst) {
+		existingDNSConfig.Searches = omitDuplicates(append(dnsConfig.Searches, existingDNSConfig.Searches...))
+	} else {
+		existingDNSConfig.Searches = omitDuplicates(append(existingDNSConfig.Searches, dnsConfig.Searches...))
+	}
+
 	existingDNSConfig.Options = mergeDNSOptions(existingDNSConfig.Options, dnsConfig.Options)
 	return existingDNSConfig
 }

@@ -463,6 +463,13 @@ const (
 	//
 	// always try to recreate sandbox even if the restart policy is Never
 	EnsurePodSuccess utilfeature.Feature = "EnsurePodSuccess"
+
+	// owner: @chenjun.cj (chenjun.cj@alipay.com)
+	// alpha: v1.12
+	//
+	// add Pod.Spec.DNSConfig.Searches to Pod's /etc/resolv.conf at first
+	// github issue see: https://github.com/kubernetes/kubernetes/issues/78206
+	PodSearchesFirst utilfeature.Feature = "PodSearchesFirst"
 )
 
 func init() {
@@ -544,6 +551,7 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	PodLevelResourceQuota:                       {Default: false, PreRelease: utilfeature.Alpha},
 	IgnoreSidecarContainerReady:                 {Default: false, PreRelease: utilfeature.Alpha},
 	EnsurePodSuccess:                            {Default: false, PreRelease: utilfeature.Alpha},
+	PodSearchesFirst:                            {Default: false, PreRelease: utilfeature.Alpha},
 
 	// inherited features from generic apiserver, relisted here to get a conflict if it is changed
 	// unintentionally on either side:

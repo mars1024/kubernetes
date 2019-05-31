@@ -30,7 +30,7 @@ var ClientSet kubernetes.Interface
 
 var podgroupSite = ""
 
-var _ = Describe("[ant][sigma-alipay-podgroup-bvt]", func() {
+var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 	f := framework.NewDefaultFramework("sigma-ant-podgroup-bvt")
 	enableOverQuota := IsEnableOverQuota()
 	timeOut = GetOperatingTimeOut()
@@ -67,7 +67,7 @@ var _ = Describe("[ant][sigma-alipay-podgroup-bvt]", func() {
 
 	})
 
-	It("[ant][sigma-alipay-podgroup-bvt][smoke][adapter] test podgroup lifecycle use adapter.", func() {
+	It("[ant][sigma-alipay-bvt][smoke][adapter] test podgroup lifecycle use adapter.", func() {
 		configFile := filepath.Join(util.TestDataDir, "alipay-adapter-create-podgroup.json")
 		framework.Logf("TestDir:%v", util.TestDataDir)
 		createConfig, err := LoadPodGroupCreateFile(configFile)

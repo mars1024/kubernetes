@@ -522,12 +522,13 @@ func TestGetPodDNSCustom(t *testing.T) {
 	configurer := NewConfigurer(recorder, nodeRef, nil, []net.IP{net.ParseIP(testClusterNameserver)}, testClusterDNSDomain, tmpfile.Name())
 
 	testCases := []struct {
-		desc                    string
-		customPodDNSFeatureGate bool
-		hostnetwork             bool
-		dnsPolicy               v1.DNSPolicy
-		dnsConfig               *v1.PodDNSConfig
-		expectedDNSConfig       *runtimeapi.DNSConfig
+		desc                        string
+		customPodDNSFeatureGate     bool
+		podSearchesFirstFeatureGate bool
+		hostnetwork                 bool
+		dnsPolicy                   v1.DNSPolicy
+		dnsConfig                   *v1.PodDNSConfig
+		expectedDNSConfig           *runtimeapi.DNSConfig
 	}{
 		{
 			desc:      "feature gate is disabled, DNSNone should fallback to DNSClusterFirst",
@@ -581,6 +582,25 @@ func TestGetPodDNSCustom(t *testing.T) {
 			},
 		},
 		{
+			desc: "feature gate is enabled and PodSearchesFirst is enabled, DNSClusterFirst with DNSConfig should have a merged DNS settings, and Pod.Spec.DNSConfig.Searches should be at first",
+			customPodDNSFeatureGate:     true,
+			podSearchesFirstFeatureGate: true,
+			dnsPolicy:                   v1.DNSClusterFirst,
+			dnsConfig: &v1.PodDNSConfig{
+				Nameservers: []string{"10.0.0.11"},
+				Searches:    []string{"my.domain"},
+				Options: []v1.PodDNSConfigOption{
+					{Name: "ndots", Value: &testNdotsOptionValue},
+					{Name: "debug"},
+				},
+			},
+			expectedDNSConfig: &runtimeapi.DNSConfig{
+				Servers:  []string{testClusterNameserver, "10.0.0.11"},
+				Searches: []string{"my.domain", testNsSvcDomain, testSvcDomain, testClusterDNSDomain, testHostDomain},
+				Options:  []string{"ndots:3", "debug"},
+			},
+		},
+		{
 			desc: "feature gate is enabled, DNSClusterFirstWithHostNet with DNSConfig should have a merged DNS settings",
 			customPodDNSFeatureGate: true,
 			hostnetwork:             true,
@@ -596,6 +616,26 @@ func TestGetPodDNSCustom(t *testing.T) {
 			expectedDNSConfig: &runtimeapi.DNSConfig{
 				Servers:  []string{testClusterNameserver, "10.0.0.11"},
 				Searches: []string{testNsSvcDomain, testSvcDomain, testClusterDNSDomain, testHostDomain, "my.domain"},
+				Options:  []string{"ndots:3", "debug"},
+			},
+		},
+		{
+			desc: "feature gate is enabled and PodSearchesFirst is enabled, DNSClusterFirstWithHostNet with DNSConfig should have a merged DNS settings, and Pod.Spec.DNSConfig.Searches should be at first",
+			customPodDNSFeatureGate:     true,
+			podSearchesFirstFeatureGate: true,
+			hostnetwork:                 true,
+			dnsPolicy:                   v1.DNSClusterFirstWithHostNet,
+			dnsConfig: &v1.PodDNSConfig{
+				Nameservers: []string{"10.0.0.11"},
+				Searches:    []string{"my.domain"},
+				Options: []v1.PodDNSConfigOption{
+					{Name: "ndots", Value: &testNdotsOptionValue},
+					{Name: "debug"},
+				},
+			},
+			expectedDNSConfig: &runtimeapi.DNSConfig{
+				Servers:  []string{testClusterNameserver, "10.0.0.11"},
+				Searches: []string{"my.domain", testNsSvcDomain, testSvcDomain, testClusterDNSDomain, testHostDomain},
 				Options:  []string{"ndots:3", "debug"},
 			},
 		},
@@ -617,11 +657,34 @@ func TestGetPodDNSCustom(t *testing.T) {
 				Options:  []string{"ndots:3", "debug"},
 			},
 		},
+		{
+			desc: "feature gate is enabled and PodSearchesFirst is enabled, DNSDefault with DNSConfig should have a merged DNS settings, and Pod.Spec.DNSConfig.Searches should be at first",
+			customPodDNSFeatureGate:     true,
+			podSearchesFirstFeatureGate: true,
+			dnsPolicy:                   v1.DNSDefault,
+			dnsConfig: &v1.PodDNSConfig{
+				Nameservers: []string{"10.0.0.11"},
+				Searches:    []string{"my.domain"},
+				Options: []v1.PodDNSConfigOption{
+					{Name: "ndots", Value: &testNdotsOptionValue},
+					{Name: "debug"},
+				},
+			},
+			expectedDNSConfig: &runtimeapi.DNSConfig{
+				Servers:  []string{testHostNameserver, "10.0.0.11"},
+				Searches: []string{"my.domain", testHostDomain},
+				Options:  []string{"ndots:3", "debug"},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
 		if err := utilfeature.DefaultFeatureGate.Set(fmt.Sprintf("CustomPodDNS=%v", tc.customPodDNSFeatureGate)); err != nil {
 			t.Errorf("Failed to set CustomPodDNS feature gate: %v", err)
+		}
+
+		if err := utilfeature.DefaultFeatureGate.Set(fmt.Sprintf("PodSearchesFirst=%v", tc.podSearchesFirstFeatureGate)); err != nil {
+			t.Errorf("Failed to set PodSearchesFirst feature gate: %v", err)
 		}
 
 		testPod.Spec.HostNetwork = tc.hostnetwork

@@ -227,6 +227,24 @@ func TestAdmit(t *testing.T) {
 			},
 		},
 		{
+			name: "don't overwrite pod oom_score_adj",
+			initfunc: func() *core.Pod {
+				guaranteedPodOOMScoreAdj = pointer.Int64Ptr(-1)
+				sidecar := newAllocSpecContainer("sidecar")
+				sidecar.HostConfig.OomScoreAdj = -1000
+				data, _ := json.Marshal(&sigmak8sapi.AllocSpec{Containers: []sigmak8sapi.Container{sidecar}})
+				pod := newPod()
+				pod.Annotations[sigmak8sapi.AnnotationPodAllocSpec] = string(data)
+				return pod
+			},
+			validate: func(pod *core.Pod) {
+				allocSpec, err := util.PodAllocSpec(pod)
+				assert.Nil(t, err)
+				assert.Equal(t, allocSpec.Containers[0].HostConfig.OomScoreAdj, int64(-1000))
+				assert.Equal(t, allocSpec.Containers[1].HostConfig.OomScoreAdj, int64(-1))
+			},
+		},
+		{
 			name: "don't set non-guaranteed pod oom_score_adj",
 			initfunc: func() *core.Pod {
 				guaranteedPodOOMScoreAdj = pointer.Int64Ptr(-1)

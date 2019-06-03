@@ -87,8 +87,12 @@ func (a *AlipayRouterInjector) injectRouter(pod *api.Pod) error {
 	addVolume := false
 	// inject volume mounts.
 	for i := range pod.Spec.Containers {
-		if !hasInjectorEnv(pod.Spec.Containers[i].Env) || hasVolumeMount(pod.Spec.Containers[i].VolumeMounts, RouterVolumeName) {
+		if hasVolumeMount(pod.Spec.Containers[i].VolumeMounts, RouterVolumeName) {
 			continue
+		}
+		// inject env, only ali_run_mode=alipay_container will take effect.
+		if !hasInjectorEnv(pod.Spec.Containers[i].Env) {
+			pod.Spec.Containers[i].Env = append(pod.Spec.Containers[i].Env, api.EnvVar{Name: RouterInjectEnvKey, Value: RouterInjectEnvValue})
 		}
 		// inject volume.
 		addVolume = true

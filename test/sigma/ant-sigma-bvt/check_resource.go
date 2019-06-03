@@ -110,7 +110,7 @@ func CheckAdapterUpdatedResource(f *framework.Framework, testPod *v1.Pod, update
 }
 
 //CheckAdapterUpgradeResource() check resource upgraded by adapter. check env/ip/network/armory
-func CheckAdapterUpgradeResource(f *framework.Framework, testPod *v1.Pod, upgradeConfig *dockerclient.ContainerConfig) () {
+func CheckAdapterUpgradeResource(f *framework.Framework, testPod *v1.Pod, upgradeConfig *dockerclient.ContainerConfig) {
 	By("sigma-adapter: [upgrade] check container env should same as pod.")
 	upPod, err := f.ClientSet.CoreV1().Pods(testPod.Namespace).Get(testPod.Name, metav1.GetOptions{})
 	Expect(err).NotTo(HaveOccurred(), "[AdapterLifeCycle] get pod list failed.")
@@ -220,6 +220,7 @@ func checkPing(f *framework.Framework, pod *v1.Pod) {
 //CheckSigmaCreateResource() check created container by sigma3.1, cpu/disk/mem/ip/env/networksettings/armory
 func CheckSigmaCreateResource(f *framework.Framework, testPod *v1.Pod) {
 	Expect(len(testPod.Spec.Containers) > 0).To(BeTrue(), "[Sigma3.1LifeCycle] check 3.1 pod container error")
+	time.Sleep(time.Second * 30)
 	By("sigma 3.1: check container hostname should same as pod.")
 	cmd := []string{"hostname"}
 	stdout, _, err := RetryExec(f, testPod, cmd, "check_hostname", 10, 2)
@@ -276,7 +277,7 @@ func CheckSigmaCreateResource(f *framework.Framework, testPod *v1.Pod) {
 }
 
 //CheckSigmaUpgradeResource() check upgraded container resource by simga3.1, check env/network-settings/armory.
-func CheckSigmaUpgradeResource(f *framework.Framework, testPod *v1.Pod, upgradePod *v1.Pod) () {
+func CheckSigmaUpgradeResource(f *framework.Framework, testPod *v1.Pod, upgradePod *v1.Pod) {
 	By("sigma 3.1: [upgrade] check container env should same as pod.")
 	cmd := []string{"env"}
 	stdout, _, err := RetryExec(f, testPod, cmd, "check_env", 10, 2)

@@ -2973,6 +2973,10 @@ func ValidatePod(pod *core.Pod) field.ErrorList {
 		}
 	}
 
+	if len(allErrs) > 0 {
+		glog.Errorf("Failed to validate pod: %+v, allErrs: %v", pod, allErrs)
+	}
+
 	return allErrs
 }
 
@@ -3483,11 +3487,11 @@ func ValidateContainerUpdates(newContainers, oldContainers []core.Container, fld
 	allErrs = field.ErrorList{}
 	// currently only supports adding containers to a pod
 	// TODO: removing this check when removing containers are supported as well
-	if len(newContainers) < len(oldContainers) {
-		//TODO: Pinpoint the specific container that causes the invalid error after we have strategic merge diff
-		allErrs = append(allErrs, field.Forbidden(fldPath, "pod updates may not remove containers"))
-		return allErrs, true
-	}
+	//if len(newContainers) < len(oldContainers) {
+	//	//TODO: Pinpoint the specific container that causes the invalid error after we have strategic merge diff
+	//	allErrs = append(allErrs, field.Forbidden(fldPath, "pod updates may not remove containers"))
+	//	return allErrs, true
+	//}
 
 	// validate updated container images
 	for i, ctr := range newContainers {
@@ -3514,7 +3518,6 @@ func ValidatePodUpdate(newPod, oldPod *core.Pod) field.ErrorList {
 	// 1.  spec.containers[*].* except name
 	// 2.  spec.initContainers[*].* except name
 	// 3.  spec.* except nodeSelector, nodeName, hostname, subdomain, securityContext.hostNetwork, securityContext.hostIPC, securityContext.hostPID, securityContext.shareProcessNamespace, Qos
-
 
 	containerErrs, stop := ValidateContainerUpdates(newPod.Spec.Containers, oldPod.Spec.Containers, specPath.Child("containers"))
 	allErrs = append(allErrs, containerErrs...)
@@ -3547,35 +3550,33 @@ func ValidatePodUpdate(newPod, oldPod *core.Pod) field.ErrorList {
 		allErrs = append(allErrs, field.Invalid(specPath.Child("activeDeadlineSeconds"), newPod.Spec.ActiveDeadlineSeconds, "must not update from a positive integer to nil value"))
 	}
 
-	containerErrs, stop = ValidateContainerQoSUpdate(newPod, oldPod, specPath.Child("containers"))
-	allErrs = append(allErrs, containerErrs...)
-	if stop {
-		return allErrs
+	// NOTE(tongkai.ytk): when DisableUpdatePodQOSValidation is open, do not validate pod QoS changing when do update.
+	if !utilfeature.DefaultFeatureGate.Enabled(features.DisableUpdatePodQOSValidation) {
+		containerErrs, stop = ValidateContainerQoSUpdate(newPod, oldPod, specPath.Child("containers"))
+		allErrs = append(allErrs, containerErrs...)
+		if stop {
+			return allErrs
+		}
 	}
 
 	// handle updateable fields by munging those fields prior to deep equal comparison.
 	mungedPod := *oldPod
 
 	// munge spec.containers[*].name
-	var newContainers []core.Container
-	// currently only supports adding containers to a pod
-	// TODO: if removing containers in a pod is supported, that means we're as well allowing
 	// 		* changing container's name
 	//		* switching containers' order in Pod.Spec.Containers
 	//      then removing below for loop.
-	for ix, container := range mungedPod.Spec.Containers {
-		container.Name = newPod.Spec.Containers[ix].Name
-		newContainers = append(newContainers, container)
-	}
-	mungedPod.Spec.Containers = newContainers
+
+	// container order validation, old containers relative order cannot be changed.  for example
+	// if munged pod containers [a b c], new pod containers must be [a b c d]/[a d b c], [b a c d] is not allowed.
+	// get oldContainer Orders.
+	oldPod.Spec.Containers = GetPodContainerOrder(newPod.Spec.Containers, oldPod.Spec.Containers, true)
+	// get newContainer Orders.
+	mungedPod.Spec.Containers = GetPodContainerOrder(mungedPod.Spec.Containers, newPod.Spec.Containers, false)
 
 	// munge spec.initContainers[*].name
-	var newInitContainers []core.Container
-	for ix, container := range mungedPod.Spec.InitContainers {
-		container.Name = newPod.Spec.InitContainers[ix].Name
-		newInitContainers = append(newInitContainers, container)
-	}
-	mungedPod.Spec.InitContainers = newInitContainers
+	oldPod.Spec.InitContainers = GetPodContainerOrder(newPod.Spec.InitContainers, oldPod.Spec.InitContainers, true)
+	mungedPod.Spec.InitContainers = GetPodContainerOrder(mungedPod.Spec.InitContainers, newPod.Spec.InitContainers, false)
 
 	// munge spec.nodeSelector
 	mungedPod.Spec.NodeSelector = newPod.Spec.NodeSelector
@@ -3606,7 +3607,6 @@ func ValidatePodUpdate(newPod, oldPod *core.Pod) field.ErrorList {
 		mungedPod.Spec.SecurityContext = newPod.Spec.SecurityContext
 	}
 
-
 	allErrs = append(allErrs, validateOnlyAddedTolerations(newPod.Spec.Tolerations, oldPod.Spec.Tolerations, specPath.Child("tolerations"))...)
 
 	if !apiequality.Semantic.DeepEqual(mungedPod.Spec, oldPod.Spec) {
@@ -3617,6 +3617,23 @@ func ValidatePodUpdate(newPod, oldPod *core.Pod) field.ErrorList {
 	}
 
 	return allErrs
+}
+
+func GetPodContainerOrder(targetContainers []core.Container, baseContainers []core.Container, baseOrder bool) []core.Container {
+	var orderdContainers []core.Container
+	for _, baseContainer := range baseContainers {
+		for _, tc := range targetContainers {
+			if tc.Name == baseContainer.Name {
+				if baseOrder {
+					orderdContainers = append(orderdContainers, baseContainer)
+				} else {
+					orderdContainers = append(orderdContainers, tc)
+				}
+				break
+			}
+		}
+	}
+	return orderdContainers
 }
 
 // ValidateContainerStateTransition test to if any illegal container state transitions are being attempted
@@ -4696,7 +4713,7 @@ func ValidateSecret(secret *core.Secret) field.ErrorList {
 			allErrs = append(allErrs, field.Required(field.NewPath("metadata", "annotations").Key(core.ServiceAccountNameKey), ""))
 		}
 	case core.SecretTypeOpaque, "":
-	// no-op
+		// no-op
 	case core.SecretTypeDockercfg:
 		dockercfgBytes, exists := secret.Data[core.DockerConfigKey]
 		if !exists {
@@ -4742,7 +4759,7 @@ func ValidateSecret(secret *core.Secret) field.ErrorList {
 		if _, exists := secret.Data[core.TLSPrivateKeyKey]; !exists {
 			allErrs = append(allErrs, field.Required(dataPath.Key(core.TLSPrivateKeyKey), ""))
 		}
-	// TODO: Verify that the key matches the cert.
+		// TODO: Verify that the key matches the cert.
 	default:
 		// no-op
 	}

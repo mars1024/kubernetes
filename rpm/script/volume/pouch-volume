@@ -16,11 +16,14 @@
 
 # user can set POUCH_ROOT_OVERRIDE to overwrite the pouch root dir
 POUCH_ROOT=${POUCH_ROOT_OVERRIDE:=/home/t4/pouch}
-GRAPH_ROOT=${POUCH_ROOT}/containerd/root/io.containerd.snapshotter.v1.overlayfs/snapshots
+POUCH_GRAPH_ROOT=${POUCH_ROOT}/containerd/root/io.containerd.snapshotter.v1.overlayfs/snapshots
+
+DOCKER_ROOT=${DOCKER_ROOT_OVERRIDE:=/home/t4/docker}
+DOCKER_GRAPH_ROOT=${POUCH_ROOT}/overlay
 
 detect_pouch_config() {
-    driver=$(pouch info | grep -o -P "Storage Driver: (\S+)")
-    root_dir=$(pouch info | grep -o -P "Pouch Root Dir: (\S+)")
+    driver=$(pouch info 2>/dev/null | grep -o -P "Storage Driver: (\S+)")
+    root_dir=$(pouch info 2>/dev/null | grep -o -P "Pouch Root Dir: (\S+)")
     driver=${driver/Storage Driver: /}
     root_dir=${root_dir/Pouch Root Dir: /}
 
@@ -32,12 +35,37 @@ detect_pouch_config() {
     fi
 
     if [[ "$driver" == "overlayfs" ]]; then
-        GRAPH_ROOT=${POUCH_ROOT}/containerd/root/io.containerd.snapshotter.v1.overlayfs/snapshots
+        POUCH_GRAPH_ROOT=${POUCH_ROOT}/containerd/root/io.containerd.snapshotter.v1.overlayfs/snapshots
     elif [[ "$driver" == "overlay1fs" ]]; then
-        GRAPH_ROOT=${POUCH_ROOT}/containerd/root/io.containerd.snapshotter.v1.overlay1fs/snapshots
+        POUCH_GRAPH_ROOT=${POUCH_ROOT}/containerd/root/io.containerd.snapshotter.v1.overlay1fs/snapshots
     else
         err "{ \"status\": \"Failure\", \"message\": \"Unknown storage driver type ${driver}\"}"
         exit 5
+    fi
+
+}
+
+
+detect_docker_config() {
+    driver=$(docker info 2>/dev/null | grep -o -P "Storage Driver: (\S+)")
+    root_dir=$(docker info 2>/dev/null | grep -o -P "Docker Root Dir: (\S+)")
+    driver=${driver/Storage Driver: /}
+    root_dir=${root_dir/Docker Root Dir: /}
+
+    if [[ -n "$root_dir" ]];then
+        DOCKER_ROOT="${root_dir}"
+    else
+        err "{ \"status\": \"Failure\", \"message\": \"Failed to get root dir of docker\"}"
+        exit 6
+    fi
+
+    if [[ "$driver" == "overlay2" ]]; then
+        DOCKER_GRAPH_ROOT=${DOCKER_ROOT}/overlay2
+    elif [[ "$driver" == "overlay" ]]; then
+        DOCKER_GRAPH_ROOT=${DOCKER_ROOT}/overlay
+    else
+        err "{ \"status\": \"Failure\", \"message\": \"Unknown storage driver type ${driver}\"}"
+        exit 7
     fi
 
 }
@@ -83,16 +111,51 @@ domount() {
         fi
 
         if [[ "$RUNTIME" = "Docker" ]]; then
+            detect_docker_config
             # Make sure image exists
             docker pull ${IMAGE} &> /dev/null
-            CTHOME=`docker inspect -f "{{.GraphDriver.Data.RootDir}}" ${IMAGE} 2> /dev/null`
-            if [[ ${CTHOME} != *overlay*/root ]]; then
-                err "{ \"status\": \"Failure\", \"message\": \"Failed to get root dir from image $IMAGE\"}"
-                exit 1
+            if [[ ${DOCKER_GRAPH_ROOT} == *overlay2* ]]; then
+                mergedPath=`echo ${IMAGE//\//__}`
+                mergedDir=${DOCKER_ROOT}/${mergedPath}
+                if [[ ! -d ${mergedDir} ]]; then
+                    mkdir -p ${mergedDir}
+                fi
+                if is_empty_dir ${mergedDir}; then
+                    # Make sure image exists
+                    docker pull ${IMAGE} &> /dev/null
+                    cid=`docker create --net host -l type="pouch-volume" ${IMAGE}`
+                    if [[ $? -ne 0 ]]; then
+                        err "{ \"status\": \"Failure\", \"message\": \"Failed to create container based on $IMAGE\"}"
+                        exit 1
+                    fi
+                    lowerdir=`docker inspect -f '{{.GraphDriver.Data.LowerDir}}' ${cid}`
+                    upperdir=`docker inspect -f '{{.GraphDriver.Data.UpperDir}}' ${cid}`
+                    workdir=`docker inspect -f '{{.GraphDriver.Data.WorkDir}}' ${cid}`
+                    cd ${DOCKER_GRAPH_ROOT}
+                    slowerdir=`echo ${lowerdir} | sed "s+${DOCKER_GRAPH_ROOT}+.+g"`
+                    env PWD=${DOCKER_GRAPH_ROOT} mount -t overlay -o rw,lowerdir=${slowerdir},upperdir=${upperdir},workdir=${workdir} overlay2 ${mergedDir} &> /dev/null
+                    if [[ $? -ne 0 ]]; then
+                        err "{ \"status\": \"Failure\", \"message\": \"Failed to mount container's dir\"}"
+                        docker rm -v ${cid} &> /dev/null
+                        exit 1
+                    fi
+                fi
+                if [[ -d ${mergedDir}${IMAGEPATH} ]]; then
+                    cp -rp ${mergedDir}${IMAGEPATH} ${MNTPATH}
+                fi
+                umount ${mergedDir} &> /dev/null
+                docker rm -v ${cid} &> /dev/null
+            else
+                CTHOME=`docker inspect -f "{{.GraphDriver.Data.RootDir}}" ${IMAGE} 2> /dev/null`
+                if [[ ${CTHOME} != *overlay*/root ]]; then
+                    err "{ \"status\": \"Failure\", \"message\": \"Failed to get root dir from image $IMAGE\"}"
+                    exit 1
+                fi
+                if [[ -d ${CTHOME}${IMAGEPATH} ]]; then
+                    cp -rp ${CTHOME}${IMAGEPATH} ${MNTPATH}
+                fi
             fi
-            if [[ -d ${CTHOME}${IMAGEPATH} ]]; then
-                cp -rp ${CTHOME}${IMAGEPATH} ${MNTPATH}
-            fi
+
         else
             detect_pouch_config
             mergedPath=`echo ${IMAGE//\//__}`
@@ -111,17 +174,17 @@ domount() {
                 lowerdir=`pouch inspect -f '{{.Snapshotter.Data.LowerDir}}' ${cid}`
                 upperdir=`pouch inspect -f '{{.Snapshotter.Data.UpperDir}}' ${cid}`
                 workdir=`pouch inspect -f '{{.Snapshotter.Data.WorkDir}}' ${cid}`
-                cd ${GRAPH_ROOT}
-                slowerdir=`echo ${lowerdir} | sed "s+${GRAPH_ROOT}+.+g"`
-                env PWD=${GRAPH_ROOT} mount -t overlay -o rw,lowerdir=${slowerdir},upperdir=${upperdir},workdir=${workdir} overlay ${mergedDir} &> /dev/null
+                cd ${POUCH_GRAPH_ROOT}
+                slowerdir=`echo ${lowerdir} | sed "s+${POUCH_GRAPH_ROOT}+.+g"`
+                env PWD=${POUCH_GRAPH_ROOT} mount -t overlay -o rw,lowerdir=${slowerdir},upperdir=${upperdir},workdir=${workdir} overlay ${mergedDir} &> /dev/null
                 if [[ $? -ne 0 ]]; then
                     err "{ \"status\": \"Failure\", \"message\": \"Failed to mount container's dir\"}"
                     pouch rm -v ${cid} &> /dev/null
                     exit 1
                 fi
             fi
-            if [[ -d ${mergedDir} ]]; then
-                cp -rp ${mergedDir}${IMAGEPATH} ${MNTPATH} &> /dev/null
+            if [[ -d ${mergedDir}${IMAGEPATH} ]]; then
+                cp -rp ${mergedDir}${IMAGEPATH} ${MNTPATH}
             fi
             umount ${mergedDir} &> /dev/null
             pouch rm -v ${cid} &> /dev/null

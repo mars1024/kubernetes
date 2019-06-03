@@ -494,47 +494,48 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	}
 
 	klet := &Kubelet{
-		hostname:                       hostname,
-		hostnameOverridden:             len(hostnameOverride) > 0,
-		nodeName:                       nodeName,
-		kubeClient:                     kubeDeps.KubeClient,
-		csiClient:                      kubeDeps.CSIClient,
-		heartbeatClient:                kubeDeps.HeartbeatClient,
-		onRepeatedHeartbeatFailure:     kubeDeps.OnHeartbeatFailure,
-		rootDirectory:                  rootDirectory,
-		resyncInterval:                 kubeCfg.SyncFrequency.Duration,
-		sourcesReady:                   config.NewSourcesReady(kubeDeps.PodConfig.SeenAllSources),
-		registerNode:                   registerNode,
-		registerWithTaints:             registerWithTaints,
-		registerSchedulable:            registerSchedulable,
-		dnsConfigurer:                  dns.NewConfigurer(kubeDeps.Recorder, nodeRef, parsedNodeIP, clusterDNS, kubeCfg.ClusterDomain, kubeCfg.ResolverConfig),
-		serviceLister:                  serviceLister,
-		nodeInfo:                       nodeInfo,
-		masterServiceNamespace:         masterServiceNamespace,
-		streamingConnectionIdleTimeout: kubeCfg.StreamingConnectionIdleTimeout.Duration,
-		recorder:                       kubeDeps.Recorder,
-		cadvisor:                       kubeDeps.CAdvisorInterface,
-		cloud:                          kubeDeps.Cloud,
-		externalCloudProvider:     cloudprovider.IsExternal(cloudProvider),
-		providerID:                providerID,
-		nodeRef:                   nodeRef,
-		nodeLabels:                nodeLabels,
-		nodeStatusUpdateFrequency: kubeCfg.NodeStatusUpdateFrequency.Duration,
-		os:                         kubeDeps.OSInterface,
-		oomWatcher:                 oomWatcher,
-		cgroupsPerQOS:              kubeCfg.CgroupsPerQOS,
-		cgroupRoot:                 kubeCfg.CgroupRoot,
-		mounter:                    kubeDeps.Mounter,
-		maxPods:                    int(kubeCfg.MaxPods),
-		podsPerCore:                int(kubeCfg.PodsPerCore),
-		syncLoopMonitor:            atomic.Value{},
-		daemonEndpoints:            daemonEndpoints,
-		containerManager:           kubeDeps.ContainerManager,
-		containerRuntimeName:       containerRuntime,
-		redirectContainerStreaming: crOptions.RedirectContainerStreaming,
-		nodeIP:          parsedNodeIP,
-		nodeIPValidator: validateNodeIP,
-		clock:           clock.RealClock{},
+		hostname:                                hostname,
+		hostnameOverridden:                      len(hostnameOverride) > 0,
+		nodeName:                                nodeName,
+		kubeClient:                              kubeDeps.KubeClient,
+		csiClient:                               kubeDeps.CSIClient,
+		heartbeatClient:                         kubeDeps.HeartbeatClient,
+		onRepeatedHeartbeatFailure:              kubeDeps.OnHeartbeatFailure,
+		rootDirectory:                           rootDirectory,
+		resyncInterval:                          kubeCfg.SyncFrequency.Duration,
+		sourcesReady:                            config.NewSourcesReady(kubeDeps.PodConfig.SeenAllSources),
+		registerNode:                            registerNode,
+		registerWithTaints:                      registerWithTaints,
+		registerSchedulable:                     registerSchedulable,
+		dnsConfigurer:                           dns.NewConfigurer(kubeDeps.Recorder, nodeRef, parsedNodeIP, clusterDNS, kubeCfg.ClusterDomain, kubeCfg.ResolverConfig),
+		serviceLister:                           serviceLister,
+		nodeInfo:                                nodeInfo,
+		masterServiceNamespace:                  masterServiceNamespace,
+		streamingConnectionIdleTimeout:          kubeCfg.StreamingConnectionIdleTimeout.Duration,
+		recorder:                                kubeDeps.Recorder,
+		cadvisor:                                kubeDeps.CAdvisorInterface,
+		cloud:                                   kubeDeps.Cloud,
+		externalCloudProvider:                   cloudprovider.IsExternal(cloudProvider),
+		providerID:                              providerID,
+		nodeRef:                                 nodeRef,
+		nodeLabels:                              nodeLabels,
+		nodeStatusUpdateFrequency:               kubeCfg.NodeStatusUpdateFrequency.Duration,
+		nodeStatusReportFrequency:               kubeCfg.NodeStatusReportFrequency.Duration,
+		os:                                      kubeDeps.OSInterface,
+		oomWatcher:                              oomWatcher,
+		cgroupsPerQOS:                           kubeCfg.CgroupsPerQOS,
+		cgroupRoot:                              kubeCfg.CgroupRoot,
+		mounter:                                 kubeDeps.Mounter,
+		maxPods:                                 int(kubeCfg.MaxPods),
+		podsPerCore:                             int(kubeCfg.PodsPerCore),
+		syncLoopMonitor:                         atomic.Value{},
+		daemonEndpoints:                         daemonEndpoints,
+		containerManager:                        kubeDeps.ContainerManager,
+		containerRuntimeName:                    containerRuntime,
+		redirectContainerStreaming:              crOptions.RedirectContainerStreaming,
+		nodeIP:                                  parsedNodeIP,
+		nodeIPValidator:                         validateNodeIP,
+		clock:                                   clock.RealClock{},
 		enableControllerAttachDetach:            kubeCfg.EnableControllerAttachDetach,
 		iptClient:                               utilipt.New(utilexec.New(), utildbus.New(), protocol),
 		makeIPTablesUtilChains:                  kubeCfg.MakeIPTablesUtilChains,
@@ -733,7 +734,7 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	klet.pleg = pleg.NewGenericPLEG(klet.containerRuntime, plegChannelCapacity, plegRelistPeriod, klet.podCache, clock.RealClock{})
 	klet.runtimeState = newRuntimeState(maxWaitForContainerRuntime)
 	klet.runtimeState.addHealthCheck("PLEG", klet.pleg.Healthy)
-	if err := klet.updatePodCIDR(kubeCfg.PodCIDR); err != nil {
+	if _, err := klet.updatePodCIDR(kubeCfg.PodCIDR); err != nil {
 		glog.Errorf("Pod CIDR update failed %v", err)
 	}
 
@@ -1065,8 +1066,9 @@ type Kubelet struct {
 	// used for generating ContainerStatus.
 	reasonCache *ReasonCache
 
-	// nodeStatusUpdateFrequency specifies how often kubelet posts node status to master.
-	// Note: be cautious when changing the constant, it must work with nodeMonitorGracePeriod
+	// nodeStatusUpdateFrequency specifies how often kubelet computes node status. If node lease
+	// feature is not enabled, it is also the frequency that kubelet posts node status to master.
+	// In that case, be cautious when changing the constant, it must work with nodeMonitorGracePeriod
 	// in nodecontroller. There are several constraints:
 	// 1. nodeMonitorGracePeriod must be N times more than nodeStatusUpdateFrequency, where
 	//    N means number of retries allowed for kubelet to post node status. It is pointless
@@ -1077,6 +1079,13 @@ type Kubelet struct {
 	//    status. Kubelet may fail to update node status reliably if the value is too small,
 	//    as it takes time to gather all necessary node information.
 	nodeStatusUpdateFrequency time.Duration
+
+	// nodeStatusUpdateFrequency is the frequency that kubelet posts node
+	// status to master. It is only used when node lease feature is enabled.
+	nodeStatusReportFrequency time.Duration
+
+	// lastStatusReportTime is the time when node status was last reported.
+	lastStatusReportTime time.Time
 
 	// syncNodeStatusMux is a lock on updating the node status, because this path is not thread-safe.
 	// This lock is used by Kublet.syncNodeStatus function and shouldn't be used anywhere else.
@@ -2328,7 +2337,7 @@ func (kl *Kubelet) fastStatusUpdateOnce() {
 			continue
 		}
 		if node.Spec.PodCIDR != "" {
-			if err := kl.updatePodCIDR(node.Spec.PodCIDR); err != nil {
+			if _, err := kl.updatePodCIDR(node.Spec.PodCIDR); err != nil {
 				glog.Errorf("Pod CIDR update failed %v", err)
 				continue
 			}

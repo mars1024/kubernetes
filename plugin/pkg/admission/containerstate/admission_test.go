@@ -41,8 +41,8 @@ func TestNewContainerState(t *testing.T) {
 	NewContainerState()
 }
 
-// TestAdmission verifies all update requests for pods result in every container's labels
-func TestAdmission(t *testing.T) {
+// TestValidatePod verifies all update requests for pods result in every container's labels
+func TestValidatePod(t *testing.T) {
 	namespace := "test"
 	handler := &ContainerState{}
 	state := sigmaapi.ContainerStateSpec{
@@ -279,6 +279,107 @@ func TestAdmission(t *testing.T) {
 	}
 	if err.Error() != expectedError {
 		t.Fatal(err)
+	}
+}
+
+// TestAdmitPod admit all update requests for pods result in every container's labels
+func TestAdmitPod(t *testing.T) {
+	namespace := "test"
+	handler := &ContainerState{}
+	state := sigmaapi.ContainerStateSpec{
+		States: map[sigmaapi.ContainerInfo]sigmaapi.ContainerState{
+			sigmaapi.ContainerInfo{Name: "name1"}: sigmaapi.ContainerStateCreated,
+			sigmaapi.ContainerInfo{Name: "name2"}: sigmaapi.ContainerStateExited,
+			sigmaapi.ContainerInfo{Name: "name3"}: sigmaapi.ContainerStateRunning,
+			sigmaapi.ContainerInfo{Name: "name4"}: sigmaapi.ContainerStatePaused,
+			sigmaapi.ContainerInfo{Name: "name5"}: sigmaapi.ContainerStateSuspended},
+	}
+	stateBytes, err := json.Marshal(state)
+	status := sigmaapi.ContainerStateStatus{
+		Statuses: map[sigmaapi.ContainerInfo]sigmaapi.ContainerStatus{
+			sigmaapi.ContainerInfo{Name: "name1"}: {
+				CurrentState: sigmaapi.ContainerStateCreated,
+				LastState:    sigmaapi.ContainerStateCreated,
+			},
+			sigmaapi.ContainerInfo{Name: "name2"}: {
+				CurrentState: sigmaapi.ContainerStateCreated,
+				LastState:    sigmaapi.ContainerStateCreated,
+			},
+			sigmaapi.ContainerInfo{Name: "name3"}: {
+				CurrentState: sigmaapi.ContainerStateCreated,
+				LastState:    sigmaapi.ContainerStateCreated,
+			},
+			sigmaapi.ContainerInfo{Name: "name4"}: {
+				CurrentState: sigmaapi.ContainerStateCreated,
+				LastState:    sigmaapi.ContainerStateCreated,
+			},
+			sigmaapi.ContainerInfo{Name: "name5"}: {
+				CurrentState: sigmaapi.ContainerStateCreated,
+				LastState:    sigmaapi.ContainerStateCreated,
+			},
+		},
+	}
+	statusBytes, err := json.Marshal(status)
+	pod := api.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "123",
+			Namespace: namespace,
+			Annotations: map[string]string{
+				sigmaapi.AnnotationContainerStateSpec: string(stateBytes),
+				sigmaapi.AnnotationPodUpdateStatus:    string(statusBytes),
+			},
+		},
+		Spec: api.PodSpec{
+			Containers: []api.Container{
+				{Name: "name1"},
+				{Name: "name2"},
+				{Name: "name3"},
+				{Name: "name4"},
+				{Name: "name5"},
+			},
+		},
+	}
+	err = handler.Admit(admission.NewAttributesRecord(&pod, nil,
+		api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name,
+		api.Resource("pods").WithVersion("version"), "", admission.Update, false, nil))
+	if err != nil {
+		t.Errorf("Unexpected error returned from admission handler: %s", err)
+	}
+
+	pod.Spec.Containers = []api.Container{
+		{Name: "name1"},
+		{Name: "name2"},
+		{Name: "name4"},
+		{Name: "name5"},
+	}
+
+	err = handler.Admit(admission.NewAttributesRecord(&pod, nil,
+		api.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name,
+		api.Resource("pods").WithVersion("version"), "", admission.Update, false, nil))
+	if err != nil {
+		t.Fatal("Unexpected error")
+	}
+
+	stateSpecstr := pod.Annotations[sigmaapi.AnnotationContainerStateSpec]
+	var newStates sigmaapi.ContainerStateSpec
+	err = json.Unmarshal([]byte(stateSpecstr), &newStates)
+	if err != nil {
+		t.Fatal("Unexpected error")
+	}
+	delete(state.States, sigmaapi.ContainerInfo{Name: "name3"})
+	if len(newStates.States) != len(state.States) {
+		t.Fatalf("Unexpected container statespec.")
+	}
+
+	updateStatusStr := pod.Annotations[sigmaapi.AnnotationPodUpdateStatus]
+	var newStatus sigmaapi.ContainerStateStatus
+	err = json.Unmarshal([]byte(updateStatusStr), &newStatus)
+	if err != nil {
+		t.Fatal("Unexpected error")
+	}
+	delete(status.Statuses, sigmaapi.ContainerInfo{Name: "name3"})
+	if len(newStatus.Statuses) != len(status.Statuses) {
+		t.Fatalf("Unexpected container statespec.")
 	}
 }
 

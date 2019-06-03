@@ -481,7 +481,7 @@ func buildGenericConfig(
 			inFlightHandler.Run(context.TODO())
 			handler = inFlightHandler
 		} else {
-			handler = genericfilters.WithMaxInFlightLimit(handler, c.MaxRequestsInFlight, c.MaxMutatingRequestsInFlight, c.MaxWatchRequestsInFlight, c.LongRunningFunc)
+			handler = genericfilters.WithMaxInFlightLimit(handler, c.MaxRequestsInFlight, c.MaxMutatingRequestsInFlight, c.LongRunningFunc)
 		}
 		if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
 			handler = multitenancyfilter.WithImpersonation(handler, c.Authorization.Authorizer, c.Serializer)

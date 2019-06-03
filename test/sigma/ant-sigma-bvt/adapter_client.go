@@ -388,9 +388,9 @@ func (s *AdapterServer) UpgradeContainer(name, requestId string, nostart bool, r
 
 type ContainerUpdate struct {
 	// Applicable to all platforms
-	Memory    int64                 // Memory limit (in bytes)
-	CPUCount  int `json:"CpuCount"` // 内部使用
-	DiskQuota string                // Disk limit (in bytes)
+	Memory    int64  // Memory limit (in bytes)
+	CPUCount  int    `json:"CpuCount"` // 内部使用
+	DiskQuota string // Disk limit (in bytes)
 }
 
 // MustUpdateContainer() update container, wait pod ready.
@@ -402,12 +402,12 @@ func MustUpdateContainer(s *AdapterServer, client clientset.Interface, pod *v1.P
 		reqInfo, err := json.Marshal(updateReq)
 		framework.Logf("Update pod %v, ReqInfo:%v", pod.Name, string(reqInfo))
 		Expect(err).NotTo(HaveOccurred(), "[AdapterLifeCycle]marshal upgrade ReqInfo failed.")
-
 		updateResp, message, err := s.UpdateContainer(pod.Name, reqInfo)
 		Expect(err).NotTo(HaveOccurred(), "[AdapterLifeCycle] update pod error.")
 		Expect(message).To(Equal(""), "[AdapterLifeCycle] update pod failed.")
 		Expect(updateResp).NotTo(BeNil(), "[AdapterLifeCycle] get update response failed.")
 		Expect(updateResp.Id).NotTo(BeEmpty(), "[AdapterLifeCycle] get updated pod sn failed.")
+		Expect(len(updateResp.Warnings)).To(BeZero(), "[AdapterLifeCycle] updated pod %v failed, err:%v", updateResp.Id, updateResp.Warnings)
 		close(ch)
 	}()
 	for {
@@ -471,4 +471,88 @@ func (s *AdapterServer) UpdateContainer(name string, reqInfo []byte) (*CreateRes
 		return updateResp, string(body), nil
 	}
 	return updateResp, "", nil
+}
+
+// CreatePodUnit() create pod unit
+func (s *AdapterServer) CreatePodUnit(reqInfo []byte) (*CreateResp, string, error) {
+	url := fmt.Sprintf("https://%v/containers/createPodUnit", s.AdapterAddress)
+	glog.V(2).Infof("Method:%v, URL:%v", http.MethodPost, url)
+	client, err := s.NewHttpClient()
+	if err != nil {
+		glog.Errorf("Init http client failed, err:%v", err)
+		return nil, "", err
+	}
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(reqInfo))
+	if err != nil {
+		glog.Errorf("Init new request failed, err: %v", err)
+		return nil, "", err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		glog.Errorf("Request failed, err:%v", err)
+		return nil, "", err
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		glog.Errorf("Read response body failed, err:%v", err)
+		return nil, "", err
+	}
+
+	createResp := &CreateResp{}
+	if resp.StatusCode == http.StatusAccepted {
+		err = json.Unmarshal(body, createResp)
+		if err != nil {
+			glog.Errorf("Unmarshal response body failed, err:%v", err)
+			return createResp, "", err
+		}
+	} else {
+		return createResp, string(body), nil
+	}
+	return createResp, "", nil
+}
+
+// DeletePodUnit() if ok return 204.
+func (s *AdapterServer) DeletePodUnit(name string, force bool) (string, error) {
+	url := fmt.Sprintf("https://%v/podUnit/%v", s.AdapterAddress, name)
+	glog.V(2).Infof("Method:%v, URL:%v", http.MethodDelete, url)
+	client, err := s.NewHttpClient()
+	if err != nil {
+		glog.Errorf("Init http client failed, err:%v", err)
+		return "", err
+	}
+	req, err := http.NewRequest(http.MethodDelete, url, nil)
+	if err != nil {
+		glog.Errorf("Init new request failed, err: %v", err)
+		return "", err
+	}
+	if force {
+		params := req.URL.Query()
+		params.Add("force", "true")
+		req.URL.RawQuery = params.Encode()
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		glog.Errorf("Request failed, err:%v", err)
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		glog.Errorf("Read response body failed, err:%v", err)
+		return "", err
+	}
+
+	if resp.StatusCode == http.StatusNoContent {
+		return "", nil
+	} else {
+		return string(body), nil
+	}
+	return "", nil
 }

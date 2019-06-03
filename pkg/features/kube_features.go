@@ -441,6 +441,12 @@ const (
 	// Disable the admit function to avoid reject pod.
 	DisableRejectPod utilfeature.Feature = "DisableRejectPod"
 
+	// owner: @tongkai.ytk (tongkai.ytk@alibaba-inc.com)
+	// alpha: v1.12
+	//
+	// Disable the pod QoS validation function to avoid updating pod cpu request forbidden (such as VPA work).
+	DisableUpdatePodQOSValidation utilfeature.Feature = "DisableUpdatePodQOSValidation"
+
 	// owner: @zhongyuan.zxy (zhongyuan.zxy@alibaba-inc.com)
 	// alpha: v1.12
 	//
@@ -458,6 +464,13 @@ const (
 	//
 	// always try to recreate sandbox even if the restart policy is Never
 	EnsurePodSuccess utilfeature.Feature = "EnsurePodSuccess"
+
+	// owner: @chenjun.cj (chenjun.cj@alipay.com)
+	// alpha: v1.12
+	//
+	// add Pod.Spec.DNSConfig.Searches to Pod's /etc/resolv.conf at first
+	// github issue see: https://github.com/kubernetes/kubernetes/issues/78206
+	PodSearchesFirst utilfeature.Feature = "PodSearchesFirst"
 )
 
 func init() {
@@ -537,6 +550,7 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	PodLevelResourceQuota:                       {Default: false, PreRelease: utilfeature.Alpha},
 	IgnoreSidecarContainerReady:                 {Default: false, PreRelease: utilfeature.Alpha},
 	EnsurePodSuccess:                            {Default: false, PreRelease: utilfeature.Alpha},
+	PodSearchesFirst:                            {Default: false, PreRelease: utilfeature.Alpha},
 
 	multitenancy.FeatureName:                    {Default: false, PreRelease: utilfeature.Alpha},
 

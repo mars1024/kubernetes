@@ -241,7 +241,8 @@ func (pool *CPUPool) GetAllocatedCPUShare() int64 {
 		if isExclusive {
 			continue
 		}
-		_, milliCPU, _ := schedulercache.CalculateResource(pod)
+		res, _, _ := schedulercache.CalculateResource(pod)
+		milliCPU := res.MilliCPU
 		allocated += int64(float64(milliCPU))
 	}
 	return allocated

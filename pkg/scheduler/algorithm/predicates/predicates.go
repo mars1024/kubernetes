@@ -883,9 +883,23 @@ func PodFitsResources(pod *v1.Pod, meta algorithm.PredicateMetadata, nodeInfo *s
 		predicateFails = append(predicateFails, NewInsufficientResourceError(v1.ResourceCPU, podRequest.MilliCPU, nodeInfo.RequestedResource().MilliCPU, allocatable.MilliCPU))
 	}
 	overQuotaRatio, _ = schedutil.MemoryOverQuotaRatio(nodeInfo.Node())
-	if allocatable.Memory*int64(overQuotaRatio*float64(precision)) < precision*(podRequest.Memory+nodeInfo.RequestedResource().Memory) {
-		predicateFails = append(predicateFails, NewInsufficientResourceError(v1.ResourceMemory, podRequest.Memory, nodeInfo.RequestedResource().Memory, allocatable.Memory))
+	if !algorithm.IsPodMonotypeHard(pod) {
+		if allocatable.Memory*int64(overQuotaRatio*float64(precision)) < precision*(podRequest.Memory+nodeInfo.RequestedResource().Memory) {
+			predicateFails = append(predicateFails, NewInsufficientResourceError(v1.ResourceMemory, podRequest.Memory, nodeInfo.RequestedResource().Memory, allocatable.Memory))
+		}
+	} else {
+		if overQuotaRatio == 1.0 {
+			overQuotaRatio = 1.05
+		}
+		//if allocatable.Memory*int64(overQuotaRatio*float64(precision)) < precision*(podRequest.Memory+nodeInfo.RequestedResource().Memory) {
+		//	predicateFails = append(predicateFails, NewInsufficientResourceError(v1.ResourceMemory, podRequest.Memory, nodeInfo.RequestedResource().Memory, allocatable.Memory))
+		//}
+		if !IsResourceApproximate(int64(float64(nodeInfo.AllocatableResource().Memory)*overQuotaRatio), podRequest.Memory+nodeInfo.RequestedResource().Memory, AllowedMemoryOverhead) {
+			memoryMatchError := NewMonotypeMismatchedError(v1.ResourceMemory, podRequest.Memory, nodeInfo.RequestedResource().Memory, nodeInfo.AllocatableResource().Memory)
+			predicateFails = append(predicateFails, memoryMatchError)
+		}
 	}
+
 	overQuotaRatio, _ = schedutil.EphemeralStorageOverQuotaRatio(nodeInfo.Node())
 	if allocatable.EphemeralStorage*int64(overQuotaRatio*float64(precision)) < precision*(podRequest.EphemeralStorage+nodeInfo.RequestedResource().EphemeralStorage) {
 		predicateFails = append(predicateFails, NewInsufficientResourceError(v1.ResourceEphemeralStorage, podRequest.EphemeralStorage, nodeInfo.RequestedResource().EphemeralStorage, allocatable.EphemeralStorage))

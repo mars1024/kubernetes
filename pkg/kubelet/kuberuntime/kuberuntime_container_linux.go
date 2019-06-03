@@ -19,6 +19,8 @@ limitations under the License.
 package kuberuntime
 
 import (
+	"errors"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -31,27 +33,65 @@ import (
 const (
 	containerPouchCPUBvtWarpNsAnnotation = "customization.cpu_bvt_warp_ns"
 	containerPouchMemorySwapAnnotation   = "io.alibaba.pouch.resources.memory-swap"
+	containerPouchMemoryWMarkRatio       = "customization.memory_wmark_ratio"
+	containerPouchIntelRdtMba            = "customization.intel_rdt_mba"
+	containerPouchIntelRdtGroup          = "customization.intel_rdt_group"
+	containerPouchPidsLimit              = "io.alibaba.pouch.resources.pids-limit"
 )
 
 // applyPlatformSpecificContainerConfig applies platform specific configurations to runtimeapi.ContainerConfig.
 func (m *kubeGenericRuntimeManager) applyPlatformSpecificContainerConfig(config *runtimeapi.ContainerConfig, container *v1.Container, pod *v1.Pod, uid *int64, username string) error {
-	config.Linux = m.generateLinuxContainerConfig(container, pod, uid, username)
+	// Get image status
+	imageSpec := &runtimeapi.ImageSpec{
+		Image: container.Image,
+	}
+	imageStatus, err := m.imageService.ImageStatus(imageSpec)
+	if err != nil {
+		return err
+	}
+	if imageStatus == nil {
+		msg := fmt.Sprintf("image %s not found", container.Image)
+		return errors.New(msg)
+	}
+
+	config.Linux = m.generateLinuxContainerConfig(container, pod, imageStatus, uid, username)
 
 	applyExtendContainerConfig(pod, container, config)
 
-	// For pouch
+	// Generate annotations for pouch.
+	applyPlatformAnnotationForPouch(config)
+	return nil
+}
+
+// applyPlatformAnnotationForPouch will generate some annotations for pouch.
+// https://yuque.antfin-inc.com/huamin.thm/gfg57i/gg1y2a#522ef370
+// https://yuque.antfin-inc.com/pouchcontainer/cncf/cfen40
+func applyPlatformAnnotationForPouch(config *runtimeapi.ContainerConfig) {
 	if config.Linux.Resources.CpuBvtWarpNs != 0 {
 		config.Annotations[containerPouchCPUBvtWarpNsAnnotation] = strconv.Itoa(int(config.Linux.Resources.CpuBvtWarpNs))
 	}
-	if config.Linux.Resources.MemorySwap > 0 {
+	if config.Linux.Resources.MemorySwap != 0 {
 		config.Annotations[containerPouchMemorySwapAnnotation] = strconv.Itoa(int(config.Linux.Resources.MemorySwap))
 	}
-	return nil
+	if config.Linux.Resources.MemoryWmarkRatio > 0 {
+		config.Annotations[containerPouchMemoryWMarkRatio] = strconv.Itoa(int(config.Linux.Resources.MemoryWmarkRatio))
+	}
+	if config.Linux.IntelRdt != nil {
+		if len(config.Linux.IntelRdt.IntelRdtMba) != 0 {
+			config.Annotations[containerPouchIntelRdtMba] = config.Linux.IntelRdt.IntelRdtMba
+		}
+		if len(config.Linux.IntelRdt.IntelRdtGroup) != 0 {
+			config.Annotations[containerPouchIntelRdtGroup] = config.Linux.IntelRdt.IntelRdtGroup
+		}
+	}
+	if config.Linux.Resources.PidsLimit > 0 {
+		config.Annotations[containerPouchPidsLimit] = strconv.FormatInt(config.Linux.Resources.PidsLimit, 10)
+	}
 }
 
 // generateLinuxContainerConfig generates linux container config for kubelet runtime v1.
 // All supported resources will be generated here.
-func (m *kubeGenericRuntimeManager) generateLinuxContainerConfig(container *v1.Container, pod *v1.Pod, uid *int64, username string) *runtimeapi.LinuxContainerConfig {
+func (m *kubeGenericRuntimeManager) generateLinuxContainerConfig(container *v1.Container, pod *v1.Pod, imageStatus *runtimeapi.Image, uid *int64, username string) *runtimeapi.LinuxContainerConfig {
 	lc := &runtimeapi.LinuxContainerConfig{
 		Resources:       &runtimeapi.LinuxContainerResources{},
 		SecurityContext: m.determineEffectiveSecurityContext(pod, container, uid, username),
@@ -94,7 +134,7 @@ func (m *kubeGenericRuntimeManager) generateLinuxContainerConfig(container *v1.C
 		}
 	}
 
-	applyExtendContainerResource(pod, container, lc, m.cpuCFSQuota)
+	applyExtendContainerResource(pod, container, imageStatus, lc, m.cpuCFSQuota)
 
 	return lc
 }

@@ -202,7 +202,12 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 				currentPodCPUQuota += containerStatus.Resources.CpuQuota
 			}
 
-			newLC := m.generateLinuxContainerResources(&container, pod)
+			newLC, err := m.generateLinuxContainerResources(&container, pod)
+			if err != nil {
+				glog.Warningf("Failed to generate resources for container %s in pod %s: %v, do it next time",
+					container.Name, format.Pod(pod), err)
+				return
+			}
 			newPodCPUQuota += newLC.CpuQuota
 		}
 

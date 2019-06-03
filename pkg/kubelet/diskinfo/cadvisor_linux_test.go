@@ -27,7 +27,6 @@ import (
 	"testing"
 
 	"github.com/golang/glog"
-
 	"k8s.io/kubernetes/pkg/util/slice"
 )
 

@@ -21,7 +21,10 @@ import (
 	"strings"
 
 	"k8s.io/api/core/v1"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
+	"k8s.io/kubernetes/pkg/features"
+	sigmautil "k8s.io/kubernetes/pkg/kubelet/sigma"
 )
 
 const (
@@ -33,7 +36,7 @@ const (
 )
 
 // GenerateContainersReadyCondition returns the status of "ContainersReady" condition.
-// The status of "ContainersReady" condition is true when all containers are ready.
+// The status of "ContainersReady" condition is true when should not ignore containers are ready.
 func GenerateContainersReadyCondition(spec *v1.PodSpec, containerStatuses []v1.ContainerStatus, podPhase v1.PodPhase) v1.PodCondition {
 	// Find if all containers are ready or not.
 	if containerStatuses == nil {
@@ -46,6 +49,10 @@ func GenerateContainersReadyCondition(spec *v1.PodSpec, containerStatuses []v1.C
 	unknownContainers := []string{}
 	unreadyContainers := []string{}
 	for _, container := range spec.Containers {
+		// if feature IgnoreSidecarContainerReady is true and whether ignore container ready is true, then ignore this container
+		if utilfeature.DefaultFeatureGate.Enabled(features.IgnoreSidecarContainerReady) && sigmautil.IsContainerReadyIgnore(&container) {
+			continue
+		}
 		if containerStatus, ok := podutil.GetContainerStatus(containerStatuses, container.Name); ok {
 			if !containerStatus.Ready {
 				unreadyContainers = append(unreadyContainers, container.Name)

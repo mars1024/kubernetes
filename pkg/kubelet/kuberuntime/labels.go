@@ -258,7 +258,7 @@ func getStringValueFromLabel(labels map[string]string, label string) string {
 		return value
 	}
 	// Do not report error, because there should be many old containers without label now.
-	glog.V(3).Infof("Container doesn't have label %s, it may be an old or invalid container", label)
+	glog.V(5).Infof("Container doesn't have label %s, it may be an old or invalid container", label)
 	// Return empty string "" for these containers, the caller will get value by other ways.
 	return ""
 }
@@ -273,7 +273,7 @@ func getIntValueFromLabel(labels map[string]string, label string) (int, error) {
 		return intValue, nil
 	}
 	// Do not report error, because there should be many old containers without label now.
-	glog.V(3).Infof("Container doesn't have label %s, it may be an old or invalid container", label)
+	glog.V(5).Infof("Container doesn't have label %s, it may be an old or invalid container", label)
 	// Just set the value to 0
 	return 0, nil
 }
@@ -288,7 +288,7 @@ func getUint64ValueFromLabel(labels map[string]string, label string) (uint64, er
 		return intValue, nil
 	}
 	// Do not report error, because there should be many old containers without label now.
-	glog.V(3).Infof("Container doesn't have label %s, it may be an old or invalid container", label)
+	glog.V(5).Infof("Container doesn't have label %s, it may be an old or invalid container", label)
 	// Just set the value to 0
 	return 0, nil
 }

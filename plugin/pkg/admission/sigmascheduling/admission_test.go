@@ -583,6 +583,142 @@ func TestValidatePod(t *testing.T) {
 			err: "spec.containers[0].resources.requests.cpu: Invalid value: \"2m\": pod spec is invalid, must be integer",
 		},
 		{
+			name:   "pod with PodGroup label",
+			action: admission.Create,
+			pod: api.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "123",
+					Namespace:   namespace,
+					Annotations: map[string]string{},
+					Labels: map[string]string{
+						sigmaapi.LabelPodGroupName: "podgroup-test",
+					},
+				},
+				Spec: api.PodSpec{
+					NodeName: "node",
+					Containers: []api.Container{
+						{
+							Name: "name1",
+							Resources: api.ResourceRequirements{
+								Requests: api.ResourceList{
+									api.ResourceCPU: resource.MustParse("2m"),
+								},
+							},
+						},
+					},
+				},
+			},
+			alloc: sigmaapi.AllocSpec{
+				Containers: []sigmaapi.Container{
+					{
+						Name: "name1",
+						Resource: sigmaapi.ResourceRequirements{
+							CPU: sigmaapi.CPUSpec{
+								CPUSet: &sigmaapi.CPUSetSpec{
+									SpreadStrategy: sigmaapi.SpreadStrategySameCoreFirst,
+									CPUIDs:         []int{1, 2},
+								},
+							},
+							GPU: sigmaapi.GPUSpec{
+								ShareMode: sigmaapi.GPUShareModeExclusive,
+							},
+						},
+					},
+				},
+			},
+			err: "",
+		},
+		{
+			name:   "pod with unequal requests",
+			action: admission.Create,
+			pod: api.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "123",
+					Namespace:   namespace,
+					Annotations: map[string]string{},
+					Labels:      map[string]string{},
+				},
+				Spec: api.PodSpec{
+					NodeName: "node",
+					Containers: []api.Container{
+						{
+							Name: "name1",
+							Resources: api.ResourceRequirements{
+								Requests: api.ResourceList{
+									api.ResourceCPU: resource.MustParse("1"),
+								},
+							},
+						},
+					},
+				},
+			},
+			alloc: sigmaapi.AllocSpec{
+				Containers: []sigmaapi.Container{
+					{
+						Name: "name1",
+						Resource: sigmaapi.ResourceRequirements{
+							CPU: sigmaapi.CPUSpec{
+								CPUSet: &sigmaapi.CPUSetSpec{
+									SpreadStrategy: sigmaapi.SpreadStrategySameCoreFirst,
+									CPUIDs:         []int{1, 2},
+								},
+							},
+							GPU: sigmaapi.GPUSpec{
+								ShareMode: sigmaapi.GPUShareModeExclusive,
+							},
+						},
+					},
+				},
+			},
+			err: `Pod "123" is invalid: allocSpec.containers[0].resource.cpu.cpuset.cpuIDs: Invalid value: "[1 2]": the count of cpuIDs is not match pod spec and this pod is not in inplace update process`,
+		},
+		{
+			name:   "pod with PodGroup label and unequal requests",
+			action: admission.Create,
+			pod: api.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "123",
+					Namespace:   namespace,
+					Annotations: map[string]string{},
+					Labels: map[string]string{
+						sigmaapi.LabelPodGroupName: "podgroup-test",
+					},
+				},
+				Spec: api.PodSpec{
+					NodeName: "node",
+					Containers: []api.Container{
+						{
+							Name: "name1",
+							Resources: api.ResourceRequirements{
+								Requests: api.ResourceList{
+									api.ResourceCPU: resource.MustParse("1"),
+								},
+							},
+						},
+					},
+				},
+			},
+			alloc: sigmaapi.AllocSpec{
+				Containers: []sigmaapi.Container{
+					{
+						Name: "name1",
+						Resource: sigmaapi.ResourceRequirements{
+							CPU: sigmaapi.CPUSpec{
+								CPUSet: &sigmaapi.CPUSetSpec{
+									SpreadStrategy: sigmaapi.SpreadStrategySameCoreFirst,
+									CPUIDs:         []int{1, 2},
+								},
+							},
+							GPU: sigmaapi.GPUSpec{
+								ShareMode: sigmaapi.GPUShareModeExclusive,
+							},
+						},
+					},
+				},
+			},
+			err: "",
+		},
+		{
 			name:   "pod with mismatch cpuids count",
 			action: admission.Create,
 			pod: api.Pod{

@@ -337,10 +337,10 @@
 			"revisionTime": "2018-11-29T17:17:00Z"
 		},
 		{
-			"checksumSHA1": "zvvUrNyDbp0An4v9nOnaBpzmcBU=",
+			"checksumSHA1": "m2Tjj/L7FTavkoRdYZRjZH6hPnA=",
 			"path": "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api",
-			"revision": "15ed497b29889db1822e146e6677e03c41b8bf80",
-			"revisionTime": "2019-03-28T04:06:23Z",
+			"revision": "ac165ad672fd0dab5c29d9837e6d79fd36fe91ea",
+			"revisionTime": "2019-04-03T03:17:16Z",
 			"version": "develop",
 			"versionExact": "develop"
 		},
@@ -803,10 +803,10 @@
 			"versionExact": "master"
 		},
 		{
-			"checksumSHA1": "87TVzjFNry9SUPaAHAnkLEjKJ0g=",
+			"checksumSHA1": "xH+acAeWyz//y7F2r/gbyyNPrCI=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/cafe-kubernetes-extension/plugin/admission/clusterinjection",
-			"revision": "83f9e301ccf1866c7bd35b51b67b0ac3f8f46dd7",
-			"revisionTime": "2019-04-12T08:16:38Z"
+			"revision": "fb76e420a1eb037328a2320935dba2f880530419",
+			"revisionTime": "2019-05-17T07:58:16Z"
 		},
 		{
 			"checksumSHA1": "nu2S+yIOytAwfojGEVtmtz6elxM=",
@@ -821,9 +821,15 @@
 			"revisionTime": "2019-04-12T08:16:38Z"
 		},
 		{
+			"checksumSHA1": "Vx2aVy62r33XB72O/IqPwUt31W8=",
+			"path": "gitlab.alipay-inc.com/antstack/cafe-k8s-api/pkg",
+			"revision": "e91b3df84bbb854b88254d9af40d67bb2c8ebc53",
+			"revisionTime": "2019-05-31T13:14:09Z"
+		},
+		{
 			"checksumSHA1": "VGRKStBBaWO0EIv3BwknNX3aKok=",
 			"path": "gitlab.alipay-inc.com/sigma/apis/pkg/apis",
-			"revision": "e829bdf5c9defc9c2510c3d0ad9b48e9816d25ad",
+			"revision": "6416a7ab4a0affa3f34cfe3aa98c5922a7a92e0b",
 			"revisionTime": "2019-03-14T03:34:20Z"
 		},
 		{

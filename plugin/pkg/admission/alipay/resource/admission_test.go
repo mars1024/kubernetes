@@ -2,6 +2,7 @@ package resource
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
@@ -9,11 +10,17 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apiserver/pkg/admission"
 
+	alipaysigmak8sapi "gitlab.alipay-inc.com/sigma/apis/pkg/apis"
 	"k8s.io/kubernetes/pkg/apis/core"
+	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
+	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset/fake"
+	"k8s.io/kubernetes/pkg/client/informers/informers_generated/internalversion"
+	kubeadmission "k8s.io/kubernetes/pkg/kubeapiserver/admission"
 )
 
 func TestResourceValidate(t *testing.T) {
-	assert := assert.New(t)
+	stopCh := make(chan struct{})
+	defer close(stopCh)
 
 	testcases := []struct {
 		cpuLimit       int64
@@ -140,6 +147,14 @@ func TestResourceValidate(t *testing.T) {
 	}
 
 	for _, testcase := range testcases {
+		handler, f, err := newHandlerForTest(fake.NewSimpleClientset(&core.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: metav1.NamespaceDefault,
+			},
+		}))
+		assert.Nil(t, err)
+		f.Start(stopCh)
+
 		pod := newPodWithResource(testcase.cpuRequest, testcase.cpuLimit, testcase.memoryRequest, testcase.memoryLimit, testcase.storageRequest, testcase.storageLimit)
 
 		if testcase.isSigmaBE {
@@ -147,13 +162,12 @@ func TestResourceValidate(t *testing.T) {
 		}
 
 		attr := admission.NewAttributesRecord(pod, nil, core.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, core.Resource("pods").WithVersion("version"), "", admission.Create, false, nil)
-		handler := newAlipayResourceAdmission()
-		err := handler.Validate(attr)
+		err = handler.Validate(attr)
 
 		if !testcase.isValid {
-			assert.NotNil(err)
+			assert.NotNil(t, err)
 		} else {
-			assert.Nil(err)
+			assert.Nil(t, err)
 		}
 	}
 }
@@ -199,4 +213,34 @@ func newPod() *core.Pod {
 			},
 		},
 	}
+}
+
+func newHandlerForTest(c internalclientset.Interface) (*AlipayResourceAdmission, internalversion.SharedInformerFactory, error) {
+	f := internalversion.NewSharedInformerFactory(c, 5*time.Minute)
+	handler := newAlipayResourceAdmission()
+	pluginInitializer := kubeadmission.NewPluginInitializer(c, f, nil, nil, nil)
+	pluginInitializer.Initialize(handler)
+	err := admission.ValidateInitialization(handler)
+	return handler, f, err
+}
+
+func TestSkipValidation(t *testing.T) {
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+
+	a, f, err := newHandlerForTest(fake.NewSimpleClientset(&core.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        metav1.NamespaceDefault,
+			Annotations: map[string]string{alipaysigmak8sapi.SkipResourceAdmission: "true"},
+		},
+	}))
+	assert.Nil(t, err)
+
+	f.Start(stopCh)
+
+	pod := newPod()
+	attr := admission.NewAttributesRecord(pod, nil, core.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, core.Resource("pods").WithVersion("version"), "", admission.Create, false, nil)
+
+	err = a.Validate(attr)
+	assert.Nil(t, err)
 }

@@ -45,6 +45,10 @@ var (
 const (
 	// AliAdminUID is  ali admin uid
 	AliAdminUID = "ali_admin_uid"
+	// ContainerDiskQuotaLabel is the label key to indicate a container's diskquota.
+	ContainerDiskQuotaLabel = "DiskQuota"
+	// ContainerQuotaIdLabel is the label key to indicate a container's quotaid.
+	ContainerQuotaIdLabel = "QuotaId"
 )
 
 // CmdExecuter is an interface to exec a command
@@ -271,8 +275,19 @@ func (m *kubeGenericRuntimeManager) createContainerExtension(podSandboxID string
 		if parentContainerStatus != nil && parentContainerStatus.Resources != nil {
 			if parentContainerStatus.QuotaId != "" {
 				containerConfig.QuotaId = parentContainerStatus.QuotaId
+			} else {
+				if quotaId, exists := parentContainerStatus.Labels[ContainerQuotaIdLabel]; exists {
+					containerConfig.QuotaId = quotaId
+				}
 			}
-			containerConfig.Linux.Resources.DiskQuota = parentContainerStatus.Resources.DiskQuota
+			if len(parentContainerStatus.Resources.DiskQuota) != 0 {
+				containerConfig.Linux.Resources.DiskQuota = parentContainerStatus.Resources.DiskQuota
+			} else {
+				if diskQuotaStr, exists := parentContainerStatus.Labels[ContainerDiskQuotaLabel]; exists {
+					diskQuota := sigmautil.ParseDiskQuota(diskQuotaStr)
+					containerConfig.Linux.Resources.DiskQuota = diskQuota
+				}
+			}
 		}
 	}
 

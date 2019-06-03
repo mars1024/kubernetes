@@ -371,6 +371,11 @@ func TestGetDiskSize(t *testing.T) {
 			expect:   "10k",
 			message:  "convert K to k",
 		},
+		{
+			resource: "12345678",
+			expect:   "12345678b",
+			message:  "set default to 'b'",
+		},
 	}
 	for _, testCase := range testCases {
 		diskSize := getDiskSize(testCase.resource)

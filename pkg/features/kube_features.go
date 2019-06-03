@@ -434,6 +434,30 @@ const (
 	// If there is no hashVersion in container,
 	// we regard it as v1.10 if DefaultHashVersionAs110 is true, else is v1.12.
 	DefaultHashVersionTo110 utilfeature.Feature = "DefaultHashVersionTo110"
+
+	// owner: @fankang.fk (fankang.fk@alibaba-inc.com)
+	// alpha: v1.12
+	//
+	// Disable the admit function to avoid reject pod.
+	DisableRejectPod utilfeature.Feature = "DisableRejectPod"
+
+	// owner: @zhongyuan.zxy (zhongyuan.zxy@alibaba-inc.com)
+	// alpha: v1.12
+	//
+	// Filter the sidecar containers when calculate pod's QoS class
+	PodLevelResourceQuota utilfeature.Feature = "PodLevelResourceQuota"
+
+	// owner: @yaowei.cyw (yaowei.cyw@alibaba-inc.com)
+	// alpha: v1.12
+	//
+	// when generate pod ready, ignore sidecar container ready
+	IgnoreSidecarContainerReady utilfeature.Feature = "IgnoreSidecarContainerReady"
+
+	// owner: @fankang.fk (fankang.fk@alipay.com)
+	// alpha: v1.12
+	//
+	// always try to recreate sandbox even if the restart policy is Never
+	EnsurePodSuccess utilfeature.Feature = "EnsurePodSuccess"
 )
 
 func init() {
@@ -444,8 +468,8 @@ func init() {
 // To add a new feature, define a key for it above and add it here. The features will be
 // available throughout Kubernetes binaries.
 var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureSpec{
-	AppArmor:                                    {Default: true, PreRelease: utilfeature.Beta},
-	DynamicKubeletConfig:                        {Default: true, PreRelease: utilfeature.Beta},
+	AppArmor:             {Default: true, PreRelease: utilfeature.Beta},
+	DynamicKubeletConfig: {Default: true, PreRelease: utilfeature.Beta},
 	ExperimentalHostUserNamespaceDefaultingGate: {Default: false, PreRelease: utilfeature.Beta},
 	ExperimentalCriticalPodAnnotation:           {Default: false, PreRelease: utilfeature.Alpha},
 	DevicePlugins:                               {Default: true, PreRelease: utilfeature.Beta},
@@ -509,6 +533,10 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	EvictPodByPolicy:                            {Default: true, PreRelease: utilfeature.Alpha},
 	DisableChangePodStatusByNodeReadyCondition:  {Default: true, PreRelease: utilfeature.Beta},
 	DefaultHashVersionTo110:                     {Default: false, PreRelease: utilfeature.Alpha},
+	DisableRejectPod:                            {Default: false, PreRelease: utilfeature.Alpha},
+	PodLevelResourceQuota:                       {Default: false, PreRelease: utilfeature.Alpha},
+	IgnoreSidecarContainerReady:                 {Default: false, PreRelease: utilfeature.Alpha},
+	EnsurePodSuccess:                            {Default: false, PreRelease: utilfeature.Alpha},
 
 	multitenancy.FeatureName:                    {Default: false, PreRelease: utilfeature.Alpha},
 

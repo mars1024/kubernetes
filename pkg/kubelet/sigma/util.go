@@ -2,6 +2,8 @@ package sigma
 
 import (
 	"regexp"
+	"strconv"
+	"strings"
 
 	"github.com/golang/glog"
 	"k8s.io/api/core/v1"
@@ -61,4 +63,35 @@ func IsPodDockerVMMode(pod *v1.Pod) bool {
 	}
 
 	return pod.Labels[sigmak8sapi.LabelServerType] == sigmak8sapi.PodLabelDockerVM
+}
+
+// IsPodJob can judge pod is a job or not.
+func IsPodJob(pod *v1.Pod) bool {
+	if pod == nil || len(pod.Labels) == 0 {
+		return false
+	}
+
+	if pod.Labels[sigmak8sapi.LabelPodIsJob] == "true" {
+		return true
+	}
+
+	return false
+}
+
+// IsContainerReadyIgnore returns whether ignore this container.
+func IsContainerReadyIgnore(container *v1.Container) bool {
+	if container == nil || len(container.Env) == 0 {
+		return false
+	}
+	for _, value := range container.Env {
+		if strings.EqualFold(value.Name, sigmak8sapi.EnvIgnoreReady) {
+			isSidecar, err := strconv.ParseBool(value.Value)
+			if err != nil {
+				glog.Errorf("container %s env %s parse error %v", container.Name, sigmak8sapi.EnvIgnoreReady, err)
+				return false
+			}
+			return isSidecar
+		}
+	}
+	return false
 }

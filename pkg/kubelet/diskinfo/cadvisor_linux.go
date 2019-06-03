@@ -49,6 +49,12 @@ func getDiskInfo(rootDir string) ([]api.DiskInfo, error) {
 		return nil, err
 	}
 
+	deviceTypes, err := getDeviceTypes()
+	if nil != err {
+		glog.Errorf("get device types failed, treat all disk as unknown, err: %v", err)
+		deviceTypes = map[string]api.DiskType{}
+	}
+
 	var infos []api.DiskInfo
 	for _, p := range partitions {
 		infos = append(infos, api.DiskInfo{
@@ -56,9 +62,8 @@ func getDiskInfo(rootDir string) ([]api.DiskInfo, error) {
 			FileSystemType: p.fsType,
 			Size:           int64(p.capacity),
 			MountPoint:     p.mountpoint,
-			//TODO (chenjun.cj): fixme
-			DiskType:    diskTypeUnknown,
-			IsGraphDisk: p.name == rootPartition.name,
+			DiskType:       getPartitionDiskType(p.name, deviceTypes),
+			IsGraphDisk:    p.name == rootPartition.name,
 		})
 	}
 

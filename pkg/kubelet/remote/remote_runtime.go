@@ -110,12 +110,13 @@ func (r *RemoteRuntimeService) RunPodSandbox(config *runtimeapi.PodSandboxConfig
 
 // StartPodSandbox Start a sandbox pod which was forced to stop by external factors.
 // Network plugin returns same IPs when input same pod names and namespaces
-func (r *RemoteRuntimeService) StartPodSandbox(podSandBoxID string) error {
+func (r *RemoteRuntimeService) StartPodSandbox(podSandBoxID string, config *runtimeapi.PodSandboxConfig) error {
 	ctx, cancel := getContextWithTimeout(r.timeout)
 	defer cancel()
 
 	_, err := r.runtimeClient.StartPodSandbox(ctx, &runtimeapi.StartPodSandboxRequest{
 		PodSandboxId: podSandBoxID,
+		Config:       config,
 	})
 	if err != nil {
 		glog.Errorf("StartPodSandbox %q from runtime service failed: %v", podSandBoxID, err)
@@ -368,8 +369,8 @@ func (r *RemoteRuntimeService) UpdateContainerResources(containerID string, reso
 	defer cancel()
 
 	_, err := r.runtimeClient.UpdateContainerResources(ctx, &runtimeapi.UpdateContainerResourcesRequest{
-		ContainerId: containerID,
-		Linux:       resources,
+		ContainerId:     containerID,
+		Linux:           resources,
 		SpecAnnotations: specAnnotations,
 	})
 	if err != nil {

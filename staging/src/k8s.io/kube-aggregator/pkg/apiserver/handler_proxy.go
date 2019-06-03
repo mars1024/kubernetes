@@ -73,6 +73,9 @@ type proxyHandlingInfo struct {
 	serviceNamespace string
 	// serviceAvailable indicates this APIService is available or not
 	serviceAvailable bool
+
+	// support both http and https
+	scheme string
 }
 
 func (r *proxyHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
@@ -110,13 +113,20 @@ func (r *proxyHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// write a new location based on the existing request pointed at the target service
 	location := &url.URL{}
 	location.Scheme = "https"
-	rloc, err := r.serviceResolver.ResolveEndpoint(handlingInfo.serviceNamespace, handlingInfo.serviceName)
-	if err != nil {
-		glog.Errorf("error resolving %s/%s: %v", handlingInfo.serviceNamespace, handlingInfo.serviceName, err)
-		http.Error(w, "service unavailable", http.StatusServiceUnavailable)
-		return
+	if len(handlingInfo.restConfig.Host) != 0 {
+		glog.V(4).Infof("Found override ake apiservice host %q", handlingInfo.restConfig.Host)
+		location.Host = handlingInfo.restConfig.Host
+		location.Scheme = handlingInfo.scheme
+	} else {
+		rloc, err := r.serviceResolver.ResolveEndpoint(handlingInfo.serviceNamespace, handlingInfo.serviceName)
+		if err != nil {
+			glog.Errorf("error resolving %s/%s: %v", handlingInfo.serviceNamespace, handlingInfo.serviceName, err)
+			http.Error(w, "service unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		location.Host = rloc.Host
 	}
-	location.Host = rloc.Host
+
 	location.Path = req.URL.Path
 	location.RawQuery = req.URL.Query().Encode()
 
@@ -124,6 +134,12 @@ func (r *proxyHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	newReq := req.WithContext(context.Background())
 	newReq.Header = utilnet.CloneHeader(req.Header)
 	newReq.URL = location
+
+	// add User-Agent here
+	// BLACKLIST_USER_AGENT will reject empty User-Agent
+	if len(newReq.Header.Get("User-Agent")) == 0 {
+		newReq.Header.Set("User-Agent", "apiservice-proxy")
+	}
 
 	if handlingInfo.proxyRoundTripper == nil {
 		http.Error(w, "", http.StatusNotFound)
@@ -208,6 +224,19 @@ func (r *proxyHandler) updateAPIService(apiService *apiregistrationapi.APIServic
 		serviceNamespace: apiService.Spec.Service.Namespace,
 		serviceAvailable: apiregistrationapi.IsAPIServiceConditionTrue(apiService, apiregistrationapi.Available),
 	}
+	// override default service based apiserver aggregator
+	// by stephen.xd
+	if serverAddr, ok := apiService.Annotations[AKEApiServiceAddrAnn]; ok {
+		serverScheme, serverHost, serverName, err := parseAKEApiService(serverAddr)
+		if err != nil {
+			glog.Infof("unable to parse ake apiService: %v", err)
+		} else {
+			newInfo.restConfig.TLSClientConfig.ServerName = serverName
+			newInfo.restConfig.Host = serverHost
+			newInfo.scheme = serverScheme
+		}
+	}
+
 	if r.proxyTransport != nil && r.proxyTransport.DialContext != nil {
 		newInfo.restConfig.Dial = r.proxyTransport.DialContext
 	}

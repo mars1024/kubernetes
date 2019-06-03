@@ -15,6 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apiserver/pkg/admission"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 )
 
 const (
@@ -55,8 +56,10 @@ func (r *MinionClusterInjection) SetCafeExtensionKubeInformerFactory(informer ca
 }
 
 func (r *MinionClusterInjection) ValidateInitialization() error {
-	if r.MinionClusterLister == nil {
-		return fmt.Errorf("%s requires a lister", PluginName)
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		if r.MinionClusterLister == nil {
+			return fmt.Errorf("%s requires a lister", PluginName)
+		}
 	}
 	return nil
 }

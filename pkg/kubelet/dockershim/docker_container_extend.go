@@ -11,7 +11,7 @@ import (
 
 	dockertypes "github.com/docker/docker/api/types"
 	"github.com/golang/glog"
-
+	sigmautil "k8s.io/kubernetes/pkg/kubelet/sigma"
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 )
 
@@ -28,29 +28,6 @@ const (
 	diskQuotaLimitAllKey = ".*"
 )
 
-// parseDiskQuotaToLabel can convert diskQuota map into a label string.
-// 1 DiskQuota=/=60g;/data1=50
-// 2 DiskQutoa=60g
-func parseDiskQuotaToLabel(diskQuota map[string]string) string {
-	var buffer bytes.Buffer
-	for k, v := range diskQuota {
-		// ".*" means the limitation of rootfs and volume.
-		// https://github.com/alibaba/pouch/blob/master/docs/features/pouch_with_diskquota.md#parameter-details
-		if k == diskQuotaLimitAllKey {
-			// Convert ".*" to the type such as "10g".
-			buffer.WriteString(v)
-			buffer.WriteString(";")
-			continue
-		}
-		buffer.WriteString(k)
-		buffer.WriteString("=")
-		buffer.WriteString(v)
-		buffer.WriteString(";")
-	}
-	diskQuotaLabel := buffer.String()
-	return strings.Trim(diskQuotaLabel, ";")
-}
-
 // getQuotaIdFromContainer get QuotaId from container's label
 func getQuotaIdFromContainer(r *dockertypes.ContainerJSON) (string, bool) {
 	if r == nil || r.Config == nil || r.Config.Labels == nil {
@@ -62,33 +39,13 @@ func getQuotaIdFromContainer(r *dockertypes.ContainerJSON) (string, bool) {
 	return "", false
 }
 
-// parseDiskQuota support to analysis:
-// 1 DiskQuota=/=60g;/data1=50
-// 2 DiskQutoa=60g
-func parseDiskQuota(diskQuota string) map[string]string {
-	diskQuotaMap := map[string]string{}
-	if diskQuota == "" {
-		return diskQuotaMap
-	}
-	diskQuotas := strings.Split(diskQuota, ";")
-	for _, pair := range diskQuotas {
-		parts := strings.SplitN(pair, "=", 2)
-		if len(parts) == 2 {
-			diskQuotaMap[parts[0]] = parts[1]
-		} else if len(parts) == 1 {
-			diskQuotaMap[diskQuotaLimitAllKey] = parts[0]
-		}
-	}
-	return diskQuotaMap
-}
-
 // getDiskQuotaFromContainer get DiskQuota from container's label
 func getDiskQuotaFromContainer(r *dockertypes.ContainerJSON) (map[string]string, bool) {
 	if r == nil || r.Config == nil || r.Config.Labels == nil {
 		return map[string]string{}, false
 	}
 	if diskQuotaStr, exists := r.Config.Labels[labelDiskQuota]; exists {
-		diskQuotaMap := parseDiskQuota(diskQuotaStr)
+		diskQuotaMap := sigmautil.ParseDiskQuota(diskQuotaStr)
 		return diskQuotaMap, true
 	}
 	return map[string]string{}, false
@@ -187,7 +144,7 @@ func UpdateContainerExtraResources(resources *runtimeapi.LinuxContainerResources
 		defer cancelFunc()
 
 		// Update DiskQuota with "docker update".
-		cmd := exec.CommandContext(ctx, "docker", "update", "--disk", parseDiskQuotaToLabel(DiskQuota), id)
+		cmd := exec.CommandContext(ctx, "docker", "update", "--disk", sigmautil.ParseDiskQuotaToLabel(DiskQuota), id)
 		out, err := cmd.Output()
 		if err != nil {
 			return fmt.Errorf("failed to exec %v, out: %q, err: %v", cmd, string(out), err)
@@ -276,21 +233,11 @@ func updateCreateConfigExtend(config *dockertypes.ContainerCreateConfig, runtime
 	// Set NetPriority field.
 	config.Config.NetPriority = int(runtimeConfig.NetPriority)
 
-	if runtimeConfig.Linux == nil || runtimeConfig.Linux.Resources == nil {
-		glog.Warningf("Ignore to update extend hostconfig field because of invalid ContainerConfig: %v", runtimeConfig)
-		return
+	// Set IntelRdt related field.
+	if runtimeConfig.Linux != nil && runtimeConfig.Linux.IntelRdt != nil {
+		config.HostConfig.Resources.IntelRdtGroup = runtimeConfig.Linux.IntelRdt.IntelRdtGroup
+		config.HostConfig.Resources.IntelRdtMba = runtimeConfig.Linux.IntelRdt.IntelRdtMba
 	}
-
-	// Set Swappiness field.
-	if runtimeConfig.Linux.Resources.MemorySwappiness != nil {
-		config.HostConfig.Resources.MemorySwappiness = &runtimeConfig.Linux.Resources.MemorySwappiness.Value
-	}
-	// Set MemorySwap field.
-	config.HostConfig.Resources.MemorySwap = runtimeConfig.Linux.Resources.MemorySwap
-	// Set CPUBvtWarpNs field.
-	config.HostConfig.Resources.CPUBvtWarpNs = runtimeConfig.Linux.Resources.CpuBvtWarpNs
-	// Set PidsLimit field.
-	config.HostConfig.Resources.PidsLimit = runtimeConfig.Linux.Resources.PidsLimit
 }
 
 // PauseContainer pauses the container.

@@ -196,6 +196,154 @@ func newTestPodsWithPriorityClasses() []runtime.Object {
 	}
 }
 
+func newTestPodsWithGenericLabels() []runtime.Object {
+	return []runtime.Object{
+		&v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "pod-running-1",
+				Namespace: "testing",
+				Labels: map[string]string{
+					"k1": "v1",
+					"k2": "v1",
+				},
+			},
+			Status: v1.PodStatus{
+				Phase: v1.PodRunning,
+			},
+			Spec: v1.PodSpec{
+				Volumes: []v1.Volume{
+					{
+						Name: "vol",
+					},
+				},
+				Containers: []v1.Container{
+					{
+						Name:  "ctr",
+						Image: "image",
+						Resources: getResourceRequirements(
+							getResourceList("100m", "10Gi"),
+							getResourceList("", "")),
+					},
+				},
+			},
+		},
+		&v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "pod-running-2",
+				Namespace: "testing",
+				Labels: map[string]string{
+					"k1": "v2",
+					"k2": "v2",
+				},
+			},
+			Status: v1.PodStatus{
+				Phase: v1.PodRunning,
+			},
+			Spec: v1.PodSpec{
+				Volumes: []v1.Volume{
+					{
+						Name: "vol",
+					},
+				},
+				Containers: []v1.Container{
+					{
+						Name:  "ctr",
+						Image: "image",
+						Resources: getResourceRequirements(
+							getResourceList("200m", "20Gi"),
+							getResourceList("", "")),
+					},
+				},
+			},
+		},
+		&v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "pod-running-3",
+				Namespace: "testing",
+				Labels: map[string]string{
+					"k2": "v1",
+				},
+			},
+			Status: v1.PodStatus{
+				Phase: v1.PodRunning,
+			},
+			Spec: v1.PodSpec{
+				Volumes: []v1.Volume{
+					{
+						Name: "vol",
+					},
+				},
+				Containers: []v1.Container{
+					{
+						Name:  "ctr",
+						Image: "image",
+						Resources: getResourceRequirements(
+							getResourceList("300m", "30Gi"),
+							getResourceList("", "")),
+					},
+				},
+			},
+		},
+		&v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "pod-running-4",
+				Namespace: "testing",
+				Labels: map[string]string{
+					"k2": "v2",
+				},
+			},
+			Status: v1.PodStatus{
+				Phase: v1.PodRunning,
+			},
+			Spec: v1.PodSpec{
+				Volumes: []v1.Volume{
+					{
+						Name: "vol",
+					},
+				},
+				Containers: []v1.Container{
+					{
+						Name:  "ctr",
+						Image: "image",
+						Resources: getResourceRequirements(
+							getResourceList("400m", "40Gi"),
+							getResourceList("", "")),
+					},
+				},
+			},
+		},
+		&v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "pod-failed",
+				Namespace: "testing",
+				Labels: map[string]string{
+					"k1": "v1",
+					"k2": "v2",
+				},
+			},
+			Status: v1.PodStatus{
+				Phase: v1.PodFailed,
+			},
+			Spec: v1.PodSpec{
+				Volumes: []v1.Volume{
+					{
+						Name: "vol",
+					},
+				},
+				Containers: []v1.Container{
+					{
+						Name:  "ctr",
+						Image: "image",
+						Resources: getResourceRequirements(
+							getResourceList("500m", "50Gi"),
+							getResourceList("", "")),
+					},
+				},
+			},
+		},
+	}
+}
+
 func TestSyncResourceQuota(t *testing.T) {
 	testCases := map[string]struct {
 		gvr               schema.GroupVersionResource
@@ -465,7 +613,7 @@ func TestSyncResourceQuota(t *testing.T) {
 							{
 								ScopeName: v1.ResourceQuotaScopePriorityClass,
 								Operator:  v1.ScopeSelectorOpNotIn,
-								Values:    []string{"high"},
+								Values:    []string{"low"},
 							},
 						},
 					},
@@ -478,8 +626,8 @@ func TestSyncResourceQuota(t *testing.T) {
 					v1.ResourcePods:   resource.MustParse("5"),
 				},
 				Used: v1.ResourceList{
-					v1.ResourceCPU:    resource.MustParse("100m"),
-					v1.ResourceMemory: resource.MustParse("1Gi"),
+					v1.ResourceCPU:    resource.MustParse("500m"),
+					v1.ResourceMemory: resource.MustParse("50Gi"),
 					v1.ResourcePods:   resource.MustParse("1"),
 				},
 			},
@@ -692,6 +840,345 @@ func TestSyncResourceQuota(t *testing.T) {
 			},
 			expectedActionSet: sets.NewString(),
 			items:             []runtime.Object{},
+		},
+		"non-matching-generic-label-scoped-quota-k3-OpExists": {
+			gvr: v1.SchemeGroupVersion.WithResource("pods"),
+			quota: v1.ResourceQuota{
+				ObjectMeta: metav1.ObjectMeta{Name: "quota", Namespace: "testing"},
+				Spec: v1.ResourceQuotaSpec{
+					Hard: v1.ResourceList{
+						v1.ResourceCPU:    resource.MustParse("3"),
+						v1.ResourceMemory: resource.MustParse("100Gi"),
+						v1.ResourcePods:   resource.MustParse("5"),
+					},
+					ScopeSelector: &v1.ScopeSelector{
+						MatchExpressions: []v1.ScopedResourceSelectorRequirement{
+							{
+								ScopeName: "k3",
+								Operator:  v1.ScopeSelectorOpExists,
+							},
+						},
+					},
+				},
+			},
+			status: v1.ResourceQuotaStatus{
+				Hard: v1.ResourceList{
+					v1.ResourceCPU:    resource.MustParse("3"),
+					v1.ResourceMemory: resource.MustParse("100Gi"),
+					v1.ResourcePods:   resource.MustParse("5"),
+				},
+				Used: v1.ResourceList{
+					v1.ResourceCPU:    resource.MustParse("0"),
+					v1.ResourceMemory: resource.MustParse("0"),
+					v1.ResourcePods:   resource.MustParse("0"),
+				},
+			},
+			expectedActionSet: sets.NewString(
+				strings.Join([]string{"update", "resourcequotas", "status"}, "-"),
+			),
+			items: newTestPodsWithGenericLabels(),
+		},
+		"matching-generic-label-scoped-quota-k1-OpExists": {
+			gvr: v1.SchemeGroupVersion.WithResource("pods"),
+			quota: v1.ResourceQuota{
+				ObjectMeta: metav1.ObjectMeta{Name: "quota", Namespace: "testing"},
+				Spec: v1.ResourceQuotaSpec{
+					Hard: v1.ResourceList{
+						v1.ResourceCPU:    resource.MustParse("3"),
+						v1.ResourceMemory: resource.MustParse("100Gi"),
+						v1.ResourcePods:   resource.MustParse("5"),
+					},
+					ScopeSelector: &v1.ScopeSelector{
+						MatchExpressions: []v1.ScopedResourceSelectorRequirement{
+							{
+								ScopeName: "k1",
+								Operator:  v1.ScopeSelectorOpExists,
+							},
+						},
+					},
+				},
+			},
+			status: v1.ResourceQuotaStatus{
+				Hard: v1.ResourceList{
+					v1.ResourceCPU:    resource.MustParse("3"),
+					v1.ResourceMemory: resource.MustParse("100Gi"),
+					v1.ResourcePods:   resource.MustParse("5"),
+				},
+				Used: v1.ResourceList{
+					v1.ResourceCPU:    resource.MustParse("300m"),
+					v1.ResourceMemory: resource.MustParse("30Gi"),
+					v1.ResourcePods:   resource.MustParse("2"),
+				},
+			},
+			expectedActionSet: sets.NewString(
+				strings.Join([]string{"update", "resourcequotas", "status"}, "-"),
+			),
+			items: newTestPodsWithGenericLabels(),
+		},
+		"matching-generic-label-scoped-quota-k1-OpIn-v1-and-v3": {
+			gvr: v1.SchemeGroupVersion.WithResource("pods"),
+			quota: v1.ResourceQuota{
+				ObjectMeta: metav1.ObjectMeta{Name: "quota", Namespace: "testing"},
+				Spec: v1.ResourceQuotaSpec{
+					Hard: v1.ResourceList{
+						v1.ResourceCPU:    resource.MustParse("3"),
+						v1.ResourceMemory: resource.MustParse("100Gi"),
+						v1.ResourcePods:   resource.MustParse("5"),
+					},
+					ScopeSelector: &v1.ScopeSelector{
+						MatchExpressions: []v1.ScopedResourceSelectorRequirement{
+							{
+								ScopeName: "k1",
+								Operator:  v1.ScopeSelectorOpIn,
+								Values:    []string{"v1", "v3"},
+							},
+						},
+					},
+				},
+			},
+			status: v1.ResourceQuotaStatus{
+				Hard: v1.ResourceList{
+					v1.ResourceCPU:    resource.MustParse("3"),
+					v1.ResourceMemory: resource.MustParse("100Gi"),
+					v1.ResourcePods:   resource.MustParse("5"),
+				},
+				Used: v1.ResourceList{
+					v1.ResourceCPU:    resource.MustParse("100m"),
+					v1.ResourceMemory: resource.MustParse("10Gi"),
+					v1.ResourcePods:   resource.MustParse("1"),
+				},
+			},
+			expectedActionSet: sets.NewString(
+				strings.Join([]string{"update", "resourcequotas", "status"}, "-"),
+			),
+			items: newTestPodsWithGenericLabels(),
+		},
+		"matching-generic-label-scoped-quota-k1-OpIn-v1": {
+			gvr: v1.SchemeGroupVersion.WithResource("pods"),
+			quota: v1.ResourceQuota{
+				ObjectMeta: metav1.ObjectMeta{Name: "quota", Namespace: "testing"},
+				Spec: v1.ResourceQuotaSpec{
+					Hard: v1.ResourceList{
+						v1.ResourceCPU:    resource.MustParse("3"),
+						v1.ResourceMemory: resource.MustParse("100Gi"),
+						v1.ResourcePods:   resource.MustParse("5"),
+					},
+					ScopeSelector: &v1.ScopeSelector{
+						MatchExpressions: []v1.ScopedResourceSelectorRequirement{
+							{
+								ScopeName: "k1",
+								Operator:  v1.ScopeSelectorOpIn,
+								Values:    []string{"v1"},
+							},
+						},
+					},
+				},
+			},
+			status: v1.ResourceQuotaStatus{
+				Hard: v1.ResourceList{
+					v1.ResourceCPU:    resource.MustParse("3"),
+					v1.ResourceMemory: resource.MustParse("100Gi"),
+					v1.ResourcePods:   resource.MustParse("5"),
+				},
+				Used: v1.ResourceList{
+					v1.ResourceCPU:    resource.MustParse("100m"),
+					v1.ResourceMemory: resource.MustParse("10Gi"),
+					v1.ResourcePods:   resource.MustParse("1"),
+				},
+			},
+			expectedActionSet: sets.NewString(
+				strings.Join([]string{"update", "resourcequotas", "status"}, "-"),
+			),
+			items: newTestPodsWithGenericLabels(),
+		},
+		"matching-generic-label-scoped-quota-k2-OpIn-v1": {
+			gvr: v1.SchemeGroupVersion.WithResource("pods"),
+			quota: v1.ResourceQuota{
+				ObjectMeta: metav1.ObjectMeta{Name: "quota", Namespace: "testing"},
+				Spec: v1.ResourceQuotaSpec{
+					Hard: v1.ResourceList{
+						v1.ResourceCPU:    resource.MustParse("3"),
+						v1.ResourceMemory: resource.MustParse("100Gi"),
+						v1.ResourcePods:   resource.MustParse("5"),
+					},
+					ScopeSelector: &v1.ScopeSelector{
+						MatchExpressions: []v1.ScopedResourceSelectorRequirement{
+							{
+								ScopeName: "k2",
+								Operator:  v1.ScopeSelectorOpIn,
+								Values:    []string{"v1"},
+							},
+						},
+					},
+				},
+			},
+			status: v1.ResourceQuotaStatus{
+				Hard: v1.ResourceList{
+					v1.ResourceCPU:    resource.MustParse("3"),
+					v1.ResourceMemory: resource.MustParse("100Gi"),
+					v1.ResourcePods:   resource.MustParse("5"),
+				},
+				Used: v1.ResourceList{
+					v1.ResourceCPU:    resource.MustParse("400m"),
+					v1.ResourceMemory: resource.MustParse("40Gi"),
+					v1.ResourcePods:   resource.MustParse("2"),
+				},
+			},
+			expectedActionSet: sets.NewString(
+				strings.Join([]string{"update", "resourcequotas", "status"}, "-"),
+			),
+			items: newTestPodsWithGenericLabels(),
+		},
+		"matching-generic-label-scoped-quota-k2-OpNotIn-v1": {
+			gvr: v1.SchemeGroupVersion.WithResource("pods"),
+			quota: v1.ResourceQuota{
+				ObjectMeta: metav1.ObjectMeta{Name: "quota", Namespace: "testing"},
+				Spec: v1.ResourceQuotaSpec{
+					Hard: v1.ResourceList{
+						v1.ResourceCPU:    resource.MustParse("3"),
+						v1.ResourceMemory: resource.MustParse("100Gi"),
+						v1.ResourcePods:   resource.MustParse("5"),
+					},
+					ScopeSelector: &v1.ScopeSelector{
+						MatchExpressions: []v1.ScopedResourceSelectorRequirement{
+							{
+								ScopeName: "k2",
+								Operator:  v1.ScopeSelectorOpNotIn,
+								Values:    []string{"v1"},
+							},
+						},
+					},
+				},
+			},
+			status: v1.ResourceQuotaStatus{
+				Hard: v1.ResourceList{
+					v1.ResourceCPU:    resource.MustParse("3"),
+					v1.ResourceMemory: resource.MustParse("100Gi"),
+					v1.ResourcePods:   resource.MustParse("5"),
+				},
+				Used: v1.ResourceList{
+					v1.ResourceCPU:    resource.MustParse("600m"),
+					v1.ResourceMemory: resource.MustParse("60Gi"),
+					v1.ResourcePods:   resource.MustParse("2"),
+				},
+			},
+			expectedActionSet: sets.NewString(
+				strings.Join([]string{"update", "resourcequotas", "status"}, "-"),
+			),
+			items: newTestPodsWithGenericLabels(),
+		},
+		"non-matching-generic-label-scoped-quota-k2-OpIn-v4-and-v5": {
+			gvr: v1.SchemeGroupVersion.WithResource("pods"),
+			quota: v1.ResourceQuota{
+				ObjectMeta: metav1.ObjectMeta{Name: "quota", Namespace: "testing"},
+				Spec: v1.ResourceQuotaSpec{
+					Hard: v1.ResourceList{
+						v1.ResourceCPU:    resource.MustParse("3"),
+						v1.ResourceMemory: resource.MustParse("100Gi"),
+						v1.ResourcePods:   resource.MustParse("5"),
+					},
+					ScopeSelector: &v1.ScopeSelector{
+						MatchExpressions: []v1.ScopedResourceSelectorRequirement{
+							{
+								ScopeName: "k2",
+								Operator:  v1.ScopeSelectorOpIn,
+								Values:    []string{"v4", "v5"},
+							},
+						},
+					},
+				},
+			},
+			status: v1.ResourceQuotaStatus{
+				Hard: v1.ResourceList{
+					v1.ResourceCPU:    resource.MustParse("3"),
+					v1.ResourceMemory: resource.MustParse("100Gi"),
+					v1.ResourcePods:   resource.MustParse("5"),
+				},
+				Used: v1.ResourceList{
+					v1.ResourceCPU:    resource.MustParse("0"),
+					v1.ResourceMemory: resource.MustParse("0"),
+					v1.ResourcePods:   resource.MustParse("0"),
+				},
+			},
+			expectedActionSet: sets.NewString(
+				strings.Join([]string{"update", "resourcequotas", "status"}, "-"),
+			),
+			items: newTestPodsWithGenericLabels(),
+		},
+		"non-matching-generic-label-scoped-quota-k2-OpNotIn": {
+			gvr: v1.SchemeGroupVersion.WithResource("pods"),
+			quota: v1.ResourceQuota{
+				ObjectMeta: metav1.ObjectMeta{Name: "quota", Namespace: "testing"},
+				Spec: v1.ResourceQuotaSpec{
+					Hard: v1.ResourceList{
+						v1.ResourceCPU:    resource.MustParse("3"),
+						v1.ResourceMemory: resource.MustParse("100Gi"),
+						v1.ResourcePods:   resource.MustParse("5"),
+					},
+					ScopeSelector: &v1.ScopeSelector{
+						MatchExpressions: []v1.ScopedResourceSelectorRequirement{
+							{
+								ScopeName: "k2",
+								Operator:  v1.ScopeSelectorOpNotIn,
+								Values:    []string{"random"},
+							},
+						},
+					},
+				},
+			},
+			status: v1.ResourceQuotaStatus{
+				Hard: v1.ResourceList{
+					v1.ResourceCPU:    resource.MustParse("3"),
+					v1.ResourceMemory: resource.MustParse("100Gi"),
+					v1.ResourcePods:   resource.MustParse("5"),
+				},
+				Used: v1.ResourceList{
+					v1.ResourceCPU:    resource.MustParse("1000m"),
+					v1.ResourceMemory: resource.MustParse("100Gi"),
+					v1.ResourcePods:   resource.MustParse("4"),
+				},
+			},
+			expectedActionSet: sets.NewString(
+				strings.Join([]string{"update", "resourcequotas", "status"}, "-"),
+			),
+			items: newTestPodsWithGenericLabels(),
+		},
+		"matching-generic-label-scoped-quota-k1-OpDoesNotExist": {
+			gvr: v1.SchemeGroupVersion.WithResource("pods"),
+			quota: v1.ResourceQuota{
+				ObjectMeta: metav1.ObjectMeta{Name: "quota", Namespace: "testing"},
+				Spec: v1.ResourceQuotaSpec{
+					Hard: v1.ResourceList{
+						v1.ResourceCPU:    resource.MustParse("3"),
+						v1.ResourceMemory: resource.MustParse("100Gi"),
+						v1.ResourcePods:   resource.MustParse("5"),
+					},
+					ScopeSelector: &v1.ScopeSelector{
+						MatchExpressions: []v1.ScopedResourceSelectorRequirement{
+							{
+								ScopeName: "k1",
+								Operator:  v1.ScopeSelectorOpDoesNotExist,
+							},
+						},
+					},
+				},
+			},
+			status: v1.ResourceQuotaStatus{
+				Hard: v1.ResourceList{
+					v1.ResourceCPU:    resource.MustParse("3"),
+					v1.ResourceMemory: resource.MustParse("100Gi"),
+					v1.ResourcePods:   resource.MustParse("5"),
+				},
+				Used: v1.ResourceList{
+					v1.ResourceCPU:    resource.MustParse("200m"),
+					v1.ResourceMemory: resource.MustParse("2Gi"),
+					v1.ResourcePods:   resource.MustParse("2"),
+				},
+			},
+			expectedActionSet: sets.NewString(
+				strings.Join([]string{"update", "resourcequotas", "status"}, "-"),
+			),
+			items: newTestPods(),
 		},
 	}
 

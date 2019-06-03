@@ -184,7 +184,7 @@ func (r *FakeRuntimeService) RunPodSandbox(config *runtimeapi.PodSandboxConfig, 
 	return podSandboxID, nil
 }
 
-func (r *FakeRuntimeService) StartPodSandbox(podSandboxID string) error {
+func (r *FakeRuntimeService) StartPodSandbox(podSandboxID string, config *runtimeapi.PodSandboxConfig) error {
 	r.Lock()
 	defer r.Unlock()
 

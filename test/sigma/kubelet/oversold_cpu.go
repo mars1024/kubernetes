@@ -44,7 +44,7 @@ var _ = Describe("[sigma-kubelet][Serial] oversold cpu", func() {
 		nodeIP = getPod.Status.HostIP
 	})
 
-	It("[smoke] create pod with cpu over sold ,should not be admitted", func() {
+	It("[smoke][pouch-only] create pod with cpu over sold ,should not be admitted", func() {
 		By("add cpu over quota")
 		podFromAPIServer, err := f.PodClient().Get(testPod.Name, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())

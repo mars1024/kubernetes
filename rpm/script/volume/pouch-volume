@@ -22,8 +22,8 @@ DOCKER_ROOT=${DOCKER_ROOT_OVERRIDE:=/home/t4/docker}
 DOCKER_GRAPH_ROOT=${POUCH_ROOT}/overlay
 
 detect_pouch_config() {
-    driver=$(pouch info | grep -o -P "Storage Driver: (\S+)")
-    root_dir=$(pouch info | grep -o -P "Pouch Root Dir: (\S+)")
+    driver=$(pouch info 2>/dev/null | grep -o -P "Storage Driver: (\S+)")
+    root_dir=$(pouch info 2>/dev/null | grep -o -P "Pouch Root Dir: (\S+)")
     driver=${driver/Storage Driver: /}
     root_dir=${root_dir/Pouch Root Dir: /}
 
@@ -47,8 +47,8 @@ detect_pouch_config() {
 
 
 detect_docker_config() {
-    driver=$(docker info | grep -o -P "Storage Driver: (\S+)")
-    root_dir=$(docker info | grep -o -P "Docker Root Dir: (\S+)")
+    driver=$(docker info 2>/dev/null | grep -o -P "Storage Driver: (\S+)")
+    root_dir=$(docker info 2>/dev/null | grep -o -P "Docker Root Dir: (\S+)")
     driver=${driver/Storage Driver: /}
     root_dir=${root_dir/Docker Root Dir: /}
 
@@ -140,8 +140,8 @@ domount() {
                         exit 1
                     fi
                 fi
-                if [[ -d ${mergedDir} ]]; then
-                    cp -rp ${mergedDir}${IMAGEPATH} ${MNTPATH} &> /dev/null
+                if [[ -d ${mergedDir}${IMAGEPATH} ]]; then
+                    cp -rp ${mergedDir}${IMAGEPATH} ${MNTPATH}
                 fi
                 umount ${mergedDir} &> /dev/null
                 docker rm -v ${cid} &> /dev/null
@@ -183,8 +183,8 @@ domount() {
                     exit 1
                 fi
             fi
-            if [[ -d ${mergedDir} ]]; then
-                cp -rp ${mergedDir}${IMAGEPATH} ${MNTPATH} &> /dev/null
+            if [[ -d ${mergedDir}${IMAGEPATH} ]]; then
+                cp -rp ${mergedDir}${IMAGEPATH} ${MNTPATH}
             fi
             umount ${mergedDir} &> /dev/null
             pouch rm -v ${cid} &> /dev/null

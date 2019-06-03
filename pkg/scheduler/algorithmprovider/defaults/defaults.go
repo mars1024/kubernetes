@@ -192,6 +192,10 @@ func defaultPredicates() sets.String {
 		// Fit is to check exclusive/shared CPUSet workloads
 		// @owner: yuzhi.wx
 		factory.RegisterFitPredicate(predicates.PodCPUSetResourceFitPred, predicates.PodCPUSetResourceFit),
+
+		// Fit is to check pod with label monotype=hard/soft/none workloads
+		// @owner: yuzhi.wx
+		factory.RegisterFitPredicate(predicates.PodResourceBestFitPred, predicates.PodResourceBestFit),
 	)
 }
 
@@ -299,6 +303,10 @@ func defaultPriorities() sets.String {
 
 		// ImageLocalityPriority prioritizes nodes that have images requested by the pod present.
 		factory.RegisterPriorityFunction2("ImageLocalityPriority", priorities.ImageLocalityPriorityMap, nil, 1),
+
+		// BestFit prioritize the node based on the degree of approximation of pod's requested resources and node capacity
+		// @owner: yuzhi.wx
+		factory.RegisterPriorityFunction2("PodResourceBestFitPriority", priorities.PodResourceBestFitPriorityMap, nil, 10),
 	)
 }
 

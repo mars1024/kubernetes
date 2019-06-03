@@ -16,16 +16,23 @@ limitations under the License.
 package predicates
 
 import (
+	"fmt"
 	"github.com/golang/glog"
+	cafelabels "gitlab.alipay-inc.com/antstack/cafe-k8s-api/pkg"
 	"k8s.io/api/core/v1"
 	"k8s.io/kubernetes/pkg/scheduler/algorithm"
 	"k8s.io/kubernetes/pkg/scheduler/algorithm/allocators"
 	schedulercache "k8s.io/kubernetes/pkg/scheduler/cache"
+	schedulerutil "k8s.io/kubernetes/pkg/scheduler/util"
+	"math"
 )
 
 const (
 	// PodCPUSetResourceFitPred defines the name of predicate PodCPUSetResourceFit.
 	PodCPUSetResourceFitPred = "PodCPUSetResourceFit"
+	PodResourceBestFitPred   = "PodResourceBestFit"
+
+	AllowedMemoryOverhead = 0.06
 )
 
 //Pod fields used:
@@ -106,3 +113,54 @@ func getPodMaxCPUCount(pod *v1.Pod) int {
 
 	return int(maxMil)
 }
+
+// PodResourceBestFit predicates that fit the capacity of host which best fit the pod request
+func PodResourceBestFit(pod *v1.Pod, meta algorithm.PredicateMetadata, nodeInfo *schedulercache.NodeInfo) (bool, []algorithm.PredicateFailureReason, error) {
+	node := nodeInfo.Node()
+	if pod == nil {
+		return false, nil, fmt.Errorf("pod is nil")
+	}
+	if node == nil {
+		return false, nil, fmt.Errorf("node not found")
+	}
+	var predicateFails []algorithm.PredicateFailureReason
+
+	if !algorithm.IsPodMonotypeHard(pod) {
+		glog.V(5).Infof("pod doesn't container label/value: %s=%s, skipping", cafelabels.MonotypeLabelKey, cafelabels.MonotypeLabelValueHard)
+		return true, predicateFails, nil
+	}
+	// TODO(yuzhi.wx) Check disk is matched
+	podRequest := GetResourceRequest(pod)
+	// We enlarge the node memory if pod container monotype=hard
+	overcommitted, _ := schedulerutil.MemoryOverQuotaRatio(nodeInfo.Node())
+	if overcommitted == 1.0 {
+		overcommitted = 1.05
+	}
+	// first check the host is empty
+	if nodeInfo.RequestedResource().MilliCPU != 0 {
+		cpuEmpty := NewMonotypeMismatchedError(v1.ResourceCPU, podRequest.MilliCPU, nodeInfo.AllocatableResource().MilliCPU, nodeInfo.AllocatableResource().MilliCPU)
+		predicateFails = append(predicateFails, cpuEmpty)
+	}
+	if nodeInfo.RequestedResource().Memory != 0 {
+		memoryEmpty := NewMonotypeMismatchedError(v1.ResourceMemory, podRequest.Memory, nodeInfo.AllocatableResource().Memory, nodeInfo.AllocatableResource().Memory)
+		predicateFails = append(predicateFails, memoryEmpty)
+	}
+
+	if !IsResourceApproximate(int64(float64(nodeInfo.AllocatableResource().Memory)*overcommitted), podRequest.Memory, AllowedMemoryOverhead) {
+		memoryMatchError := NewMonotypeMismatchedError(v1.ResourceMemory, podRequest.Memory, nodeInfo.RequestedResource().Memory, nodeInfo.AllocatableResource().Memory)
+		predicateFails = append(predicateFails, memoryMatchError)
+	}
+	if nodeInfo.AllocatableResource().MilliCPU != podRequest.MilliCPU {
+		cpuMatchError := NewMonotypeMismatchedError(v1.ResourceCPU, podRequest.Memory, nodeInfo.RequestedResource().MilliCPU, nodeInfo.AllocatableResource().MilliCPU)
+		predicateFails = append(predicateFails, cpuMatchError)
+	}
+	return len(predicateFails) == 0, predicateFails, nil
+}
+
+func IsResourceApproximate(data1, data2 int64, limit float64) bool {
+	delta := data1 - data2
+	ratio := math.Abs(float64(delta)) / float64(data2)
+	return ratio <= limit
+}
+
+

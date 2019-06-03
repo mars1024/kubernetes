@@ -821,6 +821,12 @@
 			"revisionTime": "2019-04-12T08:16:38Z"
 		},
 		{
+			"checksumSHA1": "Vx2aVy62r33XB72O/IqPwUt31W8=",
+			"path": "gitlab.alipay-inc.com/antstack/cafe-k8s-api/pkg",
+			"revision": "e91b3df84bbb854b88254d9af40d67bb2c8ebc53",
+			"revisionTime": "2019-05-31T13:14:09Z"
+		},
+		{
 			"checksumSHA1": "bLHkfGWsuX1vymblAdh5FwGf53g=",
 			"path": "gitlab.alipay-inc.com/sigma/apis/pkg/apis",
 			"revision": "9d6675700a00eb39cd190f9d9112c903232b162d",

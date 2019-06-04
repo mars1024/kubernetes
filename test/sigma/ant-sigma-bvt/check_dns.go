@@ -27,15 +27,16 @@ func CheckDNSPolicy(f *framework.Framework, pod *v1.Pod) {
 //compareDNSConfig() compare dnsConfig and resolve.conf
 func compareDNSConfig(f *framework.Framework, pod *v1.Pod) {
 	podDNSConfig := getPodDNSConfig(f, pod)
+	dnsOptions := getDNSOptions(pod)
 	if pod.Spec.DNSPolicy == v1.DNSNone {
 		framework.Logf("pod DNSConfig:%#v, resolve: %#v", pod.Spec.DNSConfig, DumpJson(podDNSConfig))
 		Expect(IsEqualSlice(pod.Spec.DNSConfig.Nameservers, podDNSConfig.Servers)).To(BeTrue(), "DNSNone, Unexpected DNSConfig nameServers")
 		Expect(IsEqualSlice(pod.Spec.DNSConfig.Searches, podDNSConfig.Searches)).To(BeTrue(), "DNSNone, Unexpected DNSConfig searches")
-		Expect(IsEqualSlice(getDNSOptions(pod), podDNSConfig.Options)).To(BeTrue(), "DNSNone, Unexpected DNSConfig options.")
+		Expect(IsEqualSlice(dnsOptions, podDNSConfig.Options)).To(BeTrue(), "DNSNone, Unexpected DNSConfig options, dnsOptions:%s, containerDNSOptions:%s", dnsOptions, podDNSConfig.Options)
 	} else if pod.Spec.DNSPolicy == v1.DNSDefault {
 		nodeDNSConfig := getNodeDNSConfig(pod)
 		framework.Logf("pod DNSConfig:%#v, pod resolv: %#v, node resolv:%#v", pod.Spec.DNSConfig, DumpJson(podDNSConfig), DumpJson(nodeDNSConfig))
-		compareNodePodResolvAndConfig(getDNSOptions(pod), nodeDNSConfig.Options, podDNSConfig.Options)
+		compareNodePodResolvAndConfig(dnsOptions, nodeDNSConfig.Options, podDNSConfig.Options)
 		compareNodePodResolvAndConfig(pod.Spec.DNSConfig.Searches, nodeDNSConfig.Searches, podDNSConfig.Searches)
 		compareNodePodResolvAndConfig(pod.Spec.DNSConfig.Nameservers, nodeDNSConfig.Servers, podDNSConfig.Servers)
 	}
@@ -58,10 +59,11 @@ func getDNSOptions(pod *v1.Pod) []string {
 	for _, option := range pod.Spec.DNSConfig.Options {
 		optionStr := option.Name
 		if option.Value != nil {
-			optionStr = fmt.Sprintf("%s:%s", option.Name, option.Value)
+			optionStr = fmt.Sprintf("%s:%s", option.Name, *option.Value)
 		}
 		options = append(options, optionStr)
 	}
+	framework.Logf("Pod dnsOptions:%v", options)
 	return options
 }
 

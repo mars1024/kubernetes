@@ -2,6 +2,7 @@ package ant_sigma_bvt
 
 import (
 	"bytes"
+	"fmt"
 
 	. "github.com/onsi/gomega"
 	"k8s.io/api/core/v1"
@@ -55,7 +56,11 @@ func compareNodePodResolvAndConfig(podConfig, nodeResolv, podResolv []string) {
 func getDNSOptions(pod *v1.Pod) []string {
 	options := make([]string, 0)
 	for _, option := range pod.Spec.DNSConfig.Options {
-		options = append(options, option.Name)
+		optionStr := option.Name
+		if option.Value != nil {
+			optionStr = fmt.Sprintf("%s:%s", option.Name, option.Value)
+		}
+		options = append(options, optionStr)
 	}
 	return options
 }

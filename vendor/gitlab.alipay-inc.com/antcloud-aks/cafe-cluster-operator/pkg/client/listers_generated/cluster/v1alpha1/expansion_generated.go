@@ -9,3 +9,7 @@ type BucketListerExpansion interface{}
 // BucketBindingListerExpansion allows custom methods to be added to
 // BucketBindingLister.
 type BucketBindingListerExpansion interface{}
+
+// ClusterResourceQuotaListerExpansion allows custom methods to be added to
+// ClusterResourceQuotaLister.
+type ClusterResourceQuotaListerExpansion interface{}

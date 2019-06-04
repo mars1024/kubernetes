@@ -448,7 +448,7 @@ func (nc *Controller) Run(stopCh <-chan struct{}) {
 	if nc.useTaintBasedEvictions {
 		// Handling taint based evictions. Because we don't want a dedicated logic in TaintManager for NC-originated
 		// taints and we normally don't rate limit evictions caused by taints, we need to rate limit adding taints.
-		go wait.Until(nc.doNoExecuteTaintingPass, scheduler.NodeEvictionPeriod, stopCh)
+		go wait.Until(nc.doNoExecuteTaintingPass, 2*time.Second, stopCh)
 	} else {
 		// Managing eviction of nodes:
 		// When we delete pods off a node, if the node was not empty at the time we then
@@ -806,11 +806,6 @@ func (nc *Controller) monitorNodeHealth() error {
 						glog.V(2).Infof("Node %s is ready again, cancelled pod eviction", node.Name)
 					}
 				}
-				// remove shutdown taint this is needed always depending do we use taintbased or not
-				err := nc.markNodeAsNotShutdown(node)
-				if err != nil {
-					glog.Errorf("Failed to remove taints from node %v. Will retry in next iteration.", node.Name)
-				}
 			}
 
 			// Report node event.
@@ -870,6 +865,7 @@ func (nc *Controller) tryUpdateNodeHealth(node *v1.Node) (time.Duration, v1.Node
 	var gracePeriod time.Duration
 	var observedReadyCondition v1.NodeCondition
 	_, currentReadyCondition := v1node.GetNodeCondition(&node.Status, v1.NodeReady)
+	glog.Infof("tryUpdateNodeHealth %s with current ready condition %+v", node.Name, currentReadyCondition)
 	if currentReadyCondition == nil {
 		// If ready condition is nil, then kubelet (or nodecontroller) never posted node status.
 		// A fake ready condition is created, where LastHeartbeatTime and LastTransitionTime is set
@@ -897,6 +893,7 @@ func (nc *Controller) tryUpdateNodeHealth(node *v1.Node) (time.Duration, v1.Node
 	}
 
 	savedNodeHealth, found := nc.nodeHealthMap[node.Name]
+	glog.Infof("tryUpdateNodeHealth get savedNodeHealth %+v of node %s", savedNodeHealth, node.Name)
 	// There are following cases to check:
 	// - both saved and new status have no Ready Condition set - we leave everything as it is,
 	// - saved status have no Ready Condition, but current one does - Controller was restarted with Node data already present in etcd,
@@ -1038,6 +1035,7 @@ func (nc *Controller) tryUpdateNodeHealth(node *v1.Node) (time.Duration, v1.Node
 
 		_, currentCondition := v1node.GetNodeCondition(&node.Status, v1.NodeReady)
 		if !apiequality.Semantic.DeepEqual(currentCondition, &observedReadyCondition) {
+			glog.Infof("tryUpdateNodeHealth update node %s status %+v", node.Name, currentCondition)
 			if _, err = nc.kubeClient.CoreV1().Nodes().UpdateStatus(node); err != nil {
 				glog.Errorf("Error updating node %s: %v", node.Name, err)
 				return gracePeriod, observedReadyCondition, currentReadyCondition, err
@@ -1052,6 +1050,8 @@ func (nc *Controller) tryUpdateNodeHealth(node *v1.Node) (time.Duration, v1.Node
 		}
 	}
 
+	glog.Infof("tryUpdateNodeHealth get gracePeriod %d, last observed condition %+v, and current ready condition %+v of node %s", gracePeriod.Seconds(),
+		observedCondition, currentReadyCondition, node.Name)
 	return gracePeriod, observedReadyCondition, currentReadyCondition, err
 }
 
@@ -1323,23 +1323,6 @@ func (nc *Controller) markNodeAsReachable(node *v1.Node) (bool, error) {
 		return nc.zoneNoExecuteTainter[utilnode.GetZoneKey(node)].Remove(key), nil
 	}
 	return nc.zoneNoExecuteTainter[utilnode.GetZoneKey(node)].Remove(node.Name), nil
-}
-
-func (nc *Controller) markNodeAsNotShutdown(node *v1.Node) error {
-	nc.evictorLock.Lock()
-	defer nc.evictorLock.Unlock()
-
-	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
-		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(node.Annotations)
-		nc = nc.ShallowCopyWithTenant(tenantInfo).(*Controller)
-	}
-
-	err := controller.RemoveTaintOffNode(nc.kubeClient, node.Name, node, controller.ShutdownTaint)
-	if err != nil {
-		glog.Errorf("Failed to remove taint from node %v: %v", node.Name, err)
-		return err
-	}
-	return nil
 }
 
 // ComputeZoneState returns a slice of NodeReadyConditions for all Nodes in a given zone.

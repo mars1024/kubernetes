@@ -93,6 +93,9 @@ import (
 	multitenancycrdserver "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/apiextensions-apiserver/pkg/apiserver"
 	multitenancyfilter "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/filter"
 	bucketingfilter "gitlab.alipay-inc.com/antcloud-aks/cafe-cluster-operator/pkg/apiserver/filter"
+	clusterclientset "gitlab.alipay-inc.com/antcloud-aks/cafe-cluster-operator/pkg/client/clientset_generated/clientset"
+	clusterinformers "gitlab.alipay-inc.com/antcloud-aks/cafe-cluster-operator/pkg/client/informers_generated/externalversions"
+	clusteradmissions "gitlab.alipay-inc.com/antcloud-aks/cafe-cluster-operator/plugin/admission"
 	cafeclientset "gitlab.alipay-inc.com/antcloud-aks/cafe-kubernetes-extension/pkg/client/clientset_generated/clientset"
 	cafeinformers "gitlab.alipay-inc.com/antcloud-aks/cafe-kubernetes-extension/pkg/client/informers_generated/externalversions"
 	multitenancyaggregator "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/kube-aggregator/pkg/apiserver"
@@ -484,6 +487,7 @@ func buildGenericConfig(
 			handler = genericfilters.WithMaxInFlightLimit(handler, c.MaxRequestsInFlight, c.MaxMutatingRequestsInFlight, c.LongRunningFunc)
 		}
 		if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+			handler = multitenancyfilter.WithResourceWhiteList(handler)
 			handler = multitenancyfilter.WithImpersonation(handler, c.Authorization.Authorizer, c.Serializer)
 		} else {
 			handler = genericapifilters.WithImpersonation(handler, c.Authorization.Authorizer, c.Serializer)
@@ -656,6 +660,15 @@ func buildGenericConfig(
 		cafeSharedInformers := cafeinformers.NewSharedInformerFactory(cafeClient, 10*time.Minute)
 		cafePluginInitializer := cafeadmission.NewPluginInitializer(cafeClient, cafeSharedInformers, storageFactory)
 		pluginInitializers = append(pluginInitializers, cafePluginInitializer)
+
+		clusterOperatorClient, err := clusterclientset.NewForConfig(&restConfigShallowCopy)
+		if err != nil {
+			lastErr = fmt.Errorf("failed to create cluster operator clientset: %v", err)
+			return
+		}
+		clusterOperatorSharedInformers := clusterinformers.NewSharedInformerFactory(clusterOperatorClient, 10*time.Minute)
+		clusterPluginInitializer := clusteradmissions.NewPluginInitializer(*genericConfig.LoopbackClientConfig, clusterOperatorSharedInformers)
+		pluginInitializers = append(pluginInitializers, clusterPluginInitializer)
 	}
 
 	err = s.Admission.ApplyTo(

@@ -27,6 +27,12 @@ func CheckSubClusterPredicate(pod *v1.Pod, meta algorithm.PredicateMetadata, nod
 		return false, []algorithm.PredicateFailureReason{ErrNodeUnknownCondition}, nil
 	}
 
+	// a DaemonSet is considered a cluster level resource, so sub-cluster checking should be exempted.
+	// To enforce sub-cluster checking for DaemonSet, use a nodeSelector in the DS's spec instead.
+	if podBelongsToDaemonSet(pod) {
+		return true, nil, nil
+	}
+
 	podSubClusterName := getSubClusterNameFromMetadata(pod.ObjectMeta)
 	nodeSubClusterName := getSubClusterNameFromMetadata(nodeInfo.Node().ObjectMeta)
 
@@ -54,6 +60,14 @@ func CheckSubClusterPredicate(pod *v1.Pod, meta algorithm.PredicateMetadata, nod
 		return false, []algorithm.PredicateFailureReason{ErrSubClusterNotMatch}, nil
 	}
 
+}
+
+func podBelongsToDaemonSet(pod *v1.Pod) bool {
+	controllerRef := metav1.GetControllerOf(pod)
+	if controllerRef == nil {
+		return false
+	}
+	return controllerRef.Kind == "DaemonSet"
 }
 
 func getSubClusterNameFromMetadata(metadata metav1.ObjectMeta) string {

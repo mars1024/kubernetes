@@ -5,3 +5,5 @@ package v1alpha1
 type BucketExpansion interface{}
 
 type BucketBindingExpansion interface{}
+
+type ClusterResourceQuotaExpansion interface{}

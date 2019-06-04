@@ -24,6 +24,12 @@ func (ctrl *PersistentVolumeController) ShallowCopyWithTenant(tenant multitenanc
 	if ctrl.volumeLister != nil {
 		ctrlCloned.volumeLister = ctrl.volumeLister.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(corelisters.PersistentVolumeLister)
 	}
+	if ctrl.podLister != nil {
+		ctrlCloned.podLister = ctrl.podLister.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(corelisters.PodLister)
+	}
+	if ctrl.NodeLister != nil {
+		ctrlCloned.NodeLister = ctrl.NodeLister.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(corelisters.NodeLister)
+	}
 	return &ctrlCloned
 }
 

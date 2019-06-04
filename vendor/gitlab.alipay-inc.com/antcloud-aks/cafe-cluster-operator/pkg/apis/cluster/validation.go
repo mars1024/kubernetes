@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package validation
+package cluster
 
 import (
 	"regexp"
@@ -23,8 +23,7 @@ import (
 	validationutil "k8s.io/apimachinery/pkg/util/validation"
 	genericvalidation "k8s.io/apimachinery/pkg/api/validation"
 	"k8s.io/apimachinery/pkg/api/resource"
-
-	"gitlab.alipay-inc.com/antcloud-aks/cafe-cluster-operator/pkg/apis/cluster"
+	corev1 "k8s.io/api/core/v1"
 )
 
 // ValidateMinionClusterName can be used to check whether the given MinionCluster
@@ -32,7 +31,7 @@ import (
 // Prefix indicates this name will be used as part of generation, in which case
 // trailing dashes are allowed.
 const (
-	minionClusterNameMaxLen = 63
+	minionClusterNameMaxLen = 255
 )
 
 const isNotIntegerErrorMsg = `must be an integer`
@@ -43,22 +42,22 @@ var (
 	validMinionClusterNameFmt      = `^[a-zA-Z0-9\-]+$`
 )
 
-func ValidateBucket(bucket *cluster.Bucket) field.ErrorList {
-	allErrs := genericvalidation.ValidateObjectMeta(&bucket.ObjectMeta, false, genericvalidation.NameIsDNSSubdomain, field.NewPath("metadata"))
+func ValidateBucket(bucket *Bucket) field.ErrorList {
+	allErrs := genericvalidation.ValidateObjectMeta(&bucket.ObjectMeta, false, ValidateMinionClusterName, field.NewPath("metadata"))
 	allErrs = append(allErrs, ValidateBucketSpec(&bucket.Spec, field.NewPath("spec"))...)
 	return allErrs
 }
 
-func ValidateBucketSpec(spec *cluster.BucketSpec, fld *field.Path) field.ErrorList {
+func ValidateBucketSpec(spec *BucketSpec, fld *field.Path) field.ErrorList {
 	var allErrs field.ErrorList
 	if !IsValidPriority(spec.Priority) {
 		var (
 			allPriorities = []string{
-				string(cluster.SystemTopPriorityBand),
-				string(cluster.SystemHighPriorityBand),
-				string(cluster.SystemMediumPriorityBand),
-				string(cluster.SystemNormalPriorityBand),
-				string(cluster.SystemLowPriorityBand),
+				string(SystemTopPriorityBand),
+				string(SystemHighPriorityBand),
+				string(SystemMediumPriorityBand),
+				string(SystemNormalPriorityBand),
+				string(SystemLowPriorityBand),
 				// NOTE(zuoxiu.jm): Lowest priority is unreachable
 				// string(cluster.SystemLowestPriorityBand),
 			}
@@ -77,33 +76,33 @@ func ValidateBucketSpec(spec *cluster.BucketSpec, fld *field.Path) field.ErrorLi
 	return allErrs
 }
 
-func IsValidPriority(priority cluster.PriorityBand) bool {
+func IsValidPriority(priority PriorityBand) bool {
 	valid := false
-	for i := range cluster.AllPriorities {
-		if cluster.AllPriorities[i] == priority {
+	for i := range AllPriorities {
+		if AllPriorities[i] == priority {
 			valid = true
 		}
 	}
 	return valid
 }
 
-func IsValidBucketBindingRuleSubject(sub *cluster.BucketBindingRule) bool {
+func IsValidBucketBindingRuleSubject(sub *BucketBindingRule) bool {
 	valid := false
-	for i := range cluster.AllBucketBindingRuleSubjects {
-		if cluster.AllBucketBindingRuleSubjects[i] == sub.Field {
+	for i := range AllBucketBindingRuleSubjects {
+		if AllBucketBindingRuleSubjects[i] == sub.Field {
 			valid = true
 		}
 	}
 	return valid
 }
 
-func ValidateBucketBinding(binding *cluster.BucketBinding) field.ErrorList {
-	allErrs := genericvalidation.ValidateObjectMeta(&binding.ObjectMeta, false, genericvalidation.NameIsDNSSubdomain, field.NewPath("metadata"))
+func ValidateBucketBinding(binding *BucketBinding) field.ErrorList {
+	allErrs := genericvalidation.ValidateObjectMeta(&binding.ObjectMeta, false, ValidateMinionClusterName, field.NewPath("metadata"))
 	allErrs = append(allErrs, ValidateBucketBindingSpec(&binding.Spec, field.NewPath("spec"))...)
 	return allErrs
 }
 
-func ValidateBucketBindingSpec(spec *cluster.BucketBindingSpec, fld *field.Path) field.ErrorList {
+func ValidateBucketBindingSpec(spec *BucketBindingSpec, fld *field.Path) field.ErrorList {
 	var allErrs field.ErrorList
 	if spec.BucketRef != nil {
 		if len(spec.BucketRef.Name) == 0 {
@@ -114,10 +113,10 @@ func ValidateBucketBindingSpec(spec *cluster.BucketBindingSpec, fld *field.Path)
 	}
 	for i := range spec.Rules {
 		if !IsValidBucketBindingRuleSubject(spec.Rules[i]) {
-			allErrs = append(allErrs, field.NotSupported(fld.Child("rules").Index(i).Child("field"), spec.Rules[i].Field, cluster.AllBucketBindingRuleSubjects))
+			allErrs = append(allErrs, field.NotSupported(fld.Child("rules").Index(i).Child("field"), spec.Rules[i].Field, AllBucketBindingRuleSubjects))
 		}
 		for j := range spec.Rules[i].Values {
-			if len(spec.Rules[i].Values[j] ) == 0 {
+			if len(spec.Rules[i].Values[j]) == 0 {
 				allErrs = append(allErrs, field.Invalid(fld.Child("rules").Index(j), spec.Rules[i].Values[j], "must not be empty"))
 			}
 		}
@@ -125,15 +124,15 @@ func ValidateBucketBindingSpec(spec *cluster.BucketBindingSpec, fld *field.Path)
 	return allErrs
 }
 
-func ValidateClusterResourceQuota(quota *cluster.ClusterResourceQuota) field.ErrorList {
+func ValidateClusterResourceQuota(quota *ClusterResourceQuota) field.ErrorList {
 	allErrs := genericvalidation.ValidateObjectMeta(&quota.ObjectMeta, false, ValidateMinionClusterName, field.NewPath("metadata"))
 
-	allErrs = append(allErrs, ValidateClusterResourceQuotaSpec(&quota.Spec, field.NewPath("spec"))...)
-	allErrs = append(allErrs, ValidateClusterResourceQuotaStatus(&quota.Status.Total, field.NewPath("status", "total"))...)
+	allErrs = append(allErrs, ValidateResourceQuotaSpec(&quota.Spec.Quota, field.NewPath("spec"))...)
+	allErrs = append(allErrs, ValidateResourceQuotaStatus(&quota.Status.Total, field.NewPath("status", "total"))...)
 	return allErrs
 }
 
-func ValidateClusterResourceQuotaSpec(resourceQuotaSpec *cluster.ClusterResourceQuotaSpec, fld *field.Path) field.ErrorList {
+func ValidateResourceQuotaSpec(resourceQuotaSpec *corev1.ResourceQuotaSpec, fld *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
 	fldPath := fld.Child("hard")
@@ -144,8 +143,7 @@ func ValidateClusterResourceQuotaSpec(resourceQuotaSpec *cluster.ClusterResource
 	}
 	return allErrs
 }
-
-func ValidateClusterResourceQuotaStatus(status *cluster.ResourceQuotaStatus, fld *field.Path) field.ErrorList {
+func ValidateResourceQuotaStatus(status *corev1.ResourceQuotaStatus, fld *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 
 	fldPath := fld.Child("hard")

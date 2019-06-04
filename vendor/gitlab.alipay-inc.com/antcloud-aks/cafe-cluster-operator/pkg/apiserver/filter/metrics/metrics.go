@@ -8,15 +8,23 @@ import (
 )
 
 var (
-	bucketQuotaGauge = prometheus.NewGaugeVec(
+	usedBucketQuotaGauge = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "apiserver_bucket_used_quota",
 			Help: "Gauge of used quota.",
 		},
 		[]string{"type", "bucket_name", "priority_band"},
 	)
+	remainingBucketQuotaGauge = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "apiserver_bucket_remaining_quota",
+			Help: "Gauge of remaining quota.",
+		},
+		[]string{"type", "bucket_name", "priority_band"},
+	)
 	metrics = []prometheus.Collector{
-		bucketQuotaGauge,
+		usedBucketQuotaGauge,
+		remainingBucketQuotaGauge,
 	}
 )
 
@@ -32,9 +40,13 @@ func Register() {
 }
 
 func MonitorAcquireReservedQuota(t, bktName string, priority cluster.PriorityBand) {
-	bucketQuotaGauge.WithLabelValues(t, bktName, string(priority)).Inc()
+	usedBucketQuotaGauge.WithLabelValues(t, bktName, string(priority)).Inc()
 }
 
 func MonitorReleaseReservedQuota(t, bktName string, priority cluster.PriorityBand) {
-	bucketQuotaGauge.WithLabelValues(t, bktName, string(priority)).Dec()
+	usedBucketQuotaGauge.WithLabelValues(t, bktName, string(priority)).Dec()
+}
+
+func MonitorRemainingReservedQuota(t, bktName string, priority cluster.PriorityBand, remaining int) {
+	remainingBucketQuotaGauge.WithLabelValues(t, bktName, string(priority)).Set(float64(remaining))
 }

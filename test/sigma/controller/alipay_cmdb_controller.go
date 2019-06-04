@@ -14,11 +14,9 @@ import (
 	alipayapis "gitlab.alipay-inc.com/sigma/apis/pkg/apis"
 	"gitlab.alipay-inc.com/sigma/controller-manager/pkg/alipaymeta"
 	cmdbClient "gitlab.alipay-inc.com/sigma/controller-manager/pkg/cmdb"
-
-	"k8s.io/apimachinery/pkg/util/wait"
-
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/kubernetes/test/e2e/framework"
 	sigmabvt "k8s.io/kubernetes/test/sigma/ant-sigma-bvt"
 	"k8s.io/kubernetes/test/sigma/util"
@@ -58,6 +56,7 @@ var _ = Describe("[ant][sigma-alipay-controller][cmdb]", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(getPod.Status.HostIP).NotTo(BeEmpty(), "status.HostIP should not be empty")
 		Expect(getPod.Status.PodIP).NotTo(BeEmpty(), "status.PodIP should not be empty")
+		framework.Logf("cmdb podInfo:%s", sigmabvt.DumpJson(getPod))
 
 		By("wait for cmdb controller reigister pod info in cmdb")
 		checkPodCMDBInfo(f, getPod, cmdbCli)
@@ -132,6 +131,7 @@ func CreateCMDBPod(f *framework.Framework, register bool, enableOverQuota string
 	pod.Labels[k8sApi.LabelSite] = site
 	pod = newCMDBPod(pod, f.Namespace.Name, register)
 	pod.Spec.Hostname = pod.Name
+	pod.Labels[alipayapis.LabelPodContainerHostName] = pod.Name
 	testPod, err := f.ClientSet.CoreV1().Pods(f.Namespace.Name).Create(pod)
 	Expect(err).NotTo(HaveOccurred(), "create pod err")
 	framework.Logf("create pod config:%v", pod)
@@ -148,13 +148,13 @@ func newCMDBPod(pod *corev1.Pod, namespace string, registered bool) *corev1.Pod 
 
 //LoadCMDBInfo() load cmdb info.
 func LoadCMDBInfo() {
-	cmdbURL = GetCMDBEnv("CMDB_URL", "http://vulcanboss.stable.alipay.net")
-	cmdbUser = GetCMDBEnv("CMDB_USER", "local-test")
-	cmdbToken = GetCMDBEnv("CMDB_TOKEN", "test-token")
+	cmdbURL = GetEnv("CMDB_URL", "http://vulcanboss.stable.alipay.net/open-api/meta,http://sigmaboss.stable.alipay.net/api/v1")
+	cmdbUser = GetEnv("CMDB_USER", "local-test")
+	cmdbToken = GetEnv("CMDB_TOKEN", "test-token")
 }
 
-//GetCMDBEnv() get env, if key doesn't exist, return default.
-func GetCMDBEnv(key string, defaultValue string) string {
+//GetEnv() get env, if key doesn't exist, return default.
+func GetEnv(key string, defaultValue string) string {
 	value, ok := os.LookupEnv(key)
 	if value == "" || !ok {
 		return defaultValue

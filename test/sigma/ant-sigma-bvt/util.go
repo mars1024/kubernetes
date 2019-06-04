@@ -143,3 +143,7 @@ func SliceContains(slice []string, v string, convert func(string) string) bool {
 	}
 	return false
 }
+
+func StringPointer(x string) *string {
+	return &x
+}

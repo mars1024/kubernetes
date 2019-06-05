@@ -889,7 +889,7 @@ func PodFitsResources(pod *v1.Pod, meta algorithm.PredicateMetadata, nodeInfo *s
 		}
 	} else {
 		if overQuotaRatio == 1.0 {
-			overQuotaRatio += AdjustedMeoryOverhead
+			overQuotaRatio += AdjustedMemoryOverhead
 		}
 		//if allocatable.Memory*int64(overQuotaRatio*float64(precision)) < precision*(podRequest.Memory+nodeInfo.RequestedResource().Memory) {
 		//	predicateFails = append(predicateFails, NewInsufficientResourceError(v1.ResourceMemory, podRequest.Memory, nodeInfo.RequestedResource().Memory, allocatable.Memory))

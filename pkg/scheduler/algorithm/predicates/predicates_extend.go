@@ -32,8 +32,10 @@ const (
 	PodCPUSetResourceFitPred = "PodCPUSetResourceFit"
 	PodResourceBestFitPred   = "PodResourceBestFit"
 
-	AllowedMemoryOverhead = 0.06
-	AdjustedMeoryOverhead = 0.06
+	AllowedMemoryOverhead      = 0.06
+	AdjustedMemoryOverhead     = 0.06
+	AbsoluteMinDiffMemoryBytes = 400 * 1024 * 1024 // Minimum absolute memory diff = 400MiB
+	AbsoluteMaxDiffMemoryBytes = 5 * 1024 * 1024 * 1024 // Maximum absolute memory diff = 5GiB
 )
 
 //Pod fields used:
@@ -136,7 +138,7 @@ func PodResourceBestFit(pod *v1.Pod, meta algorithm.PredicateMetadata, nodeInfo 
 	// We enlarge the node memory if pod container monotype=hard
 	overcommitted, _ := schedulerutil.MemoryOverQuotaRatio(nodeInfo.Node())
 	if overcommitted == 1.0 {
-		overcommitted = 1.05
+		overcommitted += AdjustedMemoryOverhead
 	}
 	// first check the host is empty
 	if nodeInfo.RequestedResource().MilliCPU != 0 {
@@ -149,10 +151,10 @@ func PodResourceBestFit(pod *v1.Pod, meta algorithm.PredicateMetadata, nodeInfo 
 	}
 
 	if !IsResourceApproximate(int64(float64(nodeInfo.AllocatableResource().Memory)*overcommitted), podRequest.Memory, AllowedMemoryOverhead) {
+		glog.V(3).Infof("node memory does not match pod request: %q", nodeInfo.Node().Name)
 		memoryMatchError := NewMonotypeMismatchedError(v1.ResourceMemory, podRequest.Memory, nodeInfo.RequestedResource().Memory, nodeInfo.AllocatableResource().Memory)
 		predicateFails = append(predicateFails, memoryMatchError)
 	}
-	glog.V(5).Infof("node:pod=%d:%d", nodeInfo.AllocatableResource().MilliCPU, podRequest.MilliCPU)
 	if nodeInfo.AllocatableResource().MilliCPU != podRequest.MilliCPU {
 		cpuMatchError := NewMonotypeMismatchedError(v1.ResourceCPU, podRequest.Memory, nodeInfo.RequestedResource().MilliCPU, nodeInfo.AllocatableResource().MilliCPU)
 		predicateFails = append(predicateFails, cpuMatchError)
@@ -161,7 +163,13 @@ func PodResourceBestFit(pod *v1.Pod, meta algorithm.PredicateMetadata, nodeInfo 
 }
 
 func IsResourceApproximate(data1, data2 int64, limit float64) bool {
-	delta := data1 - data2
-	ratio := math.Abs(float64(delta)) / float64(data2)
-	return ratio <= limit
+	delta := math.Abs(float64(data1 - data2))
+	ratio := delta / float64(data2)
+	result := ratio <= limit
+	if !result {
+		glog.V(5).Infof("ratio is too large(%f %%), will compare absolute memory delta in byte: %f", ratio*100, delta)
+		return delta <= AbsoluteMinDiffMemoryBytes
+	}
+	glog.V(5).Infof("absolute memory delta in byte: %f", delta)
+	return delta <= AbsoluteMaxDiffMemoryBytes
 }

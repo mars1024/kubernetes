@@ -146,6 +146,20 @@ func TestAdmit(t *testing.T) {
 
 }
 
+func TestAdmitHostNetworkPod(t *testing.T) {
+	pod := newPod(false, false, false)
+	pod.Spec.SecurityContext = &core.PodSecurityContext{HostNetwork: true}
+
+	handler := NewRouter()
+	attr := admission.NewAttributesRecord(pod, nil, core.Kind("Pod").WithVersion("version"), pod.Namespace, pod.Name, core.Resource("pods").WithVersion("version"), "", admission.Create, false, nil)
+	err := handler.Admit(attr)
+	assert.Nil(t, err)
+
+	assert.Len(t, pod.Spec.Volumes, 0)
+	assert.Len(t, pod.Spec.Containers[0].VolumeMounts, 0)
+	assert.Len(t, pod.Spec.Containers[0].Env, 0)
+}
+
 func newPod(env, volumeExist, injectLabel bool) *core.Pod {
 	pod := &core.Pod{
 		ObjectMeta: metav1.ObjectMeta{

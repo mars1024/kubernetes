@@ -33,6 +33,7 @@ const (
 	PodResourceBestFitPred   = "PodResourceBestFit"
 
 	AllowedMemoryOverhead = 0.06
+	AdjustedMeoryOverhead = 0.06
 )
 
 //Pod fields used:
@@ -116,6 +117,7 @@ func getPodMaxCPUCount(pod *v1.Pod) int {
 
 // PodResourceBestFit predicates that fit the capacity of host which best fit the pod request
 func PodResourceBestFit(pod *v1.Pod, meta algorithm.PredicateMetadata, nodeInfo *schedulercache.NodeInfo) (bool, []algorithm.PredicateFailureReason, error) {
+	glog.V(5).Infof("entering PodResourceBestFit for monotype")
 	node := nodeInfo.Node()
 	if pod == nil {
 		return false, nil, fmt.Errorf("pod is nil")
@@ -150,6 +152,7 @@ func PodResourceBestFit(pod *v1.Pod, meta algorithm.PredicateMetadata, nodeInfo 
 		memoryMatchError := NewMonotypeMismatchedError(v1.ResourceMemory, podRequest.Memory, nodeInfo.RequestedResource().Memory, nodeInfo.AllocatableResource().Memory)
 		predicateFails = append(predicateFails, memoryMatchError)
 	}
+	glog.V(5).Infof("node:pod=%d:%d", nodeInfo.AllocatableResource().MilliCPU, podRequest.MilliCPU)
 	if nodeInfo.AllocatableResource().MilliCPU != podRequest.MilliCPU {
 		cpuMatchError := NewMonotypeMismatchedError(v1.ResourceCPU, podRequest.Memory, nodeInfo.RequestedResource().MilliCPU, nodeInfo.AllocatableResource().MilliCPU)
 		predicateFails = append(predicateFails, cpuMatchError)
@@ -162,5 +165,3 @@ func IsResourceApproximate(data1, data2 int64, limit float64) bool {
 	ratio := math.Abs(float64(delta)) / float64(data2)
 	return ratio <= limit
 }
-
-

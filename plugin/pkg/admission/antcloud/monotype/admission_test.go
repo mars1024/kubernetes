@@ -1,13 +1,13 @@
 package antiaffinity
 
 import (
+	"k8s.io/apimachinery/pkg/api/resource"
 	"testing"
 
+	cafelabels "gitlab.alipay-inc.com/antstack/cafe-k8s-api/pkg"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apiserver/pkg/admission"
 	api "k8s.io/kubernetes/pkg/apis/core"
-	cafelabels "gitlab.alipay-inc.com/antstack/cafe-k8s-api/pkg"
-
 )
 
 func TestNewMonotypeInjector(t *testing.T) {
@@ -19,6 +19,16 @@ func TestNewMonotypeInjector(t *testing.T) {
 			},
 		},
 		Spec: api.PodSpec{
+			Containers: []api.Container{
+				{
+					Resources: api.ResourceRequirements{
+						Requests: map[api.ResourceName]resource.Quantity{
+							api.ResourceCPU:    resource.MustParse("100m"),
+							api.ResourceMemory: resource.MustParse("2G"),
+						},
+					},
+				},
+			},
 			Affinity: &api.Affinity{
 				PodAntiAffinity: &api.PodAntiAffinity{
 					RequiredDuringSchedulingIgnoredDuringExecution: []api.PodAffinityTerm{
@@ -73,6 +83,16 @@ func TestNewMonotypeInjector_NoLabel(t *testing.T) {
 			},
 		},
 		Spec: api.PodSpec{
+			Containers: []api.Container{
+				{
+					Resources: api.ResourceRequirements{
+						Requests: map[api.ResourceName]resource.Quantity{
+							api.ResourceCPU:    resource.MustParse("100m"),
+							api.ResourceMemory: resource.MustParse("2G"),
+						},
+					},
+				},
+			},
 		},
 	}
 
@@ -95,6 +115,16 @@ func TestNewMonotypeInjector_TopologyKey_Unmatched(t *testing.T) {
 			},
 		},
 		Spec: api.PodSpec{
+			Containers: []api.Container{
+				{
+					Resources: api.ResourceRequirements{
+						Requests: map[api.ResourceName]resource.Quantity{
+							api.ResourceCPU:    resource.MustParse("100m"),
+							api.ResourceMemory: resource.MustParse("2G"),
+						},
+					},
+				},
+			},
 			Affinity: &api.Affinity{
 				PodAntiAffinity: &api.PodAntiAffinity{
 					RequiredDuringSchedulingIgnoredDuringExecution: []api.PodAffinityTerm{
@@ -150,6 +180,18 @@ func TestMonotypeEnum(t *testing.T) {
 			Labels: map[string]string{
 				"monotype": valueUnderTest1,
 			},
+		},
+		Spec: api.PodSpec{
+			Containers: []api.Container{
+				{
+					Resources: api.ResourceRequirements{
+						Requests: map[api.ResourceName]resource.Quantity{
+							api.ResourceCPU:    resource.MustParse("100m"),
+							api.ResourceMemory: resource.MustParse("2G"),
+						},
+					},
+				},
+			},
 		},}
 	err := handler.Admit(admission.NewAttributesRecord(pod, nil, api.Kind("Pod").WithVersion("version"), "foo", "name", api.Resource("pods").WithVersion("version"), "", "ignored", false, nil))
 	if err == nil {
@@ -161,7 +203,20 @@ func TestMonotypeEnum(t *testing.T) {
 			Labels: map[string]string{
 				"monotype": "hard",
 			},
-		},}
+		},
+		Spec: api.PodSpec{
+			Containers: []api.Container{
+				{
+					Resources: api.ResourceRequirements{
+						Requests: map[api.ResourceName]resource.Quantity{
+							api.ResourceCPU:    resource.MustParse("100m"),
+							api.ResourceMemory: resource.MustParse("2G"),
+						},
+					},
+				},
+			},
+		},
+	}
 	err1 := handler.Admit(admission.NewAttributesRecord(pod1, nil, api.Kind("Pod").WithVersion("version"), "foo", "name", api.Resource("pods").WithVersion("version"), "", "ignored", false, nil))
 	if err1 != nil {
 		t.Errorf("should be a valid value, but rejected: %s", err1.Error())
@@ -221,5 +276,49 @@ func TestNewMonotypeInjector_Soft(t *testing.T) {
 	}
 	if !injected {
 		t.Errorf("expected monotype=soft affinity not found")
+	}
+}
+
+func TestCheckResource(t *testing.T) {
+	pod := &api.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Labels: map[string]string{
+				"monotype": "hard",
+			},
+		},
+		Spec: api.PodSpec{
+			Containers: []api.Container{
+				{
+					Resources: api.ResourceRequirements{
+						Requests: map[api.ResourceName]resource.Quantity{
+							api.ResourceCPU:    resource.MustParse("100m"),
+							api.ResourceMemory: resource.MustParse("2G"),
+						},
+					},
+				},
+			},
+			Affinity: &api.Affinity{
+				PodAntiAffinity: &api.PodAntiAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: []api.PodAffinityTerm{
+						{
+							LabelSelector: &metav1.LabelSelector{
+								MatchExpressions: []metav1.LabelSelectorRequirement{
+									{
+										Key:      cafelabels.MonotypeLabelKey,
+										Operator: metav1.LabelSelectorOpIn,
+										Values:   []string{cafelabels.MonotypeLabelValueHard},
+									},
+								},
+							},
+							TopologyKey: "az",
+						},
+					},
+				},
+			},
+		},
+	}
+	err := CheckResource(pod)
+	if err != nil {
+		t.Errorf("should not report error")
 	}
 }

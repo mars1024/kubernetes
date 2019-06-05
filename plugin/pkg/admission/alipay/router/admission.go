@@ -76,6 +76,9 @@ func (a *AlipayRouterInjector) Admit(attributes admission.Attributes) (err error
 	if !ok {
 		return apierrors.NewBadRequest("Resource was marked with kind Pod but was unable to be converted")
 	}
+	if pod.Spec.SecurityContext != nil && pod.Spec.SecurityContext.HostNetwork {
+		return nil
+	}
 	if err := a.injectRouter(pod); err != nil {
 		return apierrors.NewInternalError(err)
 	}

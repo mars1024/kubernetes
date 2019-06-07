@@ -70,6 +70,13 @@ detect_docker_config() {
 
 }
 
+shorten_overlay2_layer() {
+    local origin_layers=$1
+    local lower_path=`echo ${origin_layers} | cut -f 1 -d:`
+    local shortened_layers=$(cat `dirname ${lower_path}`/lower 2>/dev/null)
+    echo ${shortened_layers}
+}
+
 usage() {
     err "Invalid usage. Usage: "
     err "\t$0 init"
@@ -132,7 +139,11 @@ domount() {
                     upperdir=`docker inspect -f '{{.GraphDriver.Data.UpperDir}}' ${cid}`
                     workdir=`docker inspect -f '{{.GraphDriver.Data.WorkDir}}' ${cid}`
                     cd ${DOCKER_GRAPH_ROOT}
-                    slowerdir=`echo ${lowerdir} | sed "s+${DOCKER_GRAPH_ROOT}+.+g"`
+                    slowerdir=$(shorten_overlay2_layer ${lowerdir})
+                    if [[ -z ${slowerdir} ]]; then
+                        err "{ \"status\": \"Failure\", \"message\": \"Unable to shorten lowerdir: ${lowerdir}\"}"
+                        exit 1
+                     fi
                     env PWD=${DOCKER_GRAPH_ROOT} mount -t overlay -o rw,lowerdir=${slowerdir},upperdir=${upperdir},workdir=${workdir} overlay2 ${mergedDir} &> /dev/null
                     if [[ $? -ne 0 ]]; then
                         err "{ \"status\": \"Failure\", \"message\": \"Failed to mount container's dir\"}"

@@ -92,22 +92,26 @@ func (ac *AntiTamper) Validate(attributes admission.Attributes) (err error) {
 
 	verboseLogIfNecessary("Validate() started", resourceName)
 
-	user := attributes.GetUserInfo()
-
-	if isAdmin(user) { // Admin user can do anything
+	if multitenancyutil.IsMultiTenancyWiseAdmin(attributes.GetUserInfo().GetName()) {
 		verboseLogIfNecessary("isAdmin, skipping", resourceName)
 		return nil
-	} else {
-		verboseLogIfNecessary(fmt.Sprintf("%s is not Admin", user.GetName()), resourceName)
 	}
 
-	// check tenant info
-	tenant, err := multitenancyutil.TransformTenantInfoFromUser(user)
+	tenant, err := multitenancyutil.TransformTenantInfoFromUser(attributes.GetUserInfo())
 	if err != nil {
-		return err
-	} else {
-		ac = ac.ShallowCopyWithTenant(tenant).(*AntiTamper)
+		glog.Warning("fail to extract tenant info from user: %v", attributes.GetUserInfo())
+		return admission.NewForbidden(attributes, errors.New("no tenant info from user"))
 	}
+	if multitenancyutil.IsMultiTenancyWiseTenant(tenant) {
+		verboseLogIfNecessary("isAdmin, skipping", resourceName)
+		return nil
+	}
+
+
+ 	user := attributes.GetUserInfo()
+	verboseLogIfNecessary(fmt.Sprintf("%s is not Admin", user.GetName()), resourceName)
+
+	ac = ac.ShallowCopyWithTenant(tenant).(*AntiTamper)
 
 	context := &validateContext{attributes: attributes, errorMessage: "", namespaceLister: &ac.namespaceLister}
 

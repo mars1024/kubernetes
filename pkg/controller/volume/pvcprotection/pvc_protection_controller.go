@@ -132,7 +132,7 @@ func (c *Controller) processNextWorkItem() bool {
 		utilruntime.HandleError(fmt.Errorf("Error parsing PVC key %q: %v", pvcKey, err))
 		return true
 	}
-	if err == nil {
+	if tenant != nil {
 		err = c.processTenantPVC(tenant, pvcNamespace, pvcName)
 	} else {
 		err = c.processPVC(pvcNamespace, pvcName)

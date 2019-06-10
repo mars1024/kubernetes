@@ -53,6 +53,12 @@ var (
 
 		{"rbac.authorization.k8s.io", "clusterroles"},
 		{"rbac.authorization.k8s.io", "clusterrolebindings"},
+		{"authorization.k8s.io", "localsubjectaccessreviews"},
+		{"authorization.k8s.io", "selfsubjectaccessreviews"},
+		{"authorization.k8s.io", "selfsubjectrulesreviews"},
+		{"authorization.k8s.io", "subjectaccessreviews"},
+
+		{Group: "certificates.k8s.io", Resource: "certificatesigningrequests"},
 
 		{"cafe.sofastack.io", "serviceinstances"},
 		{"cafe.sofastack.io", "servicebindings"},

@@ -27,15 +27,9 @@ BASE=$OLDPWD/..
 cd $BASE
 
 rm -fr $RPM_BUILD_ROOT
-mkdir -p $RPM_BUILD_ROOT/{usr/local/bin,/etc/kubernetes,/etc/kubernetes/check}
-mkdir -p $RPM_BUILD_ROOT/usr/libexec/kubernetes/kubelet-plugins/volume/exec/alipay~pouch-volume
+mkdir -p $RPM_BUILD_ROOT/{usr/local/bin,/etc/kubernetes}
 
-install -p -D -m 0755 rpm/sigma-slave $RPM_BUILD_ROOT/usr/local/bin/sigma-slave
-install -p -D -m 0755 rpm/script/userinfo/*  $RPM_BUILD_ROOT/etc/kubernetes/
-install -p -D -m 0755 rpm/script/checklist/*.sh  $RPM_BUILD_ROOT/etc/kubernetes/
-install -p -D -m 0755 rpm/script/checklist/check/*  $RPM_BUILD_ROOT/etc/kubernetes/check/
-install -p -D -m 0755 rpm/script/volume/pouch-volume  $RPM_BUILD_ROOT/usr/libexec/kubernetes/kubelet-plugins/volume/exec/alipay~pouch-volume/
-install -p -D -m 0755 rpm/script/release/sigma-slave-clean-expire-logs.sh $RPM_BUILD_ROOT/etc/kubernetes/
+install -p -D -m 0755 rpm/kubelet $RPM_BUILD_ROOT/usr/local/bin/kubelet
 
 %clean
 
@@ -43,22 +37,11 @@ install -p -D -m 0755 rpm/script/release/sigma-slave-clean-expire-logs.sh $RPM_B
 %defattr(-,root,root)
 /usr/local/bin/kubelet
 /etc/kubernetes/*
-/etc/kubernetes/check/*
-/usr/libexec/kubernetes/kubelet-plugins/volume/exec/alipay~pouch-volume/pouch-volume
 
 %pre
 
 %post
-    cd /etc/kubernetes
-    sh -x /etc/kubernetes/check/check-host-env.sh > /tmp/kubelet-error.log 2>&1
-    if [[ $? -ne 0 ]]; then
-        exit 1
-    fi
 
-    sh -x /etc/kubernetes/pre-rpm-upgrade.sh >> /tmp/kubelet-error.log 2>&1
-    if [[ $? -ne 0 ]]; then
-        exit 1
-    fi
 %preun
 
 %postun

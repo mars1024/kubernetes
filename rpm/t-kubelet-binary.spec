@@ -36,7 +36,6 @@ install -p -D -m 0755 rpm/kubelet $RPM_BUILD_ROOT/usr/local/bin/kubelet
 %files
 %defattr(-,root,root)
 /usr/local/bin/kubelet
-/etc/kubernetes/*
 
 %pre
 

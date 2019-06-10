@@ -61,6 +61,10 @@ var (
 
 		{"admissionregistration.k8s.io", "mutatingwebhookconfigurations"},
 		{"admissionregistration.k8s.io", "validatingwebhookconfigurations"},
+
+		{Group: "apps.cafe.cloud.alipay.com", Resource:"cafedeployments"},
+		{Group: "apps.cafe.cloud.alipay.com", Resource:"cafeinplacedeployments"},
+		{Group: "apps.cafe.cloud.alipay.com", Resource:"inplacesets"},
 	}
 	AKSSupportedGroupSuffixes = []string{
 		".istio.io",

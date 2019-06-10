@@ -27,11 +27,12 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/admission"
 	api "k8s.io/kubernetes/pkg/apis/core"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 const (
-	PluginName             = "Monotype"
-	DefaultTopologyKey     = "kubernetes.io/hostname"
+	PluginName         = "Monotype"
+	DefaultTopologyKey = "kubernetes.io/hostname"
 )
 
 var (
@@ -83,6 +84,11 @@ func (p *Plugin) Admit(attributes admission.Attributes) (err error) {
 		}
 		switch v {
 		case cafelabels.MonotypeLabelValueHard:
+			err := CheckResource(pod)
+			if err != nil {
+				return err
+			}
+			injectHostNetwork(pod)
 			return injectHardAffinity(pod)
 		case cafelabels.MonotypeLabelValueSoft:
 			return injectSoftAffinity(pod)
@@ -151,6 +157,17 @@ func injectHardAffinity(pod *api.Pod) error {
 	return nil
 }
 
+func injectHostNetwork(pod *api.Pod) {
+	if pod.Spec.SecurityContext == nil {
+		pod.Spec.SecurityContext = &api.PodSecurityContext{
+			HostNetwork: true,
+		}
+	}
+	if pod.Spec.SecurityContext.HostNetwork == false {
+		pod.Spec.SecurityContext.HostNetwork = true
+	}
+}
+
 func injectSoftAffinity(pod *api.Pod) error {
 	// inject the pod anti-affinity
 	if pod.Spec.Affinity != nil && pod.Spec.Affinity.PodAntiAffinity != nil {
@@ -210,5 +227,25 @@ func injectSoftAffinity(pod *api.Pod) error {
 			},
 		},}
 
+	return nil
+}
+
+func CheckResource(pod *api.Pod) error {
+	cpu := resource.NewMilliQuantity(0, resource.DecimalSI)
+	memory := resource.NewMilliQuantity(0, resource.BinarySI)
+	for _, container := range pod.Spec.Containers {
+		if v, ok := container.Resources.Requests[api.ResourceCPU]; ok {
+			cpu.Add(v)
+		}
+		if v, ok := container.Resources.Requests[api.ResourceMemory]; ok {
+			memory.Add(v)
+		}
+	}
+	if cpu.MilliValue() <= 0 {
+		return fmt.Errorf("[monotype]total CPU request must be larger than 0")
+	}
+	if memory.MilliValue() <= 0 {
+		return fmt.Errorf("[monotype]total Memory request must be larger than 0")
+	}
 	return nil
 }

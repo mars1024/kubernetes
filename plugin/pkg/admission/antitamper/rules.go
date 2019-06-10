@@ -17,6 +17,9 @@ var immutableAnnotations = []string{
 // See `ResourceIdentifier` below
 var protectedResources = []ResourceIdentifier{
 	makeResourceIdentifier("ase-managed-cluster", "default", "", "v1", "ConfigMap"),
+	makeResourceIdentifier("*", "*", "apps.cafe.cloud.alipay.com", "v1alpha1", "CafeDeployment"),
+	makeResourceIdentifier("*", "*", "apps.cafe.cloud.alipay.com", "v1alpha1", "CafeInPlaceDeployment"),
+	makeResourceIdentifier("*", "*", "apps.cafe.cloud.alipay.com", "v1alpha1", "InPlaceSet"),
 	// makeResourceIdentifier("my-resource-*", any, any, any, any),
 }
 

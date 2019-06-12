@@ -153,7 +153,7 @@ func (pool *CPUPool) Initialize() {
 	}
 	top, err := pool.parseNodeCPUInfo(pool.nodeInfo.Node())
 	if err != nil || top.NumCPUs <= 0 {
-		glog.Error("fatal error %s, or NumCPUS=%d", err, 0)
+		glog.Errorf("fatal error %v, or NumCPUS=%d", err, 0)
 		glog.Fatal(err) // Shit
 	}
 	pool.exclusiveCntRef = make(map[int]int, 0)
@@ -262,8 +262,9 @@ func (pool *CPUPool) GetAllocatedSharedCPUSetReq() int64 {
 		//	continue
 		//}
 		//
-		_, milliCPU, _ := schedulercache.CalculateResource(pod)
-		allocated += milliCPU
+		res, _, _ := schedulercache.CalculateResource(pod)
+		milliCPU := res.MilliCPU
+		allocated += int64(float64(milliCPU))
 	}
 	return allocated
 }

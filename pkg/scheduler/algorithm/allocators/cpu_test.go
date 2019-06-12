@@ -1,12 +1,12 @@
 package allocators
 
 import (
+	"encoding/json"
 	"fmt"
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/kubernetes/staging/src/k8s.io/apimachinery/pkg/util/json"
 	"testing"
 )
 
@@ -15,8 +15,8 @@ func TestNewCPUAllocator_ShareCPUSet_First(t *testing.T) {
 	nodeInfo, _ := makeNodeInfo()
 	al := NewCPUAllocator(nodeInfo)
 	newPod := makePodWithAlloc("testPod", "2000m", "2000m")
-	result := al.Allocate(newPod)
-	if len(result) <= 0 {
+	result, err := al.Allocate(newPod)
+	if err != nil {
 		t.Error("failed to allocate cpu for containers")
 	}
 	t.Logf("allocated %v for pod %s", result, newPod.Name)
@@ -29,8 +29,8 @@ func TestNewCPUAllocator_ShareCPUSet_First(t *testing.T) {
 	alNew.resetPool(nodeInfo)
 	// Mock end
 	newPod1 := makePodWithAlloc("testPod2", "8000m", "8000m")
-	result = alNew.Allocate(newPod1)
-	if len(result) <= 0 {
+	result, err = alNew.Allocate(newPod1)
+	if err != nil {
 		t.Error("failed to allocate cpu for containers")
 	}
 	t.Logf("allocated %v for pod %s", result, newPod.Name)
@@ -42,8 +42,8 @@ func TestNewCPUAllocator_ShareCPUSet(t *testing.T) {
 	nodeInfo, _ := makeNodeInfo(pod, pod2)
 	al := NewCPUAllocator(nodeInfo)
 	newPod := makePodWithAlloc("testPod", "1000m", "1000m")
-	result := al.Allocate(newPod)
-	if len(result) <= 0 {
+	result, err := al.Allocate(newPod)
+	if err != nil {
 		t.Error("failed to allocate cpu for containers")
 	}
 	t.Logf("allocated %v for pod %s", result, newPod.Name)
@@ -56,8 +56,8 @@ func TestNewCPUAllocator_ShareCPUSet(t *testing.T) {
 	alNew.resetPool(nodeInfo)
 	// Mock end
 	newPod1 := makePodWithAlloc("testPod2", "8000m", "8000m")
-	result = alNew.Allocate(newPod1)
-	if len(result) <= 0 {
+	result, err = alNew.Allocate(newPod1)
+	if err != nil {
 		t.Error("failed to allocate cpu for containers")
 	}
 	t.Logf("allocated %v for pod %s", result, newPod.Name)
@@ -75,8 +75,8 @@ func TestNewCPUAllocator_Exclusive(t *testing.T) {
 	al := NewCPUAllocator(nodeInfo)
 	// Shared CPUSet pod
 	newPod := makePodWithAlloc("testPod", "2000m", "2000m")
-	result := al.Allocate(newPod)
-	if len(result) <= 0 {
+	result, err := al.Allocate(newPod)
+	if err != nil {
 		t.Error("failed to allocate cpu for containers")
 	}
 	t.Logf("allocated %v for pod %s", result, newPod.Name)
@@ -93,9 +93,9 @@ func TestNewCPUAllocator_Exclusive(t *testing.T) {
 	// Exclusive Pods
 	newPod1 := makePodWithAlloc("testPod2", "4000m", "4000m")
 	setExclusivePod(newPod1)
-	result = alNew.Allocate(newPod1)
+	result, err = alNew.Allocate(newPod1)
 
-	if !(len(result) > 0 && !result["testPod2-testContainer"].Contains(0) && result["testPod2-testContainer"].Size() == 4) {
+	if !(err == nil && !result["testPod2-testContainer"].Contains(0) && result["testPod2-testContainer"].Size() == 4) {
 		t.Errorf("failed to allocate cpu for containers, got %s", result)
 		t.FailNow()
 	}

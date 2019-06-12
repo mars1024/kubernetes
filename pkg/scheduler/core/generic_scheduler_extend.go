@@ -52,7 +52,10 @@ type GenericSchedulerExtend struct {
 func (ge *GenericSchedulerExtend) Allocate(pod *v1.Pod, host string) error {
 	nodeInfo := ge.cachedNodeInfoMap[host]
 	allocator := allocators.NewCPUAllocator(nodeInfo)
-	result := allocator.Allocate(pod)
+	result, err := allocator.Allocate(pod)
+	if err != nil {
+		return err
+	}
 	if len(result) <= 0 {
 		glog.V(3).Infof("patch result is %#v for pod %s/%s, skipping patch", result, pod.Namespace, pod.Name)
 		return nil
@@ -66,7 +69,7 @@ func (ge *GenericSchedulerExtend) Allocate(pod *v1.Pod, host string) error {
 		nodeShareCPUPool = cpuAllocator.NodeCPUSharePool()
 		nodeName = host
 	}
-	err := allocators.DoPatchAll(ge.client, pod, patchPod, nodeShareCPUPool, nodeName)
+	err = allocators.DoPatchAll(ge.client, pod, patchPod, nodeShareCPUPool, nodeName)
 	if err != nil {
 		return allocators.ErrAllocatorFailure(allocator.Name(), err.Error())
 	}
@@ -114,9 +117,9 @@ func (ge *GenericSchedulerExtend) inplaceUpdateReallocate(pod *v1.Pod) (string, 
 
 	// Call CPUSetAllocation to alloc CPUIDs.
 	cpuAlloc := allocators.NewCPUAllocator(nodeInfo)
-	cpuAssignments := cpuAlloc.Reallocate(pod)
+	cpuAssignments, err := cpuAlloc.Reallocate(pod)
 	ge.cache.FinishBinding(pod)
-	return string(allocators.GenAllocSpecAnnotation(pod, cpuAssignments)), nil
+	return string(allocators.GenAllocSpecAnnotation(pod, cpuAssignments)), err
 }
 
 func (ge *GenericSchedulerExtend) HandleInplacePodUpdate(pod *v1.Pod) (string, error) {

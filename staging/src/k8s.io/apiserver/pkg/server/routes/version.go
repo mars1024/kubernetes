@@ -58,10 +58,10 @@ func (v Version) handleVersion(req *restful.Request, resp *restful.Response) {
 	versionInfo := version.Info{
 		Major:        "1",
 		Minor:        "12+",
-		GitVersion:   "v1.12.0-alpha.0.41.91+50fcb4a3994dc",
-		GitCommit:    "50fcb4a3994dcd6a6c3ed546ac6a959698d24290",
+		GitVersion:   "v1.12.5-aks.1.9",
+		GitCommit:    "f932d2457aea933d640c81007760fc31afd2b775",
 		GitTreeState: "clean",
-		BuildDate:    "2019-01-26T21:00:00Z",
+		BuildDate:    "2019-06-12T21:00:00Z",
 		GoVersion:    runtime.Version(),
 		Compiler:     runtime.Compiler,
 		Platform:     fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),

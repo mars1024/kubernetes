@@ -50,8 +50,8 @@ func (as ContainerCPUAssignments) Add(key string, set cpuset.CPUSet) {
 
 type AllocatorInterface interface {
 	Name() string
-	Allocate(pod *v1.Pod) ContainerCPUAssignments
-	Reallocate(newPod *v1.Pod) ContainerCPUAssignments
+	Allocate(pod *v1.Pod) (ContainerCPUAssignments, error)
+	Reallocate(newPod *v1.Pod) (ContainerCPUAssignments, error)
 }
 
 type CPUAllocator struct {
@@ -69,13 +69,13 @@ func NewCPUAllocator(nodeInfo *schedulercache.NodeInfo) AllocatorInterface {
 func (allocator *CPUAllocator) Name() string {
 	return "CPUAllocator"
 }
-func (allocator *CPUAllocator) Allocate(pod *v1.Pod) ContainerCPUAssignments {
+func (allocator *CPUAllocator) Allocate(pod *v1.Pod) (ContainerCPUAssignments, error) {
 	allocator.reload(pod)
 	result := make(ContainerCPUAssignments, 0)
 	alloc := util.AllocSpecFromPod(pod)
 	if alloc == nil {
 		// Native pod goes native way
-		return ContainerCPUAssignments{}
+		return ContainerCPUAssignments{}, nil
 	}
 
 	// InitContainer allocate CPUSet but not take it into account in pool
@@ -108,6 +108,7 @@ func (allocator *CPUAllocator) Allocate(pod *v1.Pod) ContainerCPUAssignments {
 				allocated, err := allocator.allocateExclusiveCPUSet(pod, &c)
 				if err != nil {
 					glog.Error(err)
+					return result, err
 				}
 				allocator.pool.RefreshRefCount(allocated, true)
 				result.Add(c.Name, allocated)
@@ -117,6 +118,7 @@ func (allocator *CPUAllocator) Allocate(pod *v1.Pod) ContainerCPUAssignments {
 				allocated, err := allocator.allocateShareCPUSet(pod, &c)
 				if err != nil {
 					glog.Error(err)
+					return result, err
 				}
 				allocator.pool.RefreshRefCount(allocated, false)
 				result.Add(c.Name, allocated)
@@ -127,10 +129,10 @@ func (allocator *CPUAllocator) Allocate(pod *v1.Pod) ContainerCPUAssignments {
 			glog.V(5).Infof("[CPUAllocator]container %s will default to the cpumanager policy", ContainerName(pod, &c))
 		}
 	}
-	return result
+	return result, nil
 }
 
-func (allocator *CPUAllocator) Reallocate(newPod *v1.Pod) ContainerCPUAssignments {
+func (allocator *CPUAllocator) Reallocate(newPod *v1.Pod) (ContainerCPUAssignments, error) {
 
 	// Remove new pod from nodeInfo
 	allocator.reload(newPod)
@@ -154,7 +156,7 @@ func (allocator *CPUAllocator) allocateShareCPUSet(pod *v1.Pod, container *v1.Co
 	req := container.Resources.Requests[v1.ResourceCPU]
 	numCPUs := ContainerCPUCount(container) // it is already round up, ex 1700m => 2
 	reqMilli := req.MilliValue()
-	glog.V(5).Infof("[DEBUG]: numCPUs=%d, reqMilli=%d(pod=%s)", numCPUs, reqMilli , ContainerName(pod, container))
+	glog.V(5).Infof("[CPUAllocator][DEBUG]: numCPUs=%d, reqMilli=%d(pod=%s)", numCPUs, reqMilli, ContainerName(pod, container))
 	newRequestedMilli := int64(float64(reqMilli + allocator.pool.GetAllocatedSharedCPUSetReq()))
 	currentCPUSetMilli := int64(float64(allocator.pool.GetSharedCPUSet().Size()) * 1000 * overRatio)
 	if newRequestedMilli <= currentCPUSetMilli && numCPUs <= allocator.pool.GetSharedCPUSet().Size() { // current cpuset is enough for the container
@@ -167,10 +169,10 @@ func (allocator *CPUAllocator) allocateShareCPUSet(pod *v1.Pod, container *v1.Co
 
 		// Step 2.1: if request not enough
 		neededMilli := newRequestedMilli - currentCPUSetMilli
-		glog.V(5).Infof("[DEBUG]: newRequestedMilli=%d, currentCPUSetMilli=%d, neededMilli=%d", newRequestedMilli, currentCPUSetMilli, neededMilli)
+		glog.V(5).Infof("[CPUAllocator][DEBUG]: newRequestedMilli=%d, currentCPUSetMilli=%d, neededMilli=%d", newRequestedMilli, currentCPUSetMilli, neededMilli)
 
 		neededNumCPUsForReq := int((float64(neededMilli) + (1000*overRatio - 1)) / (overRatio * 1000)) // New from pool
-		glog.V(5).Infof("[CPUAllocator]needed number of new CPUs for pod(%s) of CPU requests: %d", neededNumCPUsForReq, ContainerName(pod, container))
+		glog.V(5).Infof("[CPUAllocator]needed number of new CPUs for pod(%s) of CPU requests: %d", ContainerName(pod, container), neededNumCPUsForReq)
 		neededNumCPUs := neededNumCPUsForReq
 		var neededForLimit int
 		if neededForLimit = numCPUs - (allocator.pool.GetSharedCPUSet().Size() + neededNumCPUsForReq); neededForLimit > 0 {
@@ -222,7 +224,7 @@ func (allocator *CPUAllocator) allocateExclusiveCPUSet(pod *v1.Pod, container *v
 		glog.V(3).Infof("[CPUAllocator]allocated CPUSet [%s] for %s", result, ContainerName(pod, container))
 		return result, nil
 	} else {
-		glog.Error("[CPUAllocator]not enough cpuset from CPUShare pool, Available CPU count is %s, allocated millicpu: %d",
+		glog.Errorf("[CPUAllocator]not enough cpuset from CPUShare pool, Available CPU count is %d, allocated millicpu: %d",
 			allocator.pool.AvailableCPUs(), allocator.pool.GetAllocatedCPUShare())
 	}
 	// Step 2: if not enough fail immediately

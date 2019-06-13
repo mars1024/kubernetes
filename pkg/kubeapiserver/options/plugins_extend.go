@@ -28,6 +28,7 @@ import (
 
 	"gitlab.alipay-inc.com/antcloud-aks/cafe-kubernetes-extension/plugin/admission/clusterinjection"
 	"gitlab.alipay-inc.com/antcloud-aks/cafe-kubernetes-extension/plugin/admission/objectmetareconcile"
+	"gitlab.alipay-inc.com/antcloud-aks/cafe-cluster-operator/plugin/admission/clusterresourcequota"
 )
 
 var AllOrderedCafePlugins = []string{
@@ -39,6 +40,7 @@ var AllOrderedCafePlugins = []string{
 	ase.PluginName,                 // ASE
 	servicenetallocator.PluginName, // ServiceNetAllocator
 	aksprivatecloud.PluginName,     // Private AntCloud
+	clusterresourcequota.PluginName,// ClusterResourceQuota
 	objectmetareconcile.PluginName, // ObjectMetaReconcile
 }
 
@@ -52,5 +54,6 @@ func RegisterCafeAdmissionPlugins(plugins *admission.Plugins) {
 	ase.Register(plugins)
 	// private antCloud
 	aksprivatecloud.Register(plugins)
+	clusterresourcequota.Register(plugins)
 	objectmetareconcile.Register(plugins)
 }

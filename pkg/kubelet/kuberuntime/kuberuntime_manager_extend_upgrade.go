@@ -280,14 +280,6 @@ func (m *kubeGenericRuntimeManager) createContainerExtension(podSandboxID string
 					containerConfig.QuotaId = quotaId
 				}
 			}
-			if len(parentContainerStatus.Resources.DiskQuota) != 0 {
-				containerConfig.Linux.Resources.DiskQuota = parentContainerStatus.Resources.DiskQuota
-			} else {
-				if diskQuotaStr, exists := parentContainerStatus.Labels[ContainerDiskQuotaLabel]; exists {
-					diskQuota := sigmautil.ParseDiskQuota(diskQuotaStr)
-					containerConfig.Linux.Resources.DiskQuota = diskQuota
-				}
-			}
 		}
 	}
 

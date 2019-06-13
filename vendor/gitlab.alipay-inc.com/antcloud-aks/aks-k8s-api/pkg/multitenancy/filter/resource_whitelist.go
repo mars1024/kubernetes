@@ -48,8 +48,12 @@ var (
 		// cluster-scoped
 		{"", "nodes"},
 		{"", "namespaces"},
+
 		{"", "persistentvolumes"},
 		{"", "persistentvolumes"},
+
+		{"storage.k8s.io", "storageclasses"},
+		{"storage.k8s.io", "volumeattachments"},
 
 		{"rbac.authorization.k8s.io", "clusterroles"},
 		{"rbac.authorization.k8s.io", "clusterrolebindings"},

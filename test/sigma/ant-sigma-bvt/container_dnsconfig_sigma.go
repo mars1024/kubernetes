@@ -18,6 +18,7 @@ import (
 )
 
 const AppName = "alipay-test-bvt"
+
 var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 	f := framework.NewDefaultFramework("sigma-ant-bvt")
 	enableOverQuota := IsEnableOverQuota()
@@ -85,7 +86,8 @@ var _ = Describe("[ant][sigma-alipay-bvt]", func() {
 			Searches:    []string{"test.alipay.net"},
 			Options: []v1.PodDNSConfigOption{
 				{
-					Name: "test-timeout:2",
+					Name:  "test-timeout",
+					Value: StringPointer("2"),
 				},
 			},
 		}

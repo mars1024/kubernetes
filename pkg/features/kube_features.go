@@ -551,7 +551,6 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	IgnoreSidecarContainerReady:                 {Default: false, PreRelease: utilfeature.Alpha},
 	EnsurePodSuccess:                            {Default: false, PreRelease: utilfeature.Alpha},
 	PodSearchesFirst:                            {Default: false, PreRelease: utilfeature.Alpha},
-
 	multitenancy.FeatureName:                    {Default: false, PreRelease: utilfeature.Alpha},
 
 	// inherited features from generic apiserver, relisted here to get a conflict if it is changed

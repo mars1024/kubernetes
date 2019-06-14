@@ -2,22 +2,22 @@ package controller_test
 
 import (
 	"net"
+	"strconv"
 	"time"
 
 	"github.com/golang/glog"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/kubernetes/test/e2e/framework"
-	corev1 "k8s.io/api/core/v1"
 	alipayapis "gitlab.alipay-inc.com/sigma/apis/pkg/apis"
 	"gitlab.alipay-inc.com/sigma/controller-manager/pkg/alipaymeta"
+	"gitlab.alipay-inc.com/sigma/controller-manager/pkg/xvip"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
-	"gitlab.alipay-inc.com/sigma/controller-manager/pkg/xvip"
-	"strconv"
 	"k8s.io/kubernetes/staging/src/k8s.io/apimachinery/pkg/util/json"
+	"k8s.io/kubernetes/test/e2e/framework"
 )
 
 func newService(namespace string, name string, portName []string, ports []int32, protocols []corev1.Protocol, ) *corev1.Service {
@@ -101,11 +101,18 @@ func dump(obj interface{}) string {
 }
 
 var (
-	e2eName     = "boss"
-	e2eToken    = "xxxxxx"
-	e2eEndpoint = "http://cloudnet-eu95-0.gz00b.stable.alipay.net"
+	e2eName     string
+	e2eToken    string
+	e2eEndpoint string
 	// docs: http://net-dev.alibaba.net/xvip/vip_management
 )
+
+//LoadCMDBInfo() load cmdb info.
+func LoadXVIPInfo() {
+	e2eEndpoint = GetEnv("XVIP_URL", "http://cloudnet.stable.alipay.net")
+	e2eName = GetEnv("XVIP_NAME", "boss")
+	e2eToken = GetEnv("XVIP_TOKEN", "xxxxxx")
+}
 
 var _ = Describe("[ant][sigma-alipay-controller][xvip]", func() {
 	f := framework.NewDefaultFramework("sigma-ant-controller")
@@ -114,6 +121,7 @@ var _ = Describe("[ant][sigma-alipay-controller][xvip]", func() {
 	  10.150.200.102
 	  10.150.200.106
 	 */
+	LoadXVIPInfo()
 	xvipClient, _ := xvip.New(e2eEndpoint, e2eName, e2eToken)
 	It("[sigma-alipay-controller][xvip][smoke] create a service with xvip provisioner, should register in xnet", func() {
 		By("create a endpint and a service with xvip not created")
@@ -373,7 +381,7 @@ var _ = Describe("[ant][sigma-alipay-controller][xvip]", func() {
 						return false, nil
 					}
 
-					framework.Logf("xvip specs %s",dump(specs))
+					framework.Logf("xvip specs %s", dump(specs))
 					for _, s := range specs {
 						if s.Port == 1080 && s.Ip == vip {
 							return true, nil
@@ -396,7 +404,7 @@ var _ = Describe("[ant][sigma-alipay-controller][xvip]", func() {
 						return false, nil
 					}
 					var found bool
-					framework.Logf("xvip specs %s",dump(specs))
+					framework.Logf("xvip specs %s", dump(specs))
 					for _, s := range specs {
 						if s.Port == 1080 && s.Ip == vip {
 							found = true

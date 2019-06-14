@@ -28,7 +28,7 @@ func (sched *Scheduler) setPodAllocSpec(id, allocSpec string) {
 	sched.inplacePodAllocSpec[id] = allocSpec
 }
 
-func (sched *Scheduler) clearPodAllocSpec(id string) {
+	func (sched *Scheduler) clearPodAllocSpec(id string) {
 	sched.inplacelock.Lock()
 	defer sched.inplacelock.Unlock()
 

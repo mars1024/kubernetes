@@ -33,6 +33,33 @@ func IsInplaceUpdatePod(pod *v1.Pod) bool {
 	return false
 }
 
+// IsInplaceUpdateIfNeeded determine whether a *real* inplace-update is
+// needed, this is to avoid the case that any dirty pod update flushes the last-spec
+func IsInplaceUpdateIfNeeded(oldPod, newPod *v1.Pod) bool {
+	if oldPod.Annotations == nil || newPod.Annotations == nil {
+		return false
+	}
+	_, oldExists := oldPod.Annotations[sigmaapi.AnnotationPodInplaceUpdateState]
+	newState, newExists := newPod.Annotations[sigmaapi.AnnotationPodInplaceUpdateState]
+	if !oldExists && newExists {
+		glog.V(5).Infof("pod %s inplace-update-state state added, value=%s", newPod.Name, newState)
+		return true
+	}
+	if oldExists && newExists {
+		if newState != sigmaapi.InplaceUpdateStateCreated {
+			glog.V(5).Infof("pod %s inplace-update-state is %q now, no need updating", newPod.Name, newState)
+			return false
+		}
+		for _, resName := range []v1.ResourceName{v1.ResourceCPU, v1.ResourceMemory, v1.ResourceEphemeralStorage} {
+			if IsResourceChanged(&oldPod.Spec, &newPod.Spec, resName) {
+				glog.V(5).Infof("pod %s resource %s was changed, need updating", resName, newPod.Name)
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func LastSpecFromPod(pod *v1.Pod) *v1.PodSpec {
 	spec := &v1.PodSpec{}
 	if pod == nil {
@@ -87,6 +114,7 @@ func StoreLastSpecIfNeeded(oldPod, newPod *v1.Pod) {
 	lastSpecCopy, oldPodSpecCopy := f(lastSpec), f(&oldPod.Spec)
 	if !reflect.DeepEqual(lastSpecCopy, oldPodSpecCopy) {
 		needToPatchLastSpec = true
+		glog.V(6).Infof("needToPatchLastSpec=%t, old=%#v, new=%#v", needToPatchLastSpec, oldPodSpecCopy, lastSpecCopy)
 		lastSpec = oldPodSpecCopy
 	}
 
@@ -108,23 +136,22 @@ func StoreLastSpecIfNeeded(oldPod, newPod *v1.Pod) {
 	glog.V(4).Infof("lastSpecStr: %s", string(lastSpecStr))
 }
 
-func IsCPUResourceChanged(oldSpec, newSpec *v1.PodSpec) bool {
+func IsResourceChanged(oldSpec *v1.PodSpec, newSpec *v1.PodSpec, res v1.ResourceName) bool {
 	if len(newSpec.Containers) != len(oldSpec.Containers) {
 		return true
 	}
-
 	for idx, container := range newSpec.Containers {
 		for rName, rQuantity := range container.Resources.Requests {
 			switch rName {
-			case v1.ResourceCPU:
+			case res:
 				newMilliCPU := rQuantity.MilliValue()
 				if idx < len(oldSpec.Containers) {
 					oldContainer := oldSpec.Containers[idx]
 					oldRequests := oldContainer.Resources.Requests
-					if oldQuantity, ok := oldRequests[v1.ResourceCPU]; ok {
-						oldMilliCPU := oldQuantity.MilliValue()
-						if newMilliCPU != oldMilliCPU {
-							// CPU resource changed, return true.
+					if oldQuantity, ok := oldRequests[res]; ok {
+						oldMilliValue := oldQuantity.MilliValue()
+						if newMilliCPU != oldMilliValue {
+							// specified resource changed, return true.
 							return true
 						}
 					}

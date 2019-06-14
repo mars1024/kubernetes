@@ -754,7 +754,7 @@ func (c *configFactory) updatePodInCache(oldObj, newObj interface{}) {
 		glog.Errorf("scheduler cache UpdatePod failed: %v", err)
 	}
 
-	if util.IsInplaceUpdatePod(newPod) {
+	if util.IsInplaceUpdateIfNeeded(oldPod, newPod) {
 		// Store old pod spec in annotations.
 		util.StoreLastSpecIfNeeded(oldPod, newPod)
 		c.updatePodInSchedulingQueue(oldPod, newPod)

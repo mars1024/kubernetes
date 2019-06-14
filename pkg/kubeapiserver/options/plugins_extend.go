@@ -24,7 +24,6 @@ import (
 	akspodpostschedule "k8s.io/kubernetes/plugin/pkg/admission/podpostschedule"
 	aksprivatecloud "k8s.io/kubernetes/plugin/pkg/admission/privatecloud"
 	monotype "k8s.io/kubernetes/plugin/pkg/admission/antcloud/monotype"
-	capinjection "k8s.io/kubernetes/plugin/pkg/admission/antcloud"
 
 	"gitlab.alipay-inc.com/antcloud-aks/cafe-kubernetes-extension/plugin/admission/clusterinjection"
 	"gitlab.alipay-inc.com/antcloud-aks/cafe-kubernetes-extension/plugin/admission/objectmetareconcile"
@@ -35,7 +34,6 @@ var AllOrderedCafePlugins = []string{
 	clusterinjection.PluginName,    // MinionClusterInjection
 	akspodpostschedule.PluginName,  // Alipay AntCloud PodPostSchedule
 	monotype.PluginName,            // Antcloud monotype mutating plugin
-	capinjection.PluginName,        // Antcloud CapInjection mutating plugin
 	antitamper.PluginName,          // Anti Tampering of Critical ConfigMaps/Labels/Annotations
 	ase.PluginName,                 // ASE
 	servicenetallocator.PluginName, // ServiceNetAllocator
@@ -48,7 +46,6 @@ func RegisterCafeAdmissionPlugins(plugins *admission.Plugins) {
 	clusterinjection.Register(plugins)
 	akspodpostschedule.Register(plugins)
 	monotype.Register(plugins)
-	capinjection.Register(plugins)
 	servicenetallocator.Register(plugins)
 	antitamper.Register(plugins)
 	ase.Register(plugins)

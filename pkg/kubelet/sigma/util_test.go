@@ -41,6 +41,47 @@ func TestHasProtectionFinalizer(t *testing.T) {
 	}
 }
 
+func TestHasUpgradeProtectionFinalizer(t *testing.T) {
+	tests := []struct {
+		pod                           *v1.Pod
+		hasUpgradeProtectionFinalizer bool
+	}{
+		{
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "bar",
+					Namespace:  "foo",
+					Finalizers: []string{"protection-upgrade.pod.beta1.sigma.ali/vip-removed", "pod.beta1.sigma.ali/cni-allocated"},
+				},
+			},
+			hasUpgradeProtectionFinalizer: true,
+		},
+		{
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "bar",
+					Namespace:  "foo",
+					Finalizers: []string{"pod.beta1.sigma.ali/cni-allocated"},
+				},
+			},
+			hasUpgradeProtectionFinalizer: false,
+		},
+		{
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "bar",
+					Namespace:  "foo",
+					Finalizers: []string{"protection-delete.pod.beta1.sigma.ali/vip-removed"},
+				},
+			},
+			hasUpgradeProtectionFinalizer: false,
+		},
+	}
+	for _, test := range tests {
+		assert.Equal(t, HasUpgradeProtectionFinalizer(test.pod), test.hasUpgradeProtectionFinalizer)
+	}
+}
+
 func TestIsPodDockerVMMode(t *testing.T) {
 	tests := []struct {
 		message        string
@@ -91,6 +132,130 @@ func TestIsPodDockerVMMode(t *testing.T) {
 		assert.Equal(t, IsPodDockerVMMode(test.pod), test.isDockerVMMode)
 	}
 }
+
+func TestHasDeleteProtectionFinalizer(t *testing.T) {
+	tests := []struct {
+		pod                          *v1.Pod
+		hasDeleteProtectionFinalizer bool
+	}{
+		{
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "bar",
+					Namespace:  "foo",
+					Finalizers: []string{"protection-delete.pod.beta1.sigma.ali/vip-removed", "pod.beta1.sigma.ali/cni-allocated"},
+				},
+			},
+			hasDeleteProtectionFinalizer: true,
+		},
+		{
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "bar",
+					Namespace:  "foo",
+					Finalizers: []string{"pod.beta1.sigma.ali/cni-allocated"},
+				},
+			},
+			hasDeleteProtectionFinalizer: false,
+		},
+		{
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "bar",
+					Namespace:  "foo",
+					Finalizers: []string{"protection-upgrade.pod.beta1.sigma.ali/vip-removed", "pod.beta1.sigma.ali/cni-allocated"},
+				},
+			},
+			hasDeleteProtectionFinalizer: false,
+		},
+	}
+	for _, test := range tests {
+		assert.Equal(t, HasDeleteProtectionFinalizer(test.pod), test.hasDeleteProtectionFinalizer)
+	}
+}
+
+func TestPodShouldNotDelete(t *testing.T) {
+	tests := []struct {
+		pod             *v1.Pod
+		shouldNotDelete bool
+	}{
+		{
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "bar",
+					Namespace:  "foo",
+					Finalizers: []string{"protection-delete.pod.beta1.sigma.ali/vip-removed", "pod.beta1.sigma.ali/cni-allocated"},
+				},
+			},
+			shouldNotDelete: true,
+		},
+		{
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "bar",
+					Namespace:  "foo",
+					Finalizers: []string{"protection.pod.beta1.sigma.ali/vip-removed", "pod.beta1.sigma.ali/cni-allocated"},
+				},
+			},
+			shouldNotDelete: true,
+		},
+		{
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "bar",
+					Namespace:  "foo",
+					Finalizers: []string{"pod.beta1.sigma.ali/cni-allocated", "protection-upgrade.pod.beta1.sigma.ali/vip-removed"},
+				},
+			},
+			shouldNotDelete: false,
+		},
+	}
+	for _, test := range tests {
+		assert.Equal(t, PodShouldNotDelete(test.pod), test.shouldNotDelete)
+	}
+}
+
+func TestPodShouldNotUpgrade(t *testing.T) {
+	tests := []struct {
+		pod              *v1.Pod
+		shouldNotUpgrade bool
+	}{
+		{
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "bar",
+					Namespace:  "foo",
+					Finalizers: []string{"protection-upgrade.pod.beta1.sigma.ali/vip-removed", "pod.beta1.sigma.ali/cni-allocated"},
+				},
+			},
+			shouldNotUpgrade: true,
+		},
+		{
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "bar",
+					Namespace:  "foo",
+					Finalizers: []string{"protection.pod.beta1.sigma.ali/vip-removed", "pod.beta1.sigma.ali/cni-allocated"},
+				},
+			},
+			shouldNotUpgrade: true,
+		},
+		{
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "bar",
+					Namespace:  "foo",
+					Finalizers: []string{"pod.beta1.sigma.ali/cni-allocated", "protection-delete.pod.beta1.sigma.ali/vip-removed"},
+				},
+			},
+			shouldNotUpgrade: false,
+		},
+	}
+	for _, test := range tests {
+		assert.Equal(t, PodShouldNotUpgrade(test.pod), test.shouldNotUpgrade)
+	}
+}
+
 
 func TestIsPodJob(t *testing.T) {
 	tests := []struct {

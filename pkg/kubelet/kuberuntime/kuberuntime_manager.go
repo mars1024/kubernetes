@@ -658,7 +658,6 @@ func (m *kubeGenericRuntimeManager) computePodActions(pod *v1.Pod, podStatus *ku
 	}
 
 	haveContainerStateAnnotation, containerDesiredState, _ := sigmautil.GetContainerDesiredStateFromAnnotation(pod)
-	hasProtectFinalizer := sigmautil.HasProtectionFinalizer(pod)
 	// Number of running containers to keep.
 	keepCount := 0
 	// check the status of containers.
@@ -726,7 +725,7 @@ func (m *kubeGenericRuntimeManager) computePodActions(pod *v1.Pod, podStatus *ku
 
 		// Upgrade the container which should be upgraded
 		if containerStatus != nil && m.isContainerNeedUpgrade(pod, &container, containerStatus) {
-			if utilfeature.DefaultFeatureGate.Enabled(features.IgnoreProtectionFinalizer) || !hasProtectFinalizer {
+			if !sigmautil.PodShouldNotUpgrade(pod) {
 				changes.ContainersToUpgrade[containerStatus.ID] = containerOperationInfo{
 					name:      containerStatus.Name,
 					container: &pod.Spec.Containers[idx],
@@ -757,7 +756,7 @@ func (m *kubeGenericRuntimeManager) computePodActions(pod *v1.Pod, podStatus *ku
 			case ContainerStart:
 				changes.ContainersToStartBecauseDesireState = append(changes.ContainersToStartBecauseDesireState, idx)
 			case ContainerStop:
-				if hasProtectFinalizer {
+				if sigmautil.PodShouldNotDelete(pod) {
 					glog.V(3).Infof("pod %s has protection finalizer, could not stop it", format.Pod(pod))
 				} else {
 					changes.ContainersToKillBecauseDesireState[containerStatus.ID] = containerOperationInfo{

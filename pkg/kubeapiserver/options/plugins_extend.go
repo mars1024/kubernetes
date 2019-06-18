@@ -24,6 +24,7 @@ import (
 	akspodpostschedule "k8s.io/kubernetes/plugin/pkg/admission/podpostschedule"
 	aksprivatecloud "k8s.io/kubernetes/plugin/pkg/admission/privatecloud"
 	monotype "k8s.io/kubernetes/plugin/pkg/admission/antcloud/monotype"
+	"k8s.io/kubernetes/plugin/pkg/admission/imagepullsecret"
 
 	"gitlab.alipay-inc.com/antcloud-aks/cafe-kubernetes-extension/plugin/admission/clusterinjection"
 	"gitlab.alipay-inc.com/antcloud-aks/cafe-kubernetes-extension/plugin/admission/objectmetareconcile"
@@ -31,15 +32,16 @@ import (
 )
 
 var AllOrderedCafePlugins = []string{
-	clusterinjection.PluginName,    // MinionClusterInjection
-	akspodpostschedule.PluginName,  // Alipay AntCloud PodPostSchedule
-	monotype.PluginName,            // Antcloud monotype mutating plugin
-	antitamper.PluginName,          // Anti Tampering of Critical ConfigMaps/Labels/Annotations
-	ase.PluginName,                 // ASE
-	servicenetallocator.PluginName, // ServiceNetAllocator
-	aksprivatecloud.PluginName,     // Private AntCloud
-	clusterresourcequota.PluginName,// ClusterResourceQuota
-	objectmetareconcile.PluginName, // ObjectMetaReconcile
+	clusterinjection.PluginName,     // MinionClusterInjection
+	akspodpostschedule.PluginName,   // Alipay AntCloud PodPostSchedule
+	monotype.PluginName,             // Antcloud monotype mutating plugin
+	antitamper.PluginName,           // Anti Tampering of Critical ConfigMaps/Labels/Annotations
+	ase.PluginName,                  // ASE
+	servicenetallocator.PluginName,  // ServiceNetAllocator
+	aksprivatecloud.PluginName,      // Private AntCloud
+	clusterresourcequota.PluginName, // ClusterResourceQuota
+	imagepullsecret.PluginName,      // CafeImageSecret
+	objectmetareconcile.PluginName,  // ObjectMetaReconcile
 }
 
 func RegisterCafeAdmissionPlugins(plugins *admission.Plugins) {
@@ -52,5 +54,6 @@ func RegisterCafeAdmissionPlugins(plugins *admission.Plugins) {
 	// private antCloud
 	aksprivatecloud.Register(plugins)
 	clusterresourcequota.Register(plugins)
+	imagepullsecret.Register(plugins)
 	objectmetareconcile.Register(plugins)
 }

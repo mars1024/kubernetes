@@ -12,7 +12,25 @@ import (
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 )
 
+const (
+	// Define protection finalizer naming convention, any finalizer that name matches
+	// this will be regard as protection finalizer, and
+	// kubelet will not upgrade pod when such finalizer exists.
+	FinalizerPodUpgradeProtectionFmt = "protection-upgrade.pod.beta1.sigma.ali/*"
+
+	// Define protection finalizer naming convention, any finalizer that name matches
+	// this will be regard as protection finalizer, and
+	// kubelet will not delete pod when such finalizer exists.
+	FinalizerPodDeleteProtectionFmt = "protection-delete.pod.beta1.sigma.ali/*"
+)
+
 var protectionFinalizerRegexp = regexp.MustCompile(sigmak8sapi.FinalizerPodProtectionFmt)
+
+// if pod finalizer match size, it should not upgrade
+var protectionUpgradeFinalizerRegexp = regexp.MustCompile(FinalizerPodUpgradeProtectionFmt)
+
+// if pod finalizer match size, it should not delete
+var protectionDeleteFinalizerRegexp = regexp.MustCompile(FinalizerPodDeleteProtectionFmt)
 
 // HasProtectionFinalizer returns true if pod has any protection finalizer
 func HasProtectionFinalizer(pod *v1.Pod) bool {
@@ -29,6 +47,50 @@ func HasProtectionFinalizer(pod *v1.Pod) bool {
 		}
 	}
 	return false
+}
+
+// HasUpgradeProtectionFinalizer returns true if pod has any upgrade protection finalizer
+func HasUpgradeProtectionFinalizer(pod *v1.Pod) bool {
+	if pod == nil {
+		return false
+	}
+	finalizers := pod.Finalizers
+	if len(finalizers) == 0 {
+		return false
+	}
+	for _, finalizer := range finalizers {
+		if protectionUpgradeFinalizerRegexp.MatchString(finalizer) {
+			return true
+		}
+	}
+	return false
+}
+
+// HasDeleteProtectionFinalizer returns true if pod has any delete protection finalizer
+func HasDeleteProtectionFinalizer(pod *v1.Pod) bool {
+	if pod == nil {
+		return false
+	}
+	finalizers := pod.Finalizers
+	if len(finalizers) == 0 {
+		return false
+	}
+	for _, finalizer := range finalizers {
+		if protectionDeleteFinalizerRegexp.MatchString(finalizer) {
+			return true
+		}
+	}
+	return false
+}
+
+// PodShouldNotUpgrade used to judge whether a pod can upgrade
+func PodShouldNotUpgrade(pod *v1.Pod) bool {
+	return HasProtectionFinalizer(pod) || HasUpgradeProtectionFinalizer(pod)
+}
+
+// PodShouldNotDelete used to judge whether a pod can delete
+func PodShouldNotDelete(pod *v1.Pod) bool {
+	return HasProtectionFinalizer(pod) || HasDeleteProtectionFinalizer(pod)
 }
 
 func IsInplaceUpdateAccepted(pod *v1.Pod) bool {

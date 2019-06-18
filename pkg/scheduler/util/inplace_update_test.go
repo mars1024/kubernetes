@@ -344,7 +344,7 @@ func TestIsCPUResourceChanged(t *testing.T) {
 	}
 
 	for i, test := range tests {
-		ret := IsCPUResourceChanged(&test.oldPod.Spec, &test.newPod.Spec)
+		ret := IsResourceChanged(&test.oldPod.Spec, &test.newPod.Spec, v1.ResourceCPU)
 		if ret != test.expRet {
 			t.Errorf("Case[%d], ret: %t not equal to expRet: %t", i, ret, test.expRet)
 		}

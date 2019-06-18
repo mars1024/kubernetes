@@ -77,7 +77,7 @@ func (ge *GenericSchedulerExtend) Allocate(pod *v1.Pod, host string) error {
 }
 
 func (ge *GenericSchedulerExtend) inplaceUpdateReallocate(pod *v1.Pod) (string, error) {
-	glog.V(4).Infof("Attempting to process inplace update pod %s/%s", pod.Namespace, pod.Name)
+	glog.V(4).Infof("[inplaceUpdateReallocate]Attempting to process inplace update pod %s/%s", pod.Namespace, pod.Name)
 
 	// Get last spec from pod annotations.
 	lastSpec := util.LastSpecFromPod(pod)
@@ -93,13 +93,18 @@ func (ge *GenericSchedulerExtend) inplaceUpdateReallocate(pod *v1.Pod) (string, 
 	if isAssumed, _ := ge.cache.IsAssumedPod(pod); isAssumed {
 		err = ge.cache.ForgetPod(pod)
 	} else {
-		ge.cache.RemovePod(pod)
+		errRemove := ge.cache.RemovePod(pod)
+		if errRemove != nil {
+			glog.Warningf("[inplaceUpdateReallocate]failed to remove pod from scheduler cache:%s", errRemove.Error())
+		}
 	}
+	defer func() {
+		ge.cache.FinishBinding(pod)
+	}()
 	if err != nil {
 		glog.Errorf("[inplaceUpdateReallocate]failed to forget/remove pod %s/%s from cache: %s", pod.Namespace, pod.Name, err.Error())
 		return "", err
 	}
-
 	// Call PodFitsResources to check resources.
 	if fit, predicateFails, _ := predicates.PodCPUSetResourceFit(pod, nil, nodeInfo); !fit {
 		return "", fmt.Errorf("failed to fit resource[PodCPUSetResourceFit] in inplace update processing with predicateFails: %+v", predicateFails)
@@ -109,16 +114,15 @@ func (ge *GenericSchedulerExtend) inplaceUpdateReallocate(pod *v1.Pod) (string, 
 		return "", fmt.Errorf("failed to fit resource[PodFitsResources] in inplace update processing with predicateFails: %+v", predicateFails)
 	}
 	// If CPU value is not changed, return immediately.
-	if !util.IsCPUResourceChanged(lastSpec, &pod.Spec) {
-		glog.V(4).Infof("CPU resource not changed or this is a cpushare request, return immediately")
-		ge.cache.FinishBinding(pod)
+	if !util.IsResourceChanged(lastSpec, &pod.Spec, v1.ResourceCPU) {
+		glog.V(4).Infof("[inplaceUpdateReallocate]CPU resource not changed or this is a cpushare request, return immediately")
 		return "", nil
 	}
 
+	glog.V(4).Infof("[inplaceUpdateReallocate]reallocating CPUSet for pod %q", pod.Name)
 	// Call CPUSetAllocation to alloc CPUIDs.
 	cpuAlloc := allocators.NewCPUAllocator(nodeInfo)
 	cpuAssignments, err := cpuAlloc.Reallocate(pod)
-	ge.cache.FinishBinding(pod)
 	return string(allocators.GenAllocSpecAnnotation(pod, cpuAssignments)), err
 }
 
@@ -131,14 +135,16 @@ func (ge *GenericSchedulerExtend) HandleInplacePodUpdate(pod *v1.Pod) (string, e
 		if lastSpec == nil || len(lastSpec.Containers) != len(assumed.Spec.Containers) {
 			return "", fmt.Errorf("get unexpected lastSpec from pod %s/%s: %v", pod.Namespace, pod.Name, lastSpec.Containers)
 		}
-		// Reset resource value.
-		for idx, _ := range assumed.Spec.Containers {
+		// Reset resource value, so that assume the correct resources into cache
+		for idx := range assumed.Spec.Containers {
 			assumed.Spec.Containers[idx].Resources = lastSpec.Containers[idx].Resources
 		}
-		err = ge.cache.AssumePod(assumed)
-		if err != nil {
-			glog.Error(fmt.Errorf("failed to assume inplace-update pod %s/%s: %v", pod.Namespace, pod.Name, err))
-		}
+		// TODO(yuzhi.wx) remove the assume for now, not figure out its purpose
+		//errAssumed := ge.cache.AssumePod(assumed)
+		//if errAssumed != nil {
+		//	glog.Error(fmt.Errorf("failed to assume inplace-update pod %s/%s: %v", pod.Namespace, pod.Name, err))
+		//}
+		// return the original error
 		return "", err
 	}
 	return allocSpec, nil

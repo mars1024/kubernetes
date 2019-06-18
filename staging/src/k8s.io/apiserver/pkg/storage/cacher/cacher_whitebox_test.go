@@ -274,10 +274,14 @@ func newTestCacher(s storage.Interface, cap int) (*Cacher, storage.Versioner) {
 
 type dummyStorage struct {
 	err error
+	// max resourceVersion
+	maxResourceVersion string
+	watchers           map[*dummyWatch]struct{}
 }
 
 type dummyWatch struct {
 	ch chan watch.Event
+	d  *dummyStorage
 }
 
 func (w *dummyWatch) ResultChan() <-chan watch.Event {
@@ -286,12 +290,19 @@ func (w *dummyWatch) ResultChan() <-chan watch.Event {
 
 func (w *dummyWatch) Stop() {
 	close(w.ch)
+	delete(w.d.watchers, w)
 }
 
-func newDummyWatch() watch.Interface {
-	return &dummyWatch{
+func newDummyWatch(d *dummyStorage) watch.Interface {
+	w := &dummyWatch{
+		d:  d,
 		ch: make(chan watch.Event),
 	}
+	if d.watchers == nil {
+		d.watchers = make(map[*dummyWatch]struct{})
+	}
+	d.watchers[w] = struct{}{}
+	return w
 }
 
 func (d *dummyStorage) Versioner() storage.Versioner { return nil }
@@ -302,10 +313,10 @@ func (d *dummyStorage) Delete(_ context.Context, _ string, _ runtime.Object, _ *
 	return fmt.Errorf("unimplemented")
 }
 func (d *dummyStorage) Watch(_ context.Context, _ string, _ string, _ storage.SelectionPredicate) (watch.Interface, error) {
-	return newDummyWatch(), nil
+	return newDummyWatch(d), nil
 }
 func (d *dummyStorage) WatchList(_ context.Context, _ string, _ string, _ storage.SelectionPredicate) (watch.Interface, error) {
-	return newDummyWatch(), nil
+	return newDummyWatch(d), nil
 }
 func (d *dummyStorage) Get(_ context.Context, _ string, _ string, _ runtime.Object, _ bool) error {
 	return fmt.Errorf("unimplemented")
@@ -324,7 +335,22 @@ func (d *dummyStorage) GuaranteedUpdate(_ context.Context, _ string, _ runtime.O
 func (d *dummyStorage) Count(_ string) (int64, error) {
 	return 0, fmt.Errorf("unimplemented")
 }
-
+func (d *dummyStorage) GetResourceVersion(ctx context.Context) (string, error) {
+	return d.maxResourceVersion, nil
+}
+func (d *dummyStorage) RequestProgress(ctx context.Context) error {
+	return d.err
+}
+func (d *dummyStorage) mockProgressNotify() {
+	for watcher := range d.watchers {
+		pod := &example.Pod{}
+		pod.ResourceVersion = d.maxResourceVersion
+		watcher.ch <- watch.Event{
+			Type:   watch.Bookmark,
+			Object: pod,
+		}
+	}
+}
 func TestListWithLimitAndRV0(t *testing.T) {
 	backingStorage := &dummyStorage{}
 	cacher, _ := newTestCacher(backingStorage, 0)
@@ -699,5 +725,27 @@ func TestDispatchingBookmarkEventsWithConcurrentStop(t *testing.T) {
 			t.Fatal("receive result timeout")
 		}
 		w.Stop()
+	}
+}
+
+func TestSyncWithUnderlyingStorage(t *testing.T) {
+	defer utilfeaturetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.WatchBookmark, true)()
+	backingStorage := &dummyStorage{}
+	cacher, _ := newTestCacher(backingStorage, 1000)
+	defer cacher.Stop()
+	// Wait until cacher is initialized.
+	cacher.ready.wait()
+	backingStorage.maxResourceVersion = "1024"
+	_, err := cacher.syncWithUnderlyingStorage(context.TODO())
+	if err == nil {
+		t.Errorf("Should fail")
+	}
+	backingStorage.mockProgressNotify()
+	storageRV, err := cacher.syncWithUnderlyingStorage(context.TODO())
+	if err != nil {
+		t.Errorf("Unexpected err %v", err)
+	}
+	if storageRV != backingStorage.maxResourceVersion {
+		t.Errorf("Unexpected storage resourceVersion got %v expected %v err %v", storageRV, backingStorage.maxResourceVersion, err)
 	}
 }

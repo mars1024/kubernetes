@@ -397,3 +397,23 @@ func (ao ascendingOrdinal) Swap(i, j int) {
 func (ao ascendingOrdinal) Less(i, j int) bool {
 	return getOrdinal(ao[i]) < getOrdinal(ao[j])
 }
+
+const (
+	// ModeForStatefulSet is the mode of a StatefulSet.
+	ModeForStatefulSet = "statefulset.sigma.ali/mode"
+	// StatefulSetModeDefault is the default mode. If the mode of a StatefulSet
+	// is not StatefulSetModeDefault, controller in this package won't handle it.
+	StatefulSetModeDefault = ""
+)
+
+// StatefulSetMode returns the mode of a StatefulSet.
+func StatefulSetMode(ss metav1.Object) string {
+	if ss != nil {
+		if labels := ss.GetLabels(); labels != nil {
+			if mode, ok := labels[ModeForStatefulSet]; ok {
+				return mode
+			}
+		}
+	}
+	return StatefulSetModeDefault
+}

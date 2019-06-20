@@ -47,8 +47,6 @@ import (
 const (
 	// period to relist statefulsets and verify pets
 	statefulSetResyncPeriod = 30 * time.Second
-
-	ModeForStatefulSet = "statefulset.sigma.ali/mode"
 )
 
 // controllerKind contains the schema.GroupVersionKind for this controller type.
@@ -383,7 +381,7 @@ func (ssc *StatefulSetController) resolveControllerRef(namespace string, control
 // enqueueStatefulSet enqueues the given statefulset in the work queue.
 func (ssc *StatefulSetController) enqueueStatefulSet(obj interface{}) {
 	ps := obj.(*apps.StatefulSet)
-	if ps.Labels[ModeForStatefulSet] == "sigma" {
+	if StatefulSetMode(ps) != StatefulSetModeDefault {
 		return
 	}
 	key, err := controller.KeyFunc(obj)

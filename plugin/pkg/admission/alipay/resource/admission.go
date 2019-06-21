@@ -66,7 +66,7 @@ func (a *AlipayResourceAdmission) Validate(attr admission.Attributes) (err error
 	if shouldIgnore(attr) {
 		return nil
 	}
-	if !a.WaitForReady() {
+	if !a.WaitForReady(attr.GetContext()) {
 		return admission.NewForbidden(attr, fmt.Errorf("not yet ready to handle request"))
 	}
 

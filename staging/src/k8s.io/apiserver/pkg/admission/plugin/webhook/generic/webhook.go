@@ -17,7 +17,6 @@ limitations under the License.
 package generic
 
 import (
-	"context"
 	"fmt"
 	"io"
 
@@ -160,11 +159,10 @@ func (a *Webhook) Dispatch(attr admission.Attributes) error {
 	if rules.IsWebhookConfigurationResource(attr) {
 		return nil
 	}
-	if !a.WaitForReady() {
+	if !a.WaitForReady(attr.GetContext()) {
 		return admission.NewForbidden(attr, fmt.Errorf("not yet ready to handle request"))
 	}
 	hooks := a.hookSource.Webhooks()
-	ctx := context.TODO()
 
 	var relevantHooks []*v1beta1.Webhook
 	for i := range hooks {
@@ -200,5 +198,5 @@ func (a *Webhook) Dispatch(attr admission.Attributes) error {
 		}
 		versionedAttr.VersionedObject = out
 	}
-	return a.dispatcher.Dispatch(ctx, &versionedAttr, relevantHooks)
+	return a.dispatcher.Dispatch(attr.GetContext(), &versionedAttr, relevantHooks)
 }

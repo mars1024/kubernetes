@@ -111,7 +111,7 @@ func DeleteResource(r rest.GracefulDeleter, allowsOptions bool, scope RequestSco
 		trace.Step("About to check admission control")
 		if admit != nil && admit.Handles(admission.Delete) {
 			userInfo, _ := request.UserFrom(ctx)
-			attrs := admission.NewAttributesRecord(nil, nil, scope.Kind, namespace, name, scope.Resource, scope.Subresource, admission.Delete, dryrun.IsDryRun(options.DryRun), userInfo)
+			attrs := admission.NewAttributesRecordWithContext(nil, nil, scope.Kind, namespace, name, scope.Resource, scope.Subresource, admission.Delete, dryrun.IsDryRun(options.DryRun), userInfo, req.Context())
 			if mutatingAdmission, ok := admit.(admission.MutationInterface); ok {
 				if err := mutatingAdmission.Admit(attrs); err != nil {
 					scope.err(err, w, req)
@@ -264,7 +264,7 @@ func DeleteCollection(r rest.CollectionDeleter, checkBody bool, scope RequestSco
 		admit = admission.WithAudit(admit, ae)
 		if admit != nil && admit.Handles(admission.Delete) {
 			userInfo, _ := request.UserFrom(ctx)
-			attrs := admission.NewAttributesRecord(nil, nil, scope.Kind, namespace, "", scope.Resource, scope.Subresource, admission.Delete, dryrun.IsDryRun(options.DryRun), userInfo)
+			attrs := admission.NewAttributesRecordWithContext(nil, nil, scope.Kind, namespace, "", scope.Resource, scope.Subresource, admission.Delete, dryrun.IsDryRun(options.DryRun), userInfo, req.Context())
 			if mutatingAdmission, ok := admit.(admission.MutationInterface); ok {
 				err = mutatingAdmission.Admit(attrs)
 				if err != nil {

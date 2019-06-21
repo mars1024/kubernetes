@@ -122,11 +122,11 @@ func UpdateResource(r rest.Updater, scope RequestScope, admit admission.Interfac
 					return nil, fmt.Errorf("unexpected error when extracting UID from oldObj: %v", err.Error())
 				} else if !isNotZeroObject {
 					if mutatingAdmission.Handles(admission.Create) {
-						return newObj, mutatingAdmission.Admit(admission.NewAttributesRecord(newObj, nil, scope.Kind, namespace, name, scope.Resource, scope.Subresource, admission.Create, dryrun.IsDryRun(options.DryRun), userInfo))
+						return newObj, mutatingAdmission.Admit(admission.NewAttributesRecordWithContext(newObj, nil, scope.Kind, namespace, name, scope.Resource, scope.Subresource, admission.Create, dryrun.IsDryRun(options.DryRun), userInfo, req.Context()))
 					}
 				} else {
 					if mutatingAdmission.Handles(admission.Update) {
-						return newObj, mutatingAdmission.Admit(admission.NewAttributesRecord(newObj, oldObj, scope.Kind, namespace, name, scope.Resource, scope.Subresource, admission.Update, dryrun.IsDryRun(options.DryRun), userInfo))
+						return newObj, mutatingAdmission.Admit(admission.NewAttributesRecordWithContext(newObj, oldObj, scope.Kind, namespace, name, scope.Resource, scope.Subresource, admission.Update, dryrun.IsDryRun(options.DryRun), userInfo, req.Context()))
 					}
 				}
 				return newObj, nil
@@ -156,11 +156,11 @@ func UpdateResource(r rest.Updater, scope RequestScope, admit admission.Interfac
 				rest.DefaultUpdatedObjectInfo(obj, transformers...),
 				withAuthorization(rest.AdmissionToValidateObjectFunc(
 					admit,
-					admission.NewAttributesRecord(nil, nil, scope.Kind, namespace, name, scope.Resource, scope.Subresource, admission.Create, dryrun.IsDryRun(options.DryRun), userInfo)),
+					admission.NewAttributesRecordWithContext(nil, nil, scope.Kind, namespace, name, scope.Resource, scope.Subresource, admission.Create, dryrun.IsDryRun(options.DryRun), userInfo, req.Context())),
 					scope.Authorizer, createAuthorizerAttributes),
 				rest.AdmissionToValidateObjectUpdateFunc(
 					admit,
-					admission.NewAttributesRecord(nil, nil, scope.Kind, namespace, name, scope.Resource, scope.Subresource, admission.Update, dryrun.IsDryRun(options.DryRun), userInfo)),
+					admission.NewAttributesRecordWithContext(nil, nil, scope.Kind, namespace, name, scope.Resource, scope.Subresource, admission.Update, dryrun.IsDryRun(options.DryRun), userInfo, req.Context())),
 				false,
 				options,
 			)

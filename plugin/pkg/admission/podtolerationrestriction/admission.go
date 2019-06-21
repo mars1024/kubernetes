@@ -85,7 +85,7 @@ func (p *podTolerationsPlugin) Admit(a admission.Attributes) error {
 		return nil
 	}
 
-	if !p.WaitForReady() {
+	if !p.WaitForReady(a.GetContext()) {
 		return admission.NewForbidden(a, fmt.Errorf("not yet ready to handle request"))
 	}
 
@@ -144,7 +144,7 @@ func (p *podTolerationsPlugin) Validate(a admission.Attributes) error {
 		return nil
 	}
 
-	if !p.WaitForReady() {
+	if !p.WaitForReady(a.GetContext()) {
 		return admission.NewForbidden(a, fmt.Errorf("not yet ready to handle request"))
 	}
 

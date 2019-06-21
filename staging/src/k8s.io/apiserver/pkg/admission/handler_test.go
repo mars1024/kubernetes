@@ -17,6 +17,7 @@ limitations under the License.
 package admission
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -34,7 +35,7 @@ func TestWaitForReady(t *testing.T) {
 		return true
 	}
 	handler.SetReadyFunc(readyFunc)
-	if !handler.WaitForReady() {
+	if !handler.WaitForReady(context.Background()) {
 		t.Errorf("Expect ready for readyFunc returns ready immediately.")
 	}
 
@@ -44,7 +45,7 @@ func TestWaitForReady(t *testing.T) {
 	}
 	startTime := time.Now()
 	handler.SetReadyFunc(readyFunc)
-	if handler.WaitForReady() {
+	if handler.WaitForReady(context.Background()) {
 		t.Errorf("Expect not ready for readyFunc returns not ready immediately.")
 	}
 	if time.Since(startTime) < timeToWaitForReady {

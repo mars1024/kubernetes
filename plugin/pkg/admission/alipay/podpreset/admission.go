@@ -60,7 +60,7 @@ func (p *AlipayPodPreset) Validate(a admission.Attributes) (err error) {
 	if !isPodPresetConfigMap(a) {
 		return nil
 	}
-	if !p.WaitForReady() {
+	if !p.WaitForReady(a.GetContext()) {
 		return admission.NewForbidden(a, fmt.Errorf("not yet ready to handle request"))
 	}
 
@@ -94,7 +94,7 @@ func (p *AlipayPodPreset) Admit(a admission.Attributes) (err error) {
 	if !isPod(a) {
 		return nil
 	}
-	if !p.WaitForReady() {
+	if !p.WaitForReady(a.GetContext()) {
 		return admission.NewForbidden(a, fmt.Errorf("not yet ready to handle request"))
 	}
 

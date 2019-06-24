@@ -17,6 +17,7 @@ limitations under the License.
 package admission
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -38,6 +39,7 @@ type attributesRecord struct {
 	object      runtime.Object
 	oldObject   runtime.Object
 	userInfo    user.Info
+	ctx         context.Context
 
 	// other elements are always accessed in single goroutine.
 	// But ValidatingAdmissionWebhook add annotations concurrently.
@@ -45,6 +47,7 @@ type attributesRecord struct {
 	annotationsLock sync.RWMutex
 }
 
+// TODO: this method only can be used in test files, but not the real apiserver serve files.
 func NewAttributesRecord(object runtime.Object, oldObject runtime.Object, kind schema.GroupVersionKind, namespace, name string, resource schema.GroupVersionResource, subresource string, operation Operation, dryRun bool, userInfo user.Info) Attributes {
 	return &attributesRecord{
 		kind:        kind,
@@ -57,6 +60,23 @@ func NewAttributesRecord(object runtime.Object, oldObject runtime.Object, kind s
 		object:      object,
 		oldObject:   oldObject,
 		userInfo:    userInfo,
+		ctx:         context.Background(),
+	}
+}
+
+func NewAttributesRecordWithContext(object runtime.Object, oldObject runtime.Object, kind schema.GroupVersionKind, namespace, name string, resource schema.GroupVersionResource, subresource string, operation Operation, dryRun bool, userInfo user.Info, ctx context.Context) Attributes {
+	return &attributesRecord{
+		kind:        kind,
+		namespace:   namespace,
+		name:        name,
+		resource:    resource,
+		subresource: subresource,
+		operation:   operation,
+		dryRun:      dryRun,
+		object:      object,
+		oldObject:   oldObject,
+		userInfo:    userInfo,
+		ctx:         ctx,
 	}
 }
 
@@ -132,6 +152,10 @@ func (record *attributesRecord) AddAnnotation(key, value string) error {
 	}
 	record.annotations[key] = value
 	return nil
+}
+
+func (record *attributesRecord) GetContext() context.Context {
+	return record.ctx
 }
 
 func checkKeyFormat(key string) error {

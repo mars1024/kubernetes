@@ -108,7 +108,7 @@ func (p *podNodeSelector) Admit(a admission.Attributes) error {
 		// node selector of an initialized pod is immutable
 		return nil
 	}
-	if !p.WaitForReady() {
+	if !p.WaitForReady(a.GetContext()) {
 		return admission.NewForbidden(a, fmt.Errorf("not yet ready to handle request"))
 	}
 
@@ -135,7 +135,7 @@ func (p *podNodeSelector) Validate(a admission.Attributes) error {
 	if shouldIgnore(a) {
 		return nil
 	}
-	if !p.WaitForReady() {
+	if !p.WaitForReady(a.GetContext()) {
 		return admission.NewForbidden(a, fmt.Errorf("not yet ready to handle request"))
 	}
 

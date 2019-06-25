@@ -297,9 +297,11 @@ func getPodName(pod *v1.Pod) string {
 }
 
 func getPVCName(pvc *v1.PersistentVolumeClaim) string {
-	tenantInfo, err := util.TransformTenantInfoFromAnnotations(pvc.Annotations)
-	if err == nil {
-		return util.TransformTenantInfoToJointString(tenantInfo, "/") + "/" + pvc.Namespace + "/" + pvc.Name
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, err := util.TransformTenantInfoFromAnnotations(pvc.Annotations)
+		if err == nil {
+			return util.TransformTenantInfoToJointString(tenantInfo, "/") + "/" + pvc.Namespace + "/" + pvc.Name
+		}
 	}
 	return pvc.Namespace + "/" + pvc.Name
 }
@@ -617,9 +619,11 @@ func (b *volumeBinder) checkVolumeProvisions(pod *v1.Pod, claimsToProvision []*v
 func (b *volumeBinder) revertAssumedPVs(bindings []*bindingInfo) {
 	for _, bindingInfo := range bindings {
 		name := bindingInfo.pv.Name
-		tenantInfo, err := util.TransformTenantInfoFromAnnotations(bindingInfo.pv.Annotations)
-		if err == nil {
-			name = util.TransformTenantInfoToJointString(tenantInfo, "/") + "/" + name
+		if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+			tenantInfo, err := util.TransformTenantInfoFromAnnotations(bindingInfo.pv.Annotations)
+			if err == nil {
+				name = util.TransformTenantInfoToJointString(tenantInfo, "/") + "/" + name
+			}
 		}
 		b.pvCache.Restore(name)
 	}

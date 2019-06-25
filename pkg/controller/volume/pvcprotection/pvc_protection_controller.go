@@ -61,8 +61,8 @@ type Controller struct {
 // NewPVCProtectionController returns a new instance of PVCProtectionController.
 func NewPVCProtectionController(pvcInformer coreinformers.PersistentVolumeClaimInformer, podInformer coreinformers.PodInformer, cl clientset.Interface, storageObjectInUseProtectionFeatureEnabled bool) *Controller {
 	e := &Controller{
-		client: cl,
-		queue:  workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "pvcprotection"),
+		client:                              cl,
+		queue:                               workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "pvcprotection"),
 		storageObjectInUseProtectionEnabled: storageObjectInUseProtectionFeatureEnabled,
 	}
 	if cl != nil && cl.CoreV1().RESTClient().GetRateLimiter() != nil {
@@ -339,14 +339,24 @@ func (c *Controller) podAddedDeletedUpdated(obj interface{}, deleted bool) {
 	glog.V(4).Infof("Got event on pod %s/%s", pod.Namespace, pod.Name)
 
 	// Enqueue all PVCs that the pod uses
-	tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
-
+	var err error
+	var tenant multitenancy.TenantInfo
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenant, err = multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+		for _, volume := range pod.Spec.Volumes {
+			if volume.PersistentVolumeClaim != nil {
+				key := pod.Namespace + "/" + volume.PersistentVolumeClaim.ClaimName
+				if err == nil {
+					key = multitenancyutil.TransformTenantInfoToJointString(tenant, "/") + "/" + key
+					c.queue.Add(key)
+				}
+			}
+		}
+		return
+	}
 	for _, volume := range pod.Spec.Volumes {
 		if volume.PersistentVolumeClaim != nil {
 			key := pod.Namespace + "/" + volume.PersistentVolumeClaim.ClaimName
-			if err == nil {
-				key = multitenancyutil.TransformTenantInfoToJointString(tenant, "/") + "/" + key
-			}
 			c.queue.Add(key)
 		}
 	}

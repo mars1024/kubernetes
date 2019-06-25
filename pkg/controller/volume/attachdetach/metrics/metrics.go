@@ -166,8 +166,7 @@ func (collector *attachDetachStateCollector) getVolumeInUseCount() volumeCount {
 			tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
 			if err == nil {
 				cloned = collector.ShallowCopyWithTenant(tenant).(*attachDetachStateCollector)
-			}
-			if err != nil {
+			} else {
 				glog.Warningf("multi-tenancy enabled but failed to get tenant info: %s", err.Error())
 			}
 		}

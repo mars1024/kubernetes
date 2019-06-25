@@ -230,19 +230,27 @@ func indexByPVCKey(obj interface{}) ([]string, error) {
 	if len(pod.Spec.NodeName) == 0 || volumeutil.IsPodTerminated(pod, pod.Status) {
 		return []string{}, nil
 	}
-	tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
 	keys := []string{}
-	for _, podVolume := range pod.Spec.Volumes {
-		if pvcSource := podVolume.VolumeSource.PersistentVolumeClaim; pvcSource != nil {
-			if err == nil {
+	var err error
+	var tenant multitenancy.TenantInfo
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenant, err = multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+		if err != nil {
+			glog.V(4).Infof("pod %s doesn't contain any tenant info, skipped", pod.Name)
+			return []string{}, err
+		}
+		for _, podVolume := range pod.Spec.Volumes {
+			if pvcSource := podVolume.VolumeSource.PersistentVolumeClaim; pvcSource != nil {
 				keys = append(keys, fmt.Sprintf("%s/%s/%s",
 					multitenancyutil.TransformTenantInfoToJointString(tenant, "/"),
 					pod.Namespace, pvcSource.ClaimName))
-
-			} else {
-				keys = append(keys, fmt.Sprintf("%s/%s", pod.Namespace, pvcSource.ClaimName))
-
 			}
+		}
+		return keys, nil
+	}
+	for _, podVolume := range pod.Spec.Volumes {
+		if pvcSource := podVolume.VolumeSource.PersistentVolumeClaim; pvcSource != nil {
+			keys = append(keys, fmt.Sprintf("%s/%s", pod.Namespace, pvcSource.ClaimName))
 		}
 	}
 	return keys, nil
@@ -422,10 +430,13 @@ func (adc *attachDetachController) populateDesiredStateOfWorld() error {
 			// with the correct ones found on pods. The present in the ASW with no corresponding
 			// pod will be detached and the spec is irrelevant.
 			clonedAdc := adc
-			tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(podToAdd.Annotations)
-			if err == nil {
-				clonedAdc = adc.ShallowCopyWithTenant(tenant).(*attachDetachController)
+			if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+				tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(podToAdd.Annotations)
+				if err == nil {
+					clonedAdc = adc.ShallowCopyWithTenant(tenant).(*attachDetachController)
+				}
 			}
+
 			volumeSpec, err := util.CreateVolumeSpec(podVolume, podToAdd.Namespace, clonedAdc.pvcLister, clonedAdc.pvLister)
 			if err != nil {
 				glog.Errorf(
@@ -484,9 +495,11 @@ func (adc *attachDetachController) podAdd(obj interface{}) {
 		return
 	}
 	clonedAdc := adc
-	tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
-	if err == nil {
-		clonedAdc = adc.ShallowCopyWithTenant(tenant).(*attachDetachController)
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+		if err == nil {
+			clonedAdc = adc.ShallowCopyWithTenant(tenant).(*attachDetachController)
+		}
 	}
 	volumeActionFlag := util.DetermineVolumeAction(
 		pod,
@@ -512,9 +525,11 @@ func (adc *attachDetachController) podUpdate(oldObj, newObj interface{}) {
 		return
 	}
 	clonedAdc := adc
-	tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
-	if err == nil {
-		clonedAdc = adc.ShallowCopyWithTenant(tenant).(*attachDetachController)
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+		if err == nil {
+			clonedAdc = adc.ShallowCopyWithTenant(tenant).(*attachDetachController)
+		}
 	}
 	volumeActionFlag := util.DetermineVolumeAction(
 		pod,
@@ -531,9 +546,11 @@ func (adc *attachDetachController) podDelete(obj interface{}) {
 		return
 	}
 	clonedAdc := adc
-	tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
-	if err == nil {
-		clonedAdc = adc.ShallowCopyWithTenant(tenant).(*attachDetachController)
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+		if err == nil {
+			clonedAdc = adc.ShallowCopyWithTenant(tenant).(*attachDetachController)
+		}
 	}
 	util.ProcessPodVolumes(pod, false, /* addVolumes */
 		clonedAdc.desiredStateOfWorld, &clonedAdc.volumePluginMgr, clonedAdc.pvcLister, clonedAdc.pvLister)

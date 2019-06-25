@@ -21,6 +21,7 @@ package reconciler
 
 import (
 	"fmt"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
 	"strings"
 	"time"
 
@@ -30,6 +31,7 @@ import (
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/kubernetes/pkg/controller/volume/attachdetach/cache"
 	"k8s.io/kubernetes/pkg/controller/volume/attachdetach/metrics"
@@ -218,9 +220,11 @@ func (rc *reconciler) reconcile() {
 			spec := attachedVolume.VolumeSpec
 			clonedNSU := rc.nodeStatusUpdater
 			if spec != nil {
-				tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(spec.PersistentVolume.Annotations)
-				if err == nil {
-					clonedNSU = rc.nodeStatusUpdater.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(statusupdater.NodeStatusUpdater)
+				if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+					tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(spec.PersistentVolume.Annotations)
+					if err == nil {
+						clonedNSU = rc.nodeStatusUpdater.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(statusupdater.NodeStatusUpdater)
+					}
 				}
 			}
 			err = clonedNSU.UpdateNodeStatuses()

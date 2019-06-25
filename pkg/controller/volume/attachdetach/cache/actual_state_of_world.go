@@ -23,17 +23,19 @@ package cache
 
 import (
 	"fmt"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
 	"sync"
 	"time"
 
 	"github.com/golang/glog"
 
-	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 	multitenancycache "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/cache"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/kubernetes/pkg/volume"
 	"k8s.io/kubernetes/pkg/volume/util"
@@ -745,23 +747,29 @@ func getAttachedVolume(
 }
 
 func tenantNodeName(node *v1.Node) types.NodeName {
-	tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(node.Annotations)
 	nodeName := node.Name
-	if err == nil {
-		nodeName = multitenancyutil.TransformTenantInfoToJointString(tenant, "/") + "/" + nodeName
-		glog.V(5).Infof("transform nodeName to tenant based: %s", nodeName)
 
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(node.Annotations)
+		if err == nil {
+			nodeName = multitenancyutil.TransformTenantInfoToJointString(tenant, "/") + "/" + nodeName
+			glog.V(5).Infof("transform nodeName to tenant based: %s", nodeName)
+
+		}
 	}
+
 	return types.NodeName(nodeName)
 }
 
 func extractNodeName(nodeName types.NodeName) string {
 	node := string(nodeName)
-	_, _, simpleNode, err := multitenancycache.MultiTenancySplitKeyWrapper(func(key string) (string, string, error) {
-		return "", key, nil
-	})(node)
-	if err == nil {
-		node = simpleNode
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		_, _, simpleNode, err := multitenancycache.MultiTenancySplitKeyWrapper(func(key string) (string, string, error) {
+			return "", key, nil
+		})(node)
+		if err == nil {
+			node = simpleNode
+		}
 	}
 	return node
 }

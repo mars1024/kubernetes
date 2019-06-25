@@ -503,6 +503,9 @@ func Convert_extensions_DaemonSetUpdateStrategy_To_v1beta2_DaemonSetUpdateStrate
 			return err
 		}
 	}
+	if in.SurgingRollingUpdate != nil {
+		out.RollingUpdate = nil
+	}
 	return nil
 }
 
@@ -551,6 +554,12 @@ func Convert_v1beta2_DaemonSetUpdateStrategy_To_extensions_DaemonSetUpdateStrate
 		if err := Convert_v1beta2_RollingUpdateDaemonSet_To_extensions_RollingUpdateDaemonSet(in.RollingUpdate, out.RollingUpdate, s); err != nil {
 			return err
 		}
+	}
+	if extensions.DaemonSetUpdateStrategyType(in.Type) == extensions.SurgingRollingUpdateDaemonSetStrategyType {
+		// overwrite by old version
+		out.SurgingRollingUpdate = &extensions.SurgingRollingUpdateDaemonSet{}
+		maxSurge := intstr.FromInt(1)
+		out.SurgingRollingUpdate.MaxSurge = maxSurge
 	}
 	return nil
 }

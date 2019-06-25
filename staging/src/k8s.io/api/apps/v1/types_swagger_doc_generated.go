@@ -96,7 +96,7 @@ func (DaemonSetSpec) SwaggerDoc() map[string]string {
 }
 
 var map_DaemonSetStatus = map[string]string{
-	"": "DaemonSetStatus represents the current status of a daemon set.",
+	"":                       "DaemonSetStatus represents the current status of a daemon set.",
 	"currentNumberScheduled": "The number of nodes that are running at least 1 daemon pod and are supposed to run the daemon pod. More info: https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/",
 	"numberMisscheduled":     "The number of nodes that are running the daemon pod, but are not supposed to run the daemon pod. More info: https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/",
 	"desiredNumberScheduled": "The total number of nodes that should be running the daemon pod (including nodes correctly running the daemon pod). More info: https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/",
@@ -114,9 +114,10 @@ func (DaemonSetStatus) SwaggerDoc() map[string]string {
 }
 
 var map_DaemonSetUpdateStrategy = map[string]string{
-	"":              "DaemonSetUpdateStrategy is a struct used to control the update strategy for a DaemonSet.",
-	"type":          "Type of daemon set update. Can be \"RollingUpdate\" or \"OnDelete\". Default is RollingUpdate.",
-	"rollingUpdate": "Rolling update config params. Present only if type = \"RollingUpdate\".",
+	"":                     "DaemonSetUpdateStrategy is a struct used to control the update strategy for a DaemonSet.",
+	"type":                 "Type of daemon set update. Can be \"RollingUpdate\" or \"OnDelete\". Default is RollingUpdate.",
+	"rollingUpdate":        "Rolling update config params. Present only if type = \"RollingUpdate\".",
+	"surgingRollingUpdate": "Surging rolling update config params. Present only if type = \"SurgingRollingUpdate\".",
 }
 
 func (DaemonSetUpdateStrategy) SwaggerDoc() map[string]string {
@@ -360,6 +361,15 @@ var map_StatefulSetUpdateStrategy = map[string]string{
 
 func (StatefulSetUpdateStrategy) SwaggerDoc() map[string]string {
 	return map_StatefulSetUpdateStrategy
+}
+
+var map_SurgingRollingUpdateDaemonSet = map[string]string{
+	"":         "Spec to control the desired behavior of a daemon set surging rolling update.",
+	"maxSurge": "The maximum number of DaemonSet pods that can be scheduled above the desired number of pods during the update. Value can be an absolute number (ex: 5) or a percentage of the total number of DaemonSet pods at the start of the update (ex: 10%). The absolute number is calculated from the percentage by rounding up. This cannot be 0. The default value is 1. Example: when this is set to 30%, at most 30% of the total number of nodes that should be running the daemon pod (i.e. status.desiredNumberScheduled) can have 2 pods running at any given time. The update starts by starting replacements for at most 30% of those DaemonSet pods. Once the new pods are available it then stops the existing pods before proceeding onto other DaemonSet pods, thus ensuring that at most 130% of the desired final number of DaemonSet  pods are running at all times during the update.",
+}
+
+func (SurgingRollingUpdateDaemonSet) SwaggerDoc() map[string]string {
+	return map_SurgingRollingUpdateDaemonSet
 }
 
 // AUTO-GENERATED FUNCTIONS END HERE

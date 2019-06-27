@@ -18,11 +18,12 @@ package cacher
 
 import (
 	"fmt"
-	"k8s.io/kubernetes/pkg/registry/core/pod"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"k8s.io/kubernetes/pkg/registry/core/pod"
 
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -49,7 +50,7 @@ func makeTestPodDetails(name string, resourceVersion uint64, node string, labels
 			Namespace:       "ns",
 			Name:            name,
 			ResourceVersion: strconv.FormatUint(resourceVersion, 10),
-			Labels: labels,
+			Labels:          labels,
 		},
 		Spec: api.PodSpec{
 			NodeName: node,
@@ -80,7 +81,8 @@ func newTestWatchCache(capacity int, indexers *cache.Indexers) *watchCache {
 		return labels.Set(pod.Labels), fields.Set{"spec.nodeName": pod.Spec.NodeName}, false, nil
 	}
 	versioner := etcd.APIObjectVersioner{}
-	wc := newWatchCache(capacity, keyFunc, indexers, getAttrsFunc, versioner)
+	mockHandler := func(*watchCacheEvent) {}
+	wc := newWatchCache(capacity, keyFunc, indexers, mockHandler, getAttrsFunc, versioner)
 	wc.clock = clock.NewFakeClock(time.Now())
 	return wc
 }
@@ -438,7 +440,7 @@ func TestReflectorForWatchCache(t *testing.T) {
 
 func TestWaitUntilFreshAndListWithIndex(t *testing.T) {
 	store := newTestWatchCache(3, &cache.Indexers{
-		"label": pod.PodLabelIndexFunc("label"),
+		"label":         pod.PodLabelIndexFunc("label"),
 		"spec.nodeName": pod.NodeNameIndexFunc,
 	})
 

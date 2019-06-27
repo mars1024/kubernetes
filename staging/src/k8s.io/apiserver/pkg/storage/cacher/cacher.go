@@ -230,6 +230,8 @@ type Cacher struct {
 // its internal cache and updating its cache in the background based on the
 // given configuration.
 func NewCacherFromConfig(config Config) *Cacher {
+	stopCh := make(chan struct{})
+
 	watchCache := newWatchCache(config.CacheCapacity, config.KeyFunc, config.Indexers, config.GetAttrsFunc, config.Versioner)
 	listerWatcher := newCacherListerWatcher(config.Storage, config.ResourcePrefix, config.NewListFunc)
 	reflectorName := "storage/cacher.go:" + config.ResourcePrefix
@@ -242,7 +244,6 @@ func NewCacherFromConfig(config Config) *Cacher {
 		}
 	}
 
-	stopCh := make(chan struct{})
 	cacher := &Cacher{
 		ready:       newReady(),
 		storage:     config.Storage,
@@ -767,12 +768,9 @@ func (c *Cacher) isStopped() bool {
 
 // Stop implements the graceful termination.
 func (c *Cacher) Stop() {
-	// avoid stopping twice (note: cachers are shared with subresources)
-	if c.isStopped() {
-		return
-	}
 	c.stopLock.Lock()
 	if c.stopped {
+		// avoid stopping twice (note: cachers are shared with subresources)
 		c.stopLock.Unlock()
 		return
 	}

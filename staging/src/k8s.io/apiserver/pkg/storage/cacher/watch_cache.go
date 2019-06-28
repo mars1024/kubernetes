@@ -17,6 +17,7 @@ limitations under the License.
 package cacher
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"sync"
@@ -326,7 +327,7 @@ func (w *watchCache) List() []interface{} {
 // waitUntilFreshAndBlock waits until cache is at least as fresh as given <resourceVersion>.
 // NOTE: This function acquired lock and doesn't release it.
 // You HAVE TO explicitly call w.RUnlock() after this function.
-func (w *watchCache) waitUntilFreshAndBlock(resourceVersion uint64, trace *utiltrace.Trace) error {
+func (w *watchCache) waitUntilFreshAndBlock(ctx context.Context, resourceVersion uint64, trace *utiltrace.Trace) error {
 	startTime := w.clock.Now()
 	go func() {
 		// Wake us up when the time limit has expired.  The docs
@@ -336,7 +337,10 @@ func (w *watchCache) waitUntilFreshAndBlock(resourceVersion uint64, trace *utilt
 		// it will wake up the loop below sometime after the broadcast,
 		// we don't need to worry about waking it up before the time
 		// has expired accidentally.
-		<-w.clock.After(blockTimeout)
+		select {
+		case <-w.clock.After(blockTimeout):
+		case <-ctx.Done():
+		}
 		w.cond.Broadcast()
 	}()
 
@@ -349,6 +353,11 @@ func (w *watchCache) waitUntilFreshAndBlock(resourceVersion uint64, trace *utilt
 			// Timeout with retry after 1 second.
 			return errors.NewTimeoutError(fmt.Sprintf("Too large resource version: %v, current: %v", resourceVersion, w.resourceVersion), 1)
 		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
 		w.cond.Wait()
 	}
 	if trace != nil {
@@ -358,8 +367,8 @@ func (w *watchCache) waitUntilFreshAndBlock(resourceVersion uint64, trace *utilt
 }
 
 // WaitUntilFreshAndList returns list of pointers to <storeElement> objects.
-func (w *watchCache) WaitUntilFreshAndList(resourceVersion uint64, trace *utiltrace.Trace) ([]interface{}, uint64, error) {
-	err := w.waitUntilFreshAndBlock(resourceVersion, trace)
+func (w *watchCache) WaitUntilFreshAndList(ctx context.Context, resourceVersion uint64, trace *utiltrace.Trace) ([]interface{}, uint64, error) {
+	err := w.waitUntilFreshAndBlock(ctx, resourceVersion, trace)
 	defer w.RUnlock()
 	if err != nil {
 		return nil, 0, err
@@ -368,8 +377,8 @@ func (w *watchCache) WaitUntilFreshAndList(resourceVersion uint64, trace *utiltr
 }
 
 // Don't change the WaitUntilFreshAndList for upstream compatibility.
-func (w *watchCache) WaitUntilFreshAndListWithIndex(resourceVersion uint64, matchValues []storage.MatchValue, trace *utiltrace.Trace) ([]interface{}, uint64, error) {
-	err := w.waitUntilFreshAndBlock(resourceVersion, trace)
+func (w *watchCache) WaitUntilFreshAndListWithIndex(ctx context.Context, resourceVersion uint64, matchValues []storage.MatchValue, trace *utiltrace.Trace) ([]interface{}, uint64, error) {
+	err := w.waitUntilFreshAndBlock(ctx, resourceVersion, trace)
 	defer w.RUnlock()
 	if err != nil {
 		return nil, 0, err
@@ -386,8 +395,8 @@ func (w *watchCache) WaitUntilFreshAndListWithIndex(resourceVersion uint64, matc
 }
 
 // WaitUntilFreshAndGet returns a pointers to <storeElement> object.
-func (w *watchCache) WaitUntilFreshAndGet(resourceVersion uint64, key string, trace *utiltrace.Trace) (interface{}, bool, uint64, error) {
-	err := w.waitUntilFreshAndBlock(resourceVersion, trace)
+func (w *watchCache) WaitUntilFreshAndGet(ctx context.Context, resourceVersion uint64, key string, trace *utiltrace.Trace) (interface{}, bool, uint64, error) {
+	err := w.waitUntilFreshAndBlock(ctx, resourceVersion, trace)
 	defer w.RUnlock()
 	if err != nil {
 		return nil, false, 0, err

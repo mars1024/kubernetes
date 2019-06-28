@@ -452,7 +452,7 @@ func (c *Cacher) Get(ctx context.Context, key string, resourceVersion string, ob
 		return err
 	}
 
-	obj, exists, readResourceVersion, err := c.watchCache.WaitUntilFreshAndGet(getRV, key, nil)
+	obj, exists, readResourceVersion, err := c.watchCache.WaitUntilFreshAndGet(ctx, getRV, key, nil)
 	if err != nil {
 		return err
 	}
@@ -518,7 +518,7 @@ func (c *Cacher) GetToList(ctx context.Context, key string, resourceVersion stri
 	}
 	filter := filterWithAttrsFunction(key, pred)
 
-	obj, exists, readResourceVersion, err := c.watchCache.WaitUntilFreshAndGet(listRV, key, trace)
+	obj, exists, readResourceVersion, err := c.watchCache.WaitUntilFreshAndGet(ctx, listRV, key, trace)
 	if err != nil {
 		return err
 	}
@@ -587,7 +587,7 @@ func (c *Cacher) List(ctx context.Context, key string, resourceVersion string, p
 	}
 	filter := filterWithAttrsFunction(key, pred)
 
-	objs, readResourceVersion, err := c.watchCache.WaitUntilFreshAndListWithIndex(listRV, pred.MatcherIndex(), trace)
+	objs, readResourceVersion, err := c.watchCache.WaitUntilFreshAndListWithIndex(ctx, listRV, pred.MatcherIndex(), trace)
 	if err != nil {
 		return err
 	}

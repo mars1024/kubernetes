@@ -470,6 +470,12 @@ const (
 	// add Pod.Spec.DNSConfig.Searches to Pod's /etc/resolv.conf at first
 	// github issue see: https://github.com/kubernetes/kubernetes/issues/78206
 	PodSearchesFirst utilfeature.Feature = "PodSearchesFirst"
+
+	// owner: @fankang.fk (fankang.fk@alipay.com)
+	// alpha: v1.12
+	//
+	// Don't set UTSMode=host when pod is host network mode.
+	DisableHostUTSMode utilfeature.Feature = "DisableHostUTSMode"
 )
 
 func init() {
@@ -552,6 +558,7 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	IgnoreSidecarContainerReady:                 {Default: false, PreRelease: utilfeature.Alpha},
 	EnsurePodSuccess:                            {Default: false, PreRelease: utilfeature.Alpha},
 	PodSearchesFirst:                            {Default: false, PreRelease: utilfeature.Alpha},
+	DisableHostUTSMode:                          {Default: false, PreRelease: utilfeature.Alpha},
 
 	// inherited features from generic apiserver, relisted here to get a conflict if it is changed
 	// unintentionally on either side:

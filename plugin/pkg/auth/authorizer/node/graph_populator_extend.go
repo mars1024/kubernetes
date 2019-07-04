@@ -27,8 +27,10 @@ func inPlaceControlPod(pod *corev1.Pod) bool {
 	}
 
 	for _, ownerReference := range ownerReferences {
-		if (ownerReference.Controller != nil && *ownerReference.Controller) && ownerReference.Kind == "InPlaceSet" {
-			return true
+		if ownerReference.Controller != nil && *ownerReference.Controller {
+			if ownerReference.Kind == "InPlaceSet" || ownerReference.Kind == "CafeServerlessSet" {
+				return true
+			}
 		}
 	}
 	return false

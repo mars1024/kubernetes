@@ -49,6 +49,26 @@ func TestInPlaceControlPod(t *testing.T) {
 			},
 			inPlaceControl: true,
 		},
+		"pod has owner reference for serverless": {
+			pod: &corev1.Pod{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "v1",
+					Kind:       "Pod",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					UID:       "12345678",
+					Name:      "foo",
+					Namespace: "new",
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							Controller: &controller,
+							Kind:       "CafeServerlessSet",
+						},
+					},
+				},
+			},
+			inPlaceControl: true,
+		},
 		"snake pod": {
 			pod: &corev1.Pod{
 				TypeMeta: metav1.TypeMeta{
@@ -66,7 +86,7 @@ func TestInPlaceControlPod(t *testing.T) {
 	} {
 		inPlaceControl := inPlaceControlPod(testCase.pod)
 		if inPlaceControl != testCase.inPlaceControl {
-			t.Errorf("Case %s: expect inPlaceControl %s bug got %s", caseName, testCase.inPlaceControl, inPlaceControl)
+			t.Errorf("Case %s: expect inPlaceControl %t bug got %t", caseName, testCase.inPlaceControl, inPlaceControl)
 		}
 
 	}

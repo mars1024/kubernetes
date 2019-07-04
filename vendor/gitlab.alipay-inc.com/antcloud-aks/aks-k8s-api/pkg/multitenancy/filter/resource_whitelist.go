@@ -79,6 +79,7 @@ var (
 	AKSSupportedGroupSuffixes = []string{
 		".istio.io",
 		".knative.dev",
+		".sigma.alipay.com",
 	}
 )
 

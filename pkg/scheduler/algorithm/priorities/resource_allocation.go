@@ -18,6 +18,7 @@ package priorities
 
 import (
 	"fmt"
+	"k8s.io/kubernetes/pkg/scheduler/convertible"
 
 	"github.com/golang/glog"
 	"k8s.io/api/core/v1"
@@ -44,6 +45,14 @@ func (r *ResourceAllocationPriority) PriorityMap(
 	if node == nil {
 		return schedulerapi.HostPriority{}, fmt.Errorf("node not found")
 	}
+
+	if convertible.ShouldSkipResourceAllocationPriority(r.Name, pod, node) {
+		return schedulerapi.HostPriority{
+			Host:  node.Name,
+			Score: int(0),
+		}, nil
+	}
+
 	allocatable := nodeInfo.AllocatableResource()
 
 	var requested schedulercache.Resource

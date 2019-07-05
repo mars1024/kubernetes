@@ -55,6 +55,7 @@ func TestDefaultPriorities(t *testing.T) {
 	result := sets.NewString(
 		"SelectorSpreadPriority",
 		"InterPodAffinityPriority",
+		"MostRequestedPriority",
 		"LeastRequestedPriority",
 		"LeastRequestedPriority2",
 		"MostRequestedPriority2",

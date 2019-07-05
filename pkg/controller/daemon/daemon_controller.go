@@ -871,6 +871,7 @@ func (dsc *DaemonSetsController) podsShouldBeOnNode(
 	node *v1.Node,
 	nodeToDaemonPods map[string][]*v1.Pod,
 	ds *apps.DaemonSet,
+	hash string,
 ) (nodesNeedingDaemonPods, podsToDelete []string, failedPodsObserved int, err error) {
 
 	wantToRun, shouldSchedule, shouldContinueRunning, err := dsc.nodeShouldRunDaemonPod(node, ds)
@@ -882,6 +883,10 @@ func (dsc *DaemonSetsController) podsShouldBeOnNode(
 	dsKey, _ := cache.MetaNamespaceKeyFunc(ds)
 
 	dsc.removeSuspendedDaemonPods(node.Name, dsKey)
+
+	// Ignore the pods that belong to previous generations
+	// Only applies when the update strategy is SurgingRollingUpdate
+	daemonPods = dsc.pruneSurgingDaemonPods(ds, daemonPods, hash)
 
 	switch {
 	case wantToRun && !shouldSchedule:
@@ -968,7 +973,7 @@ func (dsc *DaemonSetsController) manage(ds *apps.DaemonSet, hash string) error {
 	var failedPodsObserved int
 	for _, node := range nodeList {
 		nodesNeedingDaemonPodsOnNode, podsToDeleteOnNode, failedPodsObservedOnNode, err := dsc.podsShouldBeOnNode(
-			node, nodeToDaemonPods, ds)
+			node, nodeToDaemonPods, ds, hash)
 
 		if err != nil {
 			continue
@@ -996,7 +1001,7 @@ func (dsc *DaemonSetsController) manage(ds *apps.DaemonSet, hash string) error {
 var matchFieldVersion = utilversion.MustParseSemantic("v1.11.0")
 
 // syncNodes deletes given pods and creates new daemon set pods on the given nodes
-// returns slice with erros if any
+// returns slice with errors if any
 func (dsc *DaemonSetsController) syncNodes(ds *apps.DaemonSet, podsToDelete, nodesNeedingDaemonPods []string, hash string) error {
 	// We need to set expectations before creating/deleting pods to avoid race conditions.
 	dsKey, err := controller.KeyFunc(ds)
@@ -1303,6 +1308,8 @@ func (dsc *DaemonSetsController) syncDaemonSet(key string) error {
 		case apps.OnDeleteDaemonSetStrategyType:
 		case apps.RollingUpdateDaemonSetStrategyType:
 			err = dsc.rollingUpdate(ds, hash)
+		case apps.SurgingRollingUpdateDaemonSetStrategyType:
+			err = dsc.surgingRollingUpdate(ds, hash)
 		}
 		if err != nil {
 			return err

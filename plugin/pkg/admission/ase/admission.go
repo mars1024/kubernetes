@@ -51,9 +51,6 @@ var AdmitFuncs = map[string][]func(ase *Ase, a admission.Attributes) error{
 }
 
 var ValidateFuncs = map[string][]func(ase *Ase, a admission.Attributes) error{
-	"Node": {
-		ValidateFuncCheckNodeAnnotations,
-	},
 	"Pod": {
 		ValidateFuncCheckImagePermission,
 	},
@@ -868,34 +865,6 @@ var ValidateFuncCheckImagePermission = func(ase *Ase, a admission.Attributes) er
 			return admission.NewForbidden(a, errors.New("check image permission failed"))
 		}
 
-	}
-
-	return nil
-}
-
-var ValidateFuncCheckNodeAnnotations = func(ase *Ase, a admission.Attributes) error {
-	kubeResource := a.GetObject().(KubeResource)
-	labels := kubeResource.GetLabels()
-	subClusterName, _ := getSubClusterName(kubeResource)
-
-	// 如果是ASE托管的Node，就需要检查必要的Label、Annotation是否存在
-	requiredLabels := []string{LabelNodeGroupName}
-
-	for _, labelKey := range requiredLabels {
-		_, ok := labels[labelKey]
-		if !ok {
-			return admission.NewForbidden(a, errors.New("missing required label for node: "+labelKey))
-		}
-	}
-
-	clusterName, _ := labels[LabelCluster]
-	nodeGroupName, _ := labels[LabelNodeGroupName]
-
-	nodeGroupConfigMapName := "aks-sub-cluster-node-group-config-" + subClusterName + "-" + nodeGroupName
-	configMap := ase.GetConfigMapByName(clusterName, nodeGroupConfigMapName)
-
-	if configMap == nil {
-		return admission.NewForbidden(a, errors.New("invalid node group "+nodeGroupName+", config map "+nodeGroupConfigMapName+" not found"))
 	}
 
 	return nil

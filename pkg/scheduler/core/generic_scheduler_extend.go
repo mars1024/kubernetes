@@ -3,7 +3,6 @@ package core
 import (
 	"encoding/json"
 	"fmt"
-
 	"github.com/golang/glog"
 	"k8s.io/api/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
@@ -50,7 +49,16 @@ type GenericSchedulerExtend struct {
 
 // Allocate allocates the resources for the pod on given host
 func (ge *GenericSchedulerExtend) Allocate(pod *v1.Pod, host string) error {
+	alloc := util.AllocSpecFromPod(pod)
+	if alloc == nil {
+		// Native pod goes native way
+		return nil
+	}
 	nodeInfo := ge.cachedNodeInfoMap[host]
+	if util.LocalInfoFromNode(nodeInfo.Node()) == nil {
+		glog.V(4).Infof("node %s is nil or not eligible for cpuset Allocation", host)
+		return nil
+	}
 	allocator := allocators.NewCPUAllocator(nodeInfo)
 	result, err := allocator.Allocate(pod)
 	if err != nil {

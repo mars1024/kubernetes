@@ -28,7 +28,7 @@ func (nsu *nodeStatusUpdater) tenantFromNodeName(nodeName types.NodeName) (multi
 	}
 	return tenant, err
 }
-func extractNodeName(nodeName types.NodeName) string {
+func extractNodeName(nodeName types.NodeName) types.NodeName {
 	node := string(nodeName)
 	_, _, simpleNode, err := multitenancycache.MultiTenancySplitKeyWrapper(func(key string) (string, string, error) {
 		return "", key, nil
@@ -36,5 +36,5 @@ func extractNodeName(nodeName types.NodeName) string {
 	if err == nil {
 		node = simpleNode
 	}
-	return node
+	return types.NodeName(node)
 }

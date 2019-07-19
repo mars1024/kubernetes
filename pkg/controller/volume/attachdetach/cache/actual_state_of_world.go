@@ -724,7 +724,7 @@ func (asw *actualStateOfWorld) getNodeName(nodeName types.NodeName) (string, err
 	} else {
 		asw.populateNodeCache()
 		if len(asw.nodesCache[tmpNodeName]) == 0 {
-			return string(nodeName), fmt.Errorf("")
+			return string(nodeName), fmt.Errorf("no cache populated, return %s directly", nodeName)
 		}
 	}
 	tmpNodeName = asw.nodesCache[tmpNodeName]

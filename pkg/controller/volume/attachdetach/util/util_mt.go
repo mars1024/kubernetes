@@ -16,6 +16,8 @@ func TenantNodeNameFromPod(pod *v1.Pod) types.NodeName {
 		if err == nil && nodeName != "" {
 			nodeName = multitenancyutil.TransformTenantInfoToJointString(tenant, "/") + "/" + nodeName
 			glog.V(5).Infof("transform nodeName to tenant based: %s", nodeName)
+		} else if err != nil {
+			glog.Errorf("failed to TenantNodeNameFromPod: %s", err.Error())
 		}
 	}
 	return types.NodeName(nodeName)

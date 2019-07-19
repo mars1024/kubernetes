@@ -231,29 +231,31 @@ func indexByPVCKey(obj interface{}) ([]string, error) {
 		return []string{}, nil
 	}
 	keys := []string{}
-	var err error
-	var tenant multitenancy.TenantInfo
+	var tenant *multitenancy.TenantInfo
 	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
-		tenant, err = multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+		tnt, err := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
 		if err != nil {
 			glog.V(4).Infof("pod %s doesn't contain any tenant info, skipped", pod.Name)
 			return []string{}, err
 		}
-		for _, podVolume := range pod.Spec.Volumes {
-			if pvcSource := podVolume.VolumeSource.PersistentVolumeClaim; pvcSource != nil {
-				keys = append(keys, fmt.Sprintf("%s/%s/%s",
-					multitenancyutil.TransformTenantInfoToJointString(tenant, "/"),
-					pod.Namespace, pvcSource.ClaimName))
-			}
-		}
-		return keys, nil
+		tenant = &tnt
 	}
 	for _, podVolume := range pod.Spec.Volumes {
 		if pvcSource := podVolume.VolumeSource.PersistentVolumeClaim; pvcSource != nil {
-			keys = append(keys, fmt.Sprintf("%s/%s", pod.Namespace, pvcSource.ClaimName))
+			keys = append(keys, genNamespacedKey(tenant, pod.Namespace, pvcSource.ClaimName))
 		}
 	}
 	return keys, nil
+}
+
+func genNamespacedKey(tenant *multitenancy.TenantInfo, namespace, name string) string {
+	if tenant != nil {
+		return fmt.Sprintf("%s/%s/%s",
+			multitenancyutil.TransformTenantInfoToJointString(*tenant, "/"),
+			namespace, name)
+	} else {
+		return fmt.Sprintf("%s/%s", namespace, name)
+	}
 }
 
 type attachDetachController struct {
@@ -416,8 +418,7 @@ func (adc *attachDetachController) getNodeVolumeDevicePath(
 func (adc *attachDetachController) populateDesiredStateOfWorld() error {
 	glog.V(5).Infof("Populating DesiredStateOfworld")
 
-	pods, err := adc.podLister.List(labels.Everything()) //TODO(yuzhi.wx) using pager for progressive fetch
-	//podList, err := adc.kubeClient.CoreV1().Pods(metav1.NamespaceAll).List(metav1.ListOptions{})
+	pods, err := adc.podLister.List(labels.Everything())
 	if err != nil {
 		return err
 	}
@@ -434,6 +435,8 @@ func (adc *attachDetachController) populateDesiredStateOfWorld() error {
 				tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(podToAdd.Annotations)
 				if err == nil {
 					clonedAdc = adc.ShallowCopyWithTenant(tenant).(*attachDetachController)
+				} else {
+					return err
 				}
 			}
 
@@ -499,6 +502,9 @@ func (adc *attachDetachController) podAdd(obj interface{}) {
 		tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
 		if err == nil {
 			clonedAdc = adc.ShallowCopyWithTenant(tenant).(*attachDetachController)
+		} else {
+			glog.Errorf("[podAdd]failed to get tenant info from pod: %s", err.Error())
+			return
 		}
 	}
 	volumeActionFlag := util.DetermineVolumeAction(
@@ -529,6 +535,9 @@ func (adc *attachDetachController) podUpdate(oldObj, newObj interface{}) {
 		tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
 		if err == nil {
 			clonedAdc = adc.ShallowCopyWithTenant(tenant).(*attachDetachController)
+		} else {
+			glog.Errorf("[podUpdate]failed to get tenant info from pod: %s", err.Error())
+			return
 		}
 	}
 	volumeActionFlag := util.DetermineVolumeAction(
@@ -550,6 +559,9 @@ func (adc *attachDetachController) podDelete(obj interface{}) {
 		tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
 		if err == nil {
 			clonedAdc = adc.ShallowCopyWithTenant(tenant).(*attachDetachController)
+		} else {
+			glog.Errorf("[podDelete]failed to get tenant info from pod: %s", err.Error())
+			return
 		}
 	}
 	util.ProcessPodVolumes(pod, false, /* addVolumes */

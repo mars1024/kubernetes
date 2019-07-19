@@ -349,6 +349,8 @@ func (c *Controller) podAddedDeletedUpdated(obj interface{}, deleted bool) {
 				if err == nil {
 					key = multitenancyutil.TransformTenantInfoToJointString(tenant, "/") + "/" + key
 					c.queue.Add(key)
+				} else {
+					glog.Errorf("failed to add queue: %s", err.Error())
 				}
 			}
 		}

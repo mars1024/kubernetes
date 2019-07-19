@@ -65,9 +65,9 @@ func NewMutatingWebhook(configFile io.Reader) (*Plugin, error) {
 	p := &Plugin{}
 	var err error
 	if !feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
-		p.Webhook, err = generic.NewWebhook(handler, configFile, configuration.NewMutatingWebhookConfigurationManager, newMutatingDispatcher(p))
+		p.Webhook, err = generic.NewWebhookWithObjectSelectorProxy(generic.NewWebhook, handler, configFile, configuration.NewMutatingWebhookConfigurationManager, newMutatingDispatcher(p))
 	} else {
-		p.Webhook, err = generic.NewWebhook(handler, configFile, multitenancyconfiguration.NewMutatingWebhookConfigurationManager, newMutatingDispatcher(p))
+		p.Webhook, err = generic.NewWebhookWithObjectSelectorProxy(generic.NewWebhook, handler, configFile, multitenancyconfiguration.NewMutatingWebhookConfigurationManager, newMutatingDispatcher(p))
 	}
 	if err != nil {
 		return nil, err

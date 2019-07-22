@@ -59,9 +59,9 @@ func NewValidatingAdmissionWebhook(configFile io.Reader) (*Plugin, error) {
 	var err error
 	var webhook *generic.Webhook
 	if !feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
-		webhook, err = generic.NewWebhookWithObjectSelectorProxy(generic.NewWebhook, handler, configFile, configuration.NewMutatingWebhookConfigurationManager, newValidatingDispatcher)
+		webhook, err = generic.NewValidatingWebhookWithObjectSelectorProxy(generic.NewWebhook, handler, configFile, configuration.NewValidatingWebhookConfigurationManager, newValidatingDispatcher)
 	} else {
-		webhook, err = generic.NewWebhookWithObjectSelectorProxy(generic.NewWebhook, handler, configFile, multitenancyconfiguration.NewMutatingWebhookConfigurationManager, newValidatingDispatcher)
+		webhook, err = generic.NewValidatingWebhookWithObjectSelectorProxy(generic.NewWebhook, handler, configFile, multitenancyconfiguration.NewValidatingWebhookConfigurationManager, newValidatingDispatcher)
 	}
 	if err != nil {
 		return nil, err
@@ -76,8 +76,8 @@ func (a *Plugin) Validate(attr admission.Attributes) error {
 		if err != nil {
 			return err
 		}
-		var aInterface interface{} = a.Webhook
-		a.Webhook = aInterface.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(*generic.Webhook)
+		var aInterface interface{} = a
+		a = aInterface.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(*Plugin)
 	}
 	return a.Webhook.Dispatch(attr)
 }

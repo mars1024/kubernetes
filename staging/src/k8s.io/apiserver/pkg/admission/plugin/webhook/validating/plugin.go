@@ -59,9 +59,9 @@ func NewValidatingAdmissionWebhook(configFile io.Reader) (*Plugin, error) {
 	var err error
 	var webhook *generic.Webhook
 	if !feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
-		webhook, err = generic.NewWebhook(handler, configFile, configuration.NewMutatingWebhookConfigurationManager, newValidatingDispatcher)
+		webhook, err = generic.NewWebhookWithObjectSelectorProxy(generic.NewWebhook, handler, configFile, configuration.NewMutatingWebhookConfigurationManager, newValidatingDispatcher)
 	} else {
-		webhook, err = generic.NewWebhook(handler, configFile, multitenancyconfiguration.NewMutatingWebhookConfigurationManager, newValidatingDispatcher)
+		webhook, err = generic.NewWebhookWithObjectSelectorProxy(generic.NewWebhook, handler, configFile, multitenancyconfiguration.NewMutatingWebhookConfigurationManager, newValidatingDispatcher)
 	}
 	if err != nil {
 		return nil, err

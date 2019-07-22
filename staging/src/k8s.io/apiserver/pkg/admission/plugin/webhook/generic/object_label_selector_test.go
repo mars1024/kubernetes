@@ -1,21 +1,24 @@
 package generic
 
 import (
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"io"
-	"k8s.io/apiserver/pkg/admission"
-	"k8s.io/apiserver/pkg/admission/plugin/webhook/namespace"
-	"k8s.io/apiserver/pkg/util/webhook"
-	"k8s.io/client-go/informers"
-	"k8s.io/client-go/kubernetes/fake"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
 	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apiserver/pkg/admission"
+	"k8s.io/apiserver/pkg/admission/plugin/webhook/namespace"
+	"k8s.io/apiserver/pkg/util/feature"
+	featuretesting "k8s.io/apiserver/pkg/util/feature/testing"
+	"k8s.io/apiserver/pkg/util/webhook"
+	"k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes/fake"
 )
 
 func TestObjectLabelSelectorParsing(t *testing.T) {
@@ -47,7 +50,7 @@ func TestObjectLabelSelectorParsing(t *testing.T) {
 			webhook: &admissionregistrationv1beta1.ValidatingWebhookConfiguration{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						ObjectLabelSelectorAnnotationQualifiedPrefix + "foo": "bar",
+						ObjectLabelSelectorAnnotationKey: `{"foo": "bar"}`,
 					},
 				},
 			},
@@ -62,14 +65,30 @@ func TestObjectLabelSelectorParsing(t *testing.T) {
 			webhook: &admissionregistrationv1beta1.ValidatingWebhookConfiguration{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						ObjectLabelSelectorAnnotationQualifiedPrefix + "foo": "bar",
-						"tik": "tok",
+						ObjectLabelSelectorAnnotationKey: `{"foo": "bar", "tik": "tok"}`,
 					},
 				},
 			},
 			expectedSelector: labels.SelectorFromValidatedSet(
 				map[string]string{
 					"foo": "bar",
+					"tik": "tok",
+				},
+			),
+		},
+		{
+			name: "normal webhook w/ foo/bar selector should work 3",
+			webhook: &admissionregistrationv1beta1.ValidatingWebhookConfiguration{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						ObjectLabelSelectorAnnotationKey: `{"example.io/foo": "bar", "example.io/tik": "tok"}`,
+					},
+				},
+			},
+			expectedSelector: labels.SelectorFromValidatedSet(
+				map[string]string{
+					"example.io/foo": "bar",
+					"example.io/tik": "tok",
 				},
 			),
 		},
@@ -78,16 +97,38 @@ func TestObjectLabelSelectorParsing(t *testing.T) {
 			webhook: &admissionregistrationv1beta1.ValidatingWebhookConfiguration{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						ObjectLabelSelectorAnnotationQualifiedPrefix: "bar",
+						ObjectLabelSelectorAnnotationKey: `{"": "bar"}`,
+					},
+				},
+			},
+			expectedSelector: labels.Everything(),
+		},
+		{
+			name: "webhook w/ heading slash should fail",
+			webhook: &admissionregistrationv1beta1.ValidatingWebhookConfiguration{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						ObjectLabelSelectorAnnotationKey: `{"/foo": "bar"}`,
+					},
+				},
+			},
+			expectedSelector: labels.Everything(),
+		},
+		{
+			name: "webhook w/ non-json content should fail",
+			webhook: &admissionregistrationv1beta1.ValidatingWebhookConfiguration{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						ObjectLabelSelectorAnnotationKey: `{"foo": "{bar"}`,
 					},
 				},
 			},
 			expectedSelector: labels.Everything(),
 		},
 	}
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			assert.Equal(t, GetObjectLabelSelector(testCase.webhook), testCase.expectedSelector)
+	for i := range testCases {
+		t.Run(testCases[i].name, func(t *testing.T) {
+			assert.Equal(t, testCases[i].expectedSelector, GetObjectLabelSelector(testCases[i].webhook))
 		})
 	}
 }
@@ -105,7 +146,6 @@ func (s *mockSource) HasSynced() bool {
 }
 
 func TestNewWebhookProxyConstructor(t *testing.T) {
-
 	fakeClient := fake.NewSimpleClientset()
 	fakeInformer := informers.NewSharedInformerFactory(fakeClient, 0)
 	stopCh := make(chan struct{})
@@ -144,7 +184,7 @@ func TestNewWebhookProxyConstructor(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test1",
 			Annotations: map[string]string{
-				ObjectLabelSelectorAnnotationQualifiedPrefix + "m-foo": "m-bar",
+				ObjectLabelSelectorAnnotationKey: `{"m-foo": "m-bar"}`,
 			},
 		},
 		Webhooks: []admissionregistrationv1beta1.Webhook{h1, h2},
@@ -165,7 +205,7 @@ func TestNewWebhookProxyConstructor(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test2",
 			Annotations: map[string]string{
-				ObjectLabelSelectorAnnotationQualifiedPrefix + "v-foo": "v-bar",
+				ObjectLabelSelectorAnnotationKey: `{"v-foo": "v-bar"}`,
 			},
 		},
 		Webhooks: []admissionregistrationv1beta1.Webhook{h3, h4},
@@ -187,4 +227,15 @@ func TestNewWebhookProxyConstructor(t *testing.T) {
 	time.Sleep(time.Second * 1)
 	actual = w.selectorGetter(&h1)
 	assert.Equal(t, labels.Everything(), actual)
+}
+
+func TestNewWebhookProxyConstructorWithMultitenancy(t *testing.T) {
+	require.NoError(t, feature.DefaultFeatureGate.Add(map[feature.Feature]feature.FeatureSpec{
+		multitenancy.FeatureName: {
+			Default:    false,
+			PreRelease: feature.Alpha,
+		},
+	}))
+	defer featuretesting.SetFeatureGateDuringTest(t, feature.DefaultFeatureGate, multitenancy.FeatureName, true)()
+	TestNewWebhookProxyConstructor(t)
 }

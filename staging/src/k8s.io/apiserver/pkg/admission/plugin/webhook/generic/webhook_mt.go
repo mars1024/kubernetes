@@ -17,12 +17,16 @@ limitations under the License.
 package generic
 
 import (
+	"strings"
+
 	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
 	multitenancymeta "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/meta"
-	"k8s.io/apiserver/pkg/util/webhook"
+	"k8s.io/api/admissionregistration/v1beta1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apiserver/pkg/admission/plugin/webhook/namespace"
-	"k8s.io/client-go/listers/core/v1"
+	"k8s.io/apiserver/pkg/util/webhook"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/listers/core/v1"
 )
 
 // ShouldCallHook makes a decision on whether to call the webhook or not by the attribute.
@@ -34,5 +38,14 @@ func (a *Webhook) ShallowCopyWithTenant(tenant multitenancy.TenantInfo) (interfa
 		NamespaceLister: a.namespaceMatcher.NamespaceLister.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(v1.NamespaceLister),
 		Client:          a.namespaceMatcher.Client.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(kubernetes.Interface),
 	}
+	copied.selectorGetter = func(h *v1beta1.Webhook) labels.Selector {
+		copiedHook := h.DeepCopy()
+		injectTenantIntoWebhookName(tenant, copiedHook)
+		return a.selectorGetter(copiedHook)
+	}
 	return &copied
+}
+
+func injectTenantIntoWebhookName(tenant multitenancy.TenantInfo, h *v1beta1.Webhook) {
+	h.Name = strings.Join([]string{tenant.GetTenantID(), tenant.GetWorkspaceID(), tenant.GetClusterID(), h.Name}, "/")
 }

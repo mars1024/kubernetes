@@ -20,6 +20,8 @@ package statusupdater
 
 import (
 	"github.com/golang/glog"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -60,16 +62,19 @@ func (nsu *nodeStatusUpdater) UpdateNodeStatuses() error {
 	// TODO: investigate right behavior if nodeName is empty
 	// kubernetes/kubernetes/issues/37777
 	nodesToUpdate := nsu.actualStateOfWorld.GetVolumesToReportAttached()
+	cloned := nsu
 	for nodeName, attachedVolumes := range nodesToUpdate {
+		if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
 
-		tenant, err := nsu.tenantFromNodeName(nodeName)
-		cloned := nsu
-		if err == nil {
+			tenant, err := nsu.tenantFromNodeName(nodeName)
+			if err != nil {
+				return err
+			}
 			cloned = nsu.ShallowCopyWithTenant(tenant).(*nodeStatusUpdater)
 			glog.V(5).Infof("using tenant nodeStatusUpdater")
+			nodeName = extractNodeName(nodeName)
 		}
-		simpleNodeName := extractNodeName(nodeName)
-		nodeObj, err := cloned.nodeLister.Get(simpleNodeName)
+		nodeObj, err := cloned.nodeLister.Get(string(nodeName))
 		if errors.IsNotFound(err) {
 			// If node does not exist, its status cannot be updated.
 			// Do nothing so that there is no retry until node is created.
@@ -86,7 +91,7 @@ func (nsu *nodeStatusUpdater) UpdateNodeStatuses() error {
 			continue
 		}
 
-		if err := cloned.updateNodeStatus(types.NodeName(simpleNodeName), nodeObj, attachedVolumes); err != nil {
+		if err := cloned.updateNodeStatus(nodeName, nodeObj, attachedVolumes); err != nil {
 			// If update node status fails, reset flag statusUpdateNeeded back to true
 			// to indicate this node status needs to be updated again
 			nsu.actualStateOfWorld.SetNodeStatusUpdateNeeded(nodeName)
@@ -104,7 +109,7 @@ func (nsu *nodeStatusUpdater) UpdateNodeStatuses() error {
 }
 
 func (nsu *nodeStatusUpdater) updateNodeStatus(nodeName types.NodeName, nodeObj *v1.Node, attachedVolumes []v1.AttachedVolume) error {
-	glog.V(5).Infof("TODO: updating node attach status: nodeName:%s, attachedVolumes:%v", nodeName, attachedVolumes)
+	glog.V(5).Infof("updating node attach status: nodeName:%s, attachedVolumes:%v", nodeName, attachedVolumes)
 	node := nodeObj.DeepCopy()
 	node.Status.VolumesAttached = attachedVolumes
 	_, patchBytes, err := nodeutil.PatchNodeStatus(nsu.kubeClient.CoreV1(), nodeName, nodeObj, node)

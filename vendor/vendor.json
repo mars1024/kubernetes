@@ -429,10 +429,10 @@
 			"revisionTime": "2019-05-27T03:01:12Z"
 		},
 		{
-			"checksumSHA1": "8P6UcmFQcMh5zb0lk/1pF/WmOoo=",
+			"checksumSHA1": "lqrUqKZg5U6YxkLNvCcHklifIo4=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/kube-aggregator/pkg/apiserver",
-			"revision": "9e53a0203366368b460e9072e3d087f7d67b8ebb",
-			"revisionTime": "2019-05-27T03:01:12Z"
+			"revision": "594431949fd34784582668f472c644fe23604bed",
+			"revisionTime": "2019-07-17T05:06:14Z"
 		},
 		{
 			"checksumSHA1": "P0Jy3vLVLowoFxVbJ8+mF/+qgv4=",
@@ -489,10 +489,10 @@
 			"revisionTime": "2019-05-27T03:01:12Z"
 		},
 		{
-			"checksumSHA1": "wU3VKYfpxK5GjPqykpsz5p5W/Ig=",
+			"checksumSHA1": "RaXGIUmcgBQ0wz7mNuR0PFUejeY=",
 			"path": "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/admission/webhook/configuration",
-			"revision": "172c283a12ab076f7168d99adab94f7ce24c549e",
-			"revisionTime": "2019-04-23T12:30:27Z"
+			"revision": "594431949fd34784582668f472c644fe23604bed",
+			"revisionTime": "2019-07-17T05:06:14Z"
 		},
 		{
 			"checksumSHA1": "JOLvhyNxEVjAghSOKSw5zn6Tezs=",

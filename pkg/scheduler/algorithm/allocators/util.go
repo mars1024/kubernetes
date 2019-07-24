@@ -64,7 +64,7 @@ func getPodCPUSet(pod *v1.Pod) (cpuset.CPUSet, bool) {
 		for _, c := range allocSpec.Containers {
 			if c.Resource.CPU.CPUSet != nil {
 				ids := c.Resource.CPU.CPUSet.CPUIDs
-				glog.V(5).Infof("container(%s/%s) cpuset %v", pod.Name, c.Name, ids)
+				glog.V(5).Infof("container(%s/%s/%s) cpuset %v", pod.Namespace, pod.Name, c.Name, ids)
 				podCPUSet.Add(ids...)
 			}
 		}

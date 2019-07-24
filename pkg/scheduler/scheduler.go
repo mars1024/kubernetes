@@ -521,7 +521,7 @@ func (sched *Scheduler) scheduleOne() {
 			return
 		}
 		// Patch the CPUSet allocator result before binding pod to host
-		err = sched.PatchAllocators(pod, suggestedHost)
+		err = sched.PatchAllocators(assumedPod, suggestedHost)
 		if err != nil {
 			glog.Errorf("failed to allocate CPUSet for pod (%v), not binding there", err)
 			return

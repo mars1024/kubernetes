@@ -865,14 +865,13 @@ func (dsc *DaemonSetsController) resolveControllerRef(namespace string, controll
 // podsShouldBeOnNode figures out the DaemonSet pods to be created and deleted on the given node:
 //   - nodesNeedingDaemonPods: the pods need to start on the node
 //   - podsToDelete: the Pods need to be deleted on the node
-//   - failedPodsObserved: the number of failed pods on node
 //   - err: unexpected error
 func (dsc *DaemonSetsController) podsShouldBeOnNode(
 	node *v1.Node,
 	nodeToDaemonPods map[string][]*v1.Pod,
 	ds *apps.DaemonSet,
 	hash string,
-) (nodesNeedingDaemonPods, podsToDelete []string, failedPodsObserved int, err error) {
+) (nodesNeedingDaemonPods, podsToDelete []string, err error) {
 
 	wantToRun, shouldSchedule, shouldContinueRunning, err := dsc.nodeShouldRunDaemonPod(node, ds)
 	if err != nil {
@@ -904,7 +903,6 @@ func (dsc *DaemonSetsController) podsShouldBeOnNode(
 				continue
 			}
 			if pod.Status.Phase == v1.PodFailed {
-				failedPodsObserved++
 
 				// This is a critical place where DS is often fighting with kubelet that rejects pods.
 				// We need to avoid hot looping and backoff.
@@ -949,7 +947,7 @@ func (dsc *DaemonSetsController) podsShouldBeOnNode(
 		}
 	}
 
-	return nodesNeedingDaemonPods, podsToDelete, failedPodsObserved, nil
+	return nodesNeedingDaemonPods, podsToDelete, nil
 }
 
 // manage manages the scheduling and running of Pods of ds on nodes.
@@ -970,9 +968,8 @@ func (dsc *DaemonSetsController) manage(ds *apps.DaemonSet, hash string) error {
 		return fmt.Errorf("couldn't get list of nodes when syncing daemon set %#v: %v", ds, err)
 	}
 	var nodesNeedingDaemonPods, podsToDelete []string
-	var failedPodsObserved int
 	for _, node := range nodeList {
-		nodesNeedingDaemonPodsOnNode, podsToDeleteOnNode, failedPodsObservedOnNode, err := dsc.podsShouldBeOnNode(
+		nodesNeedingDaemonPodsOnNode, podsToDeleteOnNode, err := dsc.podsShouldBeOnNode(
 			node, nodeToDaemonPods, ds, hash)
 
 		if err != nil {
@@ -981,17 +978,11 @@ func (dsc *DaemonSetsController) manage(ds *apps.DaemonSet, hash string) error {
 
 		nodesNeedingDaemonPods = append(nodesNeedingDaemonPods, nodesNeedingDaemonPodsOnNode...)
 		podsToDelete = append(podsToDelete, podsToDeleteOnNode...)
-		failedPodsObserved += failedPodsObservedOnNode
 	}
 
 	// Label new pods using the hash label value of the current history when creating them
 	if err = dsc.syncNodes(ds, podsToDelete, nodesNeedingDaemonPods, hash); err != nil {
 		return err
-	}
-
-	// Throw an error when the daemon pods fail, to use ratelimiter to prevent kill-recreate hot loop
-	if failedPodsObserved > 0 {
-		return fmt.Errorf("deleted %d failed pods of DaemonSet %s/%s", failedPodsObserved, ds.Namespace, ds.Name)
 	}
 
 	return nil

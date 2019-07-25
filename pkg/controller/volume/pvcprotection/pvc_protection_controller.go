@@ -132,7 +132,7 @@ func (c *Controller) processNextWorkItem() bool {
 		utilruntime.HandleError(fmt.Errorf("Error parsing PVC key %q: %v", pvcKey, err))
 		return true
 	}
-	if tenant != nil {
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
 		err = c.processTenantPVC(tenant, pvcNamespace, pvcName)
 	} else {
 		err = c.processPVC(pvcNamespace, pvcName)

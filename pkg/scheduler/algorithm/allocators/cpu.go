@@ -143,11 +143,11 @@ func (allocator *CPUAllocator) reload(pod *v1.Pod) {
 	// Remove current pod from node cache for computing
 	oldSh := allocator.pool.shareCntRef
 	oldEx := allocator.pool.exclusiveCntRef
-	glog.V(5).Infof("[CPUAllocator]oldSh:%v, oldEx:%v", oldSh, oldEx)
+	glog.V(5).Infof("[CPUAllocator]node=%s, oldSh:%v, oldEx:%v", allocator.nodeInfo.Node().Name, oldSh, oldEx)
 	_ = allocator.nodeInfo.RemovePod(pod)
 	newSh := allocator.pool.shareCntRef
 	newEx := allocator.pool.exclusiveCntRef
-	glog.V(5).Infof("[CPUAllocator]newSh:%v, newEx:%v", newSh, newEx)
+	glog.V(5).Infof("[CPUAllocator]node=%s, newSh:%v, newEx:%v", allocator.nodeInfo.Node().Name, newSh, newEx)
 	allocator.pool.Initialize()
 }
 

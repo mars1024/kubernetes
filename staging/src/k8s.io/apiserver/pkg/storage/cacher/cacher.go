@@ -25,8 +25,6 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-	"k8s.io/klog"
-
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -779,7 +777,7 @@ func (c *Cacher) dispatchEvents() {
 				ResourceVersion: lastProcessedResourceVersion,
 			}
 			if err := c.versioner.UpdateObject(bookmarkEvent.Object, bookmarkEvent.ResourceVersion); err != nil {
-				klog.Errorf("failure to set resourceVersion to %d on bookmark event %+v", bookmarkEvent.ResourceVersion, bookmarkEvent.Object)
+				glog.Errorf("failure to set resourceVersion to %d on bookmark event %+v", bookmarkEvent.ResourceVersion, bookmarkEvent.Object)
 				continue
 			}
 			c.dispatchEvent(bookmarkEvent)

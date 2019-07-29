@@ -346,6 +346,7 @@ loop:
 				}
 			case watch.Bookmark:
 				// A `Bookmark` means watch has synced here, just update the resourceVersion
+				glog.V(5).Info("received Bookmark event")
 			default:
 				utilruntime.HandleError(fmt.Errorf("%s: unable to understand watch event %#v", r.name, event))
 			}

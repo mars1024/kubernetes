@@ -173,6 +173,7 @@ type watcherBookmarkTimeBuckets struct {
 	watchersBuckets map[int64][]*cacheWatcher
 	startBucketID   int64
 	clock           clock.Clock
+	locker          sync.Mutex
 }
 
 func newTimeBucketWatchers(clock clock.Clock) *watcherBookmarkTimeBuckets {
@@ -194,12 +195,17 @@ func (t *watcherBookmarkTimeBuckets) addWatcher(w *cacheWatcher) bool {
 	if bucketID < t.startBucketID {
 		bucketID = t.startBucketID
 	}
+	t.locker.Lock()
+	defer t.locker.Unlock()
 	watchers, _ := t.watchersBuckets[bucketID]
 	t.watchersBuckets[bucketID] = append(watchers, w)
 	return true
 }
 
 func (t *watcherBookmarkTimeBuckets) popExpiredWatchers() [][]*cacheWatcher {
+	t.locker.Lock()
+	defer t.locker.Unlock()
+
 	currentBucketID := t.clock.Now().Unix()
 	// There should be one or two elements in almost all cases
 	expiredWatchers := make([][]*cacheWatcher, 0, 2)
@@ -769,6 +775,8 @@ func (c *Cacher) dispatchEvents() {
 			// Never send a bookmark event if we did not see an event here, this is fine
 			// because we don't provide any guarantees on sending bookmarks.
 			if lastProcessedResourceVersion == 0 {
+				// pop expired watchers in case there has been no update
+				c.bookmarkWatchers.popExpiredWatchers()
 				continue
 			}
 			bookmarkEvent := &watchCacheEvent{

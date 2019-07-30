@@ -22,11 +22,11 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/golang/glog"
-
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
@@ -190,6 +190,11 @@ func ListResource(r rest.Lister, rw rest.Watcher, scope RequestScope, forceWatch
 			err = errors.NewBadRequest(err.Error())
 			scope.err(err, w, req)
 			return
+		}
+
+		// TODO: (chenjun.cj) can not decode AllowWatchBookmarks from URL query.
+		if ok, err := strconv.ParseBool(req.URL.Query().Get("allowWatchBookmarks")); err == nil && ok {
+			opts.AllowWatchBookmarks = true
 		}
 
 		// transform fields

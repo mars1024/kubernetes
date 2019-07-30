@@ -100,6 +100,10 @@ type ContainerManager interface {
 	// The pluginwatcher's Handlers allow to have a single module for handling
 	// registration.
 	GetPluginRegistrationHandler() pluginwatcher.PluginHandler
+
+	// ShouldResetExtendedResourceCapacity returns whether or not the extended resources should be zeroed,
+	// due to node recreation.
+	ShouldResetExtendedResourceCapacity() bool
 }
 
 type NodeConfig struct {

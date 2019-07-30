@@ -198,7 +198,7 @@ func (c completedConfig) NewWithDelegate(delegationTarget genericapiserver.Deleg
 	cafeExtensionProxyHandler := newLocalProxyHandler("127.0.0.1", 7443, "https")
 	cafeClusterProxyHandler := newLocalProxyHandler("127.0.0.1", 8443, "https")
 	cafeBasicProxyHandler := newLocalProxyHandler(os.Getenv(BasicAPIServerIPAddressEnv), 80, "http")
-	cafeMetricsHandler := newLocalProxyHandler(os.Getenv(CafeMetricsAPIServerIPAddressEnv), 6443, "https")
+	cafeMetricsHandler := newLocalProxyHandler(os.Getenv(CafeMetricsAPIServerIPAddressEnv), 443, "https")
 
 	if len(os.Getenv(AggregationEnableCafeExtension)) > 0 {
 		s.GenericAPIServer.Handler.NonGoRestfulMux.UnlistedHandlePrefix("/apis/apps.cafe.cloud.alipay.com/", cafeExtensionProxyHandler)

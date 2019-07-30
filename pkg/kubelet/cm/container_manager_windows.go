@@ -46,3 +46,7 @@ func (cm *containerManagerImpl) Start(_ *v1.Node, _ ActivePodsFunc, _ config.Sou
 func NewContainerManager(_ clientset.Interface, _ types.NodeName, mountUtil mount.Interface, cadvisorInterface cadvisor.Interface, nodeConfig NodeConfig, failSwapOn bool, devicePluginEnabled bool, recorder record.EventRecorder, customCgroupParents []string) (ContainerManager, error) {
 	return &containerManagerImpl{}, nil
 }
+
+func (cm *containerManagerImpl) ShouldResetExtendedResourceCapacity() bool {
+	return false
+}

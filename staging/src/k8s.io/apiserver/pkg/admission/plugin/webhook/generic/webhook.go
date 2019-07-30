@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/labels"
 
 	admissionv1beta1 "k8s.io/api/admission/v1beta1"
 	"k8s.io/api/admissionregistration/v1beta1"
@@ -38,6 +40,9 @@ import (
 // Webhook is an abstract admission plugin with all the infrastructure to define Admit or Validate on-top.
 type Webhook struct {
 	*admission.Handler
+
+	// TODO(zuoxiu.jm): Remove it after rebasing onto 1.15
+	selectorGetter func(*v1beta1.Webhook) labels.Selector
 
 	sourceFactory sourceFactory
 
@@ -148,6 +153,15 @@ func (a *Webhook) ShouldCallHook(h *v1beta1.Webhook, attr admission.Attributes) 
 			break
 		}
 	}
+
+	if a.selectorGetter != nil && attr.GetObject() != nil {
+		selector := a.selectorGetter(h)
+		accessor, _ := meta.Accessor(attr.GetObject())
+		if selector != nil && accessor != nil {
+			matches = matches && selector.Matches(labels.Set(accessor.GetLabels()))
+		}
+	}
+
 	if !matches {
 		return false, nil
 	}

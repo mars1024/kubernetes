@@ -25,8 +25,8 @@ import (
 
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/client-go/tools/cache"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	"k8s.io/client-go/tools/cache"
 
 	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
 	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
@@ -350,9 +350,11 @@ type pvAssumeCache struct {
 
 func pvStorageClassIndexFunc(obj interface{}) ([]string, error) {
 	if pv, ok := obj.(*v1.PersistentVolume); ok {
-		tenantInfo, err := util.TransformTenantInfoFromAnnotations(pv.Annotations)
-		if err == nil {
-			return []string{util.TransformTenantInfoToJointString(tenantInfo, "/") + "/" + pv.Spec.StorageClassName}, nil
+		if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+			tenantInfo, err := util.TransformTenantInfoFromAnnotations(pv.Annotations)
+			if err == nil {
+				return []string{util.TransformTenantInfoToJointString(tenantInfo, "/") + "/" + pv.Spec.StorageClassName}, nil
+			}
 		}
 		return []string{pv.Spec.StorageClassName}, nil
 	}

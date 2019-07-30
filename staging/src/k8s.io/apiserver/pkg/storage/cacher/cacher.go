@@ -486,8 +486,11 @@ func (c *Cacher) Watch(ctx context.Context, key string, resourceVersion string, 
 		watcher.forget = forgetWatcher(c, c.watcherIdx, triggerValue, triggerSupported)
 		c.watchers.addWatcher(watcher, c.watcherIdx, triggerValue, triggerSupported)
 
+		glog.V(5).Infof("cacher enable Bookmark %v, watcher enable Bookmark %v", c.watchBookmarkEnabled, watcher.allowWatchBookmarks)
+
 		// Add it to the queue only when server and client support watch bookmarks.
 		if c.watchBookmarkEnabled && watcher.allowWatchBookmarks {
+			glog.V(5).Infof("watcher %s add bookmark trigger", watcher.objectType.String())
 			c.bookmarkWatchers.addWatcher(watcher)
 		}
 		c.watcherIdx++
@@ -788,6 +791,7 @@ func (c *Cacher) dispatchEvents() {
 				glog.Errorf("failure to set resourceVersion to %d on bookmark event %+v", bookmarkEvent.ResourceVersion, bookmarkEvent.Object)
 				continue
 			}
+			glog.V(5).Infof("start to dispatch bookmark event")
 			c.dispatchEvent(bookmarkEvent)
 		case <-c.stopCh:
 			return
@@ -798,12 +802,16 @@ func (c *Cacher) dispatchEvents() {
 func (c *Cacher) dispatchEvent(event *watchCacheEvent) {
 	c.startDispatching(event)
 	defer c.finishDispatching()
-	// Watchers stopped after startDispatching will be delayed to finishDispatching,
 
+	// Watchers stopped after startDispatching will be delayed to finishDispatching,
 	// Since add() can block, we explicitly add when cacher is unlocked.
 	if event.Type == watch.Bookmark {
 		for _, watcher := range c.watchersBuffer {
-			watcher.nonblockingAdd(event)
+			if watcher.nonblockingAdd(event) {
+				glog.V(5).Infof("send bookmark event successfully, objType: %s", watcher.objectType.String())
+				continue
+			}
+			glog.Errorf("failed to send bookmark event through nonblocking, objType: %s", watcher.objectType.String())
 		}
 	} else {
 		for _, watcher := range c.watchersBuffer {

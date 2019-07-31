@@ -1172,6 +1172,7 @@ func (e *Store) Watch(ctx context.Context, options *metainternalversion.ListOpti
 	if options != nil {
 		resourceVersion = options.ResourceVersion
 		predicate.IncludeUninitialized = options.IncludeUninitialized
+		predicate.AllowWatchBookmarks = options.AllowWatchBookmarks
 	}
 	return e.WatchPredicate(ctx, predicate, resourceVersion)
 }
@@ -1390,10 +1391,10 @@ func (e *Store) CompleteWithOptions(options *generic.StoreOptions) error {
 		e.Storage.Codec = opts.StorageConfig.Codec
 		e.Storage.Storage, e.DestroyFunc = opts.Decorator(
 			opts.StorageConfig,
-			e.NewFunc(),
 			prefix,
 			keyFunc,
 			indexers,
+			e.NewFunc,
 			e.NewListFunc,
 			attrFunc,
 			triggerFunc,

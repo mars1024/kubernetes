@@ -22,11 +22,11 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/golang/glog"
-
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
@@ -192,6 +192,11 @@ func ListResource(r rest.Lister, rw rest.Watcher, scope RequestScope, forceWatch
 			return
 		}
 
+		// TODO: (chenjun.cj) can not decode AllowWatchBookmarks from URL query.
+		if ok, err := strconv.ParseBool(req.URL.Query().Get("allowWatchBookmarks")); err == nil && ok {
+			opts.AllowWatchBookmarks = true
+		}
+
 		// transform fields
 		// TODO: DecodeParametersInto should do this.
 		if opts.FieldSelector != nil {
@@ -242,7 +247,7 @@ func ListResource(r rest.Lister, rw rest.Watcher, scope RequestScope, forceWatch
 			if timeout == 0 && minRequestTimeout > 0 {
 				timeout = time.Duration(float64(minRequestTimeout) * (rand.Float64() + 1.0))
 			}
-			glog.V(3).Infof("Starting watch for %s, rv=%s labels=%s fields=%s timeout=%s", req.URL.Path, opts.ResourceVersion, opts.LabelSelector, opts.FieldSelector, timeout)
+			glog.V(3).Infof("Starting watch for %s, rv=%s labels=%s fields=%s timeout=%s allowBookmarks=%v", req.URL.Path, opts.ResourceVersion, opts.LabelSelector, opts.FieldSelector, timeout, opts.AllowWatchBookmarks)
 			ctx, cancel := context.WithTimeout(ctx, timeout)
 			defer cancel()
 			watcher, err := rw.Watch(ctx, &opts)

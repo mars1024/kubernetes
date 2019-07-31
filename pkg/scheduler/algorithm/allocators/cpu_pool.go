@@ -243,7 +243,7 @@ func (pool *CPUPool) GetAllocatedCPUShare() int64 {
 		}
 		res, _, _ := schedulercache.CalculateResource(pod)
 		milliCPU := res.MilliCPU
-		allocated += int64(float64(milliCPU))
+		allocated += milliCPU
 	}
 	return allocated
 }
@@ -264,7 +264,7 @@ func (pool *CPUPool) GetAllocatedSharedCPUSetReq() int64 {
 		//
 		res, _, _ := schedulercache.CalculateResource(pod)
 		milliCPU := res.MilliCPU
-		allocated += int64(float64(milliCPU))
+		allocated += milliCPU
 	}
 	return allocated
 }

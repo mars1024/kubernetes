@@ -15,6 +15,9 @@ import (
 	"k8s.io/kubernetes/pkg/scheduler/core/equivalence"
 	"k8s.io/kubernetes/pkg/scheduler/util"
 	"k8s.io/kubernetes/pkg/scheduler/volumebinder"
+	"sync"
+
+	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 )
 
 const (
@@ -45,6 +48,7 @@ func getPriorityWeightOverrideMap(pod *v1.Pod) map[string]int {
 type GenericSchedulerExtend struct {
 	genericScheduler
 	client clientset.Interface
+	rwLock *sync.RWMutex
 }
 
 // Allocate allocates the resources for the pod on given host
@@ -59,16 +63,20 @@ func (ge *GenericSchedulerExtend) Allocate(pod *v1.Pod, host string) error {
 		glog.V(4).Infof("node %s is nil or not eligible for cpuset Allocation", host)
 		return nil
 	}
+	ge.rwLock.Lock()
 	allocator := allocators.NewCPUAllocator(nodeInfo)
 	result, err := allocator.Allocate(pod)
 	if err != nil {
+		ge.rwLock.Unlock()
 		return err
 	}
 	if len(result) <= 0 {
 		glog.V(3).Infof("patch result is %#v for pod %s/%s, skipping patch", result, pod.Namespace, pod.Name)
+		ge.rwLock.Unlock()
 		return nil
 	}
 	glog.V(3).Infof("going to patch CPUSet %v for pod %s/%s", result, pod.Namespace, pod.Name)
+	originAlloc, allocExists := pod.Annotations[sigmak8sapi.AnnotationPodAllocSpec]
 	patchPod := allocators.MakePodCPUPatch(pod, result)
 	cpuAllocator, ok := allocator.(*allocators.CPUAllocator)
 	var nodeShareCPUPool cpuset.CPUSet
@@ -77,8 +85,13 @@ func (ge *GenericSchedulerExtend) Allocate(pod *v1.Pod, host string) error {
 		nodeShareCPUPool = cpuAllocator.NodeCPUSharePool()
 		nodeName = host
 	}
+	ge.rwLock.Unlock() // Unlock now, do not wait for patch result
 	err = allocators.DoPatchAll(ge.client, pod, patchPod, nodeShareCPUPool, nodeName)
 	if err != nil {
+		// revert the alloc-spec to previous status
+		if allocExists {
+			pod.Annotations[sigmak8sapi.AnnotationPodAllocSpec] = originAlloc
+		}
 		return allocators.ErrAllocatorFailure(allocator.Name(), err.Error())
 	}
 	return err
@@ -195,5 +208,6 @@ func NewGenericSchedulerExtend(
 	return &GenericSchedulerExtend{
 		genericScheduler: gs,
 		client:           client,
+		rwLock:           new(sync.RWMutex),
 	}
 }

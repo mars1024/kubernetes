@@ -523,7 +523,7 @@ func (sched *Scheduler) scheduleOne() {
 		// Patch the CPUSet allocator result before binding pod to host
 		err = sched.PatchAllocators(assumedPod, suggestedHost)
 		if err != nil {
-			glog.Errorf("failed to allocate CPUSet for pod (%v), not binding there", err)
+			glog.Errorf("failed to allocate CPUSet for pod (%s): %s, not binding there", assumedPod.Name, err.Error())
 			return
 		}
 		// so that kubelet is able to behave correctly

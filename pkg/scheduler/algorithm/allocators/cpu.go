@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"github.com/golang/glog"
 	v1 "k8s.io/api/core/v1"
+	utiltrace "k8s.io/apiserver/pkg/util/trace"
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpuset"
 	schedulercache "k8s.io/kubernetes/pkg/scheduler/cache"
 	"k8s.io/kubernetes/pkg/scheduler/util"
@@ -90,6 +91,10 @@ func (allocator *CPUAllocator) Name() string {
 	return "CPUAllocator"
 }
 func (allocator *CPUAllocator) Allocate(pod *v1.Pod) (ContainerCPUAssignments, error) {
+	tr := utiltrace.New(fmt.Sprintf("%s-%s", allocator.Name(), PodName(pod)))
+	defer func() {
+		tr.Log()
+	}()
 	allocator.reload(pod)
 	result := make(ContainerCPUAssignments, 0)
 	alloc := util.AllocSpecFromPod(pod)

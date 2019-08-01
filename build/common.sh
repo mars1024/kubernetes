@@ -94,10 +94,10 @@ kube::build::get_docker_wrapped_binaries() {
   case $1 in
     "amd64")
         local targets=(
-          cloud-controller-manager,busybox
-          kube-apiserver,busybox
-          kube-controller-manager,busybox
-          kube-scheduler,busybox
+          cloud-controller-manager,acs-reg.alipay.com/acloud/busybox:latest
+          kube-apiserver,acs-reg.alipay.com/acloud/busybox:latest
+          kube-controller-manager,acs-reg.alipay.com/acloud/busybox:latest
+          kube-scheduler,acs-reg.alipay.com/acloud/busybox:latest
           kube-proxy,acs-reg.alipay.com/acloud/debian-iptables-amd64:${debian_iptables_version}
         );;
     "arm")

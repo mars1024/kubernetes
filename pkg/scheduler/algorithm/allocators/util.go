@@ -83,6 +83,10 @@ func ContainerName(pod *v1.Pod, container *v1.Container) string {
 	return fmt.Sprintf("%s/%s/%s", pod.Namespace, pod.Name, container.Name)
 }
 
+func PodName(pod *v1.Pod) string {
+	return fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
+}
+
 // IsSharedCPUSetPod determines whether pod
 // is a SharedCPUSet pod
 func IsSharedCPUSetPod(pod *v1.Pod) bool {

@@ -476,6 +476,12 @@ const (
 	//
 	// Don't set UTSMode=host when pod is host network mode.
 	DisableHostUTSMode utilfeature.Feature = "DisableHostUTSMode"
+
+	// owner: @fankang.fk (fankang.fk@alipay.com)
+	// alpha: v1.12
+	//
+	// Disable dangling pod features.
+	DisableDanglingPod utilfeature.Feature = "DisableDanglingPod"
 )
 
 func init() {
@@ -559,6 +565,7 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	EnsurePodSuccess:                            {Default: false, PreRelease: utilfeature.Alpha},
 	PodSearchesFirst:                            {Default: false, PreRelease: utilfeature.Alpha},
 	DisableHostUTSMode:                          {Default: false, PreRelease: utilfeature.Alpha},
+	DisableDanglingPod:                          {Default: false, PreRelease: utilfeature.Alpha},
 
 	// inherited features from generic apiserver, relisted here to get a conflict if it is changed
 	// unintentionally on either side:

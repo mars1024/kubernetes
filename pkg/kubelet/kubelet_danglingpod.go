@@ -67,9 +67,9 @@ func generateDanglingPodKey(name, namespace, uid string) string {
 // 2 Update current dangling pods into node's annotation.
 func (kl *Kubelet) SyncDanglingPods() {
 	// If dangling pod's SafeToRemove filed is marked as true, it means that this dangling pod is safe to remove.
-	danglingPods, err := sigmautil.GetDanglingPods(kl.kubeClient, string(kl.nodeName))
+	danglingPods, err := sigmautil.GetDanglingPods(kl.GetNode)
 	if err != nil {
-		glog.Infof("[DanglingPod] Failed to get danglingPods from apiserver, error: %v", err)
+		glog.Infof("[DanglingPod] Failed to get danglingPods from apiServer, error: %v", err)
 		return
 	}
 	// Used to check is there a need to update danglingPods.

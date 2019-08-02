@@ -33,7 +33,6 @@ import (
 	kubetypes "k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
-	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
 	ref "k8s.io/client-go/tools/reference"
 	"k8s.io/client-go/util/flowcontrol"
@@ -137,10 +136,8 @@ type kubeGenericRuntimeManager struct {
 	// kubeGenericRuntimeManager can get new pod from podManager.
 	podManager kubepod.Manager
 
-	// kubeClient is the client got get objects from apiserver.
-	kubeClient clientset.Interface
-
-	nodeName string
+	// get node is a func, we can get node info by it
+	getNode func() (*v1.Node, error)
 }
 
 type KubeGenericRuntime interface {
@@ -179,8 +176,7 @@ func NewKubeGenericRuntimeManager(
 	runtimeClassManager *runtimeclass.Manager,
 	userinfoScript string,
 	podManager kubepod.Manager,
-	kubeClient clientset.Interface,
-	nodeName string,
+	getNode func() (*v1.Node, error),
 ) (KubeGenericRuntime, error) {
 	kubeRuntimeManager := &kubeGenericRuntimeManager{
 		recorder:            recorder,
@@ -200,8 +196,7 @@ func NewKubeGenericRuntimeManager(
 		runtimeClassManager: runtimeClassManager,
 		userinfoBackup:      NewUserinfoBackup(userinfoScript),
 		podManager:          podManager,
-		kubeClient:          kubeClient,
-		nodeName:            nodeName,
+		getNode:             getNode,
 	}
 
 	typedVersion, err := kubeRuntimeManager.runtimeService.Version(kubeRuntimeAPIVersion)
@@ -242,7 +237,7 @@ func NewKubeGenericRuntimeManager(
 		imagePullQPS,
 		imagePullBurst)
 	kubeRuntimeManager.runner = lifecycle.NewHandlerRunner(httpClient, kubeRuntimeManager, kubeRuntimeManager)
-	kubeRuntimeManager.containerGC = NewContainerGC(kubeClient, nodeName, runtimeService, podStateProvider, kubeRuntimeManager)
+	kubeRuntimeManager.containerGC = NewContainerGC(getNode, runtimeService, podStateProvider, kubeRuntimeManager)
 
 	kubeRuntimeManager.versionCache = cache.NewObjectCache(
 		func() (interface{}, error) {

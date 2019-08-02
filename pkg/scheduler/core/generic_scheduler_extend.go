@@ -71,19 +71,21 @@ func (ge *GenericSchedulerExtend) Allocate(pod *v1.Pod, host string) error {
 	err := ge.cache.UpdateNodeNameToInfoMap(ge.cachedNodeInfoMap)
 	nodeInfo = ge.cachedNodeInfoMap[host]
 	if err != nil {
+		ge.rwLock.Unlock()
+		glog.V(3).Infof("exited allocation section on UpdateNodeNameToInfoMap error [%s/%s]", pod.Namespace, pod.Name)
 		return err
 	}
 	allocator := allocators.NewCPUAllocator(nodeInfo)
 	result, err := allocator.Allocate(pod)
 	if err != nil {
 		ge.rwLock.Unlock()
-		glog.V(3).Infof("exited allocation section on allocation error")
+		glog.V(3).Infof("exited allocation section on allocation error [%s/%s]", pod.Namespace, pod.Name)
 		return err
 	}
 	if len(result) <= 0 {
 		glog.V(3).Infof("patch result is %#v for pod %s/%s, skipping patch", result, pod.Namespace, pod.Name)
 		ge.rwLock.Unlock()
-		glog.V(3).Infof("exited allocation section on empty result")
+		glog.V(3).Infof("exited allocation section on empty result [%s/%s]", pod.Namespace, pod.Name)
 		return nil
 	}
 	glog.V(3).Infof("going to patch CPUSet %v for pod %s/%s", result, pod.Namespace, pod.Name)

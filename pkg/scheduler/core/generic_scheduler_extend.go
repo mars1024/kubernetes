@@ -15,6 +15,9 @@ import (
 	"k8s.io/kubernetes/pkg/scheduler/core/equivalence"
 	"k8s.io/kubernetes/pkg/scheduler/util"
 	"k8s.io/kubernetes/pkg/scheduler/volumebinder"
+	"sync"
+
+	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 )
 
 const (
@@ -45,6 +48,7 @@ func getPriorityWeightOverrideMap(pod *v1.Pod) map[string]int {
 type GenericSchedulerExtend struct {
 	genericScheduler
 	client clientset.Interface
+	rwLock *sync.RWMutex
 }
 
 // Allocate allocates the resources for the pod on given host
@@ -59,16 +63,31 @@ func (ge *GenericSchedulerExtend) Allocate(pod *v1.Pod, host string) error {
 		glog.V(4).Infof("node %s is nil or not eligible for cpuset Allocation", host)
 		return nil
 	}
+	ge.rwLock.Lock()
+	glog.V(3).Infof("entered allocation section [%s/%s]", pod.Namespace, pod.Name)
+	// refresh the scheduler cachedNodeInfoMap with the latest pod info(especially
+	// the assumed pod, otherwise cpuset can be assigned by multiple pods when in
+	// high-concurrency
+	err := ge.cache.UpdateNodeNameToInfoMap(ge.cachedNodeInfoMap)
+	nodeInfo = ge.cachedNodeInfoMap[host]
+	if err != nil {
+		return err
+	}
 	allocator := allocators.NewCPUAllocator(nodeInfo)
 	result, err := allocator.Allocate(pod)
 	if err != nil {
+		ge.rwLock.Unlock()
+		glog.V(3).Infof("exited allocation section on allocation error")
 		return err
 	}
 	if len(result) <= 0 {
 		glog.V(3).Infof("patch result is %#v for pod %s/%s, skipping patch", result, pod.Namespace, pod.Name)
+		ge.rwLock.Unlock()
+		glog.V(3).Infof("exited allocation section on empty result")
 		return nil
 	}
 	glog.V(3).Infof("going to patch CPUSet %v for pod %s/%s", result, pod.Namespace, pod.Name)
+	originAlloc, allocExists := pod.Annotations[sigmak8sapi.AnnotationPodAllocSpec]
 	patchPod := allocators.MakePodCPUPatch(pod, result)
 	cpuAllocator, ok := allocator.(*allocators.CPUAllocator)
 	var nodeShareCPUPool cpuset.CPUSet
@@ -77,8 +96,14 @@ func (ge *GenericSchedulerExtend) Allocate(pod *v1.Pod, host string) error {
 		nodeShareCPUPool = cpuAllocator.NodeCPUSharePool()
 		nodeName = host
 	}
+	ge.rwLock.Unlock() // Unlock now, do not wait for patch result
+	glog.V(3).Infof("exited allocation section normally [%s/%s]", pod.Namespace, pod.Name)
 	err = allocators.DoPatchAll(ge.client, pod, patchPod, nodeShareCPUPool, nodeName)
 	if err != nil {
+		// revert the alloc-spec to previous status
+		if allocExists {
+			pod.Annotations[sigmak8sapi.AnnotationPodAllocSpec] = originAlloc
+		}
 		return allocators.ErrAllocatorFailure(allocator.Name(), err.Error())
 	}
 	return err
@@ -195,5 +220,6 @@ func NewGenericSchedulerExtend(
 	return &GenericSchedulerExtend{
 		genericScheduler: gs,
 		client:           client,
+		rwLock:           new(sync.RWMutex),
 	}
 }

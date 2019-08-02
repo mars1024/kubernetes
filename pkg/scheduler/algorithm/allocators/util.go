@@ -7,9 +7,9 @@ import (
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	"io"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpuset"
 	"k8s.io/kubernetes/pkg/scheduler/util"
-	"k8s.io/kubernetes/staging/src/k8s.io/apimachinery/pkg/util/strategicpatch"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -83,6 +83,10 @@ func ContainerName(pod *v1.Pod, container *v1.Container) string {
 	return fmt.Sprintf("%s/%s/%s", pod.Namespace, pod.Name, container.Name)
 }
 
+func PodName(pod *v1.Pod) string {
+	return fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
+}
+
 // IsSharedCPUSetPod determines whether pod
 // is a SharedCPUSet pod
 func IsSharedCPUSetPod(pod *v1.Pod) bool {
@@ -92,6 +96,16 @@ func IsSharedCPUSetPod(pod *v1.Pod) bool {
 		return false
 	}
 	return !IsExclusiveContainer(pod, nil)
+}
+
+// IsPodCpuSet define if the pod with cpuset request
+func IsPodCpuSet(pod *v1.Pod) bool {
+	alloc := util.AllocSpecFromPod(pod)
+	if alloc == nil {
+		// Native pod goes native way
+		return false
+	}
+	return true
 }
 
 // GenAllocSpecAnnotation create the annotation for each container in pod

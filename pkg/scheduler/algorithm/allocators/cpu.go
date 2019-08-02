@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"github.com/golang/glog"
 	v1 "k8s.io/api/core/v1"
+	utiltrace "k8s.io/apiserver/pkg/util/trace"
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpuset"
 	schedulercache "k8s.io/kubernetes/pkg/scheduler/cache"
 	"k8s.io/kubernetes/pkg/scheduler/util"
@@ -61,15 +62,39 @@ type CPUAllocator struct {
 
 func NewCPUAllocator(nodeInfo *schedulercache.NodeInfo) AllocatorInterface {
 	cloned := nodeInfo.Clone()
+	// We should remove the in-progress pods which are still in the queue allocating
+	// CPUSet, since it's already added in nodeInfo by assumePod
+	// but the pod cpuset are not yes set by allocator
+	for _, p := range nodeInfo.Pods() {
+		if filter(p) {
+			err := cloned.RemovePod(p)
+			if err != nil {
+				glog.Warningf("failed to remove intermediate pod %s for node cache, but continue: %s", p.Name, err.Error())
+			}
+			glog.V(6).Infof("removed intermediate pod %s before allocating", p.Name)
+		}
+	}
 	return &CPUAllocator{
 		nodeInfo: cloned,
 		pool:     NewCPUPool(cloned)}
+}
+
+func filter(pod *v1.Pod) bool {
+	if IsPodCpuSet(pod) {
+		set, _ := getPodCPUSet(pod)
+		return set.Size() <= 0 // filter out since no cpuset
+	}
+	return false
 }
 
 func (allocator *CPUAllocator) Name() string {
 	return "CPUAllocator"
 }
 func (allocator *CPUAllocator) Allocate(pod *v1.Pod) (ContainerCPUAssignments, error) {
+	tr := utiltrace.New(fmt.Sprintf("%s-%s", allocator.Name(), PodName(pod)))
+	defer func() {
+		tr.Log()
+	}()
 	allocator.reload(pod)
 	result := make(ContainerCPUAssignments, 0)
 	alloc := util.AllocSpecFromPod(pod)
@@ -159,9 +184,11 @@ func (allocator *CPUAllocator) allocateShareCPUSet(pod *v1.Pod, container *v1.Co
 	glog.V(5).Infof("[CPUAllocator][DEBUG]: numCPUs=%d, reqMilli=%d(pod=%s)", numCPUs, reqMilli, ContainerName(pod, container))
 	newRequestedMilli := int64(float64(reqMilli + allocator.pool.GetAllocatedSharedCPUSetReq()))
 	currentCPUSetMilli := int64(float64(allocator.pool.GetSharedCPUSet().Size()) * 1000 * overRatio)
+	glog.V(3).Infof("[CPUAllocator]pod %s :newRequestedMilli=%d,currentCPUSetMilli=%d,SharedCPUSet=%s",
+		ContainerName(pod, container), newRequestedMilli, currentCPUSetMilli, allocator.pool.GetSharedCPUSet())
 	if newRequestedMilli <= currentCPUSetMilli && numCPUs <= allocator.pool.GetSharedCPUSet().Size() { // current cpuset is enough for the container
 		// Step 1: calculate current cpuset, if available, get the least used cpuset
-		glog.V(5).Infof("[CPUAllocator]taking %d CPUs from existing shared CPUSet pool(pod=%s)", numCPUs, ContainerName(pod, container))
+		glog.V(3).Infof("[CPUAllocator]taking %d CPUs from existing shared CPUSet pool(pod=%s)", numCPUs, ContainerName(pod, container))
 		existing := allocator.pool.LeaseUsedSharedCPUSet(numCPUs)
 		return existing, nil
 	} else {
@@ -172,14 +199,13 @@ func (allocator *CPUAllocator) allocateShareCPUSet(pod *v1.Pod, container *v1.Co
 		glog.V(5).Infof("[CPUAllocator][DEBUG]: newRequestedMilli=%d, currentCPUSetMilli=%d, neededMilli=%d", newRequestedMilli, currentCPUSetMilli, neededMilli)
 
 		neededNumCPUsForReq := int((float64(neededMilli) + (1000*overRatio - 1)) / (overRatio * 1000)) // New from pool
-		glog.V(5).Infof("[CPUAllocator]needed number of new CPUs for pod(%s) of CPU requests: %d", ContainerName(pod, container), neededNumCPUsForReq)
+		glog.V(3).Infof("[CPUAllocator]needed number of new CPUs for pod(%s) of CPU requests: %d", ContainerName(pod, container), neededNumCPUsForReq)
 		neededNumCPUs := neededNumCPUsForReq
 		var neededForLimit int
 		if neededForLimit = numCPUs - (allocator.pool.GetSharedCPUSet().Size() + neededNumCPUsForReq); neededForLimit > 0 {
 			// Container limit is larger than existing Shared CPUSet pool
 			glog.V(5).Infof("[CPUAllocator]also taking %d new CPUs for pod(%s) of CPU limits", neededForLimit, ContainerName(pod, container))
 			neededNumCPUs += neededForLimit
-
 		}
 		glog.V(3).Infof("[CPUAllocator]allocating %d CPUs from [%s] for pod %s", neededNumCPUs, allocator.pool.GetCPUSharePoolCPUSet(), ContainerName(pod, container))
 		ret, err := takeByTopology(allocator.pool.Topology(), allocator.pool.GetCPUSharePoolCPUSet(), neededNumCPUs)

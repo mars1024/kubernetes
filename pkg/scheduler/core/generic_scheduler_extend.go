@@ -64,7 +64,15 @@ func (ge *GenericSchedulerExtend) Allocate(pod *v1.Pod, host string) error {
 		return nil
 	}
 	ge.rwLock.Lock()
-	glog.V(3).Infof("entered allocation section")
+	glog.V(3).Infof("entered allocation section [%s/%s]", pod.Namespace, pod.Name)
+	// refresh the scheduler cachedNodeInfoMap with the latest pod info(especially
+	// the assumed pod, otherwise cpuset can be assigned by multiple pods when in
+	// high-concurrency
+	err := ge.cache.UpdateNodeNameToInfoMap(ge.cachedNodeInfoMap)
+	nodeInfo = ge.cachedNodeInfoMap[host]
+	if err != nil {
+		return err
+	}
 	allocator := allocators.NewCPUAllocator(nodeInfo)
 	result, err := allocator.Allocate(pod)
 	if err != nil {
@@ -89,7 +97,7 @@ func (ge *GenericSchedulerExtend) Allocate(pod *v1.Pod, host string) error {
 		nodeName = host
 	}
 	ge.rwLock.Unlock() // Unlock now, do not wait for patch result
-	glog.V(3).Infof("exited allocation section normally")
+	glog.V(3).Infof("exited allocation section normally [%s/%s]", pod.Namespace, pod.Name)
 	err = allocators.DoPatchAll(ge.client, pod, patchPod, nodeShareCPUPool, nodeName)
 	if err != nil {
 		// revert the alloc-spec to previous status

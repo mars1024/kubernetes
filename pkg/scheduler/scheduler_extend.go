@@ -9,12 +9,11 @@ import (
 func (sched *Scheduler) PatchAllocators(pod *v1.Pod, suggestedHost string) error {
 	var err error
 	if algo, ok := sched.config.Algorithm.(*core.GenericSchedulerExtend); ok {
-		allocator, result, err := algo.Allocate(pod, suggestedHost)
+		err = algo.Allocate(pod, suggestedHost)
 		if err != nil {
 			glog.Error(err)
 			return err
 		}
-		return algo.PatchPodAndNode(allocator, pod, suggestedHost, result)
 	}
 	return err
 }

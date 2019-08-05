@@ -24,11 +24,13 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/storage"
+	"k8s.io/apiserver/pkg/storage/etcd3/metrics"
 	"k8s.io/apiserver/pkg/storage/value"
 
 	"github.com/coreos/etcd/clientv3"
@@ -209,9 +211,16 @@ func (wc *watchChan) startWatching(watchClosedCh chan struct{}) {
 			wc.sendError(err)
 			return
 		}
+		metrics.RecordEtcdWatcherChannelLength(wc.key, "incomingEventChan", len(wc.incomingEventChan))
+		metrics.RecordEtcdWatcherChannelLength(wc.key, "resultChan", len(wc.resultChan))
+		metrics.RecordEtcdWatcherChannelLength(wc.key, "errChan", len(wc.errChan))
+		metrics.RecordEtcdWatcherEventCount(wc.key, len(wres.Events))
+
+		now := time.Now()
 		for _, e := range wres.Events {
 			wc.sendEvent(parseEvent(e))
 		}
+		metrics.RecordEtcdWatcherEventLatency(wc.key, time.Since(now))
 	}
 	// When we come to this point, it's only possible that client side ends the watch.
 	// e.g. cancel the context, close the client.

@@ -55,6 +55,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/qos"
 	"k8s.io/kubernetes/pkg/kubelet/status"
 	"k8s.io/kubernetes/pkg/kubelet/util/pluginwatcher"
+	"k8s.io/kubernetes/pkg/scheduler/algorithm/predicates"
 	schedulercache "k8s.io/kubernetes/pkg/scheduler/cache"
 	utilfile "k8s.io/kubernetes/pkg/util/file"
 	"k8s.io/kubernetes/pkg/util/mount"
@@ -111,7 +112,7 @@ type containerManagerImpl struct {
 	cadvisorInterface cadvisor.Interface
 	mountUtil         mount.Interface
 	NodeConfig
-	status            Status
+	status Status
 	// External containers being managed.
 	systemContainers []*systemContainer
 	qosContainers    QOSContainersInfo
@@ -200,7 +201,7 @@ func validateSystemRequirements(mountUtil mount.Interface) (features, error) {
 // TODO(vmarmol): Add limits to the system containers.
 // Takes the absolute name of the specified containers.
 // Empty container name disables use of the specified container.
-func NewContainerManager(kubeClient clientset.Interface, nodeName types.NodeName, mountUtil mount.Interface, cadvisorInterface cadvisor.Interface, nodeConfig NodeConfig, failSwapOn bool, devicePluginEnabled bool, recorder record.EventRecorder, customCgroupParents []string) (ContainerManager, error) {
+func NewContainerManager(kubeClient clientset.Interface, nodeName types.NodeName, nodeInfo predicates.NodeInfo, mountUtil mount.Interface, cadvisorInterface cadvisor.Interface, nodeConfig NodeConfig, failSwapOn bool, devicePluginEnabled bool, recorder record.EventRecorder, customCgroupParents []string) (ContainerManager, error) {
 	subsystems, err := GetCgroupSubsystems()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get mounted cgroup subsystems: %v", err)
@@ -289,6 +290,7 @@ func NewContainerManager(kubeClient clientset.Interface, nodeName types.NodeName
 		cm.cpuManager, err = cpumanager.NewManager(
 			kubeClient,
 			nodeName,
+			nodeInfo,
 			nodeConfig.ExperimentalCPUManagerPolicy,
 			nodeConfig.ExperimentalCPUManagerReconcilePeriod,
 			machineInfo,

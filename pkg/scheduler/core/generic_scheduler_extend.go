@@ -124,28 +124,17 @@ func (ge *GenericSchedulerExtend) inplaceUpdateReallocate(pod *v1.Pod) (string, 
 
 	// Remove the pod with last spec as the resource check will be ok.
 	// And we can add this pod back into cache if scheduling pass.
-	var err error
-	if isAssumed, _ := ge.cache.IsAssumedPod(pod); isAssumed {
-		err = ge.cache.ForgetPod(pod)
-	} else {
-		errRemove := ge.cache.RemovePod(pod)
-		if errRemove != nil {
-			glog.Warningf("[inplaceUpdateReallocate]failed to remove pod from scheduler cache:%s", errRemove.Error())
-		}
-	}
-	defer func() {
-		ge.cache.FinishBinding(pod)
-	}()
-	if err != nil {
-		glog.Errorf("[inplaceUpdateReallocate]failed to forget/remove pod %s/%s from cache: %s", pod.Namespace, pod.Name, err.Error())
+	temp := nodeInfo.Clone()
+	if err := temp.RemovePod(pod); err != nil {
+		glog.Error("failed to remove pod %s before predicating: %s", pod.Namespace, pod.Name, err.Error())
 		return "", err
 	}
 	// Call PodFitsResources to check resources.
-	if fit, predicateFails, _ := predicates.PodCPUSetResourceFit(pod, nil, nodeInfo); !fit {
+	if fit, predicateFails, _ := predicates.PodCPUSetResourceFit(pod, nil, temp); !fit {
 		return "", fmt.Errorf("failed to fit resource[PodCPUSetResourceFit] in inplace update processing with predicateFails: %+v", predicateFails)
 	}
 
-	if fit, predicateFails, _ := predicates.PodFitsResources(pod, nil, nodeInfo); !fit {
+	if fit, predicateFails, _ := predicates.PodFitsResources(pod, nil, temp); !fit {
 		return "", fmt.Errorf("failed to fit resource[PodFitsResources] in inplace update processing with predicateFails: %+v", predicateFails)
 	}
 	// If CPU value is not changed, return immediately.
@@ -156,7 +145,7 @@ func (ge *GenericSchedulerExtend) inplaceUpdateReallocate(pod *v1.Pod) (string, 
 
 	glog.V(4).Infof("[inplaceUpdateReallocate]reallocating CPUSet for pod %q", pod.Name)
 	// Call CPUSetAllocation to alloc CPUIDs.
-	cpuAlloc := allocators.NewCPUAllocator(nodeInfo)
+	cpuAlloc := allocators.NewCPUAllocator(temp)
 	cpuAssignments, err := cpuAlloc.Reallocate(pod)
 	return string(allocators.GenAllocSpecAnnotation(pod, cpuAssignments)), err
 }

@@ -17,6 +17,7 @@ limitations under the License.
 package scheduler
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -212,7 +213,7 @@ func (sched *Scheduler) schedule(pod *v1.Pod) (string, error) {
 			if err != nil {
 				pod = pod.DeepCopy()
 				sched.config.Error(pod, err)
-				sched.config.Recorder.Eventf(pod, v1.EventTypeWarning, "FailedScheduling", "%v", err)
+				sched.config.Recorder.Eventf(pod, v1.EventTypeWarning, "FailedInplaceUpdate", "%v", err)
 				sched.config.PodConditionUpdater.Update(pod, &v1.PodCondition{
 					Type:    v1.PodScheduled,
 					Status:  v1.ConditionFalse,
@@ -487,6 +488,30 @@ func (sched *Scheduler) scheduleOne() {
 		return
 	}
 
+	if util.IsInplaceUpdatePod(assumedPod) {
+		// Set inplace update state to "accepted".
+		assumedPod.Annotations[sigmaapi.AnnotationPodInplaceUpdateState] = sigmaapi.InplaceUpdateStateAccepted
+		allocSpec := sched.getPodAllocSpec(string(assumedPod.UID))
+		glog.V(4).Infof("setting inplace update pod %s/%s as accepted, allocSpec: %s", pod.Namespace, pod.Name, allocSpec)
+		if len(allocSpec) > 0 {
+			assumedPod.Annotations[sigmaapi.AnnotationPodAllocSpec] = allocSpec
+		}
+		PatchedPod := assumedPod.DeepCopy()
+		go func() {
+			// Time-consuming operation, should be in background
+			if err := util.PatchPod(sched.config.GetClient(), pod, PatchedPod); err != nil {
+				err = fmt.Errorf("error patching inplaceupdate state for pod %s: %s", PatchedPod.Name, err.Error())
+				sched.config.Error(PatchedPod, err)
+				sched.config.Recorder.Eventf(assumedPod, v1.EventTypeWarning, "FailedInplaceUpdate", "[Inplace Update Pod] failed: %v", err)
+			}
+		}()
+		defer func() {
+			glog.V(1).Infof("[Inplace Update Pod] cleaning scheduler cache for pod %s/%s", assumedPod.Namespace, assumedPod.Name)
+			sched.clearPodAllocSpec(string(PatchedPod.UID))
+		}()
+
+		return
+	}
 	// assume modifies `assumedPod` by setting NodeName=suggestedHost
 	err = sched.assume(assumedPod, suggestedHost)
 	if err != nil {
@@ -494,32 +519,6 @@ func (sched *Scheduler) scheduleOne() {
 	}
 	// bind the pod to its host asynchronously (we can do this b/c of the assumption step above).
 	go func() {
-		if util.IsInplaceUpdatePod(assumedPod) {
-			defer func() {
-				glog.V(1).Infof("[Inplace Update Pod] cleaning scheduler cache for pod %s/%s", assumedPod.Namespace, assumedPod.Name)
-				sched.clearPodAllocSpec(string(assumedPod.UID))
-				if err := sched.config.SchedulerCache.FinishBinding(assumedPod); err != nil {
-					glog.Errorf("[Inplace Update Pod] scheduler cache FinishBinding failed: %v", err)
-				}
-				if err := sched.config.SchedulerCache.ForgetPod(assumedPod); err != nil {
-					glog.Errorf("[Inplace Update Pod] scheduler cache ForgetPod failed: %v", err)
-					sched.config.Error(assumedPod, err)
-					sched.config.Recorder.Eventf(assumedPod, v1.EventTypeWarning, "FailedInplaceUpdate", "[Inplace Update Pod] Binding rejected: %v", err)
-				}
-			}()
-
-			// Set inplace update state to "accepted".
-			glog.V(4).Infof("setting inplace update pod %s/%s as accepted", pod.Namespace, pod.Name)
-			assumedPod.Annotations[sigmaapi.AnnotationPodInplaceUpdateState] = sigmaapi.InplaceUpdateStateAccepted
-			allocSpec := sched.getPodAllocSpec(string(assumedPod.UID))
-			if len(allocSpec) > 0 {
-				assumedPod.Annotations[sigmaapi.AnnotationPodAllocSpec] = allocSpec
-			}
-			if err := util.PatchPod(sched.config.GetClient(), pod, assumedPod); err != nil {
-				glog.Error(err)
-			}
-			return
-		}
 		// Patch the CPUSet allocator result before binding pod to host
 		err = sched.PatchAllocators(assumedPod, suggestedHost)
 		if err != nil {

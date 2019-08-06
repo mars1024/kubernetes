@@ -482,6 +482,12 @@ const (
 	//
 	// Disable dangling pod features.
 	DisableDanglingPod utilfeature.Feature = "DisableDanglingPod"
+
+	// owner: @fankang.fk (fankang.fk@alipay.com)
+	// alpha: v1.12
+	//
+	// Ignore some unwanted events if IgnoreUnwantedEvent is true.
+	IgnoreUnwantedEvent utilfeature.Feature = "IgnoreUnwantedEvent"
 )
 
 func init() {
@@ -566,6 +572,7 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	PodSearchesFirst:                            {Default: false, PreRelease: utilfeature.Alpha},
 	DisableHostUTSMode:                          {Default: false, PreRelease: utilfeature.Alpha},
 	DisableDanglingPod:                          {Default: false, PreRelease: utilfeature.Alpha},
+	IgnoreUnwantedEvent:                         {Default: false, PreRelease: utilfeature.Alpha},
 
 	// inherited features from generic apiserver, relisted here to get a conflict if it is changed
 	// unintentionally on either side:

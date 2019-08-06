@@ -797,7 +797,7 @@ func (c *Cacher) processEvent(event *watchCacheEvent) {
 		glog.V(1).Infof("cacher (%v): %v objects queued in incoming channel.", c.objectType.String(), curLen)
 	}
 
-	watcherChannelLength.WithLabelValues(c.objectType.String()).Set(float64(len(c.incoming)))
+	watcherChannelLength.WithLabelValues(c.objectType.String(), "incoming").Set(float64(len(c.incoming)))
 	c.incoming <- *event
 }
 

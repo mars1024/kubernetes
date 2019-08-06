@@ -264,6 +264,7 @@ type Dependencies struct {
 	DynamicPluginProber     volume.DynamicPluginProber
 	TLSOptions              *server.TLSOptions
 	KubeletConfigController *kubeletconfig.Controller
+	CachedNodeInfo		*predicates.CachedNodeInfo
 }
 
 // makePodSourceConfig creates a config.PodConfig from the given
@@ -461,7 +462,12 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		r := cache.NewReflector(nodeLW, &v1.Node{}, nodeIndexer, 0)
 		go r.Run(wait.NeverStop)
 	}
-	nodeInfo := &predicates.CachedNodeInfo{NodeLister: corelisters.NewNodeLister(nodeIndexer)}
+	// Initialize CachedNodeInfo.
+	if kubeDeps.CachedNodeInfo == nil {
+		kubeDeps.CachedNodeInfo = &predicates.CachedNodeInfo{}
+	}
+	kubeDeps.CachedNodeInfo.NodeLister = corelisters.NewNodeLister(nodeIndexer)
+	nodeInfo := kubeDeps.CachedNodeInfo
 
 	// TODO: get the real node object of ourself,
 	// and use the real node name and UID.

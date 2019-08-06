@@ -85,6 +85,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/server"
 	"k8s.io/kubernetes/pkg/kubelet/server/streaming"
 	kubetypes "k8s.io/kubernetes/pkg/kubelet/types"
+	"k8s.io/kubernetes/pkg/scheduler/algorithm/predicates"
 	"k8s.io/kubernetes/pkg/util/configz"
 	utilfs "k8s.io/kubernetes/pkg/util/filesystem"
 	utilflag "k8s.io/kubernetes/pkg/util/flag"
@@ -692,9 +693,12 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.Dependencies, stopCh <-chan
 
 		devicePluginEnabled := utilfeature.DefaultFeatureGate.Enabled(features.DevicePlugins)
 
+		// CachedNodeInfo will be initialized by kubelet.
+		kubeDeps.CachedNodeInfo = &predicates.CachedNodeInfo{}
 		kubeDeps.ContainerManager, err = cm.NewContainerManager(
 			kubeDeps.KubeClient,
 			nodeName,
+			kubeDeps.CachedNodeInfo,
 			kubeDeps.Mounter,
 			kubeDeps.CAdvisorInterface,
 			cm.NodeConfig{

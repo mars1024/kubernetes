@@ -50,13 +50,21 @@ type sigmaPolicyTest struct {
 }
 
 func TestSigmaPolicyName(t *testing.T) {
-	policy := NewSigmaPolicy(&fake.Clientset{}, "", topoSingleSocketHT)
+	policy := NewSigmaPolicy(&fake.Clientset{}, "", nil, topoSingleSocketHT)
 
 	policyName := policy.Name()
 	if policyName != "sigma" {
 		t.Errorf("SigmaPolicy Name() error. expected: sigma, returned: %v",
 			policyName)
 	}
+}
+
+type fakeNodeInfo struct {
+	node *v1.Node
+}
+
+func (fake *fakeNodeInfo) GetNodeInfo(nodeID string) (*v1.Node, error) {
+	return fake.node, nil
 }
 
 func TestCheckAndCorrectDefaultCPUSet(t *testing.T) {
@@ -95,7 +103,8 @@ func TestCheckAndCorrectDefaultCPUSet(t *testing.T) {
 	} {
 		kubeClient := fake.NewSimpleClientset()
 		kubeClient.CoreV1().Nodes().Create(testCase.node)
-		policy := NewSigmaPolicy(kubeClient, types.NodeName(testCase.node.Name), testCase.topo).(PolicyExtend)
+		nodeInfo := &fakeNodeInfo{testCase.node}
+		policy := NewSigmaPolicy(kubeClient, types.NodeName(testCase.node.Name), nodeInfo, testCase.topo).(PolicyExtend)
 		st := &mockState{
 			assignments:   state.ContainerCPUAssignments{},
 			defaultCPUSet: cpuset.NewCPUSet(),
@@ -177,7 +186,7 @@ func TestSigmaPolicyAdd(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		policy := NewSigmaPolicy(&fake.Clientset{}, "", testCase.topo)
+		policy := NewSigmaPolicy(&fake.Clientset{}, "", nil, testCase.topo)
 
 		st := &mockState{
 			assignments:   testCase.stAssignments,
@@ -257,7 +266,7 @@ func TestSigmaPolicyIsCPUSetChanged(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		policy := NewSigmaPolicy(&fake.Clientset{}, "", testCase.topo).(PolicyExtend)
+		policy := NewSigmaPolicy(&fake.Clientset{}, "", nil, testCase.topo).(PolicyExtend)
 
 		st := &mockState{
 			assignments:   testCase.stAssignments,
@@ -303,7 +312,7 @@ func TestSigmaPolicyUpdateAllocSpec(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		policy := NewSigmaPolicy(&fake.Clientset{}, "", testCase.topo)
+		policy := NewSigmaPolicy(&fake.Clientset{}, "", nil, testCase.topo)
 
 		st := &mockState{
 			assignments:   testCase.stAssignments,
@@ -391,7 +400,7 @@ func TestSigmaPolicyRemove(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		policy := NewSigmaPolicy(&fake.Clientset{}, "", testCase.topo)
+		policy := NewSigmaPolicy(&fake.Clientset{}, "", nil, testCase.topo)
 
 		st := &mockState{
 			assignments:   testCase.stAssignments,

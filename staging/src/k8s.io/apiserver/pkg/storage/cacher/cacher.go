@@ -53,6 +53,43 @@ var (
 		},
 		[]string{"resource"},
 	)
+	watchersCounter = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "apiserver_created_watchers",
+			Help: "Counter of watchers created in watchcache broken by resource type",
+		},
+		[]string{"resource"},
+	)
+	watchersGauge = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "apiserver_realtime_watchers",
+			Help: "Counter of watchers created in watchcache broken by resource type",
+		},
+		[]string{"resource"},
+	)
+	cacherEventsCounter = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "apiserver_cacher_received_events",
+			Help: "Counter of events received from etcd broken by resource type",
+		},
+		[]string{"resource"},
+	)
+	sendedEventsLatency = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "apiserver_cacher_sended_events_latency_milliseconds_bucket",
+			Help:    "Latency bucket of watchers sended in watchcache broken by resource type",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"resource"},
+	)
+	// This metric is inaccurate because of the swift change of a channel.
+	watcherChannelLength = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "apiserver_cacher_watcher_channel_length",
+			Help: "Etcd watcher channel length",
+		},
+		[]string{"resource", "channel"},
+	)
 	emptyFunc = func() {}
 )
 
@@ -64,6 +101,11 @@ const (
 
 func init() {
 	prometheus.MustRegister(initCounter)
+	prometheus.MustRegister(watchersCounter)
+	prometheus.MustRegister(watchersGauge)
+	prometheus.MustRegister(cacherEventsCounter)
+	prometheus.MustRegister(sendedEventsLatency)
+	prometheus.MustRegister(watcherChannelLength)
 }
 
 // Config contains the configuration for a given Cache.
@@ -447,6 +489,7 @@ func (c *Cacher) Watch(ctx context.Context, key string, resourceVersion string, 
 		// number of objects of a given type and/or their churn.
 		chanSize = 1000
 	}
+	glog.V(5).Infof("channel size for %s(key: %s) is %d", c.objectType.String(), key, chanSize)
 
 	// Determine watch timeout('0' means deadline is not set, ignore checking)
 	deadline, _ := ctx.Deadline()
@@ -497,6 +540,7 @@ func (c *Cacher) Watch(ctx context.Context, key string, resourceVersion string, 
 	}()
 
 	go watcher.process(ctx, initEvents, watchRV)
+	watchersCounter.WithLabelValues(c.objectType.String()).Add(1.0)
 	return watcher, nil
 }
 
@@ -752,6 +796,8 @@ func (c *Cacher) processEvent(event *watchCacheEvent) {
 		// Monitor if this gets backed up, and how much.
 		glog.V(1).Infof("cacher (%v): %v objects queued in incoming channel.", c.objectType.String(), curLen)
 	}
+
+	watcherChannelLength.WithLabelValues(c.objectType.String()).Set(float64(len(c.incoming)))
 	c.incoming <- *event
 }
 
@@ -765,13 +811,17 @@ func (c *Cacher) dispatchEvents() {
 	defer bookmarkTimer.Stop()
 
 	lastProcessedResourceVersion := uint64(0)
+	metricLabelValue := c.objectType.String()
 	for {
 		select {
 		case event, ok := <-c.incoming:
 			if !ok {
 				return
 			}
+			now := c.clock.Now()
+			cacherEventsCounter.WithLabelValues(metricLabelValue).Add(1.0)
 			c.dispatchEvent(&event)
+			sendedEventsLatency.WithLabelValues(metricLabelValue).Observe(float64(c.clock.Since(now)/time.Microsecond) / 1000.0)
 			lastProcessedResourceVersion = event.ResourceVersion
 		case <-bookmarkTimer.C():
 			bookmarkTimer.Reset(wait.Jitter(time.Second, 0.25))
@@ -1052,6 +1102,7 @@ type cacheWatcher struct {
 }
 
 func newCacheWatcher(chanSize int, filter filterWithAttrsFunc, forget func(), versioner storage.Versioner, deadline time.Time, allowWatchBookmarks bool, objectType reflect.Type) *cacheWatcher {
+	watchersGauge.WithLabelValues(objectType.String()).Add(1.0)
 	return &cacheWatcher{
 		input:               make(chan *watchCacheEvent, chanSize),
 		result:              make(chan watch.Event, chanSize),
@@ -1083,6 +1134,7 @@ func (c *cacheWatcher) stop() {
 	c.Lock()
 	defer c.Unlock()
 	if !c.stopped {
+		watchersGauge.WithLabelValues(c.objectType.String()).Sub(1.0)
 		c.stopped = true
 		close(c.done)
 		close(c.input)

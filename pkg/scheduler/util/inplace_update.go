@@ -43,21 +43,27 @@ func IsInplaceUpdateIfNeeded(oldPod, newPod *v1.Pod) bool {
 	newState, newExists := newPod.Annotations[sigmaapi.AnnotationPodInplaceUpdateState]
 	if !oldExists && newExists {
 		glog.V(5).Infof("pod %s inplace-update-state state added, value=%s", newPod.Name, newState)
-		return true
+		return ifAnyResourceChanged(oldPod, newPod)
 	}
 	if oldExists && newExists {
 		if newState != sigmaapi.InplaceUpdateStateCreated {
 			glog.V(5).Infof("pod %s inplace-update-state is %q now, no need updating", newPod.Name, newState)
 			return false
 		}
-		for _, resName := range []v1.ResourceName{v1.ResourceCPU, v1.ResourceMemory, v1.ResourceEphemeralStorage} {
-			if IsResourceChanged(&oldPod.Spec, &newPod.Spec, resName) {
-				glog.V(5).Infof("pod %s resource %s was changed, need updating", resName, newPod.Name)
-				return true
-			}
-		}
+		return ifAnyResourceChanged(oldPod, newPod)
 	}
 	return false
+}
+
+func ifAnyResourceChanged(oldPod *v1.Pod, newPod *v1.Pod) bool {
+	anyChanged := false
+	for _, resName := range []v1.ResourceName{v1.ResourceCPU, v1.ResourceMemory, v1.ResourceEphemeralStorage} {
+		if IsResourceChanged(&oldPod.Spec, &newPod.Spec, resName) {
+			glog.V(5).Infof("pod %s resource %s was changed, need updating", resName, newPod.Name)
+			anyChanged = true
+		}
+	}
+	return anyChanged
 }
 
 func LastSpecFromPod(pod *v1.Pod) *v1.PodSpec {

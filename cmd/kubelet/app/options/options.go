@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/spf13/pflag"
 
@@ -212,6 +213,12 @@ type KubeletFlags struct {
 	// hostIPCSources is a comma-separated list of sources from which the
 	// Kubelet allows pods to use the host ipc namespace. Defaults to "*".
 	HostIPCSources []string
+
+	// Configurations for dns cache.
+	EnableDNSCache       bool
+	DNSMinCacheDuration  time.Duration
+	DNSMaxCacheDuration  time.Duration
+	DNSForceRefreshTimes int64
 }
 
 // NewKubeletFlags will create a new KubeletFlags with default values
@@ -247,6 +254,12 @@ func NewKubeletFlags() *KubeletFlags {
 		AllowPrivileged: true,
 		// prior to the introduction of this flag, there was a hardcoded cap of 50 images
 		NodeStatusMaxImages: 50,
+
+		// Disbale dns cache by default.
+		EnableDNSCache:       false,
+		DNSMinCacheDuration:  time.Second * 30,
+		DNSMaxCacheDuration:  time.Minute,
+		DNSForceRefreshTimes: 30,
 	}
 }
 
@@ -428,6 +441,11 @@ func (f *KubeletFlags) AddFlags(mainfs *pflag.FlagSet) {
 	fs.StringSliceVar(&f.HostIPCSources, "host-ipc-sources", f.HostIPCSources, "Comma-separated list of sources from which the Kubelet allows pods to use the host ipc namespace.")
 	fs.MarkDeprecated("host-ipc-sources", "will be removed in a future version")
 
+	// DNS Cache Flags
+	fs.BoolVar(&f.EnableDNSCache, "enable-dns-cache", f.EnableDNSCache, "Set to true if you want to cache dns results.")
+	fs.DurationVar(&f.DNSMinCacheDuration, "dns-min-cache-duration", f.DNSMinCacheDuration, "Minimum cache duration that dns cache keeps the dns results.")
+	fs.DurationVar(&f.DNSMaxCacheDuration, "dns-max-cache-duration", f.DNSMaxCacheDuration, "Maximum cache duration that dns cache keeps the dns results.")
+	fs.Int64Var(&f.DNSForceRefreshTimes, "dns-force-refresh-times", f.DNSForceRefreshTimes, "The max access count for a cached result. If this limit is broken, force to refresh cache.")
 }
 
 // AddKubeletConfigFlags adds flags for a specific kubeletconfig.KubeletConfiguration to the specified FlagSet

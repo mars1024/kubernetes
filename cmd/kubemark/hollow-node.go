@@ -34,6 +34,8 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/dnscache"
+	"k8s.io/client-go/tools/dnscache/metrics"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	_ "k8s.io/kubernetes/pkg/client/metrics/prometheus" // for client metric registration
@@ -60,6 +62,12 @@ type HollowNodeConfig struct {
 	UseRealProxier       bool
 	ProxierSyncPeriod    time.Duration
 	ProxierMinSyncPeriod time.Duration
+
+	// Configurations for dns cache.
+	EnableDNSCache       bool
+	DNSMinCacheDuration  time.Duration
+	DNSMaxCacheDuration  time.Duration
+	DNSForceRefreshTimes int64
 }
 
 const (
@@ -82,6 +90,11 @@ func (c *HollowNodeConfig) addFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&c.UseRealProxier, "use-real-proxier", true, "Set to true if you want to use real proxier inside hollow-proxy.")
 	fs.DurationVar(&c.ProxierSyncPeriod, "proxier-sync-period", 30*time.Second, "Period that proxy rules are refreshed in hollow-proxy.")
 	fs.DurationVar(&c.ProxierMinSyncPeriod, "proxier-min-sync-period", 0, "Minimum period that proxy rules are refreshed in hollow-proxy.")
+
+	fs.BoolVar(&c.EnableDNSCache, "enable-dns-cache", true, "Set to true if you want to cache dns results.")
+	fs.DurationVar(&c.DNSMinCacheDuration, "dns-min-cache-duration", time.Second*30, "Minimum cache duration that dns cache keeps the dns results.")
+	fs.DurationVar(&c.DNSMaxCacheDuration, "dns-max-cache-duration", time.Minute, "Maximum cache duration that dns cache keeps the dns results.")
+	fs.Int64Var(&c.DNSForceRefreshTimes, "dns-force-refresh-times", 30, "The max access count for a cached result. If this limit is broken, force to refresh cache.")
 }
 
 func (c *HollowNodeConfig) createClientConfigFromFile() (*restclient.Config, error) {
@@ -96,6 +109,21 @@ func (c *HollowNodeConfig) createClientConfigFromFile() (*restclient.Config, err
 	config.ContentType = c.ContentType
 	config.QPS = 10
 	config.Burst = 20
+	if c.EnableDNSCache {
+		dialer, err := dnscache.NewDialer(&dnscache.DialerConfig{
+			MinCacheDuration:  c.DNSMinCacheDuration,
+			MaxCacheDuration:  c.DNSMaxCacheDuration,
+			ForceRefreshTimes: c.DNSForceRefreshTimes,
+		})
+		if err != nil {
+			return nil, err
+		}
+		config.Dial = dialer.DialContext
+
+		if stats, ok := dialer.(dnscache.Stats); ok {
+			metrics.MustRegister(stats, nil)
+		}
+	}
 	return config, nil
 }
 

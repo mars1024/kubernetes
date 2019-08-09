@@ -92,6 +92,12 @@ const (
 	//
 	// Enables support for watch bookmark events.
 	WatchBookmark utilfeature.Feature = "WatchBookmark"
+
+	// owner: @fansong.cfs
+	// alpha: v1.15
+	//
+	// ETCD support progress notify
+	EtcdProgressNotify utilfeature.Feature = "EtcdProgressNotify"
 )
 
 func init() {
@@ -111,4 +117,5 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	DryRun:                  {Default: false, PreRelease: utilfeature.Alpha},
 	SelectorIndex:           {Default: false, PreRelease: utilfeature.Alpha},
 	WatchBookmark:           {Default: false, PreRelease: utilfeature.Alpha},
+	EtcdProgressNotify:      {Default: false, PreRelease: utilfeature.Alpha},
 }

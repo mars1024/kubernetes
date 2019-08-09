@@ -17,6 +17,7 @@ limitations under the License.
 package cache
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -69,6 +70,7 @@ type Reflector struct {
 	lastSyncResourceVersion string
 	// lastSyncResourceVersionMutex guards read/write access to lastSyncResourceVersion
 	lastSyncResourceVersionMutex sync.RWMutex
+	lastSyncResourceVersionCond  *sync.Cond
 }
 
 var (
@@ -113,6 +115,7 @@ func NewNamedReflector(name string, lw ListerWatcher, expectedType interface{}, 
 		resyncPeriod:  resyncPeriod,
 		clock:         &clock.RealClock{},
 	}
+	r.lastSyncResourceVersionCond = sync.NewCond(r.lastSyncResourceVersionMutex.RLocker())
 	return r
 }
 
@@ -146,6 +149,8 @@ var (
 	// Used to indicate that watching stopped because of a signal from the stop
 	// channel passed in from a client of the reflector.
 	errorStopRequested = errors.New("Stop requested")
+
+	errorContextCanceled = errors.New("Context canceled")
 )
 
 // resyncChan returns a channel which will receive something when a resync is
@@ -381,5 +386,31 @@ func (r *Reflector) setLastSyncResourceVersion(v string) {
 	rv, err := strconv.Atoi(v)
 	if err == nil {
 		r.metrics.lastResourceVersion.Set(float64(rv))
+	}
+
+	r.lastSyncResourceVersionCond.Broadcast()
+}
+
+// WaitLastSyncResourceVersionUntil waits until condFunc returns true or error.
+func (r *Reflector) WaitLastSyncResourceVersionUntil(ctx context.Context, condFunc func(rv string) (bool, error)) error {
+	go func() {
+		select {
+		case <-ctx.Done():
+		}
+		r.lastSyncResourceVersionCond.Broadcast()
+	}()
+	r.lastSyncResourceVersionMutex.RLock()
+	defer r.lastSyncResourceVersionMutex.RUnlock()
+	for {
+		ok, err := condFunc(r.lastSyncResourceVersion)
+		if ok || err != nil {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return errorContextCanceled
+		default:
+		}
+		r.lastSyncResourceVersionCond.Wait()
 	}
 }

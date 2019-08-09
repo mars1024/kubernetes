@@ -15,11 +15,10 @@
 package v3rpc
 
 import (
+	"context"
 	"io"
 	"sync"
 	"time"
-
-	"golang.org/x/net/context"
 
 	"github.com/coreos/etcd/auth"
 	"github.com/coreos/etcd/etcdserver"
@@ -268,6 +267,13 @@ func (sws *serverWatchStream) recvLoop() error {
 					sws.mu.Unlock()
 				}
 			}
+		case *pb.WatchRequest_ProgressRequest:
+			if uv.ProgressRequest != nil {
+				sws.ctrlStream <- &pb.WatchResponse{
+					Header:  sws.newResponseHeader(sws.watchStream.Rev()),
+					WatchId: -1, // response is not associated with any WatchId and will be broadcast to all watch channels
+				}
+			}
 		default:
 			// we probably should not shutdown the entire stream when
 			// receive an valid command.
@@ -326,11 +332,13 @@ func (sws *serverWatchStream) sendLoop() {
 				}
 			}
 
+			canceled := wresp.CompactRevision != 0
 			wr := &pb.WatchResponse{
 				Header:          sws.newResponseHeader(wresp.Revision),
 				WatchId:         int64(wresp.WatchID),
 				Events:          events,
 				CompactRevision: wresp.CompactRevision,
+				Canceled:        canceled,
 			}
 
 			if _, hasId := ids[wresp.WatchID]; !hasId {

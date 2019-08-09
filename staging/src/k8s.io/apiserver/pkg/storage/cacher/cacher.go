@@ -90,7 +90,8 @@ var (
 		},
 		[]string{"resource", "channel"},
 	)
-	emptyFunc = func() {}
+	errCacherNotReady = fmt.Errorf("cacher is not ready")
+	emptyFunc         = func() {}
 )
 
 const (
@@ -673,15 +674,26 @@ func (c *Cacher) GetToList(ctx context.Context, key string, resourceVersion stri
 func (c *Cacher) List(ctx context.Context, key string, resourceVersion string, pred storage.SelectionPredicate, listObj runtime.Object) error {
 	pagingEnabled := utilfeature.DefaultFeatureGate.Enabled(features.APIListChunking)
 	hasContinuation := pagingEnabled && len(pred.Continue) > 0
-	hasLimit := pagingEnabled && pred.Limit > 0 && resourceVersion != "0"
-	if resourceVersion == "" || hasContinuation || hasLimit {
-		// If resourceVersion is not specified, serve it from underlying
-		// storage (for backward compatibility). If a continuation is
+	if hasContinuation {
+		// If a continuation is
 		// requested, serve it from the underlying storage as well.
 		// Limits are only sent to storage when resourceVersion is non-zero
 		// since the watch cache isn't able to perform continuations, and
 		// limits are ignored when resource version is zero.
 		return c.storage.List(ctx, key, resourceVersion, pred, listObj)
+	}
+	if resourceVersion == "" {
+		// If resourceVersion is not specified, serve it from cache if cacher
+		// can sync with underlying storage within a short time period.
+		if !utilfeature.DefaultFeatureGate.Enabled(features.EtcdProgressNotify) {
+			return c.storage.List(ctx, key, resourceVersion, pred, listObj)
+		}
+		if _, err := c.syncWithUnderlyingStorage(ctx); err != nil {
+			return c.storage.List(ctx, key, resourceVersion, pred, listObj)
+		}
+		// else means cacher has guaranteed to be at least that fresh as
+		// the list request is initiated, serve it from cache.
+		resourceVersion = "0"
 	}
 
 	// If resourceVersion is specified, serve it from cache.
@@ -1335,4 +1347,47 @@ func (r *ready) set(ok bool) {
 	defer r.c.L.Unlock()
 	r.ok = ok
 	r.c.Broadcast()
+}
+
+// GetResourceVersion implements storage.Interface.
+func (c *Cacher) GetResourceVersion(ctx context.Context) (string, error) {
+	return c.storage.GetResourceVersion(ctx)
+}
+
+// RequestProgress implements storage.Interface.
+func (c *Cacher) RequestProgress(ctx context.Context) error {
+	return c.storage.RequestProgress(ctx)
+}
+
+func (c *Cacher) syncWithUnderlyingStorage(ctx context.Context) (string, error) {
+	if !c.ready.check() {
+		return "", errCacherNotReady
+	}
+	// Get current resourceVersion from underlying storage.
+	underlyingStorageRV, err := c.storage.GetResourceVersion(ctx)
+	if err != nil {
+		return "", err
+	}
+	storageRV, err := c.versioner.ParseResourceVersion(underlyingStorageRV)
+	if err != nil {
+		return "", err
+	}
+	// Request progress notify to make sure we can get the recent underlyingStorageRV.
+	if err = c.storage.RequestProgress(ctx); err != nil {
+		return "", err
+	}
+	// Wait reflector to sync with underlying storage
+	ctx, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
+	defer cancel()
+	waitReflectorLastRV := func(resourceVersion string) (bool, error) {
+		lastSyncRV, err := c.versioner.ParseResourceVersion(resourceVersion)
+		if err != nil {
+			return false, err
+		}
+		if lastSyncRV >= storageRV {
+			return true, nil
+		}
+		return false, nil
+	}
+	return underlyingStorageRV, c.reflector.WaitLastSyncResourceVersionUntil(ctx, waitReflectorLastRV)
 }

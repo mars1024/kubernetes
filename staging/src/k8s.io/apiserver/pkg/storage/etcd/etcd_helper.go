@@ -101,6 +101,14 @@ type etcdHelper struct {
 	cache utilcache.Cache
 }
 
+func (h *etcdHelper) GetResourceVersion(ctx context.Context) (string, error) {
+	panic("etcd2 client does not implement GetResourceVersion")
+}
+
+func (h *etcdHelper) RequestProgress(ctx context.Context) error {
+	panic("etcd2 client does not implement RequestProgress")
+}
+
 // Implements storage.Interface.
 func (h *etcdHelper) Versioner() storage.Versioner {
 	return h.versioner

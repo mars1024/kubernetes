@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -178,11 +179,20 @@ func (w *Watcher) init() error {
 func (w *Watcher) traversePluginDir(dir string) error {
 	return w.fs.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			return fmt.Errorf("error accessing path: %s error: %v", path, err)
+			if path == dir {
+				return fmt.Errorf("error accessing path: %s error: %v", path, err)
+			}
+
+			glog.Errorf("error accessing path: %s error: %v", path, err)
+			return nil
 		}
 
 		switch mode := info.Mode(); {
 		case mode.IsDir():
+			if w.containsBlacklistedDir(path) {
+				return filepath.SkipDir
+			}
+
 			if err := w.fsWatcher.Add(path); err != nil {
 				return fmt.Errorf("failed to watch %s, err: %v", path, err)
 			}
@@ -399,4 +409,9 @@ func dial(unixSocketPath string, timeout time.Duration) (registerapi.Registratio
 	}
 
 	return registerapi.NewRegistrationClient(c), c, nil
+}
+
+func (w *Watcher) containsBlacklistedDir(path string) bool {
+	return strings.HasPrefix(path, w.path+"/kubernetes.io/") ||
+		path == w.path+"/kubernetes.io"
 }

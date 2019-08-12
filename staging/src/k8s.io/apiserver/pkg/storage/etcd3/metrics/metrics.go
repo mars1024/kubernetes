@@ -32,7 +32,7 @@ var (
 	)
 	sendedEventsLatency = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name:    "etcd_watcher_sended_events_latency_milliseconds_bucket",
+			Name:    "etcd_watcher_sended_events_latency_milliseconds",
 			Help:    "Latency bucket of watchers sended by key",
 			Buckets: prometheus.DefBuckets,
 		},

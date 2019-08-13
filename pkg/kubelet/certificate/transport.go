@@ -59,11 +59,18 @@ func UpdateTransport(stopCh <-chan struct{}, clientConfig *restclient.Config, cl
 // updateTransport is an internal method that exposes how often this method checks that the
 // client cert has changed.
 func updateTransport(stopCh <-chan struct{}, period time.Duration, clientConfig *restclient.Config, clientCertificateManager certificate.Manager, exitAfter time.Duration) (func(), error) {
-	if clientConfig.Transport != nil || clientConfig.Dial != nil {
-		return nil, fmt.Errorf("there is already a transport or dialer configured")
+	if clientConfig.Transport != nil {
+		return nil, fmt.Errorf("there is already a transport")
 	}
 
-	d := connrotation.NewDialer((&net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}).DialContext)
+	var df connrotation.DialFunc
+	if clientConfig.Dial != nil {
+		df = clientConfig.Dial
+	} else {
+		df = (&net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}).DialContext
+	}
+
+	d := connrotation.NewDialer(df)
 
 	if clientCertificateManager != nil {
 		if err := addCertRotation(stopCh, period, clientConfig, clientCertificateManager, exitAfter, d); err != nil {

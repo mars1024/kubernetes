@@ -76,7 +76,7 @@ var (
 	)
 	sendedEventsLatency = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name:    "apiserver_cacher_sended_events_latency_milliseconds_bucket",
+			Name:    "apiserver_cacher_sended_events_latency_milliseconds",
 			Help:    "Latency bucket of watchers sended in watchcache broken by resource type",
 			Buckets: prometheus.DefBuckets,
 		},

@@ -636,6 +636,7 @@ func autoConvert_v1_DaemonSetSpec_To_extensions_DaemonSetSpec(in *v1.DaemonSetSp
 	}
 	out.MinReadySeconds = in.MinReadySeconds
 	out.RevisionHistoryLimit = (*int32)(unsafe.Pointer(in.RevisionHistoryLimit))
+	out.Paused = in.Paused
 	return nil
 }
 
@@ -650,6 +651,7 @@ func autoConvert_extensions_DaemonSetSpec_To_v1_DaemonSetSpec(in *extensions.Dae
 	out.MinReadySeconds = in.MinReadySeconds
 	// WARNING: in.TemplateGeneration requires manual conversion: does not exist in peer-type
 	out.RevisionHistoryLimit = (*int32)(unsafe.Pointer(in.RevisionHistoryLimit))
+	out.Paused = in.Paused
 	return nil
 }
 
@@ -1088,11 +1090,19 @@ func Convert_extensions_ReplicaSetStatus_To_v1_ReplicaSetStatus(in *extensions.R
 
 func autoConvert_v1_RollingUpdateDaemonSet_To_extensions_RollingUpdateDaemonSet(in *v1.RollingUpdateDaemonSet, out *extensions.RollingUpdateDaemonSet, s conversion.Scope) error {
 	// WARNING: in.MaxUnavailable requires manual conversion: inconvertible types (*k8s.io/apimachinery/pkg/util/intstr.IntOrString vs k8s.io/apimachinery/pkg/util/intstr.IntOrString)
+	out.Selector = (*metav1.LabelSelector)(unsafe.Pointer(in.Selector))
+	if err := metav1.Convert_Pointer_int32_To_int32(&in.Partition, &out.Partition, s); err != nil {
+		return err
+	}
 	return nil
 }
 
 func autoConvert_extensions_RollingUpdateDaemonSet_To_v1_RollingUpdateDaemonSet(in *extensions.RollingUpdateDaemonSet, out *v1.RollingUpdateDaemonSet, s conversion.Scope) error {
 	// WARNING: in.MaxUnavailable requires manual conversion: inconvertible types (k8s.io/apimachinery/pkg/util/intstr.IntOrString vs *k8s.io/apimachinery/pkg/util/intstr.IntOrString)
+	out.Selector = (*metav1.LabelSelector)(unsafe.Pointer(in.Selector))
+	if err := metav1.Convert_int32_To_Pointer_int32(&in.Partition, &out.Partition, s); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1330,10 +1340,18 @@ func autoConvert_apps_StatefulSetUpdateStrategy_To_v1_StatefulSetUpdateStrategy(
 
 func autoConvert_v1_SurgingRollingUpdateDaemonSet_To_extensions_SurgingRollingUpdateDaemonSet(in *v1.SurgingRollingUpdateDaemonSet, out *extensions.SurgingRollingUpdateDaemonSet, s conversion.Scope) error {
 	// WARNING: in.MaxSurge requires manual conversion: inconvertible types (*k8s.io/apimachinery/pkg/util/intstr.IntOrString vs k8s.io/apimachinery/pkg/util/intstr.IntOrString)
+	out.Selector = (*metav1.LabelSelector)(unsafe.Pointer(in.Selector))
+	if err := metav1.Convert_Pointer_int32_To_int32(&in.Partition, &out.Partition, s); err != nil {
+		return err
+	}
 	return nil
 }
 
 func autoConvert_extensions_SurgingRollingUpdateDaemonSet_To_v1_SurgingRollingUpdateDaemonSet(in *extensions.SurgingRollingUpdateDaemonSet, out *v1.SurgingRollingUpdateDaemonSet, s conversion.Scope) error {
 	// WARNING: in.MaxSurge requires manual conversion: inconvertible types (k8s.io/apimachinery/pkg/util/intstr.IntOrString vs *k8s.io/apimachinery/pkg/util/intstr.IntOrString)
+	out.Selector = (*metav1.LabelSelector)(unsafe.Pointer(in.Selector))
+	if err := metav1.Convert_int32_To_Pointer_int32(&in.Partition, &out.Partition, s); err != nil {
+		return err
+	}
 	return nil
 }

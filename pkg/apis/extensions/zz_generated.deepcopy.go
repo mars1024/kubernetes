@@ -245,12 +245,12 @@ func (in *DaemonSetUpdateStrategy) DeepCopyInto(out *DaemonSetUpdateStrategy) {
 	if in.RollingUpdate != nil {
 		in, out := &in.RollingUpdate, &out.RollingUpdate
 		*out = new(RollingUpdateDaemonSet)
-		**out = **in
+		(*in).DeepCopyInto(*out)
 	}
 	if in.SurgingRollingUpdate != nil {
 		in, out := &in.SurgingRollingUpdate, &out.SurgingRollingUpdate
 		*out = new(SurgingRollingUpdateDaemonSet)
-		**out = **in
+		(*in).DeepCopyInto(*out)
 	}
 	return
 }
@@ -859,6 +859,11 @@ func (in *RollbackConfig) DeepCopy() *RollbackConfig {
 func (in *RollingUpdateDaemonSet) DeepCopyInto(out *RollingUpdateDaemonSet) {
 	*out = *in
 	out.MaxUnavailable = in.MaxUnavailable
+	if in.Selector != nil {
+		in, out := &in.Selector, &out.Selector
+		*out = new(v1.LabelSelector)
+		(*in).DeepCopyInto(*out)
+	}
 	return
 }
 
@@ -894,6 +899,11 @@ func (in *RollingUpdateDeployment) DeepCopy() *RollingUpdateDeployment {
 func (in *SurgingRollingUpdateDaemonSet) DeepCopyInto(out *SurgingRollingUpdateDaemonSet) {
 	*out = *in
 	out.MaxSurge = in.MaxSurge
+	if in.Selector != nil {
+		in, out := &in.Selector, &out.Selector
+		*out = new(v1.LabelSelector)
+		(*in).DeepCopyInto(*out)
+	}
 	return
 }
 

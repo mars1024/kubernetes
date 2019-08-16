@@ -228,6 +228,13 @@ func Convert_extensions_RollingUpdateDaemonSet_To_v1_RollingUpdateDaemonSet(in *
 	if err := s.Convert(&in.MaxUnavailable, out.MaxUnavailable, 0); err != nil {
 		return err
 	}
+
+	if out.Partition == nil {
+		out.Partition = new(int32)
+	}
+	*out.Partition = in.Partition
+	out.Selector = in.Selector
+
 	return nil
 }
 
@@ -235,6 +242,13 @@ func Convert_v1_RollingUpdateDaemonSet_To_extensions_RollingUpdateDaemonSet(in *
 	if err := s.Convert(in.MaxUnavailable, &out.MaxUnavailable, 0); err != nil {
 		return err
 	}
+
+	if in.Partition != nil {
+		out.Partition = *in.Partition
+	} else {
+		out.Partition = int32(0)
+	}
+	out.Selector = in.Selector
 	return nil
 }
 
@@ -245,6 +259,13 @@ func Convert_extensions_SurgingRollingUpdateDaemonSet_To_v1_SurgingRollingUpdate
 	if err := s.Convert(&in.MaxSurge, out.MaxSurge, 0); err != nil {
 		return err
 	}
+
+	if out.Partition == nil {
+		out.Partition = new(int32)
+	}
+
+	*out.Partition = in.Partition
+	out.Selector = in.Selector
 	return nil
 }
 
@@ -252,6 +273,13 @@ func Convert_v1_SurgingRollingUpdateDaemonSet_To_extensions_SurgingRollingUpdate
 	if err := s.Convert(in.MaxSurge, &out.MaxSurge, 0); err != nil {
 		return err
 	}
+
+	if in.Partition != nil {
+		out.Partition = *in.Partition
+	} else {
+		out.Partition = int32(0)
+	}
+	out.Selector = in.Selector
 	return nil
 }
 
@@ -278,6 +306,7 @@ func Convert_extensions_DaemonSetSpec_To_v1_DaemonSetSpec(in *extensions.DaemonS
 		return err
 	}
 	out.MinReadySeconds = int32(in.MinReadySeconds)
+	out.Paused = in.Paused
 	if in.RevisionHistoryLimit != nil {
 		out.RevisionHistoryLimit = new(int32)
 		*out.RevisionHistoryLimit = *in.RevisionHistoryLimit
@@ -289,18 +318,28 @@ func Convert_extensions_DaemonSetSpec_To_v1_DaemonSetSpec(in *extensions.DaemonS
 
 func Convert_extensions_DaemonSetUpdateStrategy_To_v1_DaemonSetUpdateStrategy(in *extensions.DaemonSetUpdateStrategy, out *appsv1.DaemonSetUpdateStrategy, s conversion.Scope) error {
 	out.Type = appsv1.DaemonSetUpdateStrategyType(in.Type)
-	if in.RollingUpdate != nil {
-		out.RollingUpdate = &appsv1.RollingUpdateDaemonSet{}
-		if err := Convert_extensions_RollingUpdateDaemonSet_To_v1_RollingUpdateDaemonSet(in.RollingUpdate, out.RollingUpdate, s); err != nil {
-			return err
+	if in.Type == extensions.RollingUpdateDaemonSetStrategyType {
+		if in.RollingUpdate != nil {
+			out.RollingUpdate = &appsv1.RollingUpdateDaemonSet{}
+			if err := Convert_extensions_RollingUpdateDaemonSet_To_v1_RollingUpdateDaemonSet(in.RollingUpdate, out.RollingUpdate, s); err != nil {
+				return err
+			}
+		} else {
+			out.RollingUpdate = nil
 		}
 	}
-	if in.SurgingRollingUpdate != nil {
-		out.SurgingRollingUpdate = &appsv1.SurgingRollingUpdateDaemonSet{}
-		if err := Convert_extensions_SurgingRollingUpdateDaemonSet_To_v1_SurgingRollingUpdateDaemonSet(in.SurgingRollingUpdate, out.SurgingRollingUpdate, s); err != nil {
-			return err
+
+	if in.Type == extensions.SurgingRollingUpdateDaemonSetStrategyType {
+		if in.SurgingRollingUpdate != nil {
+			out.SurgingRollingUpdate = &appsv1.SurgingRollingUpdateDaemonSet{}
+			if err := Convert_extensions_SurgingRollingUpdateDaemonSet_To_v1_SurgingRollingUpdateDaemonSet(in.SurgingRollingUpdate, out.SurgingRollingUpdate, s); err != nil {
+				return err
+			}
+		} else {
+			out.SurgingRollingUpdate = nil
 		}
 	}
+
 	return nil
 }
 
@@ -339,21 +378,31 @@ func Convert_v1_DaemonSetSpec_To_extensions_DaemonSetSpec(in *appsv1.DaemonSetSp
 		out.RevisionHistoryLimit = nil
 	}
 	out.MinReadySeconds = in.MinReadySeconds
+	out.Paused = in.Paused
 	return nil
 }
 
 func Convert_v1_DaemonSetUpdateStrategy_To_extensions_DaemonSetUpdateStrategy(in *appsv1.DaemonSetUpdateStrategy, out *extensions.DaemonSetUpdateStrategy, s conversion.Scope) error {
 	out.Type = extensions.DaemonSetUpdateStrategyType(in.Type)
-	if in.RollingUpdate != nil {
-		out.RollingUpdate = &extensions.RollingUpdateDaemonSet{}
-		if err := Convert_v1_RollingUpdateDaemonSet_To_extensions_RollingUpdateDaemonSet(in.RollingUpdate, out.RollingUpdate, s); err != nil {
-			return err
+	if in.Type == appsv1.RollingUpdateDaemonSetStrategyType {
+		if in.RollingUpdate != nil {
+			out.RollingUpdate = &extensions.RollingUpdateDaemonSet{}
+			if err := Convert_v1_RollingUpdateDaemonSet_To_extensions_RollingUpdateDaemonSet(in.RollingUpdate, out.RollingUpdate, s); err != nil {
+				return err
+			}
+		} else {
+			out.RollingUpdate = nil
 		}
 	}
-	if in.SurgingRollingUpdate != nil {
-		out.SurgingRollingUpdate = &extensions.SurgingRollingUpdateDaemonSet{}
-		if err := Convert_v1_SurgingRollingUpdateDaemonSet_To_extensions_SurgingRollingUpdateDaemonSet(in.SurgingRollingUpdate, out.SurgingRollingUpdate, s); err != nil {
-			return err
+
+	if in.Type == appsv1.SurgingRollingUpdateDaemonSetStrategyType {
+		if in.SurgingRollingUpdate != nil {
+			out.SurgingRollingUpdate = &extensions.SurgingRollingUpdateDaemonSet{}
+			if err := Convert_v1_SurgingRollingUpdateDaemonSet_To_extensions_SurgingRollingUpdateDaemonSet(in.SurgingRollingUpdate, out.SurgingRollingUpdate, s); err != nil {
+				return err
+			}
+		} else {
+			out.SurgingRollingUpdate = nil
 		}
 	}
 	return nil

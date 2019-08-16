@@ -41,6 +41,10 @@ func SetDefaults_DaemonSet(obj *appsv1beta2.DaemonSet) {
 			maxUnavailable := intstr.FromInt(1)
 			updateStrategy.RollingUpdate.MaxUnavailable = &maxUnavailable
 		}
+		if updateStrategy.RollingUpdate.Partition == nil {
+			updateStrategy.RollingUpdate.Partition = new(int32)
+			*updateStrategy.RollingUpdate.Partition = 0
+		}
 	}
 	if obj.Spec.RevisionHistoryLimit == nil {
 		obj.Spec.RevisionHistoryLimit = new(int32)

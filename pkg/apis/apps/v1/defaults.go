@@ -84,6 +84,10 @@ func SetDefaults_DaemonSet(obj *appsv1.DaemonSet) {
 			maxUnavailable := intstr.FromInt(1)
 			updateStrategy.RollingUpdate.MaxUnavailable = &maxUnavailable
 		}
+		if updateStrategy.RollingUpdate.Partition == nil {
+			updateStrategy.RollingUpdate.Partition = new(int32)
+			*updateStrategy.RollingUpdate.Partition = 0
+		}
 	}
 	if updateStrategy.Type == appsv1.SurgingRollingUpdateDaemonSetStrategyType {
 		if updateStrategy.SurgingRollingUpdate == nil {
@@ -94,6 +98,10 @@ func SetDefaults_DaemonSet(obj *appsv1.DaemonSet) {
 			// Set default MaxSurge as 1 by default
 			maxSurge := intstr.FromInt(1)
 			updateStrategy.SurgingRollingUpdate.MaxSurge = &maxSurge
+		}
+		if updateStrategy.SurgingRollingUpdate.Partition == nil {
+			updateStrategy.SurgingRollingUpdate.Partition = new(int32)
+			*updateStrategy.SurgingRollingUpdate.Partition = 0
 		}
 	}
 	if obj.Spec.RevisionHistoryLimit == nil {

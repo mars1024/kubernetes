@@ -167,6 +167,10 @@ func ValidateDaemonSetUpdateStrategy(strategy *extensions.DaemonSetUpdateStrateg
 		// Make sure RollingUpdate field isn't nil.
 		if strategy.RollingUpdate == nil {
 			allErrs = append(allErrs, field.Required(fldPath.Child("rollingUpdate"), ""))
+			allErrs = append(allErrs,
+				apivalidation.ValidateNonnegativeField(
+					int64(strategy.RollingUpdate.Partition),
+					fldPath.Child("rollingUpdate").Child("partition"))...)
 			return allErrs
 		}
 		allErrs = append(allErrs, ValidateRollingUpdateDaemonSet(strategy.RollingUpdate, fldPath.Child("rollingUpdate"))...)
@@ -174,11 +178,19 @@ func ValidateDaemonSetUpdateStrategy(strategy *extensions.DaemonSetUpdateStrateg
 		// Make sure SurgingRollingUpdate field isn't nil.
 		if strategy.SurgingRollingUpdate == nil {
 			allErrs = append(allErrs, field.Required(fldPath.Child("surgingRollingUpdate"), ""))
+			allErrs = append(allErrs,
+				apivalidation.ValidateNonnegativeField(
+					int64(strategy.RollingUpdate.Partition),
+					fldPath.Child("surgingRollingUpdate").Child("partition"))...)
 			return allErrs
 		}
 		allErrs = append(allErrs, ValidateSurgingRollingUpdateDaemonSet(strategy.SurgingRollingUpdate, fldPath.Child("surgingRollingUpdate"))...)
 	default:
-		validValues := []string{string(extensions.RollingUpdateDaemonSetStrategyType), string(extensions.OnDeleteDaemonSetStrategyType)}
+		validValues := []string{
+			string(extensions.RollingUpdateDaemonSetStrategyType),
+			string(extensions.SurgingRollingUpdateDaemonSetStrategyType),
+			string(extensions.OnDeleteDaemonSetStrategyType),
+		}
 		allErrs = append(allErrs, field.NotSupported(fldPath, strategy, validValues))
 	}
 	return allErrs

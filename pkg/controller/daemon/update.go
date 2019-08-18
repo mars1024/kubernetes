@@ -47,6 +47,17 @@ func (dsc *DaemonSetsController) rollingUpdate(ds *apps.DaemonSet, hash string) 
 		return fmt.Errorf("couldn't get node to daemon pod mapping for daemon set %q: %v", ds.Name, err)
 	}
 
+	// respect gray update choice.
+	if ds.Spec.UpdateStrategy.RollingUpdate.Selector == nil {
+		if ds.Spec.UpdateStrategy.RollingUpdate.Partition != nil &&  *ds.Spec.UpdateStrategy.RollingUpdate.Partition > 0 {
+			// respect partitioned nodes to keep old versions.
+			nodeToDaemonPods = dsc.getNodeToDaemonPodsByPartition(ds, nodeToDaemonPods)
+		}
+	} else {
+		// respect selected nodes to update.
+		nodeToDaemonPods = dsc.getNodeToDaemonPodsBySelector(ds, nodeToDaemonPods)
+	}
+
 	_, oldPods := dsc.getAllDaemonSetPods(ds, nodeToDaemonPods, hash)
 	maxUnavailable, numUnavailable, err := dsc.getUnavailableNumbers(ds, nodeToDaemonPods)
 	if err != nil {
@@ -81,6 +92,62 @@ func (dsc *DaemonSetsController) rollingUpdate(ds *apps.DaemonSet, hash string) 
 		numUnavailable++
 	}
 	return dsc.syncNodes(ds, oldPodsToDelete, []string{}, hash)
+}
+
+func (dsc *DaemonSetsController) getNodeToDaemonPodsByPartition(ds *apps.DaemonSet, nodeToDaemonPods map[string][]*v1.Pod) map[string][]*v1.Pod {
+	// sort Nodes by their Names
+	var nodeNames []string
+	for nodeName := range nodeToDaemonPods {
+		nodeNames = append(nodeNames, nodeName)
+	}
+	sort.Strings(nodeNames)
+	var partition int32
+	switch ds.Spec.UpdateStrategy.Type {
+	case apps.RollingUpdateDaemonSetStrategyType:
+		partition = *ds.Spec.UpdateStrategy.RollingUpdate.Partition
+	case apps.SurgingRollingUpdateDaemonSetStrategyType:
+		partition = *ds.Spec.UpdateStrategy.SurgingRollingUpdate.Partition
+	}
+	// keep the old version pods whose count is no more than Partition value.
+	for i := int32(0); i < int32(len(nodeNames)); i++ {
+		if i == partition {
+			break
+		}
+		delete(nodeToDaemonPods, nodeNames[i])
+	}
+	return nodeToDaemonPods
+}
+
+func (dsc *DaemonSetsController) getNodeToDaemonPodsBySelector(ds *apps.DaemonSet, nodeToDaemonPods map[string][]*v1.Pod) map[string][]*v1.Pod {
+	var selector labels.Selector
+	var err error
+	switch ds.Spec.UpdateStrategy.Type {
+	case apps.OnDeleteDaemonSetStrategyType:
+		return nodeToDaemonPods
+	case apps.RollingUpdateDaemonSetStrategyType:
+		selector, err = metav1.LabelSelectorAsSelector(ds.Spec.UpdateStrategy.RollingUpdate.Selector)
+		if err != nil {
+			glog.Errorf("ds %s's rollingUpdate selector format err, ignore selector:%#v", ds.Name, ds.Spec.UpdateStrategy.RollingUpdate.Selector)
+			return nodeToDaemonPods
+		}
+	case apps.SurgingRollingUpdateDaemonSetStrategyType:
+		selector, err = metav1.LabelSelectorAsSelector(ds.Spec.UpdateStrategy.SurgingRollingUpdate.Selector)
+		if err != nil {
+			glog.Errorf("ds %s's surgingRollingUpdate selector format err, ignore selector:%#v", ds.Name, ds.Spec.UpdateStrategy.SurgingRollingUpdate.Selector)
+			return nodeToDaemonPods
+		}
+	}
+	for nodeName := range nodeToDaemonPods {
+		node, err := dsc.nodeLister.Get(nodeName)
+		if err != nil {
+			glog.Errorf("could not get node: %s nodeInfo", nodeName)
+			continue
+		}
+		if !selector.Matches(labels.Set(node.Labels)) {
+			delete(nodeToDaemonPods, nodeName)
+		}
+	}
+	return nodeToDaemonPods
 }
 
 // get all nodes where the ds should run
@@ -123,6 +190,17 @@ func (dsc *DaemonSetsController) surgingRollingUpdate(ds *apps.DaemonSet, hash s
 	maxSurge, numSurge, err := dsc.getSurgeNumbers(ds, nodeToDaemonPods, hash)
 	if err != nil {
 		return fmt.Errorf("Couldn't get surge numbers: %v", err)
+	}
+
+	// respect gray update choice.
+	if ds.Spec.UpdateStrategy.SurgingRollingUpdate.Selector == nil {
+		if ds.Spec.UpdateStrategy.SurgingRollingUpdate.Partition != nil && *ds.Spec.UpdateStrategy.SurgingRollingUpdate.Partition > 0 {
+			// respect partitioned nodes to keep old versions.
+			nodeToDaemonPods = dsc.getNodeToDaemonPodsByPartition(ds, nodeToDaemonPods)
+		}
+	} else {
+		// respect selected nodes to update.
+		nodeToDaemonPods = dsc.getNodeToDaemonPodsBySelector(ds, nodeToDaemonPods)
 	}
 
 	nodesWantToRun, nodesShouldContinueRunning, err := dsc.getNodesShouldRunDaemonPod(ds)

@@ -128,9 +128,10 @@ func newDaemonSet(name string) *apps.DaemonSet {
 
 func newRollingUpdateStrategy() *apps.DaemonSetUpdateStrategy {
 	one := intstr.FromInt(1)
+	partition := int32(0)
 	return &apps.DaemonSetUpdateStrategy{
 		Type:          apps.RollingUpdateDaemonSetStrategyType,
-		RollingUpdate: &apps.RollingUpdateDaemonSet{MaxUnavailable: &one},
+		RollingUpdate: &apps.RollingUpdateDaemonSet{MaxUnavailable: &one, Partition: &partition, Selector: nil},
 	}
 }
 
@@ -142,9 +143,10 @@ func newOnDeleteStrategy() *apps.DaemonSetUpdateStrategy {
 
 func newSurgingRollingUpdateStrategy() *apps.DaemonSetUpdateStrategy {
 	one := intstr.FromInt(1)
+	partition := int32(0)
 	return &apps.DaemonSetUpdateStrategy{
 		Type:                 apps.SurgingRollingUpdateDaemonSetStrategyType,
-		SurgingRollingUpdate: &apps.SurgingRollingUpdateDaemonSet{MaxSurge: &one},
+		SurgingRollingUpdate: &apps.SurgingRollingUpdateDaemonSet{MaxSurge: &one, Partition: &partition, Selector: nil},
 	}
 }
 

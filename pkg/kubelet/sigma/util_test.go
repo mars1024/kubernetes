@@ -206,3 +206,54 @@ func TestIsContainerReadyIgnore(t *testing.T) {
 		assert.Equal(t, test.isContainerReadyIgnore, IsContainerReadyIgnore(test.container))
 	}
 }
+
+func TestIsPodDisableServiceLinks(t *testing.T) {
+	tests := []struct {
+		message                  string
+		pod                      *v1.Pod
+		isPodDisableServiceLinks bool
+	}{
+		{
+			message: "disalbe service links",
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "bar",
+					Namespace: "foo",
+					Labels:    map[string]string{sigmak8sapi.LabelDisableServiceLinks: "true"},
+				},
+			},
+			isPodDisableServiceLinks: true,
+		},
+		{
+			message: "enable service links because label is nil",
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "bar",
+					Namespace: "foo",
+				},
+			},
+			isPodDisableServiceLinks: false,
+		},
+		{
+			message: "enable service links because label value is wrong",
+			pod: &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "bar",
+					Namespace: "foo",
+					Labels:    map[string]string{sigmak8sapi.LabelDisableServiceLinks: "something_else"},
+				},
+			},
+			isPodDisableServiceLinks: false,
+		},
+		{
+			message:                  "pod is nil",
+			pod:                      nil,
+			isPodDisableServiceLinks: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Logf("case %s", test.message)
+		assert.Equal(t, IsPodDisableServiceLinks(test.pod), test.isPodDisableServiceLinks)
+	}
+}

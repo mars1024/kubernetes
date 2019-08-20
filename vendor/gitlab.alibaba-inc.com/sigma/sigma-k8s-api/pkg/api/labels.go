@@ -60,4 +60,7 @@ const (
 
 	// If true, the pod belongs to pod.
 	LabelPodIsJob = "meta.k8s.alipay.com/job"
+
+	// If true, the service envs won't be injected into container.
+	LabelDisableServiceLinks = "sigma.ali/disable-service-links"
 )

@@ -95,3 +95,17 @@ func IsContainerReadyIgnore(container *v1.Container) bool {
 	}
 	return false
 }
+
+// IsPodDisableServiceLinks returns whether container should igore service envs or not.
+// It is only used in 1.12, because EnableServiceLinks field in PodSpec is already implemented in 1.14.
+func IsPodDisableServiceLinks(pod *v1.Pod) bool {
+	if pod == nil || len(pod.Labels) == 0 {
+		return false
+	}
+
+	if isPodDisableServiceLinks, err := strconv.ParseBool(pod.Labels[sigmak8sapi.LabelDisableServiceLinks]); err == nil && isPodDisableServiceLinks {
+		return true
+	}
+
+	return false
+}

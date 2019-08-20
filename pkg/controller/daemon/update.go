@@ -627,6 +627,7 @@ func (dsc *DaemonSetsController) getUnavailableNumbers(ds *apps.DaemonSet, nodeT
 		desiredNumberScheduled++
 		daemonPods, exists := nodeToDaemonPods[node.Name]
 		if !exists {
+			glog.V(4).Infof("node %s has no daemonset pod %s/%s yet, unavaliable", node.Name, ds.Namespace, ds.Name)
 			numUnavailable++
 			continue
 		}
@@ -639,6 +640,7 @@ func (dsc *DaemonSetsController) getUnavailableNumbers(ds *apps.DaemonSet, nodeT
 			}
 		}
 		if !available {
+			glog.V(4).Infof("node %s has no avaliable daemonset pod %s/%s yet, unavaliable", node.Name, ds.Namespace, ds.Name)
 			numUnavailable++
 		}
 	}

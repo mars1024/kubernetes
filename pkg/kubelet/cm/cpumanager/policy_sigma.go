@@ -90,14 +90,14 @@ func (p *sigmaPolicy) Start(s state.State) {
 	}
 	node, err := p.nodeInfo.GetNodeInfo(string(p.nodeName))
 	if err != nil {
-		glog.Warningf("[cpumanager] sigma policy can't get node: %s, set defaultCPUSet to all cpus", node.Name)
+		glog.Warningf("[cpumanager] sigma policy can't get node: %s, set defaultCPUSet to all cpus", string(p.nodeName))
 		s.SetDefaultCPUSet(p.topology.CPUDetails.CPUs())
 		return
 	}
 
 	expectDefaultCPUSet, exists := p.getDefaultCPUSetFromNodeAnnotation(node)
 	if !exists {
-		glog.Warningf("[cpumanager] sigma policy can't get defultCPUSet from node: %s, set defaultCPUSet to all cpus", node.Name)
+		glog.Warningf("[cpumanager] sigma policy can't get defultCPUSet from node: %s, set defaultCPUSet to all cpus", string(p.nodeName))
 		s.SetDefaultCPUSet(p.topology.CPUDetails.CPUs())
 		return
 	}
@@ -111,7 +111,7 @@ func (p *sigmaPolicy) CheckAndCorrectDefaultCPUSet(s state.State) {
 	}
 	node, err := p.nodeInfo.GetNodeInfo(string(p.nodeName))
 	if err != nil {
-		glog.Errorf("[cpumanager] sigma policy can't get node: %s", node.Name)
+		glog.Errorf("[cpumanager] sigma policy can't get node: %s", string(p.nodeName))
 		return
 	}
 

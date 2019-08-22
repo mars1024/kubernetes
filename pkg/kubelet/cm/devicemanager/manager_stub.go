@@ -61,3 +61,8 @@ func (h *ManagerStub) GetCapacity() (v1.ResourceList, v1.ResourceList, []string)
 func (h *ManagerStub) GetWatcherHandler() pluginwatcher.PluginHandler {
 	return nil
 }
+
+// ShouldResetExtendedResourceCapacity returns false
+func (h *ManagerStub) ShouldResetExtendedResourceCapacity() bool {
+	return false
+}

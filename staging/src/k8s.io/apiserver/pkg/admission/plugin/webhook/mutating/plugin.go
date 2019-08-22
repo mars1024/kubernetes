@@ -65,9 +65,9 @@ func NewMutatingWebhook(configFile io.Reader) (*Plugin, error) {
 	p := &Plugin{}
 	var err error
 	if !feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
-		p.Webhook, err = generic.NewWebhook(handler, configFile, configuration.NewMutatingWebhookConfigurationManager, newMutatingDispatcher(p))
+		p.Webhook, err = generic.NewMutatingWebhookWithObjectSelectorProxy(generic.NewWebhook, handler, configFile, configuration.NewMutatingWebhookConfigurationManager, newMutatingDispatcher(p))
 	} else {
-		p.Webhook, err = generic.NewWebhook(handler, configFile, multitenancyconfiguration.NewMutatingWebhookConfigurationManager, newMutatingDispatcher(p))
+		p.Webhook, err = generic.NewMutatingWebhookWithObjectSelectorProxy(generic.NewWebhook, handler, configFile, multitenancyconfiguration.NewMutatingWebhookConfigurationManager, newMutatingDispatcher(p))
 	}
 	if err != nil {
 		return nil, err
@@ -106,9 +106,8 @@ func (a *Plugin) Admit(attr admission.Attributes) error {
 		if err != nil {
 			return err
 		}
-		a.Webhook.ShallowCopyWithTenant(tenant)
-		var aInterface interface{} = a.Webhook
-		a.Webhook = aInterface.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(*generic.Webhook)
+		var aInterface interface{} = a
+		a = aInterface.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(*Plugin)
 	}
 	return a.Webhook.Dispatch(attr)
 }

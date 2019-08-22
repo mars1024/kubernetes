@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"k8s.io/kubernetes/pkg/scheduler/convertible"
 	"net/http"
 	"os"
 	goruntime "runtime"
@@ -365,5 +366,8 @@ func NewSchedulerConfig(s schedulerserverconfig.CompletedConfig) (*scheduler.Con
 	config.Recorder = s.Recorder
 
 	config.DisablePreemption = s.ComponentConfig.DisablePreemption
+
+	convertible.Init(enableResourceAllocationPrioritiesConvertible(config))
+
 	return config, nil
 }

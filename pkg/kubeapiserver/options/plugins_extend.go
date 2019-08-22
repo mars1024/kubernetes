@@ -17,18 +17,15 @@ limitations under the License.
 package options
 
 import (
-	"k8s.io/apiserver/pkg/admission"
-	"k8s.io/kubernetes/plugin/pkg/admission/antitamper"
-	"k8s.io/kubernetes/plugin/pkg/admission/ase"
-	"k8s.io/kubernetes/plugin/pkg/admission/servicenetallocator"
-	akspodpostschedule "k8s.io/kubernetes/plugin/pkg/admission/podpostschedule"
-	aksprivatecloud "k8s.io/kubernetes/plugin/pkg/admission/privatecloud"
-	monotype "k8s.io/kubernetes/plugin/pkg/admission/antcloud/monotype"
-	"k8s.io/kubernetes/plugin/pkg/admission/imagepullsecret"
-
+	"gitlab.alipay-inc.com/antcloud-aks/cafe-cluster-operator/plugin/admission/clusterresourcequota"
 	"gitlab.alipay-inc.com/antcloud-aks/cafe-kubernetes-extension/plugin/admission/clusterinjection"
 	"gitlab.alipay-inc.com/antcloud-aks/cafe-kubernetes-extension/plugin/admission/objectmetareconcile"
-	"gitlab.alipay-inc.com/antcloud-aks/cafe-cluster-operator/plugin/admission/clusterresourcequota"
+	"k8s.io/apiserver/pkg/admission"
+	monotype "k8s.io/kubernetes/plugin/pkg/admission/antcloud/monotype"
+	"k8s.io/kubernetes/plugin/pkg/admission/antitamper"
+	akspodpostschedule "k8s.io/kubernetes/plugin/pkg/admission/podpostschedule"
+	aksprivatecloud "k8s.io/kubernetes/plugin/pkg/admission/privatecloud"
+	"k8s.io/kubernetes/plugin/pkg/admission/servicenetallocator"
 )
 
 var AllOrderedCafePlugins = []string{
@@ -36,11 +33,10 @@ var AllOrderedCafePlugins = []string{
 	akspodpostschedule.PluginName,   // Alipay AntCloud PodPostSchedule
 	monotype.PluginName,             // Antcloud monotype mutating plugin
 	antitamper.PluginName,           // Anti Tampering of Critical ConfigMaps/Labels/Annotations
-	ase.PluginName,                  // ASE
 	servicenetallocator.PluginName,  // ServiceNetAllocator
 	aksprivatecloud.PluginName,      // Private AntCloud
 	clusterresourcequota.PluginName, // ClusterResourceQuota
-	imagepullsecret.PluginName,      // CafeImageSecret
+	//imagepullsecret.PluginName,      // CafeImageSecret
 	objectmetareconcile.PluginName,  // ObjectMetaReconcile
 }
 
@@ -50,10 +46,9 @@ func RegisterCafeAdmissionPlugins(plugins *admission.Plugins) {
 	monotype.Register(plugins)
 	servicenetallocator.Register(plugins)
 	antitamper.Register(plugins)
-	ase.Register(plugins)
 	// private antCloud
 	aksprivatecloud.Register(plugins)
 	clusterresourcequota.Register(plugins)
-	imagepullsecret.Register(plugins)
+	//imagepullsecret.Register(plugins)
 	objectmetareconcile.Register(plugins)
 }

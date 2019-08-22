@@ -7,6 +7,7 @@ import (
 	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 	"k8s.io/api/core/v1"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	clientset "k8s.io/client-go/kubernetes"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	storagelisters "k8s.io/client-go/listers/storage/v1"
@@ -34,10 +35,12 @@ func (ctrl *PersistentVolumeController) ShallowCopyWithTenant(tenant multitenanc
 }
 
 func getVolumeNameFromPVC(pvc *v1.PersistentVolumeClaim) string {
-	tenantInfo, err := util.TransformTenantInfoFromAnnotations(pvc.Annotations)
 	volumeName := pvc.Spec.VolumeName
-	if err == nil {
-		return multitenancyutil.TransformTenantInfoToJointString(tenantInfo, "/") + "/" + volumeName
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, err := util.TransformTenantInfoFromAnnotations(pvc.Annotations)
+		if err == nil {
+			return multitenancyutil.TransformTenantInfoToJointString(tenantInfo, "/") + "/" + volumeName
+		}
 	}
 	return volumeName
 }

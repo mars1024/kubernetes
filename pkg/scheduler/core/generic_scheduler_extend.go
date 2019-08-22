@@ -3,7 +3,6 @@ package core
 import (
 	"encoding/json"
 	"fmt"
-
 	"github.com/golang/glog"
 	"k8s.io/api/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
@@ -16,6 +15,9 @@ import (
 	"k8s.io/kubernetes/pkg/scheduler/core/equivalence"
 	"k8s.io/kubernetes/pkg/scheduler/util"
 	"k8s.io/kubernetes/pkg/scheduler/volumebinder"
+	"sync"
+
+	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 )
 
 const (
@@ -46,21 +48,48 @@ func getPriorityWeightOverrideMap(pod *v1.Pod) map[string]int {
 type GenericSchedulerExtend struct {
 	genericScheduler
 	client clientset.Interface
+	rwLock *sync.RWMutex
 }
 
 // Allocate allocates the resources for the pod on given host
 func (ge *GenericSchedulerExtend) Allocate(pod *v1.Pod, host string) error {
+	alloc := util.AllocSpecFromPod(pod)
+	if alloc == nil {
+		// Native pod goes native way
+		return nil
+	}
 	nodeInfo := ge.cachedNodeInfoMap[host]
+	if util.LocalInfoFromNode(nodeInfo.Node()) == nil {
+		glog.V(4).Infof("node %s is nil or not eligible for cpuset Allocation", host)
+		return nil
+	}
+	ge.rwLock.Lock()
+	glog.V(3).Infof("entered allocation section [%s/%s]", pod.Namespace, pod.Name)
+	// refresh the scheduler cachedNodeInfoMap with the latest pod info(especially
+	// the assumed pod, otherwise cpuset can be assigned by multiple pods when in
+	// high-concurrency
+	err := ge.cache.UpdateNodeNameToInfoMap(ge.cachedNodeInfoMap)
+	nodeInfo = ge.cachedNodeInfoMap[host]
+	if err != nil {
+		ge.rwLock.Unlock()
+		glog.V(3).Infof("exited allocation section on UpdateNodeNameToInfoMap error [%s/%s]", pod.Namespace, pod.Name)
+		return err
+	}
 	allocator := allocators.NewCPUAllocator(nodeInfo)
 	result, err := allocator.Allocate(pod)
 	if err != nil {
+		ge.rwLock.Unlock()
+		glog.V(3).Infof("exited allocation section on allocation error [%s/%s]", pod.Namespace, pod.Name)
 		return err
 	}
 	if len(result) <= 0 {
 		glog.V(3).Infof("patch result is %#v for pod %s/%s, skipping patch", result, pod.Namespace, pod.Name)
+		ge.rwLock.Unlock()
+		glog.V(3).Infof("exited allocation section on empty result [%s/%s]", pod.Namespace, pod.Name)
 		return nil
 	}
 	glog.V(3).Infof("going to patch CPUSet %v for pod %s/%s", result, pod.Namespace, pod.Name)
+	originAlloc, allocExists := pod.Annotations[sigmak8sapi.AnnotationPodAllocSpec]
 	patchPod := allocators.MakePodCPUPatch(pod, result)
 	cpuAllocator, ok := allocator.(*allocators.CPUAllocator)
 	var nodeShareCPUPool cpuset.CPUSet
@@ -69,8 +98,14 @@ func (ge *GenericSchedulerExtend) Allocate(pod *v1.Pod, host string) error {
 		nodeShareCPUPool = cpuAllocator.NodeCPUSharePool()
 		nodeName = host
 	}
+	ge.rwLock.Unlock() // Unlock now, do not wait for patch result
+	glog.V(3).Infof("exited allocation section normally [%s/%s]", pod.Namespace, pod.Name)
 	err = allocators.DoPatchAll(ge.client, pod, patchPod, nodeShareCPUPool, nodeName)
 	if err != nil {
+		// revert the alloc-spec to previous status
+		if allocExists {
+			pod.Annotations[sigmak8sapi.AnnotationPodAllocSpec] = originAlloc
+		}
 		return allocators.ErrAllocatorFailure(allocator.Name(), err.Error())
 	}
 	return err
@@ -89,28 +124,17 @@ func (ge *GenericSchedulerExtend) inplaceUpdateReallocate(pod *v1.Pod) (string, 
 
 	// Remove the pod with last spec as the resource check will be ok.
 	// And we can add this pod back into cache if scheduling pass.
-	var err error
-	if isAssumed, _ := ge.cache.IsAssumedPod(pod); isAssumed {
-		err = ge.cache.ForgetPod(pod)
-	} else {
-		errRemove := ge.cache.RemovePod(pod)
-		if errRemove != nil {
-			glog.Warningf("[inplaceUpdateReallocate]failed to remove pod from scheduler cache:%s", errRemove.Error())
-		}
-	}
-	defer func() {
-		ge.cache.FinishBinding(pod)
-	}()
-	if err != nil {
-		glog.Errorf("[inplaceUpdateReallocate]failed to forget/remove pod %s/%s from cache: %s", pod.Namespace, pod.Name, err.Error())
+	temp := nodeInfo.Clone()
+	if err := temp.RemovePod(pod); err != nil {
+		glog.Error("failed to remove pod %s before predicating: %s", pod.Namespace, pod.Name, err.Error())
 		return "", err
 	}
 	// Call PodFitsResources to check resources.
-	if fit, predicateFails, _ := predicates.PodCPUSetResourceFit(pod, nil, nodeInfo); !fit {
+	if fit, predicateFails, _ := predicates.PodCPUSetResourceFit(pod, nil, temp); !fit {
 		return "", fmt.Errorf("failed to fit resource[PodCPUSetResourceFit] in inplace update processing with predicateFails: %+v", predicateFails)
 	}
 
-	if fit, predicateFails, _ := predicates.PodFitsResources(pod, nil, nodeInfo); !fit {
+	if fit, predicateFails, _ := predicates.PodFitsResources(pod, nil, temp); !fit {
 		return "", fmt.Errorf("failed to fit resource[PodFitsResources] in inplace update processing with predicateFails: %+v", predicateFails)
 	}
 	// If CPU value is not changed, return immediately.
@@ -121,7 +145,7 @@ func (ge *GenericSchedulerExtend) inplaceUpdateReallocate(pod *v1.Pod) (string, 
 
 	glog.V(4).Infof("[inplaceUpdateReallocate]reallocating CPUSet for pod %q", pod.Name)
 	// Call CPUSetAllocation to alloc CPUIDs.
-	cpuAlloc := allocators.NewCPUAllocator(nodeInfo)
+	cpuAlloc := allocators.NewCPUAllocator(temp)
 	cpuAssignments, err := cpuAlloc.Reallocate(pod)
 	return string(allocators.GenAllocSpecAnnotation(pod, cpuAssignments)), err
 }
@@ -187,5 +211,6 @@ func NewGenericSchedulerExtend(
 	return &GenericSchedulerExtend{
 		genericScheduler: gs,
 		client:           client,
+		rwLock:           new(sync.RWMutex),
 	}
 }

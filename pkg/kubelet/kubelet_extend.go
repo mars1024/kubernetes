@@ -23,9 +23,12 @@ import (
 
 	"github.com/golang/glog"
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
-	"k8s.io/api/core/v1"
+	"gitlab.alipay-inc.com/sigma/eavesdropping/pkg/opentracing"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	"k8s.io/kubernetes/pkg/features"
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	sigmautil "k8s.io/kubernetes/pkg/kubelet/sigma"
@@ -148,8 +151,20 @@ func PodHaveRebuildAnnotation(pod *v1.Pod) bool {
 	return false
 }
 
+func (kl *Kubelet) updateTraceData(pod *v1.Pod, patcher *opentracing.MiniObject) {
+	if utilfeature.DefaultFeatureGate.Enabled(features.PatchTracingToObject) {
+		patchData := patcher.CompressedStrategicMergePatch("{}")
+		if len(patchData) > 2 {
+			_, err := kl.kubeClient.CoreV1().Pods(pod.GetNamespace()).Patch(pod.GetName(), types.StrategicMergePatchType, []byte(patchData))
+			if err != nil {
+				glog.Errorf("Failed to patch traceing data to pod %s: %v", format.Pod(pod), err)
+			}
+		}
+	}
+}
+
 // updateStateStatus will update pod's state status annotation with new container's state status.
-func (kl *Kubelet) updateStateStatus(pod *v1.Pod, result kubecontainer.PodSyncResult, retry int, triesBeforeBackOff int, backOffPeriod time.Duration) error {
+func (kl *Kubelet) updateStateStatus(pod *v1.Pod, result kubecontainer.PodSyncResult, retry int, triesBeforeBackOff int, backOffPeriod time.Duration, patcher *opentracing.MiniObject) error {
 	// Get latest previous StateStatus from pod and the new StateStatus from result.
 	podAnnotationValue := getAnnotationValue(pod.GetAnnotations(), sigmak8sapi.AnnotationPodUpdateStatus)
 	latestStateStatus :=
@@ -232,6 +247,10 @@ func (kl *Kubelet) updateStateStatus(pod *v1.Pod, result kubecontainer.PodSyncRe
 	} else {
 		patchData = fmt.Sprintf(
 			`{"metadata":{"annotations":{"%s":%q}}}`, sigmak8sapi.AnnotationPodUpdateStatus, updateAnnotationValue)
+	}
+
+	if utilfeature.DefaultFeatureGate.Enabled(features.PatchTracingToObject) {
+		patchData = patcher.CompressedStrategicMergePatch(patchData)
 	}
 
 	// Update pod's StateStatus annotation.

@@ -36,6 +36,8 @@ const (
 
 	AnnotationPodAllocSpec = "pod.beta1.sigma.ali/alloc-spec"
 
+	AnnotationPodRequestAllocSpec = "pod.beta1.sigma.ali/request-alloc-spec"
+
 	AnnotationPodNetworkStats = "pod.beta1.sigma.ali/network-status"
 
 	AnnotationPodNetworkStatsHistory = "pod.beta1.sigma.ali/network-status-history"
@@ -47,6 +49,7 @@ const (
 	// AnnotationPodSpecHash is a pod spec hash string provided by user
 	AnnotationPodSpecHash = "pod.beta1.sigma.ali/pod-spec-hash"
 
+	// Deprecated: please use LabelPodRegisterNamingState
 	AnnotationPodRegisterNamingState = "pod.beta1.sigma.ali/naming-register-state"
 
 	// AnnotationAutopilot is the prefix of autopilot service in node annotation
@@ -62,6 +65,9 @@ const (
 	// AnnotationPodHostNameTemplate is pod hostname template which used to generate hostname.
 	AnnotationPodHostNameTemplate = "pod.beta1.sigma.ali/hostname-template"
 
+	// AnnotationPodHostNameTemplateSuffix is pod hostname template suffix which is used to generate hostname template.
+	AnnotationPodHostNameTemplateSuffix = "pod.beta1.sigma.ali/hostname-template-suffix"
+
 	// AnnotationNodeCPUSharePool is annotation key of the cpu share pool of Node API
 	AnnotationNodeCPUSharePool = "node.beta1.sigma.ali/cpu-sharepool"
 
@@ -72,9 +78,51 @@ const (
 	// sigmalet will skip pod create, the value is timeout seconds, zero represent without limit
 	AnnotationPodPendingTimeSeconds = "pod.beta1.sigma.ali/pending-time-seconds"
 
-        // AnnotationDisableCascadingDeletion indicates whether such resource disabled cascading-deletion
-        AnnotationDisableCascadingDeletion = "sigma.ali/disable-cascading-deletion"
+	// AnnotationDisableCascadingDeletion indicates whether such resource disabled cascading-deletion
+	AnnotationDisableCascadingDeletion = "sigma.ali/disable-cascading-deletion"
 
-	// AnnotationEnableAppRulesInjection indicates wether to inject apprules into this resource.
+	// AnnotationEnableAppRulesInjection indicates whether to inject apprules into this resource.
 	AnnotationEnableAppRulesInjection = "sigma.ali/enable-apprules-injection"
+
+	// AnnotationContainerDiskQuotaID is container diskQuotaID
+	AnnotationContainerDiskQuotaID = "sigma.ali/container-diskQuotaID"
+
+	//AnnotationDisableOverquotaFilter indicates whether to ignore the overquota label.
+	AnnotationDisableOverquotaFilter = "sigma.ali/disable-over-quota-filter"
+
+	// AnnotationResourceDeletingConfirmed indicates if the Resources is confirmed to deleting.
+	// If the Resource has this annotation, admission will REJECT deleting operation if the annotation value is NOT true
+	// For now, only implemented Resources: Pod
+	AnnotationResourceDeletingConfirmed = "sigma.ali/deleting-confirmed"
+
+	// AnnotationResourceDeletingConfirmed indicates if the namespaced Resources need to inject AnnotationResourceDeletingConfirmed
+	// This annotation will only be set to Namespace
+	// If the Namespace has this annotation and the value is true, when the Resource created in this Namespace,
+	// then Resource will be injected AnnotationResourceDeletingConfirmed and value is false
+	// For now, only these Resources will be injected AnnotationResourceDeletingConfirmed: Pod
+	AnnotationResourceInjectDeletingConfirmed = "sigma.ali/inject-deleting-confirmed"
+
+	// AnnotationResourceInjectTraceID indicates if the namespaced Resources need to inject AnnotationKeyTraceID
+	// The default action is injection, only if the value is "disable" the injection will be disabled
+	AnnotationResourceInjectTraceID = "sigma.ali/inject-trace-id"
+
+	// AnnotationKeyTraceID is annotation key for traceID
+	AnnotationKeyTraceID = "pod.beta1.sigma.ali/trace-id"
+	// AnnotationKeyTrace annotation key for trace content
+	AnnotationKeyTrace = "pod.beta1.sigma.ali/trace"
+	// AnnotationKeyCompressedTrace annotation key for compressed trace content(gzip+base64)
+	AnnotationKeyCompressedTrace = "pod.beta1.sigma.ali/gzip-trace"
+
+	// AnnotationPodDesiredStateSpec is pod desired state spec
+	AnnotationPodDesiredStateSpec = "pod.beta1.sigma.ali/desired-state-spec"
+
+	// AnnotationAppGroupAutoCreation is pod auto create appGroup
+	AnnotationAppGroupAutoCreation = "pod.beta1.sigma.ali/appgroup-auto-creation"
+
+	// If true, will update quota spec without admission check.
+	AnnotationForceUpdateQuota = AlibabaCloudPrefix + "/force-update-quota"
+
+	// If "true", the user related info will be retained during upgrading whatever
+	// the status of feature gate DisableUserInfoRetainDuringUpgrade
+	AnnotationForceRetainUserInfo = "pod.beta1.sigma.ali/force-retain-user-info"
 )

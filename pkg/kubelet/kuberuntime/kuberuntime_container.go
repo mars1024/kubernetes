@@ -31,13 +31,14 @@ import (
 	"sync"
 	"time"
 
+	"gitlab.alipay-inc.com/sigma/eavesdropping/pkg/opentracing"
 	"google.golang.org/grpc"
 
 	"github.com/armon/circbuf"
 	"github.com/golang/glog"
 
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubetypes "k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -48,6 +49,7 @@ import (
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	"k8s.io/kubernetes/pkg/kubelet/events"
 	sigmautil "k8s.io/kubernetes/pkg/kubelet/sigma"
+	"k8s.io/kubernetes/pkg/kubelet/tracing"
 	"k8s.io/kubernetes/pkg/kubelet/types"
 	"k8s.io/kubernetes/pkg/kubelet/util/format"
 	"k8s.io/kubernetes/pkg/util/selinux"
@@ -91,11 +93,19 @@ func (m *kubeGenericRuntimeManager) recordContainerEvent(pod *v1.Pod, container 
 // * create the container
 // * start the container
 // * run the post start lifecycle hooks (if applicable)
-func (m *kubeGenericRuntimeManager) startContainer(podSandboxID string, podSandboxConfig *runtimeapi.PodSandboxConfig, container *v1.Container, pod *v1.Pod, podStatus *kubecontainer.PodStatus, pullSecrets []v1.Secret, podIP string, containerType kubecontainer.ContainerType) (string, error) {
+func (m *kubeGenericRuntimeManager) startContainer(ctx context.Context, podSandboxID string, podSandboxConfig *runtimeapi.PodSandboxConfig, container *v1.Container, pod *v1.Pod, podStatus *kubecontainer.PodStatus, pullSecrets []v1.Secret, podIP string, containerType kubecontainer.ContainerType) (string, error) {
+
+	ctx, t, _ := tracing.FlatTracker.Track(ctx, nil, "kubeGenericRuntimeManager.startContainer")
+	defer t.Finish(ctx)
+
+	ctx, _ = t.Stage(ctx, "pullImage")
+	opentracing.LogKV(ctx, "image", container.Image)
+
 	// Step 1: pull the image.
 	imageRef, msg, err := m.imagePuller.EnsureImageExists(pod, container, pullSecrets)
 	if err != nil {
 		m.recordContainerEvent(pod, container, "", v1.EventTypeWarning, events.FailedToCreateContainer, "Error: %v", grpc.ErrorDesc(err))
+		opentracing.LogError(ctx, err)
 		return msg, err
 	}
 
@@ -109,10 +119,15 @@ func (m *kubeGenericRuntimeManager) startContainer(podSandboxID string, podSandb
 		if err != nil {
 			glog.Errorf("Backup userinfo from container %q failed: %v, %q",
 				rebuildContainerID, err, msg)
-			return fmt.Sprintf("Failed to backup userinfo from container: %s", rebuildContainerID), err
+			msg := fmt.Sprintf("Failed to backup userinfo from container: %s", rebuildContainerID)
+			opentracing.LogKV(ctx, "message", msg)
+			opentracing.LogError(ctx, err)
+			return msg, err
 		}
 		glog.V(0).Infof("Backup userinfo from container %q in sigma2 successfully", rebuildContainerID)
 	}
+
+	ctx, _ = t.Stage(ctx, "createContainer")
 
 	// Step 2: create the container.
 	ref, err := kubecontainer.GenerateContainerRef(pod, container)
@@ -134,17 +149,23 @@ func (m *kubeGenericRuntimeManager) startContainer(podSandboxID string, podSandb
 	}
 	if err != nil {
 		m.recordContainerEvent(pod, container, "", v1.EventTypeWarning, events.FailedToCreateContainer, "Error: %v", grpc.ErrorDesc(err))
+		opentracing.LogKV(ctx, "message", grpc.ErrorDesc(err))
+		opentracing.LogError(ctx, ErrCreateContainerConfig)
 		return grpc.ErrorDesc(err), ErrCreateContainerConfig
 	}
 
 	containerID, err := m.runtimeService.CreateContainer(podSandboxID, containerConfig, podSandboxConfig)
 	if err != nil {
 		m.recordContainerEvent(pod, container, containerID, v1.EventTypeWarning, events.FailedToCreateContainer, "Error: %v", grpc.ErrorDesc(err))
+		opentracing.LogKV(ctx, "message", grpc.ErrorDesc(err))
+		opentracing.LogError(ctx, ErrCreateContainer)
 		return grpc.ErrorDesc(err), ErrCreateContainer
 	}
 	err = m.internalLifecycle.PreStartContainer(pod, container, containerID)
 	if err != nil {
 		m.recordContainerEvent(pod, container, containerID, v1.EventTypeWarning, events.FailedToStartContainer, "Internal PreStartContainer hook failed: %v", grpc.ErrorDesc(err))
+		opentracing.LogKV(ctx, "message", grpc.ErrorDesc(err))
+		opentracing.LogError(ctx, ErrPreStartHook)
 		return grpc.ErrorDesc(err), ErrPreStartHook
 	}
 	m.recordContainerEvent(pod, container, containerID, v1.EventTypeNormal, events.CreatedContainer, "Created container")
@@ -167,7 +188,10 @@ func (m *kubeGenericRuntimeManager) startContainer(podSandboxID string, podSandb
 			if msg, err := userinfoBackup.RestoreUserinfo(pod, container, containerID); err != nil {
 				glog.Errorf("Restore userinfo for container %q(id=%q) in pod %q failed: %v, %s",
 					container.Name, containerID, format.Pod(pod), err, msg)
-				return fmt.Sprintf("failed to restore userinfo to container %q", containerID), err
+				msg := fmt.Sprintf("failed to restore userinfo to container %q", containerID)
+				opentracing.LogKV(ctx, "message", msg)
+				opentracing.LogError(ctx, err)
+				return msg, err
 			}
 			glog.V(0).Infof("Restore userinfo for container %q(id=%q) in pod %q successfully",
 				container.Name, containerID, format.Pod(pod))
@@ -176,17 +200,23 @@ func (m *kubeGenericRuntimeManager) startContainer(podSandboxID string, podSandb
 			if msg, err := userinfoBackup.DeleteUserinfo(pod, container); err != nil {
 				glog.Errorf("Delete userinfo for container %q in pod %q failed: %v, %q",
 					container.Name, format.Pod(pod), err, msg)
-				return fmt.Sprintf("failed to delete userinfo for pod %q", format.Pod(pod)), err
+				msg := fmt.Sprintf("failed to delete userinfo for pod %q", format.Pod(pod))
+				opentracing.LogKV(ctx, "message", msg)
+				opentracing.LogError(ctx, err)
+				return msg, err
 			}
 			glog.V(0).Infof("Delete userinfo for container %q(id=%q) in pod %q successfully",
 				container.Name, containerID, format.Pod(pod))
 		}
 	}
 
+	ctx, _ = t.Stage(ctx, "startContainer")
 	// Step 3: start the container.
 	err = m.runtimeService.StartContainer(containerID)
 	if err != nil {
 		m.recordContainerEvent(pod, container, containerID, v1.EventTypeWarning, events.FailedToStartContainer, "Error: %v", grpc.ErrorDesc(err))
+		opentracing.LogKV(ctx, "message", grpc.ErrorDesc(err))
+		opentracing.LogError(ctx, kubecontainer.ErrRunContainer)
 		return grpc.ErrorDesc(err), kubecontainer.ErrRunContainer
 	}
 	m.recordContainerEvent(pod, container, containerID, v1.EventTypeNormal, events.StartedContainer, "Started container")
@@ -210,6 +240,7 @@ func (m *kubeGenericRuntimeManager) startContainer(podSandboxID string, podSandb
 		}
 	}
 
+	ctx, _ = t.Stage(ctx, "executePostStartHook")
 	// Step 4: execute the post start hook.
 	if container.Lifecycle != nil && container.Lifecycle.PostStart != nil {
 		timeout := sigmautil.GetTimeoutSecondsFromPodAnnotation(pod, container.Name, sigmak8sapi.PostStartHookTimeoutSeconds)
@@ -226,7 +257,10 @@ func (m *kubeGenericRuntimeManager) startContainer(podSandboxID string, podSandb
 				glog.Errorf("Failed to kill container %q(id=%q) in pod %q: %v, %v",
 					container.Name, kubeContainerID.String(), format.Pod(pod), ErrPostStartHook, err)
 			}
-			return msg, fmt.Errorf("%s: %v", ErrPostStartHook, handlerErr)
+			err := fmt.Errorf("%s: %v", ErrPostStartHook, handlerErr)
+			opentracing.LogKV(ctx, "message", msg)
+			opentracing.LogError(ctx, err)
+			return msg, err
 		}
 		m.recordContainerEvent(pod, container, containerID, v1.EventTypeNormal, events.SucceedPostStartHook,
 			fmt.Sprintf("Container %s execute poststart hook success", container.Name))
@@ -691,8 +725,8 @@ func (m *kubeGenericRuntimeManager) restoreSpecsFromContainerLabels(containerID 
 		},
 	}
 	container = &v1.Container{
-		Name:  l.ContainerName,
-		Ports: a.ContainerPorts,
+		Name:                   l.ContainerName,
+		Ports:                  a.ContainerPorts,
 		TerminationMessagePath: a.TerminationMessagePath,
 	}
 	if a.PreStopHandler != nil {

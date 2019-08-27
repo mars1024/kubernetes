@@ -1,6 +1,7 @@
 package kuberuntime
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -12,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
@@ -198,7 +199,7 @@ func TestSyncPodExtension(t *testing.T) {
 		},
 	}
 
-	m.SyncPodExtension(podSandboxConfig, pod, status, []v1.Secret{}, "", result, podActions, nil)
+	m.SyncPodExtension(context.Background(), podSandboxConfig, pod, status, []v1.Secret{}, "", result, podActions, nil)
 
 	assert.True(t, len(fakeRuntime.Containers) == len(templates), "container num should not change")
 
@@ -588,7 +589,7 @@ func TestSyncPodExtensionWithUpdatedContainer(t *testing.T) {
 			Statuses: make(map[sigmak8sapi.ContainerInfo]sigmak8sapi.ContainerStatus),
 		},
 	}
-	m.SyncPodExtension(podSandboxConfig, pod, status, []v1.Secret{}, "", syncResult, podActions, nil)
+	m.SyncPodExtension(context.Background(), podSandboxConfig, pod, status, []v1.Secret{}, "", syncResult, podActions, nil)
 	updateContainerSyncResult := syncResult.SyncResults[0]
 	assert.True(t, updateContainerSyncResult.Error == nil, "should update success")
 }

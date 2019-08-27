@@ -17,6 +17,8 @@ limitations under the License.
 package api
 
 const (
+	AlibabaCloudPrefix = "alibabacloud.com"
+
 	// serial tag of pod, should be unique globally
 	LabelPodSn = "sigma.ali/sn"
 
@@ -58,8 +60,32 @@ const (
 	// pod group of pod
 	LabelPodGroupName = "scheduling.sigma.ali/pod-group-name"
 
-	// If true, the pod belongs to pod.
+	// If true, the pod is a batch job.
 	LabelPodIsJob = "meta.k8s.alipay.com/job"
+
+	// Quota name of pod
+	LabelQuotaName = AlibabaCloudPrefix + "/quota-name"
+
+	// cmdb state of this pod
+	LabelPodRegisterNamingState = "pod.beta1.sigma.ali/naming-register-state"
+
+	// If true, the pod is support preemption
+	LabelPodPreemptible = AlibabaCloudPrefix + "/preemptible"
+
+	// If true, means the pod want to be evicted
+	LabelPodToBeEvicted = AlibabaCloudPrefix + "/to-be-evicted"
+
+	// workload type of pod, e.g. job/streaming/service/serverless
+	LabelWorkloadType = "meta.k8s.alipay.com/workload"
+
+	// scaling type of pod, e.g. elastic-job/batch-job
+	LabelScalingType = "meta.k8s.alipay.com/scaling-type"
+
+	// LabelIgnoreCMDB indicates if the Pod need to skip the CMDB registration.
+	LabelIgnoreCMDB = "meta.k8s.alipay.com/ignore-cmdb"
+
+	// LabelIgnoreNaming indicates if the Pod need to skip the Naming registration.
+	LabelIgnoreNaming = "meta.k8s.alipay.com/ignore-naming"
 
 	// If true, the service envs won't be injected into container.
 	LabelDisableServiceLinks = "sigma.ali/disable-service-links"

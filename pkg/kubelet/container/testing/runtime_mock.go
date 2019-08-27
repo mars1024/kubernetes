@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/mock"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/client-go/util/flowcontrol"
@@ -66,7 +66,7 @@ func (r *Mock) GetPods(all bool) ([]*Pod, error) {
 	return args.Get(0).([]*Pod), args.Error(1)
 }
 
-func (r *Mock) SyncPod(pod *v1.Pod, apiStatus v1.PodStatus, status *PodStatus, secrets []v1.Secret, backOff *flowcontrol.Backoff) PodSyncResult {
+func (r *Mock) SyncPod(ctx context.Context, pod *v1.Pod, apiStatus v1.PodStatus, status *PodStatus, secrets []v1.Secret, backOff *flowcontrol.Backoff) PodSyncResult {
 	args := r.Called(pod, apiStatus, status, secrets, backOff)
 	return args.Get(0).(PodSyncResult)
 }

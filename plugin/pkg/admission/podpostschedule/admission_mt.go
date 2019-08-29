@@ -4,12 +4,15 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/golang/glog"
+	cafev1alpha1 "gitlab.alipay-inc.com/antcloud-aks/cafe-kubernetes-extension/pkg/apis/apps/v1alpha1"
 	"k8s.io/apiserver/pkg/admission"
 	api "k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/client/clientset_generated/internalclientset"
 	informers "k8s.io/kubernetes/pkg/client/informers/informers_generated/internalversion"
 	settingslisters "k8s.io/kubernetes/pkg/client/listers/core/internalversion"
 	kubeapiserveradmission "k8s.io/kubernetes/pkg/kubeapiserver/admission"
+	kubeletapis "k8s.io/kubernetes/pkg/kubelet/apis"
 
 	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
 	multitenancymeta "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/meta"
@@ -18,6 +21,8 @@ import (
 
 const (
 	PluginName = "PodPostSchedule"
+	// PodAvailabilityZoneEnvKey is the env variable in pod to carry availability zone name
+	PodAvailabilityZoneEnvKey = "SOFA_CAFE_AVAILABILITY_ZONE"
 )
 
 type podPostSchedulePlugin struct {
@@ -78,6 +83,14 @@ func (plugin *podPostSchedulePlugin) Admit(a admission.Attributes) error {
 		return nil
 	}
 
+	if _, hasAppSvc := pod.Labels[cafev1alpha1.AppServiceNameLabel]; hasAppSvc {
+		glog.Infof("pod %s/%s needs availability zone info", pod.Namespace, pod.Name)
+		err := plugin.attachAvailabilityZoneInfo(pod)
+		if err != nil {
+			glog.Warningf("fail to attach availability zone info to pod %s/%s: %s", pod.Namespace, pod.Name, err)
+		}
+	}
+
 	if _, exist := pod.Annotations[multitenancy.LabelCellName]; !exist && len(pod.Spec.NodeName) > 0 {
 		node, err := plugin.nodeLister.Get(pod.Spec.NodeName)
 		if err != nil {
@@ -92,9 +105,74 @@ func (plugin *podPostSchedulePlugin) Admit(a admission.Attributes) error {
 	return nil
 }
 
+func (plugin *podPostSchedulePlugin) attachAvailabilityZoneInfo(pod *api.Pod) error {
+	if len(pod.Spec.NodeName) == 0 {
+		return nil
+	}
+
+	zone, err := plugin.getScheduledNodeAZ(pod.Spec.NodeName)
+	if err != nil {
+		glog.Warningf("fail to get availability zone info from node %s: %s", pod.Spec.NodeName, err)
+		return err
+	}
+
+	// Add AZ label and env to pod.
+	if pod.Labels == nil {
+		pod.Labels = map[string]string{}
+	}
+	pod.Labels[kubeletapis.LabelZoneFailureDomain] = zone
+	plugin.injectAvailabilityZoneInfo(&pod.Spec.InitContainers, zone)
+	plugin.injectAvailabilityZoneInfo(&pod.Spec.Containers, zone)
+
+	return nil
+}
+
+func (i *podPostSchedulePlugin) getScheduledNodeAZ(name string) (string, error) {
+	node, err := i.nodeLister.Get(name)
+	if err != nil {
+		return "", fmt.Errorf("fail to find the pod scheduled node %s: %s", name, err)
+	}
+
+	if node.Labels == nil {
+		glog.Warningf("node %s has no labels", name)
+		return "", nil
+	}
+
+	zone, exist := node.Labels[kubeletapis.LabelZoneFailureDomain]
+	if !exist {
+		glog.Warningf("node %s has no availability zone label %s", name, kubeletapis.LabelZoneFailureDomain)
+		return "", nil
+	}
+
+	return zone, nil
+}
+
+func (i *podPostSchedulePlugin) injectAvailabilityZoneInfo(containers *[]api.Container, zone string) {
+	for i, c := range *containers {
+		found := false
+		for j, env := range c.Env {
+			if env.Name == PodAvailabilityZoneEnvKey {
+				(*containers)[i].Env[j].Value = zone
+				found = true
+
+				break
+			}
+		}
+
+		if !found {
+			(*containers)[i].Env = append((*containers)[i].Env, api.EnvVar{
+				Name:  PodAvailabilityZoneEnvKey,
+				Value: zone,
+			})
+		}
+	}
+}
+
 func (plugin *podPostSchedulePlugin) ShallowCopyWithTenant(tenant multitenancy.TenantInfo) interface{} {
 	copyPodPostSchedulePlugin := *plugin
-	tenantNodeLister := plugin.nodeLister.(multitenancymeta.TenantWise)
-	copyPodPostSchedulePlugin.nodeLister = tenantNodeLister.ShallowCopyWithTenant(tenant).(settingslisters.NodeLister)
+	tenantNodeLister, ok := plugin.nodeLister.(multitenancymeta.TenantWise)
+	if ok {
+		copyPodPostSchedulePlugin.nodeLister = tenantNodeLister.ShallowCopyWithTenant(tenant).(settingslisters.NodeLister)
+	}
 	return &copyPodPostSchedulePlugin
 }

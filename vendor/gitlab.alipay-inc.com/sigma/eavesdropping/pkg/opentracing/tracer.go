@@ -108,7 +108,7 @@ func (t *tracer) Inject(sm opentracing.SpanContext, format interface{}, carrier 
 	span := sc.span.record()
 
 	trace := sc.lastTrace
-	if trace == nil {
+	if trace == nil || !trace.CompletionTimestamp.IsZero() {
 		trace = &Trace{
 			ID:                sc.traceID,
 			Service:           sc.service,
@@ -363,7 +363,7 @@ func (s *span) record() *Span {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 	span := &Span{
-		Opeartion:      s.operation,
+		Operation:      s.operation,
 		Success:        s.errors == 0,
 		StartTimestamp: s.startTime,
 		EndTimestamp:   s.finishTime,

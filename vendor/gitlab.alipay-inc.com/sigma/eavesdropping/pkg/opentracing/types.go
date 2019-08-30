@@ -23,7 +23,7 @@ type Trace struct {
 // Span records the call stack of a trace.
 type Span struct {
 	// Opeartion is the opeartion name. This should be unique in a service.
-	Opeartion string `json:"operation"`
+	Operation string `json:"operation"`
 	// Success indicates if the procedure of this span finishes without error.
 	Success bool `json:"success"`
 	// StartTimestamp is the start timestamp of this span.

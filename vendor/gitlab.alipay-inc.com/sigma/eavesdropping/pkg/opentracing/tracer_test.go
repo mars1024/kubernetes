@@ -248,3 +248,66 @@ func TestTracerWithFailedSpan(t *testing.T) {
 		t.Fatalf("Expected %s but got %s", expected, obj.annotations["pod.beta1.sigma.ali/trace-my-svc"])
 	}
 }
+
+func TestInjectWithCompleteTrace(t *testing.T) {
+	sc := &spanContext{
+		traceID: "1234",
+		service: "my-svc",
+		lastTrace: &Trace{
+			ID:                  "1234",
+			Service:             "my-svc",
+			CreationTimestamp:   time.Unix(1000000000, 0),
+			CompletionTimestamp: time.Unix(1000000001, 0),
+			ExecutionCount:      1,
+			Span:                &Span{},
+		},
+		span: &span{
+			startTime:  time.Unix(1000000002, 0),
+			finishTime: time.Unix(1000000003, 0),
+		},
+	}
+
+	tracer := NewTracer("my-svc")
+
+	obj := newMockStruct("1234")
+	err := tracer.Inject(sc, MetaObject, obj)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expected := `{"id":"1234","service":"my-svc","creationTimestamp":"2001-09-09T01:46:42Z","completionTimestamp":"2001-09-09T01:46:43Z","executionCount":1,"span":{"operation":"","success":true,"startTimestamp":"2001-09-09T01:46:42Z","endTimestamp":"2001-09-09T01:46:43Z"}}`
+	if obj.annotations["pod.beta1.sigma.ali/trace-my-svc"] != expected {
+		t.Fatalf("Expected %s but got %s", expected, obj.annotations["pod.beta1.sigma.ali/trace-my-svc"])
+	}
+}
+
+func TestInjectWithIncompleteTrace(t *testing.T) {
+	sc := &spanContext{
+		traceID: "1234",
+		service: "my-svc",
+		lastTrace: &Trace{
+			ID:                "1234",
+			Service:           "my-svc",
+			CreationTimestamp: time.Unix(1000000000, 0),
+			ExecutionCount:    1,
+			Span:              &Span{},
+		},
+		span: &span{
+			startTime:  time.Unix(1000000002, 0),
+			finishTime: time.Unix(1000000003, 0),
+		},
+	}
+
+	tracer := NewTracer("my-svc")
+
+	obj := newMockStruct("1234")
+	err := tracer.Inject(sc, MetaObject, obj)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expected := `{"id":"1234","service":"my-svc","creationTimestamp":"2001-09-09T01:46:40Z","completionTimestamp":"2001-09-09T01:46:43Z","executionCount":2,"span":{"operation":"","success":true,"startTimestamp":"2001-09-09T01:46:42Z","endTimestamp":"2001-09-09T01:46:43Z"}}`
+	if obj.annotations["pod.beta1.sigma.ali/trace-my-svc"] != expected {
+		t.Fatalf("Expected %s but got %s", expected, obj.annotations["pod.beta1.sigma.ali/trace-my-svc"])
+	}
+}

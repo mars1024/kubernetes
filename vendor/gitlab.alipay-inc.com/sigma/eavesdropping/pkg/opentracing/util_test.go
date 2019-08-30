@@ -121,20 +121,20 @@ func TestFlatTracker(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if trace.Span.Opeartion != "test-flat" {
-		t.Fatalf("Expected root operation %s but got %s", "test-flat", trace.Span.Opeartion)
+	if trace.Span.Operation != "test-flat" {
+		t.Fatalf("Expected root operation %s but got %s", "test-flat", trace.Span.Operation)
 	}
 	if len(trace.Span.Children) != 2 {
 		t.Fatalf("Expected %d children but got %d", 2, len(trace.Span.Children))
 	}
-	if trace.Span.Children[0].Opeartion != "stage0" {
-		t.Fatalf("Expected stage operation %s but got %s", "stage0", trace.Span.Children[0].Opeartion)
+	if trace.Span.Children[0].Operation != "stage0" {
+		t.Fatalf("Expected stage operation %s but got %s", "stage0", trace.Span.Children[0].Operation)
 	}
 	if trace.Span.Children[0].Tags["tag"] != "value" {
 		t.Fatalf("Expected stage tag value %s but got %s", "value", trace.Span.Children[0].Tags["tag"])
 	}
-	if trace.Span.Children[1].Opeartion != "stage1" {
-		t.Fatalf("Expected stage operation %s but got %s", "stage0", trace.Span.Children[1].Opeartion)
+	if trace.Span.Children[1].Operation != "stage1" {
+		t.Fatalf("Expected stage operation %s but got %s", "stage0", trace.Span.Children[1].Operation)
 	}
 }
 

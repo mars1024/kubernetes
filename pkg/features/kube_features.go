@@ -465,8 +465,7 @@ const (
 	// always try to recreate sandbox even if the restart policy is Never
 	EnsurePodSuccess utilfeature.Feature = "EnsurePodSuccess"
 
-
-	// owner: @chenjun.cj (fankang.fk@alipay.com)
+	// owner: @chenjun.cj (chenjun.cj@alipay.com)
 	// alpha: v1.12
 	//
 	// add Pod.Spec.DNSConfig.Searches to Pod's /etc/resolv.conf at first

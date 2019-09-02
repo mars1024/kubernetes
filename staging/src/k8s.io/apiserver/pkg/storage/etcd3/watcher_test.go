@@ -37,7 +37,11 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/apiserver/pkg/apis/example"
 	examplev1 "k8s.io/apiserver/pkg/apis/example/v1"
+	"k8s.io/apiserver/pkg/features"
 	"k8s.io/apiserver/pkg/storage"
+	etcdstorage "k8s.io/apiserver/pkg/storage/etcd"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	utilfeaturetesting "k8s.io/apiserver/pkg/util/feature/testing"
 )
 
 func TestWatch(t *testing.T) {
@@ -370,4 +374,38 @@ func testCheckStop(t *testing.T, i int, w watch.Interface) {
 	case <-time.After(wait.ForeverTestTimeout):
 		t.Errorf("#%d: time out after waiting 1s on ResultChan", i)
 	}
+}
+
+var versional = etcdstorage.APIObjectVersioner{}
+
+func testCheckEventTypeAndRV(t *testing.T, expectEventType watch.EventType, expectedRV uint64, w watch.Interface) {
+	select {
+	case res := <-w.ResultChan():
+		if res.Type != expectEventType {
+			t.Errorf("event type want=%v, get=%v", expectEventType, res.Type)
+		}
+		rv, err := versional.ObjectResourceVersion(res.Object)
+		if err != nil || rv != expectedRV {
+			t.Errorf("event rv want=%v, get=%v", expectedRV, rv)
+		}
+	case <-time.After(wait.ForeverTestTimeout):
+		t.Errorf("time out after waiting %v on ResultChan", wait.ForeverTestTimeout)
+	}
+}
+
+func TestWatchNotifyProgress(t *testing.T) {
+	defer utilfeaturetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.WatchBookmark, true)()
+	ctx, store, cluster := testSetup(t)
+	defer cluster.Terminate(t)
+	out := &example.Pod{}
+	store.Create(ctx, "key1", &example.Pod{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "ns"}}, out, 0)
+	w, _ := store.Watch(ctx, "key1", "0", storage.Everything)
+	expectedRV, _ := versional.ObjectResourceVersion(out)
+	testCheckEventTypeAndRV(t, watch.Added, expectedRV, w)
+	store.RequestProgress(context.Background())
+	testCheckEventTypeAndRV(t, watch.Bookmark, expectedRV, w)
+	store.Create(ctx, "key2", &example.Pod{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "ns"}}, out, 0)
+	store.RequestProgress(context.Background())
+	expectedRV, _ = versional.ObjectResourceVersion(out)
+	testCheckEventTypeAndRV(t, watch.Bookmark, expectedRV, w)
 }

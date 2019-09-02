@@ -24,6 +24,8 @@ import (
 	"github.com/blang/semver"
 	dockercontainer "github.com/docker/docker/api/types/container"
 
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	"k8s.io/kubernetes/pkg/features"
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 	knetwork "k8s.io/kubernetes/pkg/kubelet/dockershim/network"
 )
@@ -200,7 +202,7 @@ func modifyHostOptionsForContainer(nsOpts *runtimeapi.NamespaceOption, podSandbo
 	hc.IpcMode = dockercontainer.IpcMode(sandboxNSMode)
 	hc.UTSMode = ""
 
-	if nsOpts.GetNetwork() == runtimeapi.NamespaceMode_NODE {
+	if !utilfeature.DefaultFeatureGate.Enabled(features.DisableHostUTSMode) && nsOpts.GetNetwork() == runtimeapi.NamespaceMode_NODE {
 		hc.UTSMode = namespaceModeHost
 	}
 }

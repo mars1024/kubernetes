@@ -17,6 +17,7 @@ limitations under the License.
 package admission
 
 import (
+	"context"
 	"io"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -60,6 +61,9 @@ type Attributes interface {
 	// An error is returned if the format of key is invalid. When trying to overwrite annotation with a new value, an error is returned.
 	// Both ValidationInterface and MutationInterface are allowed to add Annotations.
 	AddAnnotation(key, value string) error
+
+	// GetContext is the context associated with the request (if any)
+	GetContext() context.Context
 }
 
 // privateAnnotationsGetter is a private interface which allows users to get annotations from Attributes.

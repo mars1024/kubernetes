@@ -21,6 +21,7 @@ import (
 
 const (
 	PluginName = "PodPostSchedule"
+
 	// PodAvailabilityZoneEnvKey is the env variable in pod to carry availability zone name
 	PodAvailabilityZoneEnvKey = "SOFA_CAFE_AVAILABILITY_ZONE"
 )
@@ -104,6 +105,7 @@ func (plugin *podPostSchedulePlugin) Admit(a admission.Attributes) error {
 
 	return nil
 }
+
 
 func (plugin *podPostSchedulePlugin) attachAvailabilityZoneInfo(pod *api.Pod) error {
 	if len(pod.Spec.NodeName) == 0 {

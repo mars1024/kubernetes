@@ -54,7 +54,7 @@ func (l *AlipayPodLocation) Admit(a admission.Attributes) (err error) {
 	if shouldIgnore(a) {
 		return nil
 	}
-	if !l.WaitForReady() {
+	if !l.WaitForReady(a.GetContext()) {
 		return admission.NewForbidden(a, fmt.Errorf("not yet ready to handle request"))
 	}
 

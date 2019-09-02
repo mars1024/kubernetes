@@ -77,7 +77,7 @@ func (p *Provision) Admit(a admission.Attributes) error {
 		return nil
 	}
 	// we need to wait for our caches to warm
-	if !p.WaitForReady() {
+	if !p.WaitForReady(a.GetContext()) {
 		return admission.NewForbidden(a, fmt.Errorf("not yet ready to handle request"))
 	}
 

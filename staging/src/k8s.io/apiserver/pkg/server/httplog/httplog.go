@@ -144,10 +144,11 @@ func (rl *respLogger) Addf(format string, data ...interface{}) {
 func (rl *respLogger) Log() {
 	latency := time.Since(rl.startTime)
 	if glog.V(3) {
+		contentType := rl.w.Header().Get("Content-Type")
 		if !rl.hijacked {
-			glog.InfoDepth(1, fmt.Sprintf("%s %s: (%v) %v%v%v [%s %s]", rl.req.Method, rl.req.RequestURI, latency, rl.status, rl.statusStack, rl.addedInfo, rl.req.UserAgent(), rl.req.RemoteAddr))
+			glog.InfoDepth(1, fmt.Sprintf("%s %s: (%v) %v%v%v [%s %s] %v", rl.req.Method, rl.req.RequestURI, latency, rl.status, rl.statusStack, rl.addedInfo, rl.req.UserAgent(), rl.req.RemoteAddr, contentType))
 		} else {
-			glog.InfoDepth(1, fmt.Sprintf("%s %s: (%v) hijacked [%s %s]", rl.req.Method, rl.req.RequestURI, latency, rl.req.UserAgent(), rl.req.RemoteAddr))
+			glog.InfoDepth(1, fmt.Sprintf("%s %s: (%v) hijacked [%s %s] %v", rl.req.Method, rl.req.RequestURI, latency, rl.req.UserAgent(), rl.req.RemoteAddr, contentType))
 		}
 	}
 }

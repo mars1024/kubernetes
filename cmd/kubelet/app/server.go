@@ -53,6 +53,8 @@ import (
 	v1core "k8s.io/client-go/kubernetes/typed/core/v1"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/dnscache"
+	"k8s.io/client-go/tools/dnscache/metrics"
 	"k8s.io/client-go/tools/record"
 	certutil "k8s.io/client-go/util/cert"
 	"k8s.io/client-go/util/certificate"
@@ -85,6 +87,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/server"
 	"k8s.io/kubernetes/pkg/kubelet/server/streaming"
 	kubetypes "k8s.io/kubernetes/pkg/kubelet/types"
+	"k8s.io/kubernetes/pkg/scheduler/algorithm/predicates"
 	"k8s.io/kubernetes/pkg/util/configz"
 	utilfs "k8s.io/kubernetes/pkg/util/filesystem"
 	utilflag "k8s.io/kubernetes/pkg/util/flag"
@@ -692,9 +695,12 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.Dependencies, stopCh <-chan
 
 		devicePluginEnabled := utilfeature.DefaultFeatureGate.Enabled(features.DevicePlugins)
 
+		// CachedNodeInfo will be initialized by kubelet.
+		kubeDeps.CachedNodeInfo = &predicates.CachedNodeInfo{}
 		kubeDeps.ContainerManager, err = cm.NewContainerManager(
 			kubeDeps.KubeClient,
 			nodeName,
+			kubeDeps.CachedNodeInfo,
 			kubeDeps.Mounter,
 			kubeDeps.CAdvisorInterface,
 			cm.NodeConfig{
@@ -899,6 +905,7 @@ func createAPIServerClientConfig(s *options.KubeletServer) (*restclient.Config, 
 	clientConfig.Burst = int(s.KubeAPIBurst)
 
 	addChaosToClientConfig(s, clientConfig)
+	addDNSCacheToClientConfig(s, clientConfig)
 	return clientConfig, nil
 }
 
@@ -910,6 +917,29 @@ func addChaosToClientConfig(s *options.KubeletServer, config *restclient.Config)
 			// TODO: introduce a standard chaos package with more tunables - this is just a proof of concept
 			// TODO: introduce random latency and stalls
 			return chaosclient.NewChaosRoundTripper(rt, chaosclient.LogChaos, seed.P(s.ChaosChance, chaosclient.ErrSimulatedConnectionResetByPeer))
+		}
+	}
+}
+
+// addDNSCacheToClientConfig injects dialer with dns cache if enabled.
+func addDNSCacheToClientConfig(s *options.KubeletServer, config *restclient.Config) {
+	if s.EnableDNSCache {
+		cfg := &dnscache.DialerConfig{
+			MinCacheDuration:  s.DNSMinCacheDuration,
+			MaxCacheDuration:  s.DNSMaxCacheDuration,
+			ForceRefreshTimes: s.DNSForceRefreshTimes,
+		}
+		if config.Dial != nil {
+			cfg.Dialer = dnscache.DialContext(config.Dial)
+		}
+		dialer, err := dnscache.NewDialer(cfg)
+		if err != nil {
+			panic(err)
+		}
+		config.Dial = dialer.DialContext
+		if stats, ok := dialer.(dnscache.Stats); ok {
+			// Register metrics.
+			metrics.MustRegister(stats, nil)
 		}
 	}
 }

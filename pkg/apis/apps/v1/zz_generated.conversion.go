@@ -321,6 +321,16 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}); err != nil {
 		return err
 	}
+	if err := s.AddGeneratedConversionFunc((*v1.SurgingRollingUpdateDaemonSet)(nil), (*extensions.SurgingRollingUpdateDaemonSet)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1_SurgingRollingUpdateDaemonSet_To_extensions_SurgingRollingUpdateDaemonSet(a.(*v1.SurgingRollingUpdateDaemonSet), b.(*extensions.SurgingRollingUpdateDaemonSet), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*extensions.SurgingRollingUpdateDaemonSet)(nil), (*v1.SurgingRollingUpdateDaemonSet)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_extensions_SurgingRollingUpdateDaemonSet_To_v1_SurgingRollingUpdateDaemonSet(a.(*extensions.SurgingRollingUpdateDaemonSet), b.(*v1.SurgingRollingUpdateDaemonSet), scope)
+	}); err != nil {
+		return err
+	}
 	if err := s.AddConversionFunc((*apps.StatefulSetSpec)(nil), (*v1.StatefulSetSpec)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_apps_StatefulSetSpec_To_v1_StatefulSetSpec(a.(*apps.StatefulSetSpec), b.(*v1.StatefulSetSpec), scope)
 	}); err != nil {
@@ -381,6 +391,11 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}); err != nil {
 		return err
 	}
+	if err := s.AddConversionFunc((*extensions.SurgingRollingUpdateDaemonSet)(nil), (*v1.SurgingRollingUpdateDaemonSet)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_extensions_SurgingRollingUpdateDaemonSet_To_v1_SurgingRollingUpdateDaemonSet(a.(*extensions.SurgingRollingUpdateDaemonSet), b.(*v1.SurgingRollingUpdateDaemonSet), scope)
+	}); err != nil {
+		return err
+	}
 	if err := s.AddConversionFunc((*v1.DaemonSetSpec)(nil), (*extensions.DaemonSetSpec)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_v1_DaemonSetSpec_To_extensions_DaemonSetSpec(a.(*v1.DaemonSetSpec), b.(*extensions.DaemonSetSpec), scope)
 	}); err != nil {
@@ -438,6 +453,11 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}
 	if err := s.AddConversionFunc((*v1.StatefulSetUpdateStrategy)(nil), (*apps.StatefulSetUpdateStrategy)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_v1_StatefulSetUpdateStrategy_To_apps_StatefulSetUpdateStrategy(a.(*v1.StatefulSetUpdateStrategy), b.(*apps.StatefulSetUpdateStrategy), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddConversionFunc((*v1.SurgingRollingUpdateDaemonSet)(nil), (*extensions.SurgingRollingUpdateDaemonSet)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1_SurgingRollingUpdateDaemonSet_To_extensions_SurgingRollingUpdateDaemonSet(a.(*v1.SurgingRollingUpdateDaemonSet), b.(*extensions.SurgingRollingUpdateDaemonSet), scope)
 	}); err != nil {
 		return err
 	}
@@ -682,6 +702,15 @@ func autoConvert_v1_DaemonSetUpdateStrategy_To_extensions_DaemonSetUpdateStrateg
 	} else {
 		out.RollingUpdate = nil
 	}
+	if in.SurgingRollingUpdate != nil {
+		in, out := &in.SurgingRollingUpdate, &out.SurgingRollingUpdate
+		*out = new(extensions.SurgingRollingUpdateDaemonSet)
+		if err := Convert_v1_SurgingRollingUpdateDaemonSet_To_extensions_SurgingRollingUpdateDaemonSet(*in, *out, s); err != nil {
+			return err
+		}
+	} else {
+		out.SurgingRollingUpdate = nil
+	}
 	return nil
 }
 
@@ -695,6 +724,15 @@ func autoConvert_extensions_DaemonSetUpdateStrategy_To_v1_DaemonSetUpdateStrateg
 		}
 	} else {
 		out.RollingUpdate = nil
+	}
+	if in.SurgingRollingUpdate != nil {
+		in, out := &in.SurgingRollingUpdate, &out.SurgingRollingUpdate
+		*out = new(v1.SurgingRollingUpdateDaemonSet)
+		if err := Convert_extensions_SurgingRollingUpdateDaemonSet_To_v1_SurgingRollingUpdateDaemonSet(*in, *out, s); err != nil {
+			return err
+		}
+	} else {
+		out.SurgingRollingUpdate = nil
 	}
 	return nil
 }
@@ -1287,5 +1325,15 @@ func autoConvert_apps_StatefulSetUpdateStrategy_To_v1_StatefulSetUpdateStrategy(
 	} else {
 		out.RollingUpdate = nil
 	}
+	return nil
+}
+
+func autoConvert_v1_SurgingRollingUpdateDaemonSet_To_extensions_SurgingRollingUpdateDaemonSet(in *v1.SurgingRollingUpdateDaemonSet, out *extensions.SurgingRollingUpdateDaemonSet, s conversion.Scope) error {
+	// WARNING: in.MaxSurge requires manual conversion: inconvertible types (*k8s.io/apimachinery/pkg/util/intstr.IntOrString vs k8s.io/apimachinery/pkg/util/intstr.IntOrString)
+	return nil
+}
+
+func autoConvert_extensions_SurgingRollingUpdateDaemonSet_To_v1_SurgingRollingUpdateDaemonSet(in *extensions.SurgingRollingUpdateDaemonSet, out *v1.SurgingRollingUpdateDaemonSet, s conversion.Scope) error {
+	// WARNING: in.MaxSurge requires manual conversion: inconvertible types (k8s.io/apimachinery/pkg/util/intstr.IntOrString vs *k8s.io/apimachinery/pkg/util/intstr.IntOrString)
 	return nil
 }

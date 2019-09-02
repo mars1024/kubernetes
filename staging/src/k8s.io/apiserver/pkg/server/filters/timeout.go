@@ -27,6 +27,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golang/glog"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apiserver/pkg/endpoints/metrics"
 	apirequest "k8s.io/apiserver/pkg/endpoints/request"
@@ -58,8 +59,12 @@ func WithTimeoutForNonLongRunningRequests(handler http.Handler, longRunning apir
 
 		postTimeoutFn := func() {
 			cancel()
-			metrics.Record(req, requestInfo, "", http.StatusGatewayTimeout, 0, 0)
+			// Otherwise, there's some error, server has already tried to write headers and body but timeout to finish to write all body,
+			// or failed to write 504 response code and body
+			// So, actually it's not a 504 response to the client, the client received EOF.
+			metrics.Record(req, requestInfo, "", -1, 0, 0)
 		}
+
 		return req, time.After(timeout), postTimeoutFn, apierrors.NewTimeoutError(fmt.Sprintf("request did not complete within %s", timeout), 0)
 	}
 	return WithTimeout(handler, timeoutFunc)
@@ -115,13 +120,35 @@ func (t *timeoutHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	case <-after:
 		postTimeoutFn()
-		tw.timeout(err)
+		writeRespErr := tw.timeout(err)
+
+		// The timeout writer has been used by the inner handler. There is
+		// no way to timeout the HTTP request at the point. We have to shutdown
+		// the connection for HTTP1 or reset stream for HTTP2.
+		//
+		// Note from: Brad Fitzpatrick
+		// if the ServeHTTP goroutine panics, that will do the best possible thing for both
+		// HTTP/1 and HTTP/2. In HTTP/1, assuming you're replying with at least HTTP/1.1 and
+		// you've already flushed the headers so it's using HTTP chunking, it'll kill the TCP
+		// connection immediately without a proper 0-byte EOF chunk, so the peer will recognize
+		// the response as bogus. In HTTP/2 the server will just RST_STREAM the stream, leaving
+		// the TCP connection open, but resetting the stream to the peer so it'll have an error,
+		// like the HTTP/1 case.
+		if writeRespErr != nil {
+			panic(writeRespErr)
+		}
+		return
 	}
 }
 
 type timeoutWriter interface {
 	http.ResponseWriter
-	timeout(*apierrors.StatusError)
+
+	// timeout will be invoked by timeout handler to write 504 code and body to response,
+	// return nil if the timeout writer has not been used by the inner handler and write 504 code successfully,
+	// otherwise return the errConnKilled or the error when writing 504 code and body.
+	// Whatever error occurs, timeout handler need call panic
+	timeout(*apierrors.StatusError) error
 }
 
 func newTimeoutWriter(w http.ResponseWriter) timeoutWriter {
@@ -152,6 +179,9 @@ type baseTimeoutWriter struct {
 	wroteHeader bool
 	// if this timeout writer has been hijacked
 	hijacked bool
+
+	// wroteStartTime is the time when called Write or WriteHeader, it's for logging and debug
+	wroteStartTime time.Time
 }
 
 func (tw *baseTimeoutWriter) Header() http.Header {
@@ -177,6 +207,8 @@ func (tw *baseTimeoutWriter) Write(p []byte) (int, error) {
 	}
 
 	tw.wroteHeader = true
+	tw.wroteStartTime = time.Now()
+
 	return tw.w.Write(p)
 }
 
@@ -202,10 +234,11 @@ func (tw *baseTimeoutWriter) WriteHeader(code int) {
 	}
 
 	tw.wroteHeader = true
+	tw.wroteStartTime = time.Now()
 	tw.w.WriteHeader(code)
 }
 
-func (tw *baseTimeoutWriter) timeout(err *apierrors.StatusError) {
+func (tw *baseTimeoutWriter) timeout(err *apierrors.StatusError) error {
 	tw.mu.Lock()
 	defer tw.mu.Unlock()
 
@@ -217,22 +250,14 @@ func (tw *baseTimeoutWriter) timeout(err *apierrors.StatusError) {
 	if !tw.wroteHeader && !tw.hijacked {
 		tw.w.WriteHeader(http.StatusGatewayTimeout)
 		enc := json.NewEncoder(tw.w)
-		enc.Encode(&err.ErrStatus)
-	} else {
-		// The timeout writer has been used by the inner handler. There is
-		// no way to timeout the HTTP request at the point. We have to shutdown
-		// the connection for HTTP1 or reset stream for HTTP2.
-		//
-		// Note from: Brad Fitzpatrick
-		// if the ServeHTTP goroutine panics, that will do the best possible thing for both
-		// HTTP/1 and HTTP/2. In HTTP/1, assuming you're replying with at least HTTP/1.1 and
-		// you've already flushed the headers so it's using HTTP chunking, it'll kill the TCP
-		// connection immediately without a proper 0-byte EOF chunk, so the peer will recognize
-		// the response as bogus. In HTTP/2 the server will just RST_STREAM the stream, leaving
-		// the TCP connection open, but resetting the stream to the peer so it'll have an error,
-		// like the HTTP/1 case.
-		panic(errConnKilled)
+		return enc.Encode(&err.ErrStatus)
 	}
+
+	// if err is errConnKilled, server has finished request processing(processing cache/etcd/webhook) and has already tried to write header and body,
+	// but failed to write all bodies, the response maybe too large, we need record it to debug
+	glog.Errorf("timeout to write response, write response elapsed: %v", time.Now().Sub(tw.wroteStartTime))
+
+	return errConnKilled
 }
 
 func (tw *baseTimeoutWriter) closeNotify() <-chan bool {

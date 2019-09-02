@@ -115,3 +115,10 @@ func (s *DryRunnableStorage) copyInto(in, out runtime.Object) error {
 	return nil
 
 }
+
+func (s *DryRunnableStorage) GetResourceVersion(ctx context.Context) (string, error) {
+	return s.Storage.GetResourceVersion(ctx)
+}
+func (s *DryRunnableStorage) RequestProgress(ctx context.Context) error {
+	return s.Storage.RequestProgress(ctx)
+}

@@ -823,3 +823,21 @@ func notFound(key string) clientv3.Cmp {
 func getTypeName(obj interface{}) string {
 	return reflect.TypeOf(obj).String()
 }
+
+// GetResourceVersion returns the current revision of etcd.
+func (s *store) GetResourceVersion(ctx context.Context) (string, error) {
+	key := path.Join(s.pathPrefix, "/")
+	getResp, err := s.client.KV.Get(ctx, key, clientv3.WithLimit(1))
+	if err != nil {
+		return "", err
+	}
+	if getResp.Header == nil {
+		return "", fmt.Errorf("nil header(%v)", getResp)
+	}
+	return fmt.Sprintf("%d", uint64(getResp.Header.GetRevision())), nil
+}
+
+// RequestProgress implements storage.Interface.
+func (s *store) RequestProgress(ctx context.Context) error {
+	return s.client.RequestProgress(ctx)
+}

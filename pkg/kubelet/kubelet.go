@@ -264,6 +264,7 @@ type Dependencies struct {
 	DynamicPluginProber     volume.DynamicPluginProber
 	TLSOptions              *server.TLSOptions
 	KubeletConfigController *kubeletconfig.Controller
+	CachedNodeInfo		*predicates.CachedNodeInfo
 }
 
 // makePodSourceConfig creates a config.PodConfig from the given
@@ -461,7 +462,12 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		r := cache.NewReflector(nodeLW, &v1.Node{}, nodeIndexer, 0)
 		go r.Run(wait.NeverStop)
 	}
-	nodeInfo := &predicates.CachedNodeInfo{NodeLister: corelisters.NewNodeLister(nodeIndexer)}
+	// Initialize CachedNodeInfo.
+	if kubeDeps.CachedNodeInfo == nil {
+		kubeDeps.CachedNodeInfo = &predicates.CachedNodeInfo{}
+	}
+	kubeDeps.CachedNodeInfo.NodeLister = corelisters.NewNodeLister(nodeIndexer)
+	nodeInfo := kubeDeps.CachedNodeInfo
 
 	// TODO: get the real node object of ourself,
 	// and use the real node name and UID.
@@ -698,8 +704,7 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		klet.runtimeClassManager,
 		kubeCfg.UserinfoScriptPath,
 		klet.podManager,
-		klet.kubeClient,
-		string(klet.nodeName),
+		klet.GetNode,
 	)
 	if err != nil {
 		return nil, err
@@ -1476,7 +1481,10 @@ func (kl *Kubelet) Run(updates <-chan kubetypes.PodUpdate) {
 	go wait.Until(kl.podKiller, 1*time.Second, wait.NeverStop)
 
 	// Deal with dangling pod
-	go wait.Until(kl.SyncDanglingPods, 10*time.Second, wait.NeverStop)
+	if !utilfeature.DefaultFeatureGate.Enabled(features.DisableDanglingPod) {
+		// TODO: Support customize syncPeriod.
+		go wait.Until(kl.SyncDanglingPods, 300*time.Second, wait.NeverStop)
+	}
 
 	// Start component sync loops.
 	kl.statusManager.Start()

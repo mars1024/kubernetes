@@ -144,6 +144,7 @@ var InterestingApiServerMetrics = []string{
 	"etcd_request_cache_add_latencies_summary",
 	"etcd_request_cache_get_latencies_summary",
 	"etcd_request_latencies_summary",
+	"apiserver_init_events_total",
 }
 
 var InterestingControllerManagerMetrics = []string{

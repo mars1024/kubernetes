@@ -220,4 +220,11 @@ type Interface interface {
 
 	// Count returns number of different entries under the key (generally being path prefix).
 	Count(key string) (int64, error)
+
+	// GetResourceVersion returns the max resourceVersion storage has seen.
+	GetResourceVersion(ctx context.Context) (string, error)
+
+	// RequestProgress requests a progress notify response. If the server does not support
+	// this feature, it will return a ErrRequestProgressNotImplemented error.
+	RequestProgress(ctx context.Context) error
 }

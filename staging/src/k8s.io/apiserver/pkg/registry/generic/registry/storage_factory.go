@@ -35,20 +35,21 @@ import (
 func StorageWithCacher(capacity int) generic.StorageDecorator {
 	return func(
 		storageConfig *storagebackend.Config,
-		objectType runtime.Object,
 		resourcePrefix string,
 		keyFunc func(obj runtime.Object) (string, error),
 		Indexers *cache.Indexers,
+		newFunc func() runtime.Object,
 		newListFunc func() runtime.Object,
 		getAttrsFunc storage.AttrFunc,
 		triggerFunc storage.TriggerPublisherFunc) (storage.Interface, factory.DestroyFunc) {
 
 		s, d := generic.NewRawStorage(storageConfig)
+
 		if capacity == 0 {
-			glog.V(5).Infof("Storage caching is disabled for %T", objectType)
+			glog.V(5).Infof("Storage caching is disabled for %T", newFunc())
 			return s, d
 		}
-		glog.V(5).Infof("Storage caching is enabled for %T with capacity %v", objectType, capacity)
+		glog.V(5).Infof("Storage caching is enabled for %T with capacity %v", newFunc(), capacity)
 
 		// TODO: we would change this later to make storage always have cacher and hide low level KV layer inside.
 		// Currently it has two layers of same storage interface -- cacher and low level kv.
@@ -56,9 +57,9 @@ func StorageWithCacher(capacity int) generic.StorageDecorator {
 			CacheCapacity:        capacity,
 			Storage:              s,
 			Versioner:            etcdstorage.APIObjectVersioner{},
-			Type:                 objectType,
 			ResourcePrefix:       resourcePrefix,
 			KeyFunc:              keyFunc,
+			NewFunc:              newFunc,
 			NewListFunc:          newListFunc,
 			GetAttrsFunc:         getAttrsFunc,
 			Indexers:             Indexers,

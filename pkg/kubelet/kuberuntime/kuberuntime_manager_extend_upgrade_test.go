@@ -18,6 +18,7 @@ package kuberuntime
 
 import (
 	"fmt"
+	"k8s.io/kubernetes/pkg/features"
 	"strings"
 	"testing"
 	"time"
@@ -25,8 +26,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	utilfeaturetesting "k8s.io/apiserver/pkg/util/feature/testing"
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
+
+	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 )
 
 func TestScriptExecuter(t *testing.T) {
@@ -545,4 +550,47 @@ func TestMergeAliAdminUID(t *testing.T) {
 		})
 	}
 
+}
+
+func TestIsRemainUserInfoNeeded(t *testing.T) {
+	testCases := []struct {
+		name         string
+		pod          *v1.Pod
+		isEnabled    bool
+		isRetainNeed bool
+	}{
+		{
+			name:         "feature disable without ann",
+			pod:          makeTestPod("testPod", "ns", "fakeUid", []v1.Container{}),
+			isEnabled:    true,
+			isRetainNeed: false,
+		},
+		{name: "feature enabled with force retain ann",
+			pod: func() *v1.Pod {
+				podWithAnn := makeTestPod("testPod", "ns", "fakeUid", []v1.Container{})
+				podWithAnn.Annotations = make(map[string]string, 0)
+				podWithAnn.Annotations[sigmak8sapi.AnnotationForceRetainUserInfo] = "true"
+				return podWithAnn
+			}(),
+			isEnabled:    true,
+			isRetainNeed: true,
+		},
+		{name: "feature enabled with invalid ann",
+			pod: func() *v1.Pod {
+				podWithAnn := makeTestPod("testPod", "ns", "fakeUid", []v1.Container{})
+				podWithAnn.Annotations = make(map[string]string, 0)
+				podWithAnn.Annotations[sigmak8sapi.AnnotationForceRetainUserInfo] = "Invalid"
+				return podWithAnn
+			}(),
+			isEnabled:    true,
+			isRetainNeed: false},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := utilfeaturetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.DisableUserInfoRetainDuringUpgrade, tc.isEnabled)
+			defer fake()
+			r := IsRetainUserInfoNeeded(tc.pod)
+			assert.Equal(t, r, tc.isRetainNeed)
+		})
+	}
 }

@@ -20,13 +20,17 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"k8s.io/kubernetes/pkg/features"
 	"os"
 	"os/exec"
+	"strconv"
 
 	"github.com/golang/glog"
+	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	"google.golang.org/grpc"
 	"k8s.io/api/core/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	"k8s.io/kubernetes/pkg/kubelet/events"
@@ -465,18 +469,20 @@ func (m *kubeGenericRuntimeManager) upgradeContainerCommon(containerStatus *kube
 		glog.V(4).Infof("Kill container %q(id=%q) in pod %q successfully", containerStatus.Name, containerStatus.ID, format.Pod(pod))
 	}
 
-	// Step2: Backup userinfo
-	// TODO: Created container's userinfo should be backuped when supporting Created container
-	if userinfoBackup != nil && (containerState == runtimeapi.ContainerState_CONTAINER_RUNNING || containerState == runtimeapi.ContainerState_CONTAINER_EXITED) {
-		// Only when we backup userinfo successfully, we can stop current container.
-		// So we can get userinfo in the condition that the stopped container is deleted by GC.
-		msg, err := userinfoBackup.BackupUserinfo(pod, container, containerStatus.ID.ID)
-		if err != nil {
-			glog.Errorf("Backup userinfo for container %q(id=%q) in pod %q failed: %v, %q",
-				container.Name, containerStatus.ID, format.Pod(pod), err, msg)
-			return nil, err.Error(), ErrUpgradeContainer
+	if IsRetainUserInfoNeeded(pod) {
+		// Step2: Backup userinfo
+		// TODO: Created container's userinfo should be backuped when supporting Created container
+		if userinfoBackup != nil && (containerState == runtimeapi.ContainerState_CONTAINER_RUNNING || containerState == runtimeapi.ContainerState_CONTAINER_EXITED) {
+			// Only when we backup userinfo successfully, we can stop current container.
+			// So we can get userinfo in the condition that the stopped container is deleted by GC.
+			msg, err := userinfoBackup.BackupUserinfo(pod, container, containerStatus.ID.ID)
+			if err != nil {
+				glog.Errorf("Backup userinfo for container %q(id=%q) in pod %q failed: %v, %q",
+					container.Name, containerStatus.ID, format.Pod(pod), err, msg)
+				return nil, err.Error(), ErrUpgradeContainer
+			}
+			glog.V(4).Infof("Backup userinfo for container %q(id=%q) in pod %q successfully", container.Name, containerStatus.ID, format.Pod(pod))
 		}
-		glog.V(4).Infof("Backup userinfo for container %q(id=%q) in pod %q successfully", container.Name, containerStatus.ID, format.Pod(pod))
 	}
 
 	// Step3: Create new container.
@@ -498,27 +504,29 @@ func (m *kubeGenericRuntimeManager) upgradeContainerCommon(containerStatus *kube
 	}
 	glog.V(4).Infof("Create container %q(id=%q) in pod %q successfully", container.Name, upgradedContainer.ID, format.Pod(pod))
 
-	// Step4: Restore userinfo
-	// If userinfo exists on the disk, we should copy it to the new created container and then delete it.
-	if userinfoBackup != nil {
-		if _, err := userinfoBackup.CheckUserinfoExists(pod, container); err == nil {
-			// Userinfo dir in the disk should be deleted when we finish the restore procedure.
-			if msg, err := userinfoBackup.RestoreUserinfo(pod, container, upgradedContainer.ID); err != nil {
-				glog.Errorf("Restore userinfo for container %q(id=%q) in pod %q failed: %v, %s",
-					container.Name, upgradedContainer.ID, format.Pod(pod), err, msg)
-				return upgradedContainer, err.Error(), ErrUpgradeContainer
+	if IsRetainUserInfoNeeded(pod) {
+		// Step4: Restore userinfo
+		// If userinfo exists on the disk, we should copy it to the new created container and then delete it.
+		if userinfoBackup != nil {
+			if _, err := userinfoBackup.CheckUserinfoExists(pod, container); err == nil {
+				// Userinfo dir in the disk should be deleted when we finish the restore procedure.
+				if msg, err := userinfoBackup.RestoreUserinfo(pod, container, upgradedContainer.ID); err != nil {
+					glog.Errorf("Restore userinfo for container %q(id=%q) in pod %q failed: %v, %s",
+						container.Name, upgradedContainer.ID, format.Pod(pod), err, msg)
+					return upgradedContainer, err.Error(), ErrUpgradeContainer
+				}
+				glog.V(4).Infof("Restore userinfo for container %q(id=%q) in pod %q successfully",
+					container.Name, upgradedContainer.ID, format.Pod(pod))
+				// Delete userinfo dir in the disk.
+				// Removal of userinfo dir means that the container gets all creating steps finished and can be started now.
+				if msg, err := userinfoBackup.DeleteUserinfo(pod, container); err != nil {
+					glog.Errorf("Delete userinfo for container %q in pod %q failed: %v, %q",
+						container.Name, format.Pod(pod), err, msg)
+					return upgradedContainer, err.Error(), ErrUpgradeContainer
+				}
+				glog.V(4).Infof("Delete userinfo for container %q(id=%q) in pod %q successfully",
+					container.Name, upgradedContainer.ID, format.Pod(pod))
 			}
-			glog.V(4).Infof("Restore userinfo for container %q(id=%q) in pod %q successfully",
-				container.Name, upgradedContainer.ID, format.Pod(pod))
-			// Delete userinfo dir in the disk.
-			// Removal of userinfo dir means that the container gets all creating steps finished and can be started now.
-			if msg, err := userinfoBackup.DeleteUserinfo(pod, container); err != nil {
-				glog.Errorf("Delete userinfo for container %q in pod %q failed: %v, %q",
-					container.Name, format.Pod(pod), err, msg)
-				return upgradedContainer, err.Error(), ErrUpgradeContainer
-			}
-			glog.V(4).Infof("Delete userinfo for container %q(id=%q) in pod %q successfully",
-				container.Name, upgradedContainer.ID, format.Pod(pod))
 		}
 	}
 
@@ -602,4 +610,23 @@ func GetAnonymousVolumesFromContainerStatus(mergedVolumes map[string]*runtimeapi
 		}
 	}
 	return anonymousVolumes
+}
+
+func IsRetainUserInfoNeeded(pod *v1.Pod) bool {
+	// First, check feature gate
+	if !utilfeature.DefaultFeatureGate.Enabled(features.DisableUserInfoRetainDuringUpgrade) {
+		return true
+	}
+	// feature gate enabled, while no annotation
+	if pod.Annotations == nil || len(pod.Annotations) <= 0 {
+		return false
+	}
+	if value, ok := pod.Annotations[sigmak8sapi.AnnotationForceRetainUserInfo]; ok {
+		v, err := strconv.ParseBool(value)
+		if err != nil {
+			glog.V(5).Infof("invalid value %q for annotation %s: %s", value, sigmak8sapi.AnnotationForceRetainUserInfo, err.Error())
+		}
+		return v
+	}
+	return false
 }

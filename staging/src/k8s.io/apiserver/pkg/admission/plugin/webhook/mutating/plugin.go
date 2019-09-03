@@ -25,6 +25,11 @@ import (
 	"k8s.io/apiserver/pkg/admission"
 	"k8s.io/apiserver/pkg/admission/configuration"
 	"k8s.io/apiserver/pkg/admission/plugin/webhook/generic"
+	"k8s.io/apiserver/pkg/util/feature"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancyconfiguration "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/admission/webhook/configuration"
+	multitenancymeta "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/meta"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 )
 
 const (
@@ -59,7 +64,11 @@ func NewMutatingWebhook(configFile io.Reader) (*Plugin, error) {
 	handler := admission.NewHandler(admission.Connect, admission.Create, admission.Delete, admission.Update)
 	p := &Plugin{}
 	var err error
-	p.Webhook, err = generic.NewWebhook(handler, configFile, configuration.NewMutatingWebhookConfigurationManager, newMutatingDispatcher(p))
+	if !feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		p.Webhook, err = generic.NewMutatingWebhookWithObjectSelectorProxy(generic.NewWebhook, handler, configFile, configuration.NewMutatingWebhookConfigurationManager, newMutatingDispatcher(p))
+	} else {
+		p.Webhook, err = generic.NewMutatingWebhookWithObjectSelectorProxy(generic.NewWebhook, handler, configFile, multitenancyconfiguration.NewMutatingWebhookConfigurationManager, newMutatingDispatcher(p))
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -92,5 +101,13 @@ func (a *Plugin) ValidateInitialization() error {
 
 // Admit makes an admission decision based on the request attributes.
 func (a *Plugin) Admit(attr admission.Attributes) error {
+	if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenant, err := multitenancyutil.TransformTenantInfoFromUser(attr.GetUserInfo())
+		if err != nil {
+			return err
+		}
+		var aInterface interface{} = a
+		a = aInterface.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(*Plugin)
+	}
 	return a.Webhook.Dispatch(attr)
 }

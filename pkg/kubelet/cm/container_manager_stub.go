@@ -31,7 +31,9 @@ import (
 	schedulercache "k8s.io/kubernetes/pkg/scheduler/cache"
 )
 
-type containerManagerStub struct{}
+type containerManagerStub struct {
+	shouldResetExtendedResourceCapacity bool
+}
 
 var _ ContainerManager = &containerManagerStub{}
 
@@ -105,6 +107,14 @@ func (cm *containerManagerStub) GetPodCgroupRoot() string {
 	return ""
 }
 
+func (cm *containerManagerStub) ShouldResetExtendedResourceCapacity() bool {
+	return cm.shouldResetExtendedResourceCapacity
+}
+
 func NewStubContainerManager() ContainerManager {
-	return &containerManagerStub{}
+	return &containerManagerStub{shouldResetExtendedResourceCapacity: false}
+}
+
+func NewStubContainerManagerWithExtendedResource(shouldResetExtendedResourceCapacity bool) ContainerManager {
+	return &containerManagerStub{shouldResetExtendedResourceCapacity: shouldResetExtendedResourceCapacity}
 }

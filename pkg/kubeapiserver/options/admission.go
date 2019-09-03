@@ -57,6 +57,13 @@ func NewAdmissionOptions() *AdmissionOptions {
 	options.RecommendedPluginOrder = AllOrderedPlugins
 	// set DefaultOffPlugins
 	options.DefaultOffPlugins = DefaultOffAdmissionPlugins()
+	// register all cafe admission plugins
+	RegisterCafeAdmissionPlugins(options.Plugins)
+	// append cafe admission plugins
+	options.RecommendedPluginOrder = append(options.RecommendedPluginOrder, AllOrderedCafePlugins...)
+	// overwrite DefaultOffPlugins
+	AllOrderedPlugins = append(AllOrderedPlugins, AllOrderedCafePlugins...)
+	options.DefaultOffPlugins = DefaultOffAdmissionPlugins()
 
 	return &AdmissionOptions{
 		GenericAdmission: options,

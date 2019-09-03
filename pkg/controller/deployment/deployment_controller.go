@@ -26,6 +26,9 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancycache "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/cache"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 
 	apps "k8s.io/api/apps/v1"
 	"k8s.io/api/core/v1"
@@ -35,6 +38,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	appsinformers "k8s.io/client-go/informers/apps/v1"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
@@ -205,6 +209,11 @@ func (dc *DeploymentController) addReplicaSet(obj interface{}) {
 		return
 	}
 
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(rs.Annotations)
+		dc = dc.ShallowCopyWithTenant(tenantInfo).(*DeploymentController)
+	}
+
 	// If it has a ControllerRef, that's all that matters.
 	if controllerRef := metav1.GetControllerOf(rs); controllerRef != nil {
 		d := dc.resolveControllerRef(rs.Namespace, controllerRef)
@@ -259,6 +268,11 @@ func (dc *DeploymentController) updateReplicaSet(old, cur interface{}) {
 		// Periodic resync will send update events for all known replica sets.
 		// Two different versions of the same replica set will always have different RVs.
 		return
+	}
+
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(curRS.Annotations)
+		dc = dc.ShallowCopyWithTenant(tenantInfo).(*DeploymentController)
 	}
 
 	curControllerRef := metav1.GetControllerOf(curRS)
@@ -320,6 +334,11 @@ func (dc *DeploymentController) deleteReplicaSet(obj interface{}) {
 		}
 	}
 
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(rs.Annotations)
+		dc = dc.ShallowCopyWithTenant(tenantInfo).(*DeploymentController)
+	}
+
 	controllerRef := metav1.GetControllerOf(rs)
 	if controllerRef == nil {
 		// No controller should care about orphans being deleted.
@@ -353,6 +372,12 @@ func (dc *DeploymentController) deletePod(obj interface{}) {
 			return
 		}
 	}
+
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+		dc = dc.ShallowCopyWithTenant(tenantInfo).(*DeploymentController)
+	}
+
 	glog.V(4).Infof("Pod %s deleted.", pod.Name)
 	if d := dc.getDeploymentForPod(pod); d != nil && d.Spec.Strategy.Type == apps.RecreateDeploymentStrategyType {
 		// Sync if this Deployment now has no more Pods.
@@ -564,10 +589,14 @@ func (dc *DeploymentController) syncDeployment(key string) error {
 		glog.V(4).Infof("Finished syncing deployment %q (%v)", key, time.Since(startTime))
 	}()
 
-	namespace, name, err := cache.SplitMetaNamespaceKey(key)
+	tenant, namespace, name, err := multitenancycache.MultiTenancySplitKeyWrapper(cache.SplitMetaNamespaceKey)(key)
 	if err != nil {
 		return err
 	}
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		dc = dc.ShallowCopyWithTenant(tenant).(*DeploymentController)
+	}
+
 	deployment, err := dc.dLister.Deployments(namespace).Get(name)
 	if errors.IsNotFound(err) {
 		glog.V(2).Infof("Deployment %v has been deleted", key)

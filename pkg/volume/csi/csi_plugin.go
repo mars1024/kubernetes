@@ -52,7 +52,7 @@ const (
 	// TODO (vladimirvivien) would be nice to name socket with a .sock extension
 	// for consistency.
 	csiAddrTemplate = "/var/lib/kubelet/plugins/%v/csi.sock"
-	csiTimeout      = 15 * time.Second
+	csiTimeout      = 2 * time.Minute
 	volNameSep      = "^"
 	volDataFileName = "vol_data.json"
 	fsTypeBlockName = "block"
@@ -530,7 +530,7 @@ func (p *csiPlugin) skipAttach(driver string) (bool, error) {
 			// Don't skip attach if CSIDriver does not exist
 			return false, nil
 		}
-		return false, err
+		return false, nil
 	}
 	if csiDriver.Spec.AttachRequired != nil && *csiDriver.Spec.AttachRequired == false {
 		return true, nil

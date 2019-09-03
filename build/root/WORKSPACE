@@ -84,8 +84,8 @@ docker_pull(
 docker_pull(
     name = "official_busybox",
     digest = "sha256:cb63aa0641a885f54de20f61d152187419e8f6b159ed11a251a09d115fdff9bd",
-    registry = "index.docker.io",
-    repository = "library/busybox",
+    registry = "acs-reg.alipay.com",
+    repository = "acloud/busybox",
     tag = "latest",  # ignored, but kept here for documentation
 )
 

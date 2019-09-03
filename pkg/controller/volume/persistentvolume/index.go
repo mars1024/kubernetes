@@ -18,6 +18,7 @@ package persistentvolume
 
 import (
 	"fmt"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
 	"sort"
 
 	"github.com/golang/glog"
@@ -40,7 +41,12 @@ type persistentVolumeOrderedIndex struct {
 }
 
 func newPersistentVolumeOrderedIndex() persistentVolumeOrderedIndex {
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		return persistentVolumeOrderedIndex{cache.NewIndexer(cache.MultiTenancyKeyFuncWrapper(cache.MetaNamespaceKeyFunc), cache.Indexers{"accessmodes": accessModesIndexFunc})}
+
+	}
 	return persistentVolumeOrderedIndex{cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{"accessmodes": accessModesIndexFunc})}
+
 }
 
 // accessModesIndexFunc is an indexing function that returns a persistent
@@ -378,10 +384,29 @@ func (c byAccessModes) Len() int {
 }
 
 func claimToClaimKey(claim *v1.PersistentVolumeClaim) string {
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		key, _ := cache.MultiTenancyKeyFuncWrapper(
+			func(obj interface{}) (string, error) {
+				return fmt.Sprintf("%s/%s", claim.Namespace, claim.Name), nil
+			})(claim)
+		return key
+	}
 	return fmt.Sprintf("%s/%s", claim.Namespace, claim.Name)
 }
 
 func claimrefToClaimKey(claimref *v1.ObjectReference) string {
+	return fmt.Sprintf("%s/%s", claimref.Namespace, claimref.Name)
+}
+
+func tenantClaimrefToClaimKey(claimref *v1.ObjectReference, volume *v1.PersistentVolume) string {
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		key, _ := cache.MultiTenancyKeyFuncWrapper(
+			func(obj interface{}) (string, error) {
+				return fmt.Sprintf("%s/%s", claimref.Namespace, claimref.Name), nil
+			})(volume)
+		glog.V(5).Infof("DEBUG:claimKey=>%s",key)
+		return key
+	}
 	return fmt.Sprintf("%s/%s", claimref.Namespace, claimref.Name)
 }
 

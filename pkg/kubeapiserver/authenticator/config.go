@@ -42,6 +42,9 @@ import (
 	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/serviceaccount"
 
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancyfilter "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/filter"
+	multitenancyserviceaccount "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/serviceaccount"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 )
 
@@ -134,6 +137,18 @@ func (config AuthenticatorConfig) New() (authenticator.Request, *spec.SecurityDe
 		tokenAuthenticators = append(tokenAuthenticators, tokenAuth)
 	}
 	if len(config.ServiceAccountKeyFiles) > 0 {
+		if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+			allPublicKeys := []interface{}{}
+			for _, keyfile := range config.ServiceAccountKeyFiles {
+				publicKeys, err := certutil.PublicKeysFromFile(keyfile)
+				if err != nil {
+					return nil, nil, err
+				}
+				allPublicKeys = append(allPublicKeys, publicKeys...)
+			}
+			tenantTokenAuthenticator := multitenancyserviceaccount.TenantWiseJWTTokenAuthenticator(serviceaccount.LegacyIssuer, allPublicKeys)
+			tokenAuthenticators = append(tokenAuthenticators, tenantTokenAuthenticator)
+		}
 		serviceAccountAuth, err := newLegacyServiceAccountAuthenticator(config.ServiceAccountKeyFiles, config.ServiceAccountLookup, config.ServiceAccountTokenGetter)
 		if err != nil {
 			return nil, nil, err
@@ -313,6 +328,9 @@ func newAuthenticatorFromClientCAFile(clientCAFile string) (authenticator.Reques
 	opts := x509.DefaultVerifyOptions()
 	opts.Roots = roots
 
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		return x509.New(opts, multitenancyfilter.CommonNameUserConversionWithMultiTenancy), nil
+	}
 	return x509.New(opts, x509.CommonNameUserConversion), nil
 }
 

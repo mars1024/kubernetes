@@ -22,6 +22,11 @@ import (
 	"k8s.io/apiserver/pkg/admission"
 	"k8s.io/apiserver/pkg/admission/configuration"
 	"k8s.io/apiserver/pkg/admission/plugin/webhook/generic"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	"k8s.io/apiserver/pkg/util/feature"
+	multitenancyconfiguration "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/admission/webhook/configuration"
+	multitenancymeta "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/meta"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 )
 
 const (
@@ -51,7 +56,13 @@ var _ admission.ValidationInterface = &Plugin{}
 // NewValidatingAdmissionWebhook returns a generic admission webhook plugin.
 func NewValidatingAdmissionWebhook(configFile io.Reader) (*Plugin, error) {
 	handler := admission.NewHandler(admission.Connect, admission.Create, admission.Delete, admission.Update)
-	webhook, err := generic.NewWebhook(handler, configFile, configuration.NewValidatingWebhookConfigurationManager, newValidatingDispatcher)
+	var err error
+	var webhook *generic.Webhook
+	if !feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		webhook, err = generic.NewValidatingWebhookWithObjectSelectorProxy(generic.NewWebhook, handler, configFile, configuration.NewValidatingWebhookConfigurationManager, newValidatingDispatcher)
+	} else {
+		webhook, err = generic.NewValidatingWebhookWithObjectSelectorProxy(generic.NewWebhook, handler, configFile, multitenancyconfiguration.NewValidatingWebhookConfigurationManager, newValidatingDispatcher)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -60,5 +71,13 @@ func NewValidatingAdmissionWebhook(configFile io.Reader) (*Plugin, error) {
 
 // Validate makes an admission decision based on the request attributes.
 func (a *Plugin) Validate(attr admission.Attributes) error {
+	if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenant, err := multitenancyutil.TransformTenantInfoFromUser(attr.GetUserInfo())
+		if err != nil {
+			return err
+		}
+		var aInterface interface{} = a
+		a = aInterface.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(*Plugin)
+	}
 	return a.Webhook.Dispatch(attr)
 }

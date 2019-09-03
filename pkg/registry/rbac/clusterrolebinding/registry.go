@@ -25,6 +25,9 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/kubernetes/pkg/apis/rbac"
 	rbacv1helpers "k8s.io/kubernetes/pkg/apis/rbac/v1"
+	"k8s.io/apiserver/pkg/util/feature"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancycopy "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/copy"
 )
 
 // Registry is an interface for things that know how to store ClusterRoleBindings.
@@ -40,6 +43,9 @@ type storage struct {
 // NewRegistry returns a new Registry interface for the given Storage. Any mismatched
 // types will panic.
 func NewRegistry(s rest.StandardStorage) Registry {
+	if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		return &storage{multitenancycopy.InjectRESTLister(s)}
+	}
 	return &storage{s}
 }
 

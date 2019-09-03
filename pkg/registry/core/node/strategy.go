@@ -41,6 +41,7 @@ import (
 	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/kubelet/client"
 	proxyutil "k8s.io/kubernetes/pkg/proxy/util"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
 )
 
 // nodeStrategy implements behavior for nodes
@@ -209,11 +210,11 @@ func ResourceLocation(getter ResourceGetter, connection client.ConnectionInfoGet
 	// We check if we want to get a default Kubelet's transport. It happens if either:
 	// - no port is specified in request (Kubelet's port is default)
 	// - the requested port matches the kubelet port for this node
-	if portReq == "" || portReq == info.Port {
+	if portReq == "" || portReq == info.Port || utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
 		return &url.URL{
-				Scheme: info.Scheme,
-				Host:   net.JoinHostPort(info.Hostname, info.Port),
-			},
+			Scheme: info.Scheme,
+			Host:   net.JoinHostPort(info.Hostname, info.Port),
+		},
 			info.Transport,
 			nil
 	}

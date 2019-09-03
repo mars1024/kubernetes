@@ -94,11 +94,11 @@ kube::build::get_docker_wrapped_binaries() {
   case $1 in
     "amd64")
         local targets=(
-          cloud-controller-manager,busybox
-          kube-apiserver,busybox
-          kube-controller-manager,busybox
-          kube-scheduler,busybox
-          kube-proxy,k8s.gcr.io/debian-iptables-amd64:${debian_iptables_version}
+          cloud-controller-manager,acs-reg.alipay.com/acloud/busybox:latest
+          kube-apiserver,acs-reg.alipay.com/acloud/busybox:latest
+          kube-controller-manager,acs-reg.alipay.com/acloud/busybox:latest
+          kube-scheduler,acs-reg.alipay.com/acloud/busybox:latest
+          kube-proxy,acs-reg.alipay.com/acloud/debian-iptables-amd64:${debian_iptables_version}
         );;
     "arm")
         local targets=(
@@ -106,7 +106,7 @@ kube::build::get_docker_wrapped_binaries() {
           kube-apiserver,arm32v7/busybox
           kube-controller-manager,arm32v7/busybox
           kube-scheduler,arm32v7/busybox
-          kube-proxy,k8s.gcr.io/debian-iptables-arm:${debian_iptables_version}
+          kube-proxy,acs-reg.alipay.com/acloud/debian-iptables-arm:${debian_iptables_version}
         );;
     "arm64")
         local targets=(
@@ -114,7 +114,7 @@ kube::build::get_docker_wrapped_binaries() {
           kube-apiserver,arm64v8/busybox
           kube-controller-manager,arm64v8/busybox
           kube-scheduler,arm64v8/busybox
-          kube-proxy,k8s.gcr.io/debian-iptables-arm64:${debian_iptables_version}
+          kube-proxy,acs-reg.alipay.com/acloud/debian-iptables-arm64:${debian_iptables_version}
         );;
     "ppc64le")
         local targets=(
@@ -122,7 +122,7 @@ kube::build::get_docker_wrapped_binaries() {
           kube-apiserver,ppc64le/busybox
           kube-controller-manager,ppc64le/busybox
           kube-scheduler,ppc64le/busybox
-          kube-proxy,k8s.gcr.io/debian-iptables-ppc64le:${debian_iptables_version}
+          kube-proxy,acs-reg.alipay.com/acloud/debian-iptables-ppc64le:${debian_iptables_version}
         );;
     "s390x")
         local targets=(
@@ -130,7 +130,7 @@ kube::build::get_docker_wrapped_binaries() {
           kube-apiserver,s390x/busybox
           kube-controller-manager,s390x/busybox
           kube-scheduler,s390x/busybox
-          kube-proxy,k8s.gcr.io/debian-iptables-s390x:${debian_iptables_version}
+          kube-proxy,acs-reg.alipay.com/acloud/debian-iptables-s390x:${debian_iptables_version}
         );;
   esac
 
@@ -731,6 +731,7 @@ function kube::build::sync_to_container() {
     --filter='- /_tmp/' \
     --filter='- /_output/' \
     --filter='- /' \
+    --filter='+ vendor/***/zz_generated.*' \
     --filter='H zz_generated.*' \
     --filter='H generated.proto' \
     "${KUBE_ROOT}/" "rsync://k8s@${KUBE_RSYNC_ADDR}/k8s/"

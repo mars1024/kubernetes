@@ -27,9 +27,11 @@ import (
 	"time"
 
 	"github.com/golang/glog"
-
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/controller/nodelifecycle"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
 	"net/http"
 
+	multitenancygarbagecollector "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/controller/garbagecollector"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
@@ -120,6 +122,33 @@ func startNodeIpamController(ctx ControllerContext) (http.Handler, bool, error) 
 }
 
 func startNodeLifecycleController(ctx ControllerContext) (http.Handler, bool, error) {
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		lifecycleController, err := nodelifecycle.NewNodeLifecycleController(
+			ctx.InformerFactory.Coordination().V1beta1().Leases(),
+			ctx.InformerFactory.Core().V1().Pods(),
+			ctx.InformerFactory.Core().V1().Nodes(),
+			ctx.InformerFactory.Extensions().V1beta1().DaemonSets(),
+			ctx.Cloud,
+			ctx.ClientBuilder.ClientOrDie("node-controller"),
+			ctx.ComponentConfig.KubeCloudShared.NodeMonitorPeriod.Duration,
+			ctx.ComponentConfig.NodeLifecycleController.NodeStartupGracePeriod.Duration,
+			ctx.ComponentConfig.NodeLifecycleController.NodeMonitorGracePeriod.Duration,
+			ctx.ComponentConfig.NodeLifecycleController.PodEvictionTimeout.Duration,
+			ctx.ComponentConfig.NodeLifecycleController.NodeEvictionRate,
+			ctx.ComponentConfig.NodeLifecycleController.SecondaryNodeEvictionRate,
+			ctx.ComponentConfig.NodeLifecycleController.LargeClusterSizeThreshold,
+			ctx.ComponentConfig.NodeLifecycleController.UnhealthyZoneThreshold,
+			ctx.ComponentConfig.NodeLifecycleController.EnableTaintManager,
+			utilfeature.DefaultFeatureGate.Enabled(features.TaintBasedEvictions),
+			utilfeature.DefaultFeatureGate.Enabled(features.TaintNodesByCondition),
+		)
+		if err != nil {
+			return nil, true, err
+		}
+		go lifecycleController.Run(ctx.Stop)
+		return nil, true, nil
+	}
+
 	lifecycleController, err := lifecyclecontroller.NewNodeLifecycleController(
 		ctx.InformerFactory.Coordination().V1beta1().Leases(),
 		ctx.InformerFactory.Core().V1().Pods(),
@@ -377,6 +406,29 @@ func startGarbageCollectorController(ctx ControllerContext) (http.Handler, bool,
 	for _, r := range ctx.ComponentConfig.GarbageCollectorController.GCIgnoredResources {
 		ignoredResources[schema.GroupResource{Group: r.Group, Resource: r.Resource}] = struct{}{}
 	}
+
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		garbageCollector, err := multitenancygarbagecollector.NewGarbageCollector(
+			dynamicClient,
+			ctx.RESTMapper,
+			deletableResources,
+			ignoredResources,
+			ctx.InformerFactory,
+			ctx.InformersStarted,
+		)
+		if err != nil {
+			return nil, true, fmt.Errorf("Failed to start the generic garbage collector: %v", err)
+		}
+		workers := int(ctx.ComponentConfig.GarbageCollectorController.ConcurrentGCSyncs)
+		go garbageCollector.Run(workers, ctx.Stop)
+
+		// Periodically refresh the RESTMapper with new discovery information and sync
+		// the garbage collector.
+		go garbageCollector.Sync(gcClientset.Discovery(), 30*time.Second, ctx.Stop)
+
+		return multitenancygarbagecollector.NewDebugHandler(garbageCollector), true, nil
+	}
+
 	garbageCollector, err := garbagecollector.NewGarbageCollector(
 		dynamicClient,
 		ctx.RESTMapper,

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM busybox
+FROM reg.docker.alibaba-inc.com/busybox
 ADD cauldron cauldron
 ADD cauldron.go cauldron.go
 ENTRYPOINT ["/cauldron"]

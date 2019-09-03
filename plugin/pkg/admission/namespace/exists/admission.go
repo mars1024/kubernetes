@@ -28,6 +28,9 @@ import (
 	informers "k8s.io/kubernetes/pkg/client/informers/informers_generated/internalversion"
 	corelisters "k8s.io/kubernetes/pkg/client/listers/core/internalversion"
 	kubeapiserveradmission "k8s.io/kubernetes/pkg/kubeapiserver/admission"
+	"k8s.io/apiserver/pkg/util/feature"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 )
 
 // PluginName indicates name of admission plugin.
@@ -60,6 +63,14 @@ func (e *Exists) Validate(a admission.Attributes) error {
 	// its a namespaced resource.
 	if len(a.GetNamespace()) == 0 || a.GetKind().GroupKind() == api.Kind("Namespace") {
 		return nil
+	}
+
+	if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenant, err := multitenancyutil.TransformTenantInfoFromUser(a.GetUserInfo())
+		if err != nil {
+			return err
+		}
+		e = e.ShallowCopyWithTenant(tenant).(*Exists)
 	}
 
 	// we need to wait for our caches to warm

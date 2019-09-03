@@ -22,6 +22,11 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancycache "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/cache"
+	multitenancyserviceaccount "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/serviceaccount"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
+	
 	"k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -30,6 +35,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	informers "k8s.io/client-go/informers/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	listersv1 "k8s.io/client-go/listers/core/v1"
@@ -104,7 +110,11 @@ func NewTokensController(serviceAccounts informers.ServiceAccountInformer, secre
 	)
 
 	secretCache := secrets.Informer().GetIndexer()
-	e.updatedSecrets = cache.NewIntegerResourceVersionMutationCache(secretCache, secretCache, 60*time.Second, true)
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		e.updatedSecrets = multitenancycache.NewIntegerResourceVersionMutationCache(secretCache, secretCache, 60*time.Second, true)
+	} else {
+		e.updatedSecrets = cache.NewIntegerResourceVersionMutationCache(secretCache, secretCache, 60*time.Second, true)
+	}
 	e.secretSynced = secrets.Informer().HasSynced
 	secrets.Informer().AddEventHandlerWithResyncPeriod(
 		cache.FilteringResourceEventHandler{
@@ -241,6 +251,10 @@ func (e *TokensController) syncServiceAccount() {
 		return
 	}
 
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		e = e.ShallowCopyWithTenant(multitenancy.NewTenantInfo(saInfo.tenantID, saInfo.workspaceID, saInfo.clusterID)).(*TokensController)
+	}
+
 	sa, err := e.getServiceAccount(saInfo.namespace, saInfo.name, saInfo.uid, false)
 	switch {
 	case err != nil:
@@ -249,7 +263,12 @@ func (e *TokensController) syncServiceAccount() {
 	case sa == nil:
 		// service account no longer exists, so delete related tokens
 		glog.V(4).Infof("syncServiceAccount(%s/%s), service account deleted, removing tokens", saInfo.namespace, saInfo.name)
-		sa = &v1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Namespace: saInfo.namespace, Name: saInfo.name, UID: saInfo.uid}}
+		sa = &v1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Namespace: saInfo.namespace, Name: saInfo.name, UID: saInfo.uid,
+			Annotations: map[string]string{
+				multitenancy.MultiTenancyAnnotationKeyTenantID: saInfo.tenantID,
+				multitenancy.MultiTenancyAnnotationKeyWorkspaceID: saInfo.workspaceID,
+				multitenancy.MultiTenancyAnnotationKeyClusterID: saInfo.clusterID,
+			}}}
 		retry, err = e.deleteTokens(sa)
 		if err != nil {
 			glog.Errorf("error deleting serviceaccount tokens for %s/%s: %v", saInfo.namespace, saInfo.name, err)
@@ -283,6 +302,12 @@ func (e *TokensController) syncSecret() {
 	}
 
 	secret, err := e.getSecret(secretInfo.namespace, secretInfo.name, secretInfo.uid, false)
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenant := multitenancy.NewTenantInfo(secretInfo.tenantID, secretInfo.workspaceID, secretInfo.clusterID)
+		e = e.ShallowCopyWithTenant(tenant).(*TokensController)
+		secret, err = e.getSecretWithTenantInfo(secretInfo.namespace, secretInfo.name, secretInfo.uid, false, tenant)
+	}
+
 	switch {
 	case err != nil:
 		glog.Error(err)
@@ -396,6 +421,9 @@ func (e *TokensController) ensureReferencedToken(serviceAccount *v1.ServiceAccou
 
 	// Generate the token
 	token, err := e.token.GenerateToken(serviceaccount.LegacyClaims(*serviceAccount, *secret))
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		token, err = e.token.GenerateToken(multitenancyserviceaccount.TenantWiseLegacyClaims(*serviceAccount, *secret))
+	}
 	if err != nil {
 		// retriable error
 		return true, err
@@ -647,6 +675,42 @@ func (e *TokensController) getServiceAccount(ns string, name string, uid types.U
 	return nil, nil
 }
 
+func (e *TokensController) getSecretWithTenantInfo(ns string, name string, uid types.UID, fetchOnCacheMiss bool, tenant multitenancy.TenantInfo) (*v1.Secret, error) {
+	key := multitenancyutil.TransformTenantInfoToJointString(tenant, "/") + "/" + ns + "/" + name
+	obj, exists, err := e.updatedSecrets.GetByKey(key)
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		secret, ok := obj.(*v1.Secret)
+		if !ok {
+			return nil, fmt.Errorf("expected *v1.Secret, got %#v", secret)
+		}
+		// Ensure UID matches if given
+		if len(uid) == 0 || uid == secret.UID {
+			return secret, nil
+		}
+	}
+
+	if !fetchOnCacheMiss {
+		return nil, nil
+	}
+
+	// Live lookup
+	secret, err := e.client.CoreV1().Secrets(ns).Get(name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	// Ensure UID matches if given
+	if len(uid) == 0 || uid == secret.UID {
+		return secret, nil
+	}
+	return nil, nil
+}
+
 func (e *TokensController) getSecret(ns string, name string, uid types.UID, fetchOnCacheMiss bool) (*v1.Secret, error) {
 	// Look up in cache
 	obj, exists, err := e.updatedSecrets.GetByKey(makeCacheKey(ns, name))
@@ -686,7 +750,19 @@ func (e *TokensController) getSecret(ns string, name string, uid types.UID, fetc
 // listTokenSecrets returns a list of all of the ServiceAccountToken secrets that
 // reference the given service account's name and uid
 func (e *TokensController) listTokenSecrets(serviceAccount *v1.ServiceAccount) ([]*v1.Secret, error) {
-	namespaceSecrets, err := e.updatedSecrets.ByIndex("namespace", serviceAccount.Namespace)
+	var namespaceSecrets []interface{}
+	var err error
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(serviceAccount.Annotations)
+		if err != nil {
+			return nil, err
+		}
+		namespaceSecrets, err = e.updatedSecrets.ByIndex(
+			multitenancycache.TenantNamespaceIndex,
+			multitenancyutil.TransformTenantInfoToJointString(tenant, "/")+"/"+serviceAccount.Namespace)
+	} else {
+		namespaceSecrets, err = e.updatedSecrets.ByIndex("namespace", serviceAccount.Namespace)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -724,16 +800,22 @@ func getSecretReferences(serviceAccount *v1.ServiceAccount) sets.String {
 // It contains enough information to look up the cached service account,
 // or delete owned tokens if the service account no longer exists.
 type serviceAccountQueueKey struct {
-	namespace string
-	name      string
-	uid       types.UID
+	namespace   string
+	name        string
+	uid         types.UID
+	tenantID    string
+	workspaceID string
+	clusterID   string
 }
 
 func makeServiceAccountKey(sa *v1.ServiceAccount) interface{} {
 	return serviceAccountQueueKey{
-		namespace: sa.Namespace,
-		name:      sa.Name,
-		uid:       sa.UID,
+		namespace:   sa.Namespace,
+		name:        sa.Name,
+		uid:         sa.UID,
+		tenantID:    sa.Annotations[multitenancy.MultiTenancyAnnotationKeyTenantID],
+		workspaceID: sa.Annotations[multitenancy.MultiTenancyAnnotationKeyWorkspaceID],
+		clusterID:   sa.Annotations[multitenancy.MultiTenancyAnnotationKeyClusterID],
 	}
 }
 
@@ -754,16 +836,22 @@ type secretQueueKey struct {
 	uid       types.UID
 	saName    string
 	// optional, will be blank when syncing tokens missing the service account uid annotation
-	saUID types.UID
+	saUID       types.UID
+	tenantID    string
+	workspaceID string
+	clusterID   string
 }
 
 func makeSecretQueueKey(secret *v1.Secret) interface{} {
 	return secretQueueKey{
-		namespace: secret.Namespace,
-		name:      secret.Name,
-		uid:       secret.UID,
-		saName:    secret.Annotations[v1.ServiceAccountNameKey],
-		saUID:     types.UID(secret.Annotations[v1.ServiceAccountUIDKey]),
+		namespace:   secret.Namespace,
+		name:        secret.Name,
+		uid:         secret.UID,
+		saName:      secret.Annotations[v1.ServiceAccountNameKey],
+		saUID:       types.UID(secret.Annotations[v1.ServiceAccountUIDKey]),
+		tenantID:    secret.Annotations[multitenancy.MultiTenancyAnnotationKeyTenantID],
+		workspaceID: secret.Annotations[multitenancy.MultiTenancyAnnotationKeyWorkspaceID],
+		clusterID:   secret.Annotations[multitenancy.MultiTenancyAnnotationKeyClusterID],
 	}
 }
 
@@ -777,5 +865,11 @@ func parseSecretQueueKey(key interface{}) (secretQueueKey, error) {
 
 // produce the same key format as cache.MetaNamespaceKeyFunc
 func makeCacheKey(namespace, name string) string {
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		key, _ := multitenancycache.MultiTenancyKeyFuncWrapper(func(interface{}) (string, error) {
+			return namespace + "/" + name, nil
+		})(nil)
+		return key
+	}
 	return namespace + "/" + name
 }

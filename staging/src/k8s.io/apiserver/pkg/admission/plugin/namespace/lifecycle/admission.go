@@ -35,6 +35,9 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	corelisters "k8s.io/client-go/listers/core/v1"
+	"k8s.io/apiserver/pkg/util/feature"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 )
 
 const (
@@ -83,12 +86,28 @@ func (l *Lifecycle) Admit(a admission.Attributes) error {
 		return nil
 	}
 
+	if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenant, err := multitenancyutil.TransformTenantInfoFromUser(a.GetUserInfo())
+		if err != nil {
+			return err
+		}
+		l = l.ShallowCopyWithTenant(tenant).(*Lifecycle)
+	}
+
 	if a.GetKind().GroupKind() == v1.SchemeGroupVersion.WithKind("Namespace").GroupKind() {
 		// if a namespace is deleted, we want to prevent all further creates into it
 		// while it is undergoing termination.  to reduce incidences where the cache
 		// is slow to update, we add the namespace into a force live lookup list to ensure
 		// we are not looking at stale state.
 		if a.GetOperation() == admission.Delete {
+			if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+				tenant, err := multitenancyutil.TransformTenantInfoFromUser(a.GetUserInfo())
+				if err != nil {
+					return err
+				}
+				l.forceLiveLookupCache.Add(multitenancyutil.TransformTenantInfoToJointString(tenant, "/")+"/"+a.GetName(), true, forceLiveLookupTTL)
+				return nil
+			}
 			l.forceLiveLookupCache.Add(a.GetName(), true, forceLiveLookupTTL)
 		}
 		// allow all operations to namespaces
@@ -144,9 +163,21 @@ func (l *Lifecycle) Admit(a admission.Attributes) error {
 
 	// forceLiveLookup if true will skip looking at local cache state and instead always make a live call to server.
 	forceLiveLookup := false
-	if _, ok := l.forceLiveLookupCache.Get(a.GetNamespace()); ok {
-		// we think the namespace was marked for deletion, but our current local cache says otherwise, we will force a live lookup.
-		forceLiveLookup = exists && namespace.Status.Phase == v1.NamespaceActive
+
+	if !feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		if _, ok := l.forceLiveLookupCache.Get(a.GetNamespace()); ok {
+			// we think the namespace was marked for deletion, but our current local cache says otherwise, we will force a live lookup.
+			forceLiveLookup = exists && namespace.Status.Phase == v1.NamespaceActive
+		}
+	} else {
+		tenant, err := multitenancyutil.TransformTenantInfoFromUser(a.GetUserInfo())
+		if err != nil {
+			return err
+		}
+		if _, ok := l.forceLiveLookupCache.Get(multitenancyutil.TransformTenantInfoToJointString(tenant, "/") + "/" + a.GetNamespace()); ok {
+			// we think the namespace was marked for deletion, but our current local cache says otherwise, we will force a live lookup.
+			forceLiveLookup = exists && namespace.Status.Phase == v1.NamespaceActive
+		}
 	}
 
 	// refuse to operate on non-existent namespaces

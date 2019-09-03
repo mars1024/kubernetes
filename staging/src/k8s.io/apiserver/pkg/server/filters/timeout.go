@@ -40,14 +40,14 @@ func WithTimeoutForNonLongRunningRequests(handler http.Handler, longRunning apir
 	if longRunning == nil {
 		return handler
 	}
-	timeoutFunc := func(req *http.Request) (*http.Request, <-chan time.Time, func(error), *apierrors.StatusError) {
+	timeoutFunc := func(req *http.Request) (*http.Request, <-chan time.Time, func(), *apierrors.StatusError) {
 		// TODO unify this with apiserver.MaxInFlightLimit
 		ctx := req.Context()
 
 		requestInfo, ok := apirequest.RequestInfoFrom(ctx)
 		if !ok {
 			// if this happens, the handler chain isn't setup correctly because there is no request info
-			return req, time.After(timeout), func(error) {}, apierrors.NewInternalError(fmt.Errorf("no request info found for request during timeout"))
+			return req, time.After(timeout), func() {}, apierrors.NewInternalError(fmt.Errorf("no request info found for request during timeout"))
 		}
 
 		if longRunning(req, requestInfo) {
@@ -57,15 +57,8 @@ func WithTimeoutForNonLongRunningRequests(handler http.Handler, longRunning apir
 		ctx, cancel := context.WithCancel(ctx)
 		req = req.WithContext(ctx)
 
-		postTimeoutFn := func(err error) {
+		postTimeoutFn := func() {
 			cancel()
-
-			// No error occur, timeout handler write 504 code and body successfully
-			if nil == err {
-				metrics.Record(req, requestInfo, "", http.StatusGatewayTimeout, 0, 0)
-				return
-			}
-
 			// Otherwise, there's some error, server has already tried to write headers and body but timeout to finish to write all body,
 			// or failed to write 504 response code and body
 			// So, actually it's not a 504 response to the client, the client received EOF.
@@ -77,7 +70,7 @@ func WithTimeoutForNonLongRunningRequests(handler http.Handler, longRunning apir
 	return WithTimeout(handler, timeoutFunc)
 }
 
-type timeoutFunc = func(*http.Request) (req *http.Request, timeout <-chan time.Time, postTimeoutFunc func(error), err *apierrors.StatusError)
+type timeoutFunc = func(*http.Request) (req *http.Request, timeout <-chan time.Time, postTimeoutFunc func(), err *apierrors.StatusError)
 
 // WithTimeout returns an http.Handler that runs h with a timeout
 // determined by timeoutFunc. The new http.Handler calls h.ServeHTTP to handle
@@ -126,8 +119,8 @@ func (t *timeoutHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	case <-after:
+		postTimeoutFn()
 		writeRespErr := tw.timeout(err)
-		postTimeoutFn(writeRespErr)
 
 		// The timeout writer has been used by the inner handler. There is
 		// no way to timeout the HTTP request at the point. We have to shutdown

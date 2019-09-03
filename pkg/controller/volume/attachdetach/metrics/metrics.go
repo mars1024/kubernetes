@@ -25,6 +25,10 @@ import (
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/kubernetes/pkg/controller/volume/attachdetach/cache"
 	"k8s.io/kubernetes/pkg/controller/volume/attachdetach/util"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
+
 	"k8s.io/kubernetes/pkg/volume"
 )
 
@@ -157,8 +161,17 @@ func (collector *attachDetachStateCollector) getVolumeInUseCount() volumeCount {
 		if pod.Spec.NodeName == "" {
 			continue
 		}
+		cloned := collector
+		if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+			tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+			if err == nil {
+				cloned = collector.ShallowCopyWithTenant(tenant).(*attachDetachStateCollector)
+			} else {
+				glog.Warningf("multi-tenancy enabled but failed to get tenant info: %s", err.Error())
+			}
+		}
 		for _, podVolume := range pod.Spec.Volumes {
-			volumeSpec, err := util.CreateVolumeSpec(podVolume, pod.Namespace, collector.pvcLister, collector.pvLister)
+			volumeSpec, err := util.CreateVolumeSpec(podVolume, pod.Namespace, cloned.pvcLister, cloned.pvLister)
 			if err != nil {
 				continue
 			}

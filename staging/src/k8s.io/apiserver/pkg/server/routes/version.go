@@ -23,6 +23,8 @@ import (
 
 	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/apiserver/pkg/endpoints/handlers/responsewriters"
+	"runtime"
+	"fmt"
 )
 
 // Version provides a webservice with version information.
@@ -53,5 +55,16 @@ func (v Version) Install(c *restful.Container) {
 
 // handleVersion writes the server's version information.
 func (v Version) handleVersion(req *restful.Request, resp *restful.Response) {
-	responsewriters.WriteRawJSON(http.StatusOK, *v.Version, resp.ResponseWriter)
+	versionInfo := version.Info{
+		Major:        "1",
+		Minor:        "12+",
+		GitVersion:   "v1.12.5-aks.1.9",
+		GitCommit:    "f932d2457aea933d640c81007760fc31afd2b775",
+		GitTreeState: "clean",
+		BuildDate:    "2019-06-12T21:00:00Z",
+		GoVersion:    runtime.Version(),
+		Compiler:     runtime.Compiler,
+		Platform:     fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
+	}
+	responsewriters.WriteRawJSON(http.StatusOK, versionInfo, resp.ResponseWriter)
 }

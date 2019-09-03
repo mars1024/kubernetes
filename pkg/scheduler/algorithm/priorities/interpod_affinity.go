@@ -17,6 +17,7 @@ limitations under the License.
 package priorities
 
 import (
+	"reflect"
 	"sync"
 
 	"k8s.io/api/core/v1"
@@ -24,10 +25,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/kubernetes/pkg/scheduler/algorithm"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/kubernetes/pkg/scheduler/algorithm/predicates"
 	priorityutil "k8s.io/kubernetes/pkg/scheduler/algorithm/priorities/util"
 	schedulerapi "k8s.io/kubernetes/pkg/scheduler/api"
 	schedulercache "k8s.io/kubernetes/pkg/scheduler/cache"
+
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 
 	"github.com/golang/glog"
 )
@@ -116,6 +121,10 @@ func (p *podAffinityPriorityMap) processTerms(terms []v1.WeightedPodAffinityTerm
 // Symmetry need to be considered for preferredDuringSchedulingIgnoredDuringExecution from podAffinity & podAntiAffinity,
 // symmetry need to be considered for hard requirements from podAffinity
 func (ipa *InterPodAffinity) CalculateInterPodAffinityPriority(pod *v1.Pod, nodeNameToInfo map[string]*schedulercache.NodeInfo, nodes []*v1.Node) (schedulerapi.HostPriorityList, error) {
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+		ipa = ipa.ShallowCopyWithTenant(tenantInfo).(*InterPodAffinity)
+	}
 	affinity := pod.Spec.Affinity
 	hasAffinityConstraints := affinity != nil && affinity.PodAffinity != nil
 	hasAntiAffinityConstraints := affinity != nil && affinity.PodAntiAffinity != nil
@@ -192,6 +201,14 @@ func (ipa *InterPodAffinity) CalculateInterPodAffinityPriority(pod *v1.Pod, node
 	processNode := func(i int) {
 		nodeInfo := nodeNameToInfo[allNodeNames[i]]
 		if nodeInfo.Node() != nil {
+			if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+				// filter out nodes with different tenant info
+				tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+				nodeTenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(nodeInfo.Node().Annotations)
+				if !reflect.DeepEqual(tenantInfo, nodeTenantInfo) {
+					return
+				}
+			}
 			if hasAffinityConstraints || hasAntiAffinityConstraints {
 				// We need to process all the nodes.
 				for _, existingPod := range nodeInfo.Pods() {

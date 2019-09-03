@@ -20,13 +20,19 @@ package populator
 
 import (
 	"fmt"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
 	"time"
 
 	"github.com/golang/glog"
 
+	multitenancycache "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/cache"
+	multitenancymeta "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/meta"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
+
 	"k8s.io/apimachinery/pkg/util/wait"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	kcache "k8s.io/client-go/tools/cache"
@@ -107,19 +113,22 @@ func (dswp *desiredStateOfWorldPopulator) populatorLoopFunc() func() {
 // longer exist in the informer
 func (dswp *desiredStateOfWorldPopulator) findAndRemoveDeletedPods() {
 	for dswPodUID, dswPodToAdd := range dswp.desiredStateOfWorld.GetPodToAdd() {
-		dswPodKey, err := kcache.MetaNamespaceKeyFunc(dswPodToAdd.Pod)
+		dswPodKey, err := multitenancycache.MultiTenancyKeyFuncWrapper(kcache.MetaNamespaceKeyFunc)(dswPodToAdd.Pod)
 		if err != nil {
 			glog.Errorf("MetaNamespaceKeyFunc failed for pod %q (UID %q) with: %v", dswPodKey, dswPodUID, err)
 			continue
 		}
-
 		// Retrieve the pod object from pod informer with the namespace key
-		namespace, name, err := kcache.SplitMetaNamespaceKey(dswPodKey)
+		tenant, namespace, name, err := multitenancycache.MultiTenancySplitKeyWrapper(kcache.SplitMetaNamespaceKey)(dswPodKey)
 		if err != nil {
 			utilruntime.HandleError(fmt.Errorf("error splitting dswPodKey %q: %v", dswPodKey, err))
 			continue
 		}
-		informerPod, err := dswp.podLister.Pods(namespace).Get(name)
+		podLister := dswp.podLister
+		if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+			podLister = podLister.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(corelisters.PodLister)
+		}
+		informerPod, err := podLister.Pods(namespace).Get(name)
 		switch {
 		case errors.IsNotFound(err):
 			// if we can't find the pod, we need to delete it below
@@ -162,8 +171,19 @@ func (dswp *desiredStateOfWorldPopulator) findAndAddActivePods() {
 			// Do not add volumes for terminated pods
 			continue
 		}
+		pvcLister := dswp.pvcLister
+		pvLister := dswp.pvLister
+		if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+			tenant, err := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+			if err != nil {
+				glog.Errorf("failed to get tenant info while multitenant enabled: %v", err)
+				return
+			}
+			pvcLister = dswp.pvcLister.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(corelisters.PersistentVolumeClaimLister)
+			pvLister = dswp.pvLister.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(corelisters.PersistentVolumeLister)
+		}
 		util.ProcessPodVolumes(pod, true,
-			dswp.desiredStateOfWorld, dswp.volumePluginMgr, dswp.pvcLister, dswp.pvLister)
+			dswp.desiredStateOfWorld, dswp.volumePluginMgr, pvcLister, pvLister)
 
 	}
 

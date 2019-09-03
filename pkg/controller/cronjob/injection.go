@@ -101,23 +101,23 @@ func copyAnnotations(template *batchv1beta1.JobTemplateSpec) labels.Set {
 	return a
 }
 
-func (r realJobControl) GetJob(namespace, name string) (*batchv1.Job, error) {
+func (r *realJobControl) GetJob(namespace, name string) (*batchv1.Job, error) {
 	return r.KubeClient.BatchV1().Jobs(namespace).Get(name, metav1.GetOptions{})
 }
 
-func (r realJobControl) UpdateJob(namespace string, job *batchv1.Job) (*batchv1.Job, error) {
+func (r *realJobControl) UpdateJob(namespace string, job *batchv1.Job) (*batchv1.Job, error) {
 	return r.KubeClient.BatchV1().Jobs(namespace).Update(job)
 }
 
-func (r realJobControl) PatchJob(namespace string, name string, pt types.PatchType, data []byte, subresources ...string) (*batchv1.Job, error) {
+func (r *realJobControl) PatchJob(namespace string, name string, pt types.PatchType, data []byte, subresources ...string) (*batchv1.Job, error) {
 	return r.KubeClient.BatchV1().Jobs(namespace).Patch(name, pt, data, subresources...)
 }
 
-func (r realJobControl) CreateJob(namespace string, job *batchv1.Job) (*batchv1.Job, error) {
+func (r *realJobControl) CreateJob(namespace string, job *batchv1.Job) (*batchv1.Job, error) {
 	return r.KubeClient.BatchV1().Jobs(namespace).Create(job)
 }
 
-func (r realJobControl) DeleteJob(namespace string, name string) error {
+func (r *realJobControl) DeleteJob(namespace string, name string) error {
 	return r.KubeClient.BatchV1().Jobs(namespace).Delete(name, nil)
 }
 
@@ -215,11 +215,11 @@ type realPodControl struct {
 
 var _ podControlInterface = &realPodControl{}
 
-func (r realPodControl) ListPods(namespace string, opts metav1.ListOptions) (*v1.PodList, error) {
+func (r *realPodControl) ListPods(namespace string, opts metav1.ListOptions) (*v1.PodList, error) {
 	return r.KubeClient.CoreV1().Pods(namespace).List(opts)
 }
 
-func (r realPodControl) DeletePod(namespace string, name string) error {
+func (r *realPodControl) DeletePod(namespace string, name string) error {
 	return r.KubeClient.CoreV1().Pods(namespace).Delete(name, nil)
 }
 

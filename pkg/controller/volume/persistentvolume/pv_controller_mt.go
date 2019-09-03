@@ -1,0 +1,46 @@
+package persistentvolume
+
+import (
+	"github.com/golang/glog"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancymeta "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/meta"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
+	"k8s.io/api/core/v1"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	clientset "k8s.io/client-go/kubernetes"
+	corelisters "k8s.io/client-go/listers/core/v1"
+	storagelisters "k8s.io/client-go/listers/storage/v1"
+)
+
+func (ctrl *PersistentVolumeController) ShallowCopyWithTenant(tenant multitenancy.TenantInfo) interface{} {
+	glog.Infof("PersistentVolumeController ShallowCopyWithTenant with tenant info %#v", tenant)
+	ctrlCloned := *ctrl
+	ctrlCloned.kubeClient = ctrl.kubeClient.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(clientset.Interface)
+	ctrlCloned.classLister = ctrl.classLister.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(storagelisters.StorageClassLister)
+	// note: scheduler did not initialize following fields
+	if ctrl.claimLister != nil {
+		ctrlCloned.claimLister = ctrl.claimLister.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(corelisters.PersistentVolumeClaimLister)
+	}
+	if ctrl.volumeLister != nil {
+		ctrlCloned.volumeLister = ctrl.volumeLister.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(corelisters.PersistentVolumeLister)
+	}
+	if ctrl.podLister != nil {
+		ctrlCloned.podLister = ctrl.podLister.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(corelisters.PodLister)
+	}
+	if ctrl.NodeLister != nil {
+		ctrlCloned.NodeLister = ctrl.NodeLister.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(corelisters.NodeLister)
+	}
+	return &ctrlCloned
+}
+
+func getVolumeNameFromPVC(pvc *v1.PersistentVolumeClaim) string {
+	volumeName := pvc.Spec.VolumeName
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, err := util.TransformTenantInfoFromAnnotations(pvc.Annotations)
+		if err == nil {
+			return multitenancyutil.TransformTenantInfoToJointString(tenantInfo, "/") + "/" + volumeName
+		}
+	}
+	return volumeName
+}

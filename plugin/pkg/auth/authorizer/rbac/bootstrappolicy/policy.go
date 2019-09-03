@@ -117,7 +117,7 @@ func NodeRules() []rbacv1.PolicyRule {
 
 		// Needed for the node to create/delete mirror pods.
 		// Use the NodeRestriction admission plugin to limit a node to creating/deleting mirror pods bound to itself.
-		rbacv1helpers.NewRule("create", "delete").Groups(legacyGroup).Resources("pods").RuleOrDie(),
+		rbacv1helpers.NewRule("create", "delete", "patch").Groups(legacyGroup).Resources("pods").RuleOrDie(),
 		// Needed for the node to report status of pods it is running.
 		// Use the NodeRestriction admission plugin to limit a node to updating status of pods bound to itself.
 		rbacv1helpers.NewRule("update", "patch").Groups(legacyGroup).Resources("pods/status").RuleOrDie(),
@@ -380,6 +380,7 @@ func ClusterRoles() []rbacv1.ClusterRole {
 			Rules: []rbacv1.PolicyRule{
 				// used to create a certificatesigningrequest for a node-specific client certificate, and watch for it to be signed
 				rbacv1helpers.NewRule("create", "get", "list", "watch").Groups(certificatesGroup).Resources("certificatesigningrequests").RuleOrDie(),
+				rbacv1helpers.NewRule("get").Groups(legacyGroup).Resources("secrets").RuleOrDie(),
 			},
 		},
 		{

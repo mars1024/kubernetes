@@ -196,6 +196,9 @@ func (rc *reconciler) reconcile() {
 					volumeToMount.VolumeToMount,
 					rc.nodeName,
 					rc.actualStateOfWorld)
+				if err != nil {
+					glog.V(5).Infof("reconciler: operationExecutor.VerifyControllerAttachedVolume failed as: %s", err)
+				}
 				if err != nil &&
 					!nestedpendingoperations.IsAlreadyExists(err) &&
 					!exponentialbackoff.IsExponentialBackoff(err) {

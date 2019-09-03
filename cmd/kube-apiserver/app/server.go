@@ -20,6 +20,7 @@ limitations under the License.
 package app
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"io/ioutil"
@@ -89,6 +90,20 @@ import (
 	"k8s.io/kubernetes/pkg/version/verflag"
 	"k8s.io/kubernetes/plugin/pkg/auth/authenticator/token/bootstrap"
 
+	multitenancycrdserver "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/apiextensions-apiserver/pkg/apiserver"
+	multitenancyfilter "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/filter"
+	bucketingfilter "gitlab.alipay-inc.com/antcloud-aks/cafe-cluster-operator/pkg/apiserver/filter"
+	clusterclientset "gitlab.alipay-inc.com/antcloud-aks/cafe-cluster-operator/pkg/client/clientset_generated/clientset"
+	clusterinformers "gitlab.alipay-inc.com/antcloud-aks/cafe-cluster-operator/pkg/client/informers_generated/externalversions"
+	clusteradmissions "gitlab.alipay-inc.com/antcloud-aks/cafe-cluster-operator/plugin/admission"
+	cafeclientset "gitlab.alipay-inc.com/antcloud-aks/cafe-kubernetes-extension/pkg/client/clientset_generated/clientset"
+	cafeinformers "gitlab.alipay-inc.com/antcloud-aks/cafe-kubernetes-extension/pkg/client/informers_generated/externalversions"
+	multitenancyaggregator "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/kube-aggregator/pkg/apiserver"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	cafeadmission "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/admission"
+	multitenancyresolver "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/resolver"
+	genericapifilters "k8s.io/apiserver/pkg/endpoints/filters"
+	genericfilters "k8s.io/apiserver/pkg/server/filters"
 	utilflag "k8s.io/kubernetes/pkg/util/flag"
 	_ "k8s.io/kubernetes/pkg/util/reflector/prometheus" // for reflector metric registration
 	_ "k8s.io/kubernetes/pkg/util/workqueue/prometheus" // for workqueue metric registration
@@ -176,6 +191,32 @@ func CreateServerChain(completedOptions completedServerRunOptions, stopCh <-chan
 	if err != nil {
 		return nil, err
 	}
+
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		apiExtensionsServer, err := multitenancycrdserver.CreateAPIExtensionsServer(apiExtensionsConfig, genericapiserver.NewEmptyDelegate())
+		if err != nil {
+			return nil, err
+		}
+		kubeAPIServer, err := CreateKubeAPIServer(kubeAPIServerConfig, apiExtensionsServer.GenericAPIServer, admissionPostStartHook)
+		if err != nil {
+			return nil, err
+		}
+
+		kubeAPIServer.GenericAPIServer.PrepareRun()
+		apiExtensionsServer.GenericAPIServer.PrepareRun()
+
+		aggregatorConfig, err := createAggregatorConfig(*kubeAPIServerConfig.GenericConfig, completedOptions.ServerRunOptions, kubeAPIServerConfig.ExtraConfig.VersionedInformers, serviceResolver, proxyTransport, pluginInitializer)
+		if err != nil {
+			return nil, err
+		}
+
+		aggregatorServer, err := multitenancyaggregator.CreateAggregatorServer(aggregatorConfig, kubeAPIServer.GenericAPIServer, apiExtensionsServer.Informers)
+		if err != nil {
+			return nil, err
+		}
+		return aggregatorServer.GenericAPIServer, nil
+	}
+
 	apiExtensionsServer, err := createAPIExtensionsServer(apiExtensionsConfig, genericapiserver.NewEmptyDelegate())
 	if err != nil {
 		return nil, err
@@ -435,6 +476,36 @@ func buildGenericConfig(
 	genericConfig = genericapiserver.NewConfig(legacyscheme.Codecs)
 	genericConfig.MergedResourceConfig = master.DefaultAPIResourceConfigSource()
 
+	genericConfig.BuildHandlerChainFunc = func(apiHandler http.Handler, c *genericapiserver.Config) (secure http.Handler) {
+		handler := genericapifilters.WithAuthorization(apiHandler, c.Authorization.Authorizer, c.Serializer)
+		if len(os.Getenv("FEATURE_RATE_LIMIT")) > 0 && utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+			inFlightHandler := bucketingfilter.NewInFlightFilterWithRestConfig(handler, genericConfig.LoopbackClientConfig)
+			// HACK(zuoxiu.jm): nil handler means it's already initialized, somehow singleton handler doesn't work
+			inFlightHandler.Run(context.TODO())
+			handler = inFlightHandler
+		} else {
+			handler = genericfilters.WithMaxInFlightLimit(handler, c.MaxRequestsInFlight, c.MaxMutatingRequestsInFlight, c.LongRunningFunc)
+		}
+		if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+			handler = multitenancyfilter.WithResourceWhiteList(handler)
+			handler = multitenancyfilter.WithImpersonation(handler, c.Authorization.Authorizer, c.Serializer)
+		} else {
+			handler = genericapifilters.WithImpersonation(handler, c.Authorization.Authorizer, c.Serializer)
+		}
+		handler = genericapifilters.WithAudit(handler, c.AuditBackend, c.AuditPolicyChecker, c.LongRunningFunc)
+		failedHandler := genericapifilters.Unauthorized(c.Serializer, c.Authentication.SupportsBasicAuth)
+		failedHandler = genericapifilters.WithFailedAuthenticationAudit(failedHandler, c.AuditBackend, c.AuditPolicyChecker)
+		handler = genericapifilters.WithAuthentication(handler, c.Authentication.Authenticator, failedHandler)
+		handler = genericfilters.WithCORS(handler, c.CorsAllowedOriginList, nil, nil, nil, "true")
+		handler = genericfilters.WithTimeoutForNonLongRunningRequests(handler, c.LongRunningFunc, c.RequestTimeout)
+		handler = genericfilters.WithWaitGroup(handler, c.LongRunningFunc, c.HandlerChainWaitGroup)
+		handler = genericapifilters.WithRequestInfo(handler, c.RequestInfoResolver)
+		handler = multitenancyfilter.WithBlacklist(handler)
+		handler = genericfilters.WithPanicRecovery(handler)
+		return handler
+
+	}
+
 	if lastErr = s.GenericServerRunOptions.ApplyTo(genericConfig); lastErr != nil {
 		return
 	}
@@ -524,7 +595,11 @@ func buildGenericConfig(
 	}
 	serviceResolver = aggregatorapiserver.NewLoopbackServiceResolver(serviceResolver, localHost)
 
-	genericConfig.Authentication.Authenticator, genericConfig.OpenAPIConfig.SecurityDefinitions, err = BuildAuthenticator(s, clientgoExternalClient, sharedInformers)
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		serviceResolver = multitenancyresolver.NewLoadBalancerServiceResolver(versionedInformers.Core().V1().Services().Lister())
+	}
+
+	genericConfig.Authentication.Authenticator, genericConfig.OpenAPIConfig.SecurityDefinitions, err = BuildAuthenticator(s, client, clientgoExternalClient, sharedInformers)
 	if err != nil {
 		lastErr = fmt.Errorf("invalid authentication config: %v", err)
 		return
@@ -572,6 +647,28 @@ func buildGenericConfig(
 	if err != nil {
 		lastErr = fmt.Errorf("failed to create admission plugin initializer: %v", err)
 		return
+	}
+
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		restConfigShallowCopy := *genericConfig.LoopbackClientConfig
+		restConfigShallowCopy.ContentType = "application/json"
+		cafeClient, err := cafeclientset.NewForConfig(&restConfigShallowCopy)
+		if err != nil {
+			lastErr = fmt.Errorf("failed to create cafe clientset: %v", err)
+			return
+		}
+		cafeSharedInformers := cafeinformers.NewSharedInformerFactory(cafeClient, 10*time.Minute)
+		cafePluginInitializer := cafeadmission.NewPluginInitializer(cafeClient, cafeSharedInformers, storageFactory)
+		pluginInitializers = append(pluginInitializers, cafePluginInitializer)
+
+		clusterOperatorClient, err := clusterclientset.NewForConfig(&restConfigShallowCopy)
+		if err != nil {
+			lastErr = fmt.Errorf("failed to create cluster operator clientset: %v", err)
+			return
+		}
+		clusterOperatorSharedInformers := clusterinformers.NewSharedInformerFactory(clusterOperatorClient, 10*time.Minute)
+		clusterPluginInitializer := clusteradmissions.NewPluginInitializer(*genericConfig.LoopbackClientConfig, clusterOperatorSharedInformers)
+		pluginInitializers = append(pluginInitializers, clusterPluginInitializer)
 	}
 
 	err = s.Admission.ApplyTo(
@@ -625,14 +722,18 @@ func BuildAdmissionPluginInitializers(
 }
 
 // BuildAuthenticator constructs the authenticator
-func BuildAuthenticator(s *options.ServerRunOptions, extclient clientgoclientset.Interface, sharedInformers informers.SharedInformerFactory) (authenticator.Request, *spec.SecurityDefinitions, error) {
+func BuildAuthenticator(s *options.ServerRunOptions, intclient *internalclientset.Clientset, extclient clientgoclientset.Interface, sharedInformers informers.SharedInformerFactory) (authenticator.Request, *spec.SecurityDefinitions, error) {
 	authenticatorConfig := s.Authentication.ToAuthenticationConfig()
 	if s.Authentication.ServiceAccounts.Lookup {
 		authenticatorConfig.ServiceAccountTokenGetter = serviceaccountcontroller.NewGetterFromClient(extclient)
 	}
-	authenticatorConfig.BootstrapTokenAuthenticator = bootstrap.NewTokenAuthenticator(
-		sharedInformers.Core().InternalVersion().Secrets().Lister().Secrets(v1.NamespaceSystem),
-	)
+
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		authenticatorConfig.BootstrapTokenAuthenticator = bootstrap.NewTokenAuthenticator(nil, intclient)
+	} else {
+		authenticatorConfig.BootstrapTokenAuthenticator = bootstrap.NewTokenAuthenticator(
+			sharedInformers.Core().InternalVersion().Secrets().Lister().Secrets(v1.NamespaceSystem), nil)
+	}
 
 	return authenticatorConfig.New()
 }

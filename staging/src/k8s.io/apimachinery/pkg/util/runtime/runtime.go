@@ -63,7 +63,6 @@ func HandleCrash(additionalHandlers ...func(interface{})) {
 // logPanic logs the caller tree when a panic occurs.
 func logPanic(r interface{}) {
 	callers := getCallers(r)
-
 	if _, ok := r.(string); ok {
 		glog.Errorf("Observed a panic: %s\n%v", r, callers)
 	} else {

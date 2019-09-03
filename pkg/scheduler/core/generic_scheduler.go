@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -48,6 +49,10 @@ import (
 	"k8s.io/kubernetes/pkg/scheduler/metrics"
 	"k8s.io/kubernetes/pkg/scheduler/util"
 	"k8s.io/kubernetes/pkg/scheduler/volumebinder"
+
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
+	multitenancymeta "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/meta"
 )
 
 const (
@@ -148,6 +153,8 @@ func (g *genericScheduler) Schedule(pod *v1.Pod, nodeLister algorithm.NodeLister
 	}
 
 	// Used for all fit and priority funcs.
+	// To keep cachedNodeInfoMap keep consistent with scheduler cache nodes info
+	// TODO: should group by tenant
 	err = g.cache.UpdateNodeNameToInfoMap(g.cachedNodeInfoMap)
 	if err != nil {
 		return "", err
@@ -181,6 +188,7 @@ func (g *genericScheduler) Schedule(pod *v1.Pod, nodeLister algorithm.NodeLister
 		return filteredNodes[0].Name, nil
 	}
 
+	// cachedNodeInfoMap contains all nodes from scheduler cache
 	metaPrioritiesInterface := g.priorityMetaProducer(pod, g.cachedNodeInfoMap)
 	priorityList, err := PrioritizeNodes(pod, g.cachedNodeInfoMap, metaPrioritiesInterface, g.prioritizers, filteredNodes, g.extenders)
 	if err != nil {
@@ -208,7 +216,7 @@ func (g *genericScheduler) selectHostForVolumes(pod *v1.Pod, priorityList schedu
 
 	for _, node := range priorityList {
 		// If the node has bound volumes for the pod
-		if len(g.volumeBinder.Binder.GetBindingsCache().GetBindings(pod, node.Host)) > 0 {
+		if g.volumeBinder != nil && len(g.volumeBinder.Binder.GetBindingsCache().GetBindings(pod, node.Host)) > 0 {
 			nodesWithBoundVolumes = append(nodesWithBoundVolumes, node)
 		} else {
 			nodesWithoutBoundVolumes = append(nodesWithoutBoundVolumes, node)
@@ -451,6 +459,21 @@ func (g *genericScheduler) findNodesThatFit(pod *v1.Pod, nodes []*v1.Node) ([]*v
 			if g.equivalenceCache != nil {
 				nodeCache, _ = g.equivalenceCache.GetNodeCache(nodeName)
 			}
+			nodeInfo := g.cachedNodeInfoMap[nodeName]
+			if nodeInfo.Node() == nil {
+				// TODO: this could break the scheduler behavior
+				return
+			}
+			if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+				// filter out nodes with different tenant info
+				tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+				if node := nodeInfo.Node(); node != nil {
+					nodeTenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(node.Annotations)
+					if !reflect.DeepEqual(tenantInfo, nodeTenantInfo) {
+						return
+					}
+				}
+			}
 			fits, failedPredicates, err := podFitsOnNode(
 				pod,
 				meta,
@@ -493,6 +516,7 @@ func (g *genericScheduler) findNodesThatFit(pod *v1.Pod, nodes []*v1.Node) ([]*v
 		}
 	}
 
+	// no extenders when use default provider
 	if len(filtered) > 0 && len(g.extenders) != 0 {
 		for _, extender := range g.extenders {
 			if !extender.IsInterested(pod) {
@@ -745,10 +769,14 @@ func PrioritizeNodes(
 	// Summarize all scores.
 	result := make(schedulerapi.HostPriorityList, 0, len(nodes))
 
+	// See if priority weights are overridden
+	priorityWeightOverride := getPriorityWeightOverrideMap(pod)
+
 	for i := range nodes {
 		result = append(result, schedulerapi.HostPriority{Host: nodes[i].Name, Score: 0})
 		for j := range priorityConfigs {
-			result[i].Score += results[j][i].Score * priorityConfigs[j].Weight
+			effectiveWeight := getEffectivePriorityWeight(priorityWeightOverride, priorityConfigs[j].Name, priorityConfigs[j].Weight)
+			result[i].Score += results[j][i].Score * effectiveWeight
 		}
 	}
 
@@ -1156,6 +1184,10 @@ func podPassesBasicChecks(pod *v1.Pod, pvcLister corelisters.PersistentVolumeCla
 		if volume.PersistentVolumeClaim == nil {
 			// Volume is not a PVC, ignore
 			continue
+		}
+		if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+			tenant, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+			pvcLister = pvcLister.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(corelisters.PersistentVolumeClaimLister)
 		}
 		pvcName := volume.PersistentVolumeClaim.ClaimName
 		pvc, err := pvcLister.PersistentVolumeClaims(namespace).Get(pvcName)

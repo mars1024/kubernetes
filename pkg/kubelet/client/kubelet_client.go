@@ -63,6 +63,7 @@ type ConnectionInfo struct {
 // ConnectionInfoGetter provides ConnectionInfo for the kubelet running on a named node
 type ConnectionInfoGetter interface {
 	GetConnectionInfo(nodeName types.NodeName) (*ConnectionInfo, error)
+	GetNodeConnectionInfo(node *v1.Node) (*ConnectionInfo, error)
 }
 
 func MakeTransport(config *KubeletClientConfig) (http.RoundTripper, error) {
@@ -159,6 +160,27 @@ func (k *NodeConnectionInfoGetter) GetConnectionInfo(nodeName types.NodeName) (*
 		return nil, err
 	}
 
+	// Find a kubelet-reported address, using preferred address type
+	host, err := nodeutil.GetPreferredNodeAddress(node, k.preferredAddressTypes)
+	if err != nil {
+		return nil, err
+	}
+
+	// Use the kubelet-reported port, if present
+	port := int(node.Status.DaemonEndpoints.KubeletEndpoint.Port)
+	if port <= 0 {
+		port = k.defaultPort
+	}
+
+	return &ConnectionInfo{
+		Scheme:    k.scheme,
+		Hostname:  host,
+		Port:      strconv.Itoa(port),
+		Transport: k.transport,
+	}, nil
+}
+
+func (k *NodeConnectionInfoGetter) GetNodeConnectionInfo(node *v1.Node) (*ConnectionInfo, error) {
 	// Find a kubelet-reported address, using preferred address type
 	host, err := nodeutil.GetPreferredNodeAddress(node, k.preferredAddressTypes)
 	if err != nil {

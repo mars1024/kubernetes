@@ -55,8 +55,12 @@ func TestDefaultPriorities(t *testing.T) {
 	result := sets.NewString(
 		"SelectorSpreadPriority",
 		"InterPodAffinityPriority",
+		"MostRequestedPriority",
 		"LeastRequestedPriority",
+		"LeastRequestedPriority2",
+		"MostRequestedPriority2",
 		"BalancedResourceAllocation",
+		"CustomExpression",
 		"NodePreferAvoidPodsPriority",
 		"NodeAffinityPriority",
 		"TaintTolerationPriority",
@@ -71,6 +75,7 @@ func TestDefaultPredicates(t *testing.T) {
 		predicates.NoVolumeZoneConflictPred,
 		predicates.MaxEBSVolumeCountPred,
 		predicates.MaxGCEPDVolumeCountPred,
+		predicates.CustomExpressionPred,
 		predicates.MaxAzureDiskVolumeCountPred,
 		predicates.MaxCSIVolumeCountPred,
 		predicates.MatchInterPodAffinityPred,
@@ -82,6 +87,8 @@ func TestDefaultPredicates(t *testing.T) {
 		predicates.CheckNodeConditionPred,
 		predicates.PodToleratesNodeTaintsPred,
 		predicates.CheckVolumeBindingPred,
+		predicates.CheckSubClusterPred,
+		predicates.CheckMaxReplicasPerHostPred,
 	)
 
 	if expected := defaultPredicates(); !result.Equal(expected) {

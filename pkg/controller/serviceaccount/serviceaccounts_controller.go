@@ -18,6 +18,7 @@ package serviceaccount
 
 import (
 	"fmt"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
 	"time"
 
 	"github.com/golang/glog"
@@ -27,11 +28,13 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
+	multitenancycache "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/cache"
 	"k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/util/metrics"
 )
@@ -141,18 +144,56 @@ func (c *ServiceAccountsController) serviceAccountDeleted(obj interface{}) {
 			return
 		}
 	}
+
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		key, err := controller.KeyFunc(&v1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: sa.Annotations,
+				Name:        sa.Namespace,
+			},
+		})
+		if err != nil {
+			glog.Errorf("serviceaccount controller failed to map controller key from obj: %v", sa)
+			return
+		}
+		c.queue.Add(key)
+		return
+	}
+
 	c.queue.Add(sa.Namespace)
 }
 
 // namespaceAdded reacts to a Namespace creation by creating a default ServiceAccount object
 func (c *ServiceAccountsController) namespaceAdded(obj interface{}) {
 	namespace := obj.(*v1.Namespace)
+
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		key, err := controller.KeyFunc(namespace)
+		if err != nil {
+			glog.Errorf("serviceaccount controller failed to map controller key from obj: %v", namespace)
+			return
+		}
+		c.queue.Add(key)
+		return
+	}
+
 	c.queue.Add(namespace.Name)
 }
 
 // namespaceUpdated reacts to a Namespace update (or re-list) by creating a default ServiceAccount in the namespace if needed
 func (c *ServiceAccountsController) namespaceUpdated(oldObj interface{}, newObj interface{}) {
 	newNamespace := newObj.(*v1.Namespace)
+
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		key, err := controller.KeyFunc(newNamespace)
+		if err != nil {
+			glog.Errorf("serviceaccount controller failed to map controller key from obj: %v", newNamespace)
+			return
+		}
+		c.queue.Add(key)
+		return
+	}
+
 	c.queue.Add(newNamespace.Name)
 }
 
@@ -181,6 +222,14 @@ func (c *ServiceAccountsController) processNextWorkItem() bool {
 	return true
 }
 func (c *ServiceAccountsController) syncNamespace(key string) error {
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenant, _, name, err := multitenancycache.MultiTenancySplitKeyWrapper(cache.SplitMetaNamespaceKey)(key)
+		if err != nil {
+			return err
+		}
+		c = c.ShallowCopyWithTenant(tenant).(*ServiceAccountsController)
+		key = name
+	}
 	startTime := time.Now()
 	defer func() {
 		glog.V(4).Infof("Finished syncing namespace %q (%v)", key, time.Since(startTime))

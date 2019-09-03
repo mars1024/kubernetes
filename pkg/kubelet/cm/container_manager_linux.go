@@ -34,7 +34,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer/cgroups/fs"
 	"github.com/opencontainers/runc/libcontainer/configs"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -304,9 +304,9 @@ func NewContainerManager(kubeClient clientset.Interface, nodeName types.NodeName
 	}
 
 	// If customCgroupParents is not defined in parameter, then try to get it from ConfigMap.
-	if len(cm.customCgroupParents) == 0 {
+	/*if len(cm.customCgroupParents) == 0 {
 		cm.listWatchCustomCgroupParentConfigMap(kubeClient)
-	}
+	}*/
 
 	return cm, nil
 }
@@ -899,4 +899,8 @@ func (cm *containerManagerImpl) GetCapacity() v1.ResourceList {
 
 func (cm *containerManagerImpl) GetDevicePluginResourceCapacity() (v1.ResourceList, v1.ResourceList, []string) {
 	return cm.deviceManager.GetCapacity()
+}
+
+func (cm *containerManagerImpl) ShouldResetExtendedResourceCapacity() bool {
+	return cm.deviceManager.ShouldResetExtendedResourceCapacity()
 }

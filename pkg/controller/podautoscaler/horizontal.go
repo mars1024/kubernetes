@@ -22,6 +22,8 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancycache "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/cache"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2beta2"
 	"k8s.io/api/core/v1"
@@ -35,6 +37,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apiserver/pkg/util/feature"
 	autoscalinginformers "k8s.io/client-go/informers/autoscaling/v1"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -117,9 +120,9 @@ func NewHorizontalController(
 		scaleNamespacer:              scaleNamespacer,
 		hpaNamespacer:                hpaNamespacer,
 		downscaleStabilisationWindow: downscaleStabilisationWindow,
-		queue:           workqueue.NewNamedRateLimitingQueue(NewDefaultHPARateLimiter(resyncPeriod), "horizontalpodautoscaler"),
-		mapper:          mapper,
-		recommendations: map[string][]timestampedRecommendation{},
+		queue:                        workqueue.NewNamedRateLimitingQueue(NewDefaultHPARateLimiter(resyncPeriod), "horizontalpodautoscaler"),
+		mapper:                       mapper,
+		recommendations:              map[string][]timestampedRecommendation{},
 	}
 
 	hpaInformer.Informer().AddEventHandlerWithResyncPeriod(
@@ -299,9 +302,12 @@ func (a *HorizontalController) computeReplicasForMetrics(hpa *autoscalingv2.Hori
 }
 
 func (a *HorizontalController) reconcileKey(key string) error {
-	namespace, name, err := cache.SplitMetaNamespaceKey(key)
+	tenant, namespace, name, err := multitenancycache.MultiTenancySplitKeyWrapper(cache.SplitMetaNamespaceKey)(key)
 	if err != nil {
 		return err
+	}
+	if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) && tenant != nil {
+		a = a.ShallowCopyWithTenant(tenant).(*HorizontalController)
 	}
 
 	hpa, err := a.hpaLister.HorizontalPodAutoscalers(namespace).Get(name)
@@ -373,7 +379,7 @@ func (a *HorizontalController) computeStatusForResourceMetric(currentReplicas in
 			return 0, time.Time{}, "", fmt.Errorf("failed to get %s utilization: %v", metricSpec.Resource.Name, err)
 		}
 		metricNameProposal := fmt.Sprintf("%s resource", metricSpec.Resource.Name)
-		status = &autoscalingv2.MetricStatus{
+		*status = autoscalingv2.MetricStatus{
 			Type: autoscalingv2.ResourceMetricSourceType,
 			Resource: &autoscalingv2.ResourceMetricStatus{
 				Name: metricSpec.Resource.Name,

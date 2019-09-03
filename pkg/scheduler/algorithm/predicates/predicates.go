@@ -48,7 +48,8 @@ import (
 	"k8s.io/kubernetes/pkg/scheduler/volumebinder"
 	volumeutil "k8s.io/kubernetes/pkg/volume/util"
 
-	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 )
 
 const (
@@ -135,13 +136,15 @@ const (
 // The order is based on the restrictiveness & complexity of predicates.
 // Design doc: https://github.com/kubernetes/community/blob/master/contributors/design-proposals/scheduling/predicates-ordering.md
 var (
-	predicatesOrdering = []string{CheckNodeConditionPred, CheckNodeUnschedulablePred,
+	predicatesOrdering = []string{CheckNodeConditionPred, CheckNodeUnschedulablePred, CheckSubClusterPred, CustomExpressionPred,
 		GeneralPred, HostNamePred, PodFitsHostPortsPred,
 		MatchNodeSelectorPred, PodFitsResourcesPred, NoDiskConflictPred,
 		PodToleratesNodeTaintsPred, PodToleratesNodeNoExecuteTaintsPred, CheckNodeLabelPresencePred,
 		CheckServiceAffinityPred, MaxEBSVolumeCountPred, MaxGCEPDVolumeCountPred, MaxCSIVolumeCountPred,
 		MaxAzureDiskVolumeCountPred, CheckVolumeBindingPred, NoVolumeZoneConflictPred,
-		CheckNodeMemoryPressurePred, CheckNodePIDPressurePred, CheckNodeDiskPressurePred, MatchInterPodAffinityPred, CheckMaxReplicasPerHostPred}
+		CheckNodeMemoryPressurePred, CheckNodePIDPressurePred, CheckNodeDiskPressurePred, MatchInterPodAffinityPred, CheckMaxReplicasPerHostPred,
+		PodCPUSetResourceFitPred, PodResourceBestFitPred,
+	}
 )
 
 // NodeInfo interface represents anything that can get node object from node ID.
@@ -461,6 +464,10 @@ func (c *MaxPDVolumeCountChecker) predicate(pod *v1.Pod, meta algorithm.Predicat
 		return true, nil, nil
 	}
 
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+		c = c.ShallowCopyWithTenant(tenantInfo).(*MaxPDVolumeCountChecker)
+	}
 	newVolumes := make(map[string]bool)
 	if err := c.filterVolumes(pod.Spec.Volumes, pod.Namespace, newVolumes); err != nil {
 		return false, nil, err
@@ -603,6 +610,10 @@ func (c *VolumeZoneChecker) predicate(pod *v1.Pod, meta algorithm.PredicateMetad
 		return false, nil, fmt.Errorf("node not found")
 	}
 
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+		c = c.ShallowCopyWithTenant(tenantInfo).(*VolumeZoneChecker)
+	}
 	nodeConstraints := make(map[string]string)
 	for k, v := range node.ObjectMeta.Labels {
 		if k != kubeletapis.LabelZoneFailureDomain && k != kubeletapis.LabelZoneRegion {
@@ -829,33 +840,6 @@ func podName(pod *v1.Pod) string {
 	return pod.Namespace + "/" + pod.Name
 }
 
-func CPUOverQuotaRatio(nodeInfo *schedulercache.NodeInfo) (float64, bool) {
-	if v, exists := nodeInfo.Node().Labels[sigmak8sapi.LabelCPUOverQuota]; exists {
-		if ratio, err := strconv.ParseFloat(v, 64); err == nil {
-			return ratio, true
-		}
-	}
-	return 1.0, false
-}
-
-func MemoryOverQuotaRatio(nodeInfo *schedulercache.NodeInfo) (float64, bool) {
-	if v, exists := nodeInfo.Node().Labels[sigmak8sapi.LabelMemOverQuota]; exists {
-		if ratio, err := strconv.ParseFloat(v, 64); err == nil {
-			return ratio, true
-		}
-	}
-	return 1.0, false
-}
-
-func EphemeralStorageOverQuotaRatio(nodeInfo *schedulercache.NodeInfo) (float64, bool) {
-	if v, exists := nodeInfo.Node().Labels[sigmak8sapi.LabelDiskOverQuota]; exists {
-		if ratio, err := strconv.ParseFloat(v, 64); err == nil {
-			return ratio, true
-		}
-	}
-	return 1.0, false
-}
-
 // PodFitsResources checks if a node has sufficient resources, such as cpu, memory, gpu, opaque int resources etc to run a pod.
 // First return value indicates whether a node has sufficient resources to run a pod while the second return value indicates the
 // predicate failure reasons if the node has insufficient resources to run the pod.
@@ -894,15 +878,29 @@ func PodFitsResources(pod *v1.Pod, meta algorithm.PredicateMetadata, nodeInfo *s
 	// TODO import sigma unified scheduler's PodFitResource, including overquota
 	const precision int64 = 100
 	allocatable := nodeInfo.AllocatableResource()
-	overQuotaRatio, _ := CPUOverQuotaRatio(nodeInfo)
+	overQuotaRatio, _ := schedutil.CPUOverQuotaRatio(nodeInfo.Node())
 	if allocatable.MilliCPU*int64(overQuotaRatio*float64(precision)) < precision*(podRequest.MilliCPU+nodeInfo.RequestedResource().MilliCPU) {
 		predicateFails = append(predicateFails, NewInsufficientResourceError(v1.ResourceCPU, podRequest.MilliCPU, nodeInfo.RequestedResource().MilliCPU, allocatable.MilliCPU))
 	}
-	overQuotaRatio, _ = MemoryOverQuotaRatio(nodeInfo)
-	if allocatable.Memory*int64(overQuotaRatio*float64(precision)) < precision*(podRequest.Memory+nodeInfo.RequestedResource().Memory) {
-		predicateFails = append(predicateFails, NewInsufficientResourceError(v1.ResourceMemory, podRequest.Memory, nodeInfo.RequestedResource().Memory, allocatable.Memory))
+	overQuotaRatio, _ = schedutil.MemoryOverQuotaRatio(nodeInfo.Node())
+	if !algorithm.IsPodMonotypeHard(pod) {
+		if allocatable.Memory*int64(overQuotaRatio*float64(precision)) < precision*(podRequest.Memory+nodeInfo.RequestedResource().Memory) {
+			predicateFails = append(predicateFails, NewInsufficientResourceError(v1.ResourceMemory, podRequest.Memory, nodeInfo.RequestedResource().Memory, allocatable.Memory))
+		}
+	} else {
+		if overQuotaRatio == 1.0 {
+			overQuotaRatio += AdjustedMemoryOverhead
+		}
+		//if allocatable.Memory*int64(overQuotaRatio*float64(precision)) < precision*(podRequest.Memory+nodeInfo.RequestedResource().Memory) {
+		//	predicateFails = append(predicateFails, NewInsufficientResourceError(v1.ResourceMemory, podRequest.Memory, nodeInfo.RequestedResource().Memory, allocatable.Memory))
+		//}
+		if !IsResourceApproximate(int64(float64(nodeInfo.AllocatableResource().Memory)*overQuotaRatio), podRequest.Memory+nodeInfo.RequestedResource().Memory, AllowedMemoryOverhead) {
+			memoryMatchError := NewMonotypeMismatchedError(v1.ResourceMemory, podRequest.Memory, nodeInfo.RequestedResource().Memory, nodeInfo.AllocatableResource().Memory)
+			predicateFails = append(predicateFails, memoryMatchError)
+		}
 	}
-	overQuotaRatio, _ = EphemeralStorageOverQuotaRatio(nodeInfo)
+
+	overQuotaRatio, _ = schedutil.EphemeralStorageOverQuotaRatio(nodeInfo.Node())
 	if allocatable.EphemeralStorage*int64(overQuotaRatio*float64(precision)) < precision*(podRequest.EphemeralStorage+nodeInfo.RequestedResource().EphemeralStorage) {
 		predicateFails = append(predicateFails, NewInsufficientResourceError(v1.ResourceEphemeralStorage, podRequest.EphemeralStorage, nodeInfo.RequestedResource().EphemeralStorage, allocatable.EphemeralStorage))
 	}
@@ -1129,6 +1127,10 @@ func NewServiceAffinityPredicate(podLister algorithm.PodLister, serviceLister al
 // WARNING: This Predicate is NOT guaranteed to work if some of the predicateMetadata data isn't precomputed...
 // For that reason it is not exported, i.e. it is highly coupled to the implementation of the FitPredicate construction.
 func (s *ServiceAffinity) checkServiceAffinity(pod *v1.Pod, meta algorithm.PredicateMetadata, nodeInfo *schedulercache.NodeInfo) (bool, []algorithm.PredicateFailureReason, error) {
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+		s = s.ShallowCopyWithTenant(tenantInfo).(*ServiceAffinity)
+	}
 	var services []*v1.Service
 	var pods []*v1.Pod
 	if pm, ok := meta.(*predicateMetadata); ok && (pm.serviceAffinityMatchingPodList != nil || pm.serviceAffinityMatchingPodServices != nil) {
@@ -1296,6 +1298,10 @@ func (c *PodAffinityChecker) InterPodAffinityMatches(pod *v1.Pod, meta algorithm
 	if node == nil {
 		return false, nil, fmt.Errorf("node not found")
 	}
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+		c = c.ShallowCopyWithTenant(tenantInfo).(*PodAffinityChecker)
+	}
 	if failedPredicates, error := c.satisfiesExistingPodsAntiAffinity(pod, meta, nodeInfo); failedPredicates != nil {
 		failedPredicates := append([]algorithm.PredicateFailureReason{ErrPodAffinityNotMatch}, failedPredicates)
 		return false, failedPredicates, error
@@ -1413,7 +1419,7 @@ func (c *PodAffinityChecker) getMatchingAntiAffinityTopologyPairsOfPods(pod *v1.
 		existingPodNode, err := c.info.GetNodeInfo(existingPod.Spec.NodeName)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				glog.Errorf("Node not found, %v", existingPod.Spec.NodeName)
+				glog.Errorf("Node not found when check pod %v %v", pod.Name, existingPod.Spec.NodeName)
 				continue
 			}
 			return nil, err
@@ -1766,6 +1772,10 @@ func (c *VolumeBindingChecker) predicate(pod *v1.Pod, meta algorithm.PredicateMe
 		return false, nil, fmt.Errorf("node not found")
 	}
 
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
+		c = c.ShallowCopyWithTenant(tenantInfo).(*VolumeBindingChecker)
+	}
 	unboundSatisfied, boundSatisfied, err := c.binder.Binder.FindPodVolumes(pod, node)
 	if err != nil {
 		return false, nil, err

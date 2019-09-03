@@ -37,6 +37,11 @@ import (
 	printerstorage "k8s.io/kubernetes/pkg/printers/storage"
 	"k8s.io/kubernetes/pkg/registry/core/node"
 	noderest "k8s.io/kubernetes/pkg/registry/core/node/rest"
+	"k8s.io/apiserver/pkg/util/feature"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
+	multitenancymeta "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/meta"
 )
 
 // NodeStorage includes storage for nodes and all sub resources
@@ -76,7 +81,7 @@ func (r *StatusREST) Update(ctx context.Context, name string, objInfo rest.Updat
 }
 
 // NewStorage returns a NodeStorage object that will work against nodes.
-func NewStorage(optsGetter generic.RESTOptionsGetter, kubeletClientConfig client.KubeletClientConfig, proxyTransport http.RoundTripper) (*NodeStorage, error) {
+func NewStorage(optsGetter generic.RESTOptionsGetter, kubeletClientConfig client.KubeletClientConfig, proxyTransport http.RoundTripper, nodeClient corev1client.NodeInterface) (*NodeStorage, error) {
 	store := &genericregistry.Store{
 		NewFunc:                  func() runtime.Object { return &api.Node{} },
 		NewListFunc:              func() runtime.Object { return &api.NodeList{} },
@@ -122,6 +127,9 @@ func NewStorage(optsGetter generic.RESTOptionsGetter, kubeletClientConfig client
 		return externalNode, nil
 	})
 	connectionInfoGetter, err := client.NewNodeConnectionInfoGetter(nodeGetter, kubeletClientConfig)
+	if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		connectionInfoGetter, err = client.NewVPCNodeConnectionInfoGetter(kubeletClientConfig, nodeClient, connectionInfoGetter)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -129,9 +137,9 @@ func NewStorage(optsGetter generic.RESTOptionsGetter, kubeletClientConfig client
 	proxyREST.Connection = connectionInfoGetter
 
 	return &NodeStorage{
-		Node:   nodeREST,
-		Status: statusREST,
-		Proxy:  proxyREST,
+		Node:                  nodeREST,
+		Status:                statusREST,
+		Proxy:                 proxyREST,
 		KubeletConnectionInfo: connectionInfoGetter,
 	}, nil
 }
@@ -141,6 +149,12 @@ var _ = rest.Redirector(&REST{})
 
 // ResourceLocation returns a URL to which one can send traffic for the specified node.
 func (r *REST) ResourceLocation(ctx context.Context, id string) (*url.URL, http.RoundTripper, error) {
+	if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		user, _ := genericapirequest.UserFrom(ctx)
+		tenant, _ := multitenancyutil.TransformTenantInfoFromUser(user)
+		conn := r.connection.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(client.ConnectionInfoGetter)
+		return node.ResourceLocation(r, conn, r.proxyTransport, ctx, id)
+	}
 	return node.ResourceLocation(r, r.connection, r.proxyTransport, ctx, id)
 }
 

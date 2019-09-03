@@ -1,3 +1,5 @@
+// +build !multitenancy
+
 /*
 Copyright 2016 The Kubernetes Authors.
 
@@ -65,6 +67,11 @@ func DefaultNameSystem() string {
 // Packages makes the client package definition.
 func Packages(context *generator.Context, arguments *args.GeneratorArgs) generator.Packages {
 	boilerplate, err := arguments.LoadGoBoilerplate()
+
+	boilerplate = append([]byte(`// +build !multitenancy
+
+`), boilerplate...)
+
 	if err != nil {
 		glog.Fatalf("Failed loading boilerplate: %v", err)
 	}

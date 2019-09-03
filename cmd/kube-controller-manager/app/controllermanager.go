@@ -31,6 +31,9 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/spf13/cobra"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancycache "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/cache"
+	multitenancymeta "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/meta"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -39,6 +42,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/pkg/server/mux"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	apiserverflag "k8s.io/apiserver/pkg/util/flag"
 	cacheddiscovery "k8s.io/client-go/discovery/cached"
 	"k8s.io/client-go/informers"
@@ -46,6 +50,7 @@ import (
 	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	certutil "k8s.io/client-go/util/cert"
 	genericcontrollermanager "k8s.io/kubernetes/cmd/controller-manager/app"
 	"k8s.io/kubernetes/cmd/kube-controller-manager/app/config"
@@ -91,6 +96,9 @@ current state towards the desired state. Examples of controllers that ship with
 Kubernetes today are the replication controller, endpoints controller, namespace
 controller, and serviceaccounts controller.`,
 		Run: func(cmd *cobra.Command, args []string) {
+			if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+				controller.KeyFunc = multitenancycache.MultiTenancyKeyFuncWrapper(controller.KeyFunc)
+			}
 			verflag.PrintAndExitIfRequested()
 			utilflag.PrintFlags(cmd.Flags())
 
@@ -217,12 +225,16 @@ func Run(c *config.CompletedConfig, stopCh <-chan struct{}) error {
 		return err
 	}
 
+	coreV1Client := c.LeaderElectionClient.CoreV1()
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		coreV1Client = coreV1Client.(multitenancymeta.TenantWise).ShallowCopyWithTenant(multitenancy.AKSAdminTenant).(corev1client.CoreV1Interface)
+	}
 	// add a uniquifier so that two processes on the same host don't accidentally both become active
 	id = id + "_" + string(uuid.NewUUID())
 	rl, err := resourcelock.New(c.ComponentConfig.Generic.LeaderElection.ResourceLock,
 		"kube-system",
 		"kube-controller-manager",
-		c.LeaderElectionClient.CoreV1(),
+		coreV1Client,
 		resourcelock.ResourceLockConfig{
 			Identity:      id,
 			EventRecorder: c.EventRecorder,

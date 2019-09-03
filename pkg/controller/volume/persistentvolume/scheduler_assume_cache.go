@@ -25,7 +25,11 @@ import (
 
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/client-go/tools/cache"
+
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 )
 
 // AssumeCache is a cache on top of the informer that allows for updating
@@ -150,7 +154,11 @@ func (c *assumeCache) add(obj interface{}) {
 		return
 	}
 
-	name, err := cache.MetaNamespaceKeyFunc(obj)
+	keyFunc := cache.MetaNamespaceKeyFunc
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		keyFunc = cache.MultiTenancyKeyFuncWrapper(cache.MetaNamespaceKeyFunc)
+	}
+	name, err := keyFunc(obj)
 	if err != nil {
 		glog.Errorf("add failed: %v", &errObjectName{err})
 		return
@@ -194,7 +202,11 @@ func (c *assumeCache) delete(obj interface{}) {
 		return
 	}
 
-	name, err := cache.MetaNamespaceKeyFunc(obj)
+	keyFunc := cache.MetaNamespaceKeyFunc
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		keyFunc = cache.MultiTenancyKeyFuncWrapper(cache.MetaNamespaceKeyFunc)
+	}
+	name, err := keyFunc(obj)
 	if err != nil {
 		glog.Errorf("delete failed: %v", &errObjectName{err})
 		return
@@ -273,7 +285,11 @@ func (c *assumeCache) List(indexObj interface{}) []interface{} {
 }
 
 func (c *assumeCache) Assume(obj interface{}) error {
-	name, err := cache.MetaNamespaceKeyFunc(obj)
+	keyFunc := cache.MetaNamespaceKeyFunc
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		keyFunc = cache.MultiTenancyKeyFuncWrapper(cache.MetaNamespaceKeyFunc)
+	}
+	name, err := keyFunc(obj)
 	if err != nil {
 		return &errObjectName{err}
 	}
@@ -334,6 +350,12 @@ type pvAssumeCache struct {
 
 func pvStorageClassIndexFunc(obj interface{}) ([]string, error) {
 	if pv, ok := obj.(*v1.PersistentVolume); ok {
+		if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+			tenantInfo, err := util.TransformTenantInfoFromAnnotations(pv.Annotations)
+			if err == nil {
+				return []string{util.TransformTenantInfoToJointString(tenantInfo, "/") + "/" + pv.Spec.StorageClassName}, nil
+			}
+		}
 		return []string{pv.Spec.StorageClassName}, nil
 	}
 	return []string{""}, fmt.Errorf("object is not a v1.PersistentVolume: %v", obj)
@@ -388,7 +410,7 @@ type pvcAssumeCache struct {
 }
 
 func NewPVCAssumeCache(informer cache.SharedIndexInformer) PVCAssumeCache {
-	return &pvcAssumeCache{assumeCache: NewAssumeCache(informer, "v1.PersistentVolumeClaim", "namespace", cache.MetaNamespaceIndexFunc)}
+	return &pvcAssumeCache{assumeCache: NewAssumeCache(informer, "v1.PersistentVolumeClaim", "namespace", MetaTenantNamespaceIndexFunc)}
 }
 
 func (c *pvcAssumeCache) GetPVC(pvcKey string) (*v1.PersistentVolumeClaim, error) {

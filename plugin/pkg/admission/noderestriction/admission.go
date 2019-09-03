@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"io"
 
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -98,6 +100,10 @@ var (
 )
 
 func (c *nodePlugin) Admit(a admission.Attributes) error {
+	if c.features.Enabled(multitenancy.FeatureName) {
+		tenant, _ := multitenancyutil.TransformTenantInfoFromUser(a.GetUserInfo())
+		c = c.ShallowCopyWithTenant(tenant).(*nodePlugin)
+	}
 	nodeName, isNode := c.nodeIdentifier.NodeIdentity(a.GetUserInfo())
 
 	// Our job is just to restrict nodes
@@ -210,6 +216,18 @@ func (c *nodePlugin) admitPod(nodeName string, a admission.Attributes) error {
 		// only allow a node to delete a pod bound to itself
 		if existingPod.Spec.NodeName != nodeName {
 			return admission.NewForbidden(a, fmt.Errorf("node %q can only delete pods with spec.nodeName set to itself", nodeName))
+		}
+		return nil
+
+	case admission.Update:
+		// require an existing pod
+		pod, ok := a.GetOldObject().(*api.Pod)
+		if !ok {
+			return admission.NewForbidden(a, fmt.Errorf("unexpected type %T", a.GetOldObject()))
+		}
+		// only allow a node to update pod bound to itself
+		if pod.Spec.NodeName != nodeName {
+			return admission.NewForbidden(a, fmt.Errorf("node %q can only update pod for pods with spec.nodeName set to itself", nodeName))
 		}
 		return nil
 

@@ -49,6 +49,10 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/golang/glog"
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancyregistry "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/registry"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
+	"k8s.io/apiserver/pkg/util/feature"
 )
 
 // ObjectFunc is a function to act on a given object. An error may be returned
@@ -1330,18 +1334,58 @@ func (e *Store) CompleteWithOptions(options *generic.StoreOptions) error {
 	// Set the default behavior for storage key generation
 	if e.KeyRootFunc == nil && e.KeyFunc == nil {
 		if isNamespaced {
-			e.KeyRootFunc = func(ctx context.Context) string {
-				return NamespaceKeyRootFunc(ctx, prefix)
-			}
-			e.KeyFunc = func(ctx context.Context, name string) (string, error) {
-				return NamespaceKeyFunc(ctx, prefix, name)
+			if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+				e.KeyRootFunc = func(ctx context.Context) string {
+
+					/////////////////////////
+					// TODO: remove this hack after usage of legacy admin tenant is gone
+					if user, ok := genericapirequest.UserFrom(ctx); ok {
+						tenant, _ := multitenancyutil.TransformTenantInfoFromUser(user)
+						if tenant != nil && multitenancyutil.IsMultiTenancyWiseTenant(tenant) {
+							return prefix
+						}
+					}
+					/////////////////////////
+
+					return multitenancyregistry.MultiTenancyKeyRootFuncForNamespaced(ctx, prefix)
+				}
+				e.KeyFunc = func(ctx context.Context, name string) (string, error) {
+					return multitenancyregistry.MultiTenancyKeyFuncForNamespaced(ctx, prefix, name, true)
+				}
+			} else {
+				e.KeyRootFunc = func(ctx context.Context) string {
+					return NamespaceKeyRootFunc(ctx, prefix)
+				}
+				e.KeyFunc = func(ctx context.Context, name string) (string, error) {
+					return NamespaceKeyFunc(ctx, prefix, name)
+				}
 			}
 		} else {
-			e.KeyRootFunc = func(ctx context.Context) string {
-				return prefix
-			}
-			e.KeyFunc = func(ctx context.Context, name string) (string, error) {
-				return NoNamespaceKeyFunc(ctx, prefix, name)
+			if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+				e.KeyRootFunc = func(ctx context.Context) string {
+
+					/////////////////////////
+					// TODO: remove this hack after usage of legacy admin tenant is gone
+					if user, ok := genericapirequest.UserFrom(ctx); ok {
+						tenant, _ := multitenancyutil.TransformTenantInfoFromUser(user)
+						if tenant != nil && multitenancyutil.IsMultiTenancyWiseTenant(tenant) {
+							return prefix
+						}
+					}
+					/////////////////////////
+
+					return multitenancyregistry.MultiTenancyKeyRootFuncForNonNamespaced(ctx, prefix)
+				}
+				e.KeyFunc = func(ctx context.Context, name string) (string, error) {
+					return multitenancyregistry.MultiTenancyKeyFuncForNonNamespaced(ctx, prefix, name, true)
+				}
+			} else {
+				e.KeyRootFunc = func(ctx context.Context) string {
+					return prefix
+				}
+				e.KeyFunc = func(ctx context.Context, name string) (string, error) {
+					return NoNamespaceKeyFunc(ctx, prefix, name)
+				}
 			}
 		}
 	}
@@ -1355,9 +1399,25 @@ func (e *Store) CompleteWithOptions(options *generic.StoreOptions) error {
 		}
 
 		if isNamespaced {
+			if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+				tenantInfo, err := multitenancyutil.TransformTenantInfoFromAnnotations(accessor.GetAnnotations())
+				if err != nil {
+					return "", err
+				}
+				ctx := multitenancyutil.NewEmptyContextWithTenant(tenantInfo)
+				ctx = genericapirequest.WithNamespace(ctx, accessor.GetNamespace())
+				return multitenancyregistry.MultiTenancyKeyFuncForNamespaced(ctx, prefix, accessor.GetName(), false)
+			}
 			return e.KeyFunc(genericapirequest.WithNamespace(genericapirequest.NewContext(), accessor.GetNamespace()), accessor.GetName())
 		}
 
+		if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+			tenantInfo, err := multitenancyutil.TransformTenantInfoFromAnnotations(accessor.GetAnnotations())
+			if err != nil {
+				return "", err
+			}
+			return multitenancyregistry.MultiTenancyKeyFuncForNonNamespaced(multitenancyutil.NewEmptyContextWithTenant(tenantInfo), prefix, accessor.GetName(), false)
+		}
 		return e.KeyFunc(genericapirequest.NewContext(), accessor.GetName())
 	}
 

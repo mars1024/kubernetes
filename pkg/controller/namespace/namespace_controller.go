@@ -20,11 +20,15 @@ import (
 	"fmt"
 	"time"
 
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancycache "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/cache"
+
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/client-go/dynamic"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
@@ -71,7 +75,7 @@ func NewNamespaceController(
 
 	// create the controller so we can inject the enqueue function
 	namespaceController := &NamespaceController{
-		queue: workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "namespace"),
+		queue:                      workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "namespace"),
 		namespacedResourcesDeleter: deletion.NewNamespacedResourcesDeleter(kubeClient.CoreV1().Namespaces(), dynamicClient, kubeClient.CoreV1(), discoverResourcesFn, finalizerToken, true),
 	}
 
@@ -166,7 +170,15 @@ func (nm *NamespaceController) syncNamespaceFromKey(key string) (err error) {
 		glog.V(4).Infof("Finished syncing namespace %q (%v)", key, time.Since(startTime))
 	}()
 
-	namespace, err := nm.lister.Get(key)
+	tenant, _, name, err := multitenancycache.MultiTenancySplitKeyWrapper(cache.SplitMetaNamespaceKey)(key)
+	if err != nil {
+		return err
+	}
+	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		nm = nm.ShallowCopyWithTenant(tenant).(*NamespaceController)
+	}
+
+	namespace, err := nm.lister.Get(name)
 	if errors.IsNotFound(err) {
 		glog.Infof("Namespace has been deleted %v", key)
 		return nil

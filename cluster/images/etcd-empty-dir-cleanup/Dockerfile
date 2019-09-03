@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM busybox
+FROM reg.docker.alibaba-inc.com/busybox
 
 COPY etcdctl etcd-empty-dir-cleanup.sh /
 RUN chmod a+rx /etcdctl /etcd-empty-dir-cleanup.sh

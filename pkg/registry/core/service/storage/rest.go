@@ -26,26 +26,35 @@ import (
 	"strconv"
 
 	"github.com/golang/glog"
+
 	"k8s.io/apimachinery/pkg/api/errors"
 	metainternalversion "k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1beta1 "k8s.io/apimachinery/pkg/apis/meta/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	utilnet "k8s.io/apimachinery/pkg/util/net"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/apimachinery/pkg/watch"
 	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
+	genericrequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/apiserver/pkg/util/dryrun"
-
+	"k8s.io/apiserver/pkg/util/feature"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	apiservice "k8s.io/kubernetes/pkg/api/service"
 	api "k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/apis/core/helper"
 	"k8s.io/kubernetes/pkg/apis/core/validation"
+	"k8s.io/kubernetes/pkg/kubelet/client"
 	registry "k8s.io/kubernetes/pkg/registry/core/service"
 	"k8s.io/kubernetes/pkg/registry/core/service/ipallocator"
 	"k8s.io/kubernetes/pkg/registry/core/service/portallocator"
+
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
+	multitenancymeta "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/meta"
+	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 )
 
 // REST adapts a service registry into apiserver's RESTStorage model.
@@ -56,6 +65,7 @@ type REST struct {
 	serviceNodePorts portallocator.Interface
 	proxyTransport   http.RoundTripper
 	pods             rest.Getter
+	kubeletConn      client.ConnectionInfoGetter
 }
 
 // ServiceNodePort includes protocol and port number of a service NodePort.
@@ -92,6 +102,7 @@ func NewREST(
 	services ServiceStorage,
 	endpoints EndpointsStorage,
 	pods rest.Getter,
+	k client.ConnectionInfoGetter,
 	serviceIPs ipallocator.Interface,
 	serviceNodePorts portallocator.Interface,
 	proxyTransport http.RoundTripper,
@@ -103,6 +114,7 @@ func NewREST(
 		serviceNodePorts: serviceNodePorts,
 		proxyTransport:   proxyTransport,
 		pods:             pods,
+		kubeletConn:      k,
 	}
 	return rest, &registry.ProxyREST{Redirector: rest, ProxyTransport: proxyTransport}
 }
@@ -163,6 +175,9 @@ func (rs *REST) Create(ctx context.Context, obj runtime.Object, createValidation
 	defer func() {
 		if releaseServiceIP {
 			if helper.IsServiceIPSet(service) {
+				if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+					return
+				}
 				rs.serviceIPs.Release(net.ParseIP(service.Spec.ClusterIP))
 			}
 		}
@@ -187,7 +202,7 @@ func (rs *REST) Create(ctx context.Context, obj runtime.Object, createValidation
 	}
 
 	// Handle ExternalTraffic related fields during service creation.
-	if apiservice.NeedsHealthCheck(service) {
+	if apiservice.NeedsHealthCheck(service) && !feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
 		if err := allocateHealthCheckNodePort(service, nodePortOp); err != nil {
 			return nil, errors.NewInternalError(err)
 		}
@@ -249,6 +264,9 @@ func (rs *REST) Delete(ctx context.Context, id string, options *metav1.DeleteOpt
 }
 
 func (rs *REST) releaseAllocatedResources(svc *api.Service) {
+	if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		return
+	}
 	if helper.IsServiceIPSet(svc) {
 		rs.serviceIPs.Release(net.ParseIP(svc.Spec.ClusterIP))
 	}
@@ -311,8 +329,8 @@ func (rs *REST) healthCheckNodePortUpdate(oldService, service *api.Service, node
 			return false, errors.NewInternalError(err)
 		}
 
-	// Case 2: Transition from needs HealthCheckNodePort to don't need HealthCheckNodePort.
-	// Free the existing healthCheckNodePort and clear the HealthCheckNodePort field.
+		// Case 2: Transition from needs HealthCheckNodePort to don't need HealthCheckNodePort.
+		// Free the existing healthCheckNodePort and clear the HealthCheckNodePort field.
 	case neededHealthCheckNodePort && !needsHealthCheckNodePort:
 		glog.Infof("Transition to non LoadBalancer type service or LoadBalancer type service with ExternalTrafficPolicy=Global")
 		glog.V(4).Infof("Releasing healthCheckNodePort: %d", oldHealthCheckNodePort)
@@ -320,8 +338,8 @@ func (rs *REST) healthCheckNodePortUpdate(oldService, service *api.Service, node
 		// Clear the HealthCheckNodePort field.
 		service.Spec.HealthCheckNodePort = 0
 
-	// Case 3: Remain in needs HealthCheckNodePort.
-	// Reject changing the value of the HealthCheckNodePort field.
+		// Case 3: Remain in needs HealthCheckNodePort.
+		// Reject changing the value of the HealthCheckNodePort field.
 	case neededHealthCheckNodePort && needsHealthCheckNodePort:
 		if oldHealthCheckNodePort != newHealthCheckNodePort {
 			glog.Warningf("Attempt to change value of health check node port DENIED")
@@ -379,7 +397,9 @@ func (rs *REST) Update(ctx context.Context, name string, objInfo rest.UpdatedObj
 		// Update service from non-ExternalName to ExternalName, should release ClusterIP if exists.
 		if oldService.Spec.Type != api.ServiceTypeExternalName && service.Spec.Type == api.ServiceTypeExternalName {
 			if helper.IsServiceIPSet(oldService) {
-				rs.serviceIPs.Release(net.ParseIP(oldService.Spec.ClusterIP))
+				if !feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+					rs.serviceIPs.Release(net.ParseIP(oldService.Spec.ClusterIP))
+				}
 			}
 		}
 	}
@@ -390,8 +410,10 @@ func (rs *REST) Update(ctx context.Context, name string, objInfo rest.UpdatedObj
 	}
 	// Update service from any type to NodePort or LoadBalancer, should update NodePort.
 	if service.Spec.Type == api.ServiceTypeNodePort || service.Spec.Type == api.ServiceTypeLoadBalancer {
-		if err := updateNodePorts(oldService, service, nodePortOp); err != nil {
-			return nil, false, err
+		if !feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+			if err := updateNodePorts(oldService, service, nodePortOp); err != nil {
+				return nil, false, err
+			}
 		}
 	}
 	// Update service from LoadBalancer to non-LoadBalancer, should remove any LoadBalancerStatus.
@@ -401,9 +423,11 @@ func (rs *REST) Update(ctx context.Context, name string, objInfo rest.UpdatedObj
 	}
 
 	// Handle ExternalTraffic related updates.
-	success, err := rs.healthCheckNodePortUpdate(oldService, service, nodePortOp)
-	if !success || err != nil {
-		return nil, false, err
+	if !feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		success, err := rs.healthCheckNodePortUpdate(oldService, service, nodePortOp)
+		if !success || err != nil {
+			return nil, false, err
+		}
 	}
 	externalTrafficPolicyUpdate(oldService, service)
 	if errs := validation.ValidateServiceExternalTrafficFieldsCombination(service); len(errs) > 0 {
@@ -487,10 +511,34 @@ func (rs *REST) ResourceLocation(ctx context.Context, id string) (*url.URL, http
 					}
 					ip := addr.IP
 					port := int(ss.Ports[i].Port)
-					return &url.URL{
-						Scheme: svcScheme,
-						Host:   net.JoinHostPort(ip, strconv.Itoa(port)),
-					}, rs.proxyTransport, nil
+
+					if addr.NodeName != nil {
+						nodeName := types.NodeName(*addr.NodeName)
+						if len(nodeName) == 0 {
+							utilruntime.HandleError(fmt.Errorf("Address %v does not have a valid nodeName", addr))
+							continue
+						}
+
+						conn := rs.kubeletConn
+						if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+							user, _ := genericrequest.UserFrom(ctx)
+							tenant, _ := multitenancyutil.TransformTenantInfoFromUser(user)
+							conn = rs.kubeletConn.(multitenancymeta.TenantWise).ShallowCopyWithTenant(tenant).(client.ConnectionInfoGetter)
+						}
+						nodeInfo, err := conn.GetConnectionInfo(nodeName)
+						if err != nil {
+							return nil, nil, err
+						}
+						if len(svcScheme) == 0 {
+							svcScheme = "http"
+						}
+						loc := &url.URL{
+							Scheme: nodeInfo.Scheme,
+							Host:   net.JoinHostPort(nodeInfo.Hostname, nodeInfo.Port),
+							Path:   fmt.Sprintf("/podProxy/%s/%s/", svcScheme, net.JoinHostPort(ip, strconv.Itoa(port))),
+						}
+						return loc, nodeInfo.Transport, nil
+					}
 				}
 				utilruntime.HandleError(fmt.Errorf("Failed to find a valid address, skipping subset: %v", ss))
 			}
@@ -586,6 +634,9 @@ func allocateHealthCheckNodePort(service *api.Service, nodePortOp *portallocator
 
 // The return bool value indicates if a cluster IP is allocated successfully.
 func initClusterIP(service *api.Service, serviceIPs ipallocator.Interface) (bool, error) {
+	if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		return false, nil
+	}
 	switch {
 	case service.Spec.ClusterIP == "":
 		// Allocate next available.
@@ -612,6 +663,9 @@ func initClusterIP(service *api.Service, serviceIPs ipallocator.Interface) (bool
 }
 
 func initNodePorts(service *api.Service, nodePortOp *portallocator.PortAllocationOperation) error {
+	if feature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
+		return nil
+	}
 	svcPortToNodePort := map[int]int{}
 	for i := range service.Spec.Ports {
 		servicePort := &service.Spec.Ports[i]

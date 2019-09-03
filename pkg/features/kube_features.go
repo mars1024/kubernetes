@@ -17,10 +17,10 @@ limitations under the License.
 package features
 
 import (
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
 	apiextensionsfeatures "k8s.io/apiextensions-apiserver/pkg/features"
 	genericfeatures "k8s.io/apiserver/pkg/features"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
-	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
 )
 
 const (
@@ -495,6 +495,11 @@ const (
 	//
 	// Patch tracing data to object annotations if PatchTracingToObject is true.
 	PatchTracingToObject utilfeature.Feature = "PatchTracingToObject"
+
+	// owner: @yuzhi.wx (yuzhi.wx@antfin.com)
+	// alpha: v1.12
+	// Disable user info backup/restore logic during image upgrading
+	DisableUserInfoRetainDuringUpgrade utilfeature.Feature = "DisableUserInfoRetainDuringUpgrade"
 )
 
 func init() {
@@ -581,6 +586,7 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	DisableDanglingPod:                          {Default: false, PreRelease: utilfeature.Alpha},
 	IgnoreUnwantedEvent:                         {Default: false, PreRelease: utilfeature.Alpha},
 	PatchTracingToObject:                        {Default: false, PreRelease: utilfeature.Alpha},
+	DisableUserInfoRetainDuringUpgrade:          {Default: false, PreRelease: utilfeature.Alpha},
 	multitenancy.FeatureName:                    {Default: false, PreRelease: utilfeature.Alpha},
 
 	// inherited features from generic apiserver, relisted here to get a conflict if it is changed

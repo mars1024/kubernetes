@@ -23,7 +23,7 @@ import (
 	"github.com/golang/glog"
 
 	apps "k8s.io/api/apps/v1"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/kubernetes/pkg/controller/history"
@@ -411,6 +411,17 @@ func (ssc *defaultStatefulSetControl) updateStatefulSet(
 			}
 			// pod created, no more work possible for this round
 			continue
+		}
+		// If the Pod in pending state then trigger PVC creation to create missing PVCs
+		if isPending(replicas[i]) {
+			glog.V(4).Infof(
+				"StatefulSet %s/%s is triggering PVC creation for pending Pod %s",
+				set.Namespace,
+				set.Name,
+				replicas[i].Name)
+			if err := ssc.podControl.CreatePersistentVolumeClaims(set, replicas[i]); err != nil {
+				return &status, err
+			}
 		}
 		// If we find a Pod that is currently terminating, we must wait until graceful deletion
 		// completes before we continue to make progress.

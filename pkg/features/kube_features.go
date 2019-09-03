@@ -489,6 +489,12 @@ const (
 	//
 	// Ignore some unwanted events if IgnoreUnwantedEvent is true.
 	IgnoreUnwantedEvent utilfeature.Feature = "IgnoreUnwantedEvent"
+
+	// owner: @kira.gw (kira.gw@alipay.com)
+	// alpha: v1.12
+	//
+	// Patch tracing data to object annotations if PatchTracingToObject is true.
+	PatchTracingToObject utilfeature.Feature = "PatchTracingToObject"
 )
 
 func init() {
@@ -574,6 +580,7 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	DisableHostUTSMode:                          {Default: false, PreRelease: utilfeature.Alpha},
 	DisableDanglingPod:                          {Default: false, PreRelease: utilfeature.Alpha},
 	IgnoreUnwantedEvent:                         {Default: false, PreRelease: utilfeature.Alpha},
+	PatchTracingToObject:                        {Default: false, PreRelease: utilfeature.Alpha},
 	multitenancy.FeatureName:                    {Default: false, PreRelease: utilfeature.Alpha},
 
 	// inherited features from generic apiserver, relisted here to get a conflict if it is changed

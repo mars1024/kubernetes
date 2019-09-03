@@ -227,13 +227,14 @@ func TestV1StatefulSetUpdateStrategyConversion(t *testing.T) {
 
 func TestV1RollingUpdateDaemonSetConversion(t *testing.T) {
 	intorstr := intstr.FromInt(1)
+	partition := int32(0)
 	testcases := map[string]struct {
 		rollingUpdateDs1 *extensions.RollingUpdateDaemonSet
 		rollingUpdateDs2 *appsv1.RollingUpdateDaemonSet
 	}{
 		"RollingUpdateDaemonSet Conversion 2": {
-			rollingUpdateDs1: &extensions.RollingUpdateDaemonSet{MaxUnavailable: intorstr},
-			rollingUpdateDs2: &appsv1.RollingUpdateDaemonSet{MaxUnavailable: &intorstr},
+			rollingUpdateDs1: &extensions.RollingUpdateDaemonSet{MaxUnavailable: intorstr, Partition:int32(0)},
+			rollingUpdateDs2: &appsv1.RollingUpdateDaemonSet{MaxUnavailable: &intorstr, Partition: &partition},
 		},
 	}
 

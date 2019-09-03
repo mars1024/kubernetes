@@ -98,6 +98,12 @@ func Convert_extensions_RollingUpdateDaemonSet_To_v1beta2_RollingUpdateDaemonSet
 	if err := s.Convert(&in.MaxUnavailable, out.MaxUnavailable, 0); err != nil {
 		return err
 	}
+
+	if out.Partition == nil {
+		out.Partition = new(int32)
+	}
+	*out.Partition = in.Partition
+	out.Selector = in.Selector
 	return nil
 }
 
@@ -105,6 +111,13 @@ func Convert_v1beta2_RollingUpdateDaemonSet_To_extensions_RollingUpdateDaemonSet
 	if err := s.Convert(in.MaxUnavailable, &out.MaxUnavailable, 0); err != nil {
 		return err
 	}
+
+	if in.Partition != nil {
+		out.Partition = *in.Partition
+	} else {
+		out.Partition = int32(0)
+	}
+	out.Selector = in.Selector
 	return nil
 }
 
@@ -486,6 +499,7 @@ func Convert_extensions_DaemonSetSpec_To_v1beta2_DaemonSetSpec(in *extensions.Da
 		return err
 	}
 	out.MinReadySeconds = int32(in.MinReadySeconds)
+	out.Paused = in.Paused
 	if in.RevisionHistoryLimit != nil {
 		out.RevisionHistoryLimit = new(int32)
 		*out.RevisionHistoryLimit = *in.RevisionHistoryLimit
@@ -497,15 +511,23 @@ func Convert_extensions_DaemonSetSpec_To_v1beta2_DaemonSetSpec(in *extensions.Da
 
 func Convert_extensions_DaemonSetUpdateStrategy_To_v1beta2_DaemonSetUpdateStrategy(in *extensions.DaemonSetUpdateStrategy, out *appsv1beta2.DaemonSetUpdateStrategy, s conversion.Scope) error {
 	out.Type = appsv1beta2.DaemonSetUpdateStrategyType(in.Type)
-	if in.RollingUpdate != nil {
-		out.RollingUpdate = &appsv1beta2.RollingUpdateDaemonSet{}
-		if err := Convert_extensions_RollingUpdateDaemonSet_To_v1beta2_RollingUpdateDaemonSet(in.RollingUpdate, out.RollingUpdate, s); err != nil {
-			return err
+	if in.Type == extensions.RollingUpdateDaemonSetStrategyType {
+		if in.RollingUpdate != nil {
+			out.RollingUpdate = &appsv1beta2.RollingUpdateDaemonSet{}
+			if err := Convert_extensions_RollingUpdateDaemonSet_To_v1beta2_RollingUpdateDaemonSet(in.RollingUpdate, out.RollingUpdate, s); err != nil {
+				return err
+			}
+		} else {
+			out.RollingUpdate = nil
 		}
 	}
-	if in.SurgingRollingUpdate != nil {
-		out.RollingUpdate = nil
+
+	if in.Type == extensions.SurgingRollingUpdateDaemonSetStrategyType {
+		if in.SurgingRollingUpdate != nil {
+			out.RollingUpdate = nil
+		}
 	}
+
 	return nil
 }
 
@@ -544,6 +566,7 @@ func Convert_v1beta2_DaemonSetSpec_To_extensions_DaemonSetSpec(in *appsv1beta2.D
 		out.RevisionHistoryLimit = nil
 	}
 	out.MinReadySeconds = in.MinReadySeconds
+	out.Paused = in.Paused
 	return nil
 }
 

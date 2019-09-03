@@ -172,3 +172,9 @@ type CPUInfo struct {
 type CPUSharePool struct {
 	CPUIDs []int32 `json:"cpuIDs,omitempty"`
 }
+
+// Node taints
+const (
+    // TaintNodeLifecycle refer to the node's current state, e.g. offline
+    TaintNodeLifecycle = "node.sigma.ali/lifecycle"
+)

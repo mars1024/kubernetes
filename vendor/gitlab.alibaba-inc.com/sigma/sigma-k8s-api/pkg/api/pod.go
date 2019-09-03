@@ -7,6 +7,9 @@ import (
 
 const (
 	LabelPodReuseIp = "pod.beta1.sigma.ali/ip-reuse"
+
+	// LabelPodReservedIp release pod with ipam/armory info not released.
+	LabelPodReservedIp = "pod.beta1.sigma.ali/ip-reserved"
 )
 
 // AllocSpec contains specification of the desired allocation behavior of the pod.
@@ -302,6 +305,20 @@ type NetworkStatus struct {
 	ReleaseTimestamp *metav1.Time `json:"releaseTimestamp,omitempty"`
 	// Ip security domain
 	SecurityDomain string `json:"securityDomain,omitempty"`
+	// Ipv6
+	IPv6 string `json:"ipv6,omitempty"`
+	// Maskv6
+	Maskv6 string `json:"maskv6,omitempty"`
+	// Gatewayv6
+	Gatewayv6 string `json:"gatewayv6,omitempty"`
+	// ENI Region
+	RegionId string `json:"regionId,omitempty"`
+	// ENI Zone
+	ZoneId string `json:"zoneId,omitempty"`
+	// ENI VpcId
+	VpcId string `json:"vpcId,omitempty"`
+	// ENI SecurityGroupId
+	SecurityGroupId string `json:"securityGroupId,omitempty"`
 }
 
 // DanglingPod is a kind of pod that is removed from apiserver but still running on node.
@@ -327,4 +344,16 @@ type DanglingPod struct {
 	Phase v1.PodPhase `json:"phase,omitempty"`
 	// If SafeToRemove is true,Sigmalet will delete dangling pod
 	SafeToRemove bool `json:"safeToRemove"`
+}
+
+type PodDesiredStateSpec struct {
+	ID               string                      `json:"ID"`
+	UpstreamIdentity string                      `json:"upstreamIdentity"`
+	ContainerStates  map[string]ContainerState   `json:"containerStates,omitempty"`
+	RestartSpec      *PodDesiredStateRestartSpec `json:"restartSpec,omitempty"`
+}
+
+type PodDesiredStateRestartSpec struct {
+	Containers []string `json:"containers"`
+	Timeout    string   `json:"timeout,omitempty"`
 }

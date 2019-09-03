@@ -1336,6 +1336,12 @@ func (dsc *DaemonSetsController) syncDaemonSet(key string) error {
 		return nil
 	}
 
+	// if daemon set spec 'Paused' was set to true, the update should be paused.
+	if ds.Spec.Paused {
+		glog.V(4).Infof("daemonset %s updation is paused.", ds.Name)
+		return nil
+	}
+
 	// Construct histories of the DaemonSet, and get the hash of current history
 	cur, old, err := dsc.constructHistory(ds)
 	if err != nil {

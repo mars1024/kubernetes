@@ -549,6 +549,16 @@ func (in *RollingUpdateDaemonSet) DeepCopyInto(out *RollingUpdateDaemonSet) {
 		*out = new(intstr.IntOrString)
 		**out = **in
 	}
+	if in.Selector != nil {
+		in, out := &in.Selector, &out.Selector
+		*out = new(metav1.LabelSelector)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.Partition != nil {
+		in, out := &in.Partition, &out.Partition
+		*out = new(int32)
+		**out = **in
+	}
 	return
 }
 
@@ -782,6 +792,16 @@ func (in *SurgingRollingUpdateDaemonSet) DeepCopyInto(out *SurgingRollingUpdateD
 	if in.MaxSurge != nil {
 		in, out := &in.MaxSurge, &out.MaxSurge
 		*out = new(intstr.IntOrString)
+		**out = **in
+	}
+	if in.Selector != nil {
+		in, out := &in.Selector, &out.Selector
+		*out = new(metav1.LabelSelector)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.Partition != nil {
+		in, out := &in.Partition, &out.Partition
+		*out = new(int32)
 		**out = **in
 	}
 	return

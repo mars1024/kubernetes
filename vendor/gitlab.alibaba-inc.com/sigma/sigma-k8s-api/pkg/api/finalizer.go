@@ -19,8 +19,25 @@ package api
 const (
 	FinalizerPodCNIAllocated = "pod.beta1.sigma.ali/cni-allocated"
 
+	// https://yuque.antfin-inc.com/sigma.pouch/sigma3.x/cnfr7h
+
 	// Define protection finalizer naming convention, any finalizer that name matches
-	// `protection.pod.beta1.sigma.ali/*` will be regard as protection finalizer, and
+	// this will be regard as protection finalizer, and
+	// kubelet will not delete, upgrade and stop pod when such finalizer exists.
+	FinalizerPodProtectionFmt = "protection.pod*"
+
+	// Define protection finalizer naming convention, any finalizer that name matches
+	// this will be regard as protection finalizer, and
+	// kubelet will not upgrade pod when such finalizer exists.
+	FinalizerPodUpgradeProtectionFmt = "protection-upgrade.pod*"
+
+	// Define protection finalizer naming convention, any finalizer that name matches
+	// this will be regard as protection finalizer, and
 	// kubelet will not delete pod when such finalizer exists.
-	FinalizerPodProtectionFmt = "protection.pod.beta1.sigma.ali/*"
+	FinalizerPodDeleteProtectionFmt = "protection-delete.pod*"
+
+	// Define protection finalizer naming convention, any finalizer that name matches
+	// this will be regard as protection finalizer, and
+	// kubelet will not stop pod when such finalizer exists.
+	FinalizerPodStopProtectionFmt = "protection-stop.pod*"
 )

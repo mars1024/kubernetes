@@ -32,10 +32,11 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"gitlab.alipay-inc.com/sigma/eavesdropping/pkg/opentracing"
 
 	cadvisorapi "github.com/google/cadvisor/info/v1"
 	cadvisorapiv2 "github.com/google/cadvisor/info/v2"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
@@ -99,6 +100,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/status"
 	"k8s.io/kubernetes/pkg/kubelet/sysctl"
 	"k8s.io/kubernetes/pkg/kubelet/token"
+	"k8s.io/kubernetes/pkg/kubelet/tracing"
 	kubetypes "k8s.io/kubernetes/pkg/kubelet/types"
 	"k8s.io/kubernetes/pkg/kubelet/util/format"
 	"k8s.io/kubernetes/pkg/kubelet/util/manager"
@@ -116,6 +118,7 @@ import (
 	"k8s.io/kubernetes/pkg/util/oom"
 	"k8s.io/kubernetes/pkg/volume"
 	"k8s.io/kubernetes/pkg/volume/csi"
+	"k8s.io/kubernetes/pkg/volume/util"
 	utilexec "k8s.io/utils/exec"
 )
 
@@ -264,7 +267,7 @@ type Dependencies struct {
 	DynamicPluginProber     volume.DynamicPluginProber
 	TLSOptions              *server.TLSOptions
 	KubeletConfigController *kubeletconfig.Controller
-	CachedNodeInfo		*predicates.CachedNodeInfo
+	CachedNodeInfo          *predicates.CachedNodeInfo
 }
 
 // makePodSourceConfig creates a config.PodConfig from the given
@@ -1534,15 +1537,37 @@ func (kl *Kubelet) syncPod(o syncPodOptions) error {
 	podStatus := o.podStatus
 	updateType := o.updateType
 
+	patcher := opentracing.NewMiniObject(tracing.Service, pod)
+	ctx, t, _ := tracing.FlatTracker.Track(context.Background(), patcher, "Kubelet.syncPod")
+	finished := false
+	defer func() {
+		// Log tracing data.
+		_, value := patcher.Value()
+		if value != "" {
+			glog.V(4).Infof("Pod %s tracing data: %s", format.Pod(pod), value)
+		}
+
+		if finished {
+			return
+		}
+		t.Finish(ctx)
+		// Update traceing data to pod.
+		kl.updateTraceData(pod, patcher)
+	}()
+	opentracing.LogKV(ctx, "updateType", updateType)
+
 	skip := skipPodCreate(pod)
 	if skip {
 		return fmt.Errorf("pod create should skiped")
 	}
 	// if we want to kill a pod, do it now!
 	if updateType == kubetypes.SyncPodKill {
+		ctx, _ = t.Stage(ctx, "killPod")
 		killPodOptions := o.killPodOptions
 		if killPodOptions == nil || killPodOptions.PodStatusFunc == nil {
-			return fmt.Errorf("kill pod options are required if update type is kill")
+			err := fmt.Errorf("kill pod options are required if update type is kill")
+			opentracing.LogError(ctx, err)
+			return err
 		}
 		apiPodStatus := killPodOptions.PodStatusFunc(pod, podStatus)
 		kl.statusManager.SetPodStatus(pod, apiPodStatus)
@@ -1551,11 +1576,13 @@ func (kl *Kubelet) syncPod(o syncPodOptions) error {
 			kl.recorder.Eventf(pod, v1.EventTypeWarning, events.FailedToKillPod, "error killing pod: %v", err)
 			// there was an error killing the pod, so we return that error directly
 			utilruntime.HandleError(err)
+			opentracing.LogError(ctx, err)
 			return err
 		}
 		return nil
 	}
 
+	t.Stage(ctx, "updatePodStatus")
 	// Latency measurements for the main workflow are relative to the
 	// first time the pod was seen by the API server.
 	var firstSeenTime time.Time
@@ -1613,6 +1640,7 @@ func (kl *Kubelet) syncPod(o syncPodOptions) error {
 
 	// Kill pod if it should not be running
 	if !runnable.Admit || pod.DeletionTimestamp != nil || apiPodStatus.Phase == v1.PodFailed {
+		ctx, _ = t.Stage(ctx, "killPodAfterJudgement")
 		var syncErr error
 		if err := kl.killPod(pod, nil, podStatus, nil); err != nil {
 			kl.recorder.Eventf(pod, v1.EventTypeWarning, events.FailedToKillPod, "error killing pod: %v", err)
@@ -1625,13 +1653,17 @@ func (kl *Kubelet) syncPod(o syncPodOptions) error {
 				syncErr = fmt.Errorf("pod cannot be run: %s", runnable.Message)
 			}
 		}
+		opentracing.LogError(ctx, syncErr)
 		return syncErr
 	}
 
+	ctx, _ = t.Stage(ctx, "checkRuntimeState")
 	// If the network plugin is not ready, only start the pod if it uses the host network
 	if rs := kl.runtimeState.networkErrors(); len(rs) != 0 && !kubecontainer.IsHostNetworkPod(pod) {
 		kl.recorder.Eventf(pod, v1.EventTypeWarning, events.NetworkNotReady, "network is not ready: %v", rs)
-		return fmt.Errorf("network is not ready: %v", rs)
+		err := fmt.Errorf("network is not ready: %v", rs)
+		opentracing.LogError(ctx, err)
+		return err
 	}
 
 	// Create Cgroups for the pod and apply resource parameters
@@ -1640,6 +1672,7 @@ func (kl *Kubelet) syncPod(o syncPodOptions) error {
 	// If pod has already been terminated then we need not create
 	// or update the pod's cgroup
 	if !kl.podIsTerminated(pod) {
+		ctx, _ = t.Stage(ctx, "checkPodCgroup")
 		// When the kubelet is restarted with the cgroups-per-qos
 		// flag enabled, all the pod's running containers
 		// should be killed intermittently and brought back up
@@ -1675,7 +1708,9 @@ func (kl *Kubelet) syncPod(o syncPodOptions) error {
 				}
 				if err := pcm.EnsureExists(pod); err != nil {
 					kl.recorder.Eventf(pod, v1.EventTypeWarning, events.FailedToCreatePodContainer, "unable to ensure pod container exists: %v", err)
-					return fmt.Errorf("failed to ensure that the pod: %v cgroups exist and are correctly applied: %v", pod.UID, err)
+					err := fmt.Errorf("failed to ensure that the pod: %v cgroups exist and are correctly applied: %v", pod.UID, err)
+					opentracing.LogError(ctx, err)
+					return err
 				}
 			}
 		}
@@ -1710,34 +1745,49 @@ func (kl *Kubelet) syncPod(o syncPodOptions) error {
 		}
 	}
 
+	ctx, _ = t.Stage(ctx, "makePodDataDirs")
 	// Make data directories for the pod
 	if err := kl.makePodDataDirs(pod); err != nil {
 		kl.recorder.Eventf(pod, v1.EventTypeWarning, events.FailedToMakePodDataDirectories, "error making pod data directories: %v", err)
 		glog.Errorf("Unable to make pod data directories for pod %q: %v", format.Pod(pod), err)
+		opentracing.LogError(ctx, err)
 		return err
 	}
 
 	// Volume manager will not mount volumes for terminated pods
 	if !kl.podIsTerminated(pod) {
+		ctx, _ = t.Stage(ctx, "mountVolumes")
 		// Wait for volumes to attach/mount
 		if err := kl.volumeManager.WaitForAttachAndMount(pod); err != nil {
 			kl.recorder.Eventf(pod, v1.EventTypeWarning, events.FailedMountVolume, "Unable to mount volumes for pod %q: %v", format.Pod(pod), err)
 			glog.Errorf("Unable to mount volumes for pod %q: %v; skipping pod", format.Pod(pod), err)
+			volumes := kl.volumeManager.GetMountedVolumesForPod(util.GetUniquePodName(pod))
+			for k, volume := range volumes {
+				opentracing.LogKV(ctx, "volume", map[string]interface{}{
+					"name":                k,
+					"readOnly":            volume.ReadOnly,
+					"innerVolumeSpecName": volume.InnerVolumeSpecName,
+				})
+			}
+			opentracing.LogError(ctx, err)
 			return err
 		}
 	}
 
+	ctx, _ = t.Stage(ctx, "updateContainers")
 	// Fetch the pull secrets for the pod
 	pullSecrets := kl.getPullSecretsForPod(pod)
 
 	// Call the container runtime's SyncPod callback
-	result := kl.containerRuntime.SyncPod(pod, apiPodStatus, podStatus, pullSecrets, kl.backOff)
+	result := kl.containerRuntime.SyncPod(ctx, pod, apiPodStatus, podStatus, pullSecrets, kl.backOff)
 	for _, syncResult := range result.SyncResults {
 		if syncResult.Action == kubecontainer.UpdateContainer && syncResult.Error == nil {
+			opentracing.LogError(ctx, syncResult.Error)
 			// The pod might have been resized, needs to update its cgroup.
 			if err := pcm.Update(pod); err != nil {
 				kl.recorder.Eventf(pod, v1.EventTypeWarning, events.FailedUpdatePodCgroup, "failed to ensure that the pod: %v cgroups exist and are correctly applied: %v", format.Pod(pod), err)
 				glog.Errorf("failed to ensure that the pod: %v cgroups exist and are correctly applied: %v", format.Pod(pod), err)
+				opentracing.LogError(ctx, err)
 			}
 		}
 	}
@@ -1748,10 +1798,16 @@ func (kl *Kubelet) syncPod(o syncPodOptions) error {
 	if !exists {
 		return fmt.Errorf("pod %s doesn't exist in pod manager", format.Pod(pod))
 	}
+
+	// Force to finish. Then the trace can be merged to another patch request in updateStateStatus.
+	t.Finish(ctx)
+	finished = true
+
 	// Update pod's state-status.
-	if err := kl.updateStateStatus(latestPod, result, maxPatchRetry, triesBeforeBackOff, backOffPeriod); err != nil {
+	if err := kl.updateStateStatus(latestPod, result, maxPatchRetry, triesBeforeBackOff, backOffPeriod, patcher); err != nil {
 		kl.recorder.Eventf(pod, v1.EventTypeWarning, events.FailedUpdatePodAnnotation, "Unable to update pod to client for pod %q: %v", format.Pod(pod), err)
 		glog.Errorf("pod annotation change, update pod: %s, error: %v", format.Pod(pod), err)
+		opentracing.LogError(ctx, err)
 	}
 
 	//TODO  update pod through api server
@@ -2325,6 +2381,8 @@ func (kl *Kubelet) cleanUpContainersInPod(podID types.UID, exitedContainerID str
 		if syncedPod, ok := kl.podManager.GetPodByUID(podID); ok {
 			// generate the api status using the cached runtime status to get up-to-date ContainerStatuses
 			apiPodStatus := kl.generateAPIPodStatus(syncedPod, podStatus)
+			// Sync pod status immediately to ensure that pod has condition of terminated container
+			kl.statusManager.SetPodStatus(syncedPod, apiPodStatus)
 			// When an evicted or deleted pod has already synced, all containers can be removed.
 			removeAll = eviction.PodIsEvicted(syncedPod.Status) || (syncedPod.DeletionTimestamp != nil && notRunning(apiPodStatus.ContainerStatuses))
 		}

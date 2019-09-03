@@ -17,6 +17,7 @@ limitations under the License.
 package kuberuntime
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -26,7 +27,9 @@ import (
 	"github.com/golang/glog"
 	cadvisorapi "github.com/google/cadvisor/info/v1"
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
+	"gitlab.alipay-inc.com/sigma/eavesdropping/pkg/opentracing"
 	sigmautil "k8s.io/kubernetes/pkg/kubelet/sigma"
+	"k8s.io/kubernetes/pkg/kubelet/tracing"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -842,7 +845,12 @@ func (m *kubeGenericRuntimeManager) computePodActions(pod *v1.Pod, podStatus *ku
 //  4. Create sandbox if necessary.
 //  5. Create init containers.
 //  6. Create normal containers.
-func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStatus *kubecontainer.PodStatus, pullSecrets []v1.Secret, backOff *flowcontrol.Backoff) (result kubecontainer.PodSyncResult) {
+func (m *kubeGenericRuntimeManager) SyncPod(ctx context.Context, pod *v1.Pod, _ v1.PodStatus, podStatus *kubecontainer.PodStatus, pullSecrets []v1.Secret, backOff *flowcontrol.Backoff) (result kubecontainer.PodSyncResult) {
+
+	ctx, t, _ := tracing.FlatTracker.Track(ctx, nil, "kubeGenericRuntimeManager.SyncPod")
+	defer t.Finish(ctx)
+
+	t.Stage(ctx, "computePodActions")
 	// Step 1: Compute sandbox and container changes.
 	podContainerChanges := m.computePodActions(pod, podStatus)
 
@@ -872,6 +880,7 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 
 	// Step 2: Kill the pod if the sandbox has changed.
 	if podContainerChanges.KillPod {
+		ctx, _ = t.Stage(ctx, "killPod")
 		if !podContainerChanges.CreateSandbox {
 			glog.V(4).Infof("Stopping PodSandbox for %q because all other containers are dead.", format.Pod(pod))
 		} else {
@@ -882,6 +891,7 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 		result.AddPodSyncResult(killResult)
 		if killResult.Error() != nil {
 			glog.Errorf("killPodWithSyncResult failed: %v", killResult.Error())
+			opentracing.LogError(ctx, killResult.Error())
 			return
 		}
 
@@ -889,6 +899,7 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 			m.purgeInitContainers(pod, podStatus)
 		}
 	} else {
+		ctx, _ = t.Stage(ctx, "killContainers")
 		// Step 3: kill any running containers in this pod which are not to keep.
 		for containerID, containerInfo := range podContainerChanges.ContainersToKill {
 			glog.V(3).Infof("Killing unwanted container %q(id=%q) for pod %q", containerInfo.name, containerID, format.Pod(pod))
@@ -901,12 +912,14 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 				msg := fmt.Sprintf("killContainer %q(id=%q) for pod %q failed: %v", containerInfo.name, containerID, format.Pod(pod), err)
 				glog.Error(msg)
 				m.updateContainerStateStatus(containerStatus, containerInfo.name, containerID.ID, result.StateStatus, false, msg)
+				opentracing.LogError(ctx, errors.New(msg))
 				return
 			}
 			m.updateContainerStateStatus(containerStatus, containerInfo.name, containerID.ID, result.StateStatus, true, KillContainerSuccess)
 		}
 	}
 
+	ctx, _ = t.Stage(ctx, "pruneInitContainersBeforeStart")
 	// Keep terminated init containers fairly aggressively controlled
 	// This is an optimization because container removals are typically handled
 	// by container garbage collector.
@@ -929,6 +942,7 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 	// Step 4: Create or restart a sandbox for the pod if necessary.
 	podSandboxID := podContainerChanges.SandboxID
 	if podContainerChanges.CreateSandbox {
+		ctx, _ = t.Stage(ctx, "createSandbox")
 		var msg string
 		var err error
 
@@ -944,6 +958,7 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 				glog.Errorf("Couldn't make a ref to pod %q: '%v'", format.Pod(pod), referr)
 			}
 			m.recorder.Eventf(ref, v1.EventTypeWarning, events.FailedCreatePodSandBox, "Failed create pod sandbox: %v", err)
+			opentracing.LogError(ctx, fmt.Errorf("Failed create pod sandbox: %v", err))
 			return
 		}
 		glog.V(4).Infof("Created PodSandbox %q for pod %q", podSandboxID, format.Pod(pod))
@@ -957,6 +972,7 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 			m.recorder.Eventf(ref, v1.EventTypeWarning, events.FailedStatusPodSandBox, "Unable to get pod sandbox status: %v", err)
 			glog.Errorf("Failed to get pod sandbox status: %v; Skipping pod %q", err, format.Pod(pod))
 			result.Fail(err)
+			opentracing.LogError(ctx, fmt.Errorf("Failed to get pod sandbox status: %v", err))
 			return
 		}
 
@@ -971,6 +987,7 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 
 	// Start the sandbox if necessary.
 	if podContainerChanges.StartSandbox {
+		ctx, _ = t.Stage(ctx, "startSandbox")
 		glog.V(4).Infof("Starting sandbox for pod %s", format.Pod(pod))
 		startSandboxResult := kubecontainer.NewSyncResult(kubecontainer.CreatePodSandbox, format.Pod(pod))
 		result.AddSyncResult(startSandboxResult)
@@ -985,12 +1002,14 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 		if err != nil {
 			message := fmt.Sprintf("GeneratePodSandboxConfig for pod %q for restart failed: %v", format.Pod(pod), err)
 			glog.Error(message)
+			opentracing.LogError(ctx, errors.New(message))
 			return
 		}
 
 		if err := m.runtimeService.StartPodSandbox(podSandboxID, podSandboxConfig); err != nil {
 			glog.Errorf("Failed to start sandbox %s", podSandboxID)
 			result.Fail(err)
+			opentracing.LogError(ctx, fmt.Errorf("Failed to start sandbox %s: %v", podSandboxID, err))
 			return
 		}
 
@@ -1003,6 +1022,7 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 			m.recorder.Eventf(ref, v1.EventTypeWarning, events.FailedStatusPodSandBox, "Unable to get pod sandbox status: %v", err)
 			glog.Errorf("Failed to get pod sandbox status: %v; Skipping pod %q", err, format.Pod(pod))
 			result.Fail(err)
+			opentracing.LogError(ctx, fmt.Errorf("Failed to get pod sandbox status: %v", err))
 			return
 		}
 
@@ -1017,6 +1037,7 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 		glog.V(4).Infof("Starting sandbox for pod %s success", format.Pod(pod))
 	}
 
+	ctx, _ = t.Stage(ctx, "generatePodSandboxConfig")
 	// Get podSandboxConfig for containers to start.
 	configPodSandboxResult := kubecontainer.NewSyncResult(kubecontainer.ConfigPodSandbox, podSandboxID)
 	result.AddSyncResult(configPodSandboxResult)
@@ -1025,11 +1046,13 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 		message := fmt.Sprintf("GeneratePodSandboxConfig for pod %q failed: %v", format.Pod(pod), err)
 		glog.Error(message)
 		configPodSandboxResult.Fail(kubecontainer.ErrConfigPodSandbox, message)
+		opentracing.LogError(ctx, errors.New(message))
 		return
 	}
 
 	// Step 5: start the init container.
 	if container := podContainerChanges.NextInitContainerToStart; container != nil {
+		ctx, _ = t.Stage(ctx, "startInitContainer")
 		// Start the next init container.
 		startContainerResult := kubecontainer.NewSyncResult(kubecontainer.StartContainer, container.Name)
 		result.AddSyncResult(startContainerResult)
@@ -1037,11 +1060,12 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 		if isInBackOff {
 			startContainerResult.Fail(err, msg)
 			glog.V(4).Infof("Backing Off restarting init container %+v in pod %v", container, format.Pod(pod))
+			opentracing.LogError(ctx, err)
 			return
 		}
 		containerStatus := createContainerStatus(podStatus, sigmak8sapi.StartContainerAction, container.Name, pod)
 		glog.V(4).Infof("Creating init container %+v in pod %v", container, format.Pod(pod))
-		if msg, err := m.startContainer(podSandboxID, podSandboxConfig, container, pod, podStatus, pullSecrets, podIP, kubecontainer.ContainerTypeInit); err != nil {
+		if msg, err := m.startContainer(ctx, podSandboxID, podSandboxConfig, container, pod, podStatus, pullSecrets, podIP, kubecontainer.ContainerTypeInit); err != nil {
 			startContainerResult.Fail(err, msg)
 			errMsg := fmt.Sprintf("init container start failed: %v: %s", err, msg)
 			utilruntime.HandleError(fmt.Errorf(errMsg))
@@ -1050,6 +1074,7 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 				m.updateContainerStateStatus(containerStatus, container.Name, msg, result.StateStatus, false,
 					errMsg)
 			}
+			opentracing.LogError(ctx, err)
 			return
 		}
 		// if err==nil msg is containerID
@@ -1062,6 +1087,9 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 	// Step 6: start containers in podContainerChanges.ContainersToStart.
 	for _, idx := range podContainerChanges.ContainersToStart {
 		container := &pod.Spec.Containers[idx]
+		ctx, _ = t.Stage(ctx, "startContainer")
+		opentracing.LogKV(ctx, "containerName", container.Name, "containerIndex", idx)
+
 		startContainerResult := kubecontainer.NewSyncResult(kubecontainer.StartContainer, container.Name)
 		result.AddSyncResult(startContainerResult)
 
@@ -1070,6 +1098,7 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 			startContainerResult.Fail(err, msg)
 			glog.V(4).Infof("Backing Off restarting container %+v in pod %v", container, format.Pod(pod))
 			if utilfeature.DefaultFeatureGate.Enabled(features.StartContainerByOrder) {
+				opentracing.LogError(ctx, fmt.Errorf("Backing Off restarting container %+v in pod %v", container, format.Pod(pod)))
 				break
 			}
 			continue
@@ -1077,7 +1106,7 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 		containerStatus := createContainerStatus(podStatus, sigmak8sapi.StartContainerAction, container.Name, pod)
 
 		glog.V(4).Infof("Creating container %+v in pod %v", container, format.Pod(pod))
-		if msg, err := m.startContainer(podSandboxID, podSandboxConfig, container, pod, podStatus, pullSecrets, podIP, kubecontainer.ContainerTypeRegular); err != nil {
+		if msg, err := m.startContainer(ctx, podSandboxID, podSandboxConfig, container, pod, podStatus, pullSecrets, podIP, kubecontainer.ContainerTypeRegular); err != nil {
 			startContainerResult.Fail(err, msg)
 			// known errors that are logged in other places are logged at higher levels here to avoid
 			// repetitive log spam
@@ -1092,6 +1121,7 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 			}
 
 			if utilfeature.DefaultFeatureGate.Enabled(features.StartContainerByOrder) {
+				opentracing.LogError(ctx, err)
 				break
 			}
 			continue
@@ -1110,7 +1140,9 @@ func (m *kubeGenericRuntimeManager) SyncPod(pod *v1.Pod, _ v1.PodStatus, podStat
 		len(podContainerChanges.ContainersToUnsuspend) > 0 {
 		glog.V(4).Infof("pod %s containers have change about start, stop, update, upgrade, pause, suspend, unsuspend:%+v",
 			format.Pod(pod), podContainerChanges)
-		m.SyncPodExtension(podSandboxConfig, pod, podStatus, pullSecrets, podIP, &result, podContainerChanges, backOff)
+
+		ctx, _ = t.Stage(ctx, "extensions")
+		m.SyncPodExtension(ctx, podSandboxConfig, pod, podStatus, pullSecrets, podIP, &result, podContainerChanges, backOff)
 	} else {
 		glog.V(4).Infof("pod %s containers have no change about start, stop, update, upgrade, pause, suspend, unsuspend", format.Pod(pod))
 	}

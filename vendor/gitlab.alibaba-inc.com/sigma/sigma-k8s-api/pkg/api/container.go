@@ -39,6 +39,7 @@ const (
 const (
 	InplaceUpdateStateCreated   string = "created"
 	InplaceUpdateStateAccepted  string = "accepted"
+	InplaceUpdateStateRejected  string = "rejected"
 	InplaceUpdateStateFailed    string = "failed"
 	InplaceUpdateStateSucceeded string = "succeeded"
 )

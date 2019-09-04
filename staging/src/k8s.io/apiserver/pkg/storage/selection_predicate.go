@@ -75,10 +75,11 @@ type SelectionPredicate struct {
 	Field                fields.Selector
 	IncludeUninitialized bool
 	GetAttrs             AttrFunc
-	IndexLabels			 []string
+	IndexLabels          []string
 	IndexFields          []string
 	Limit                int64
 	Continue             string
+	AllowWatchBookmarks  bool
 }
 
 // Matches returns true if the given object's labels and fields (as

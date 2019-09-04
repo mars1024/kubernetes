@@ -71,14 +71,16 @@ func (w *predicateAdmitHandler) Admit(attrs *PodAdmitAttributes) PodAdmitResult 
 	pods := attrs.OtherPods
 	nodeInfo := schedulercache.NewNodeInfo(pods...)
 	nodeInfo.SetNode(node)
-	// ensure the node has enough plugin resources for that required in pods
-	if err = w.pluginResourceUpdateFunc(nodeInfo, attrs); err != nil {
-		message := fmt.Sprintf("Update plugin resources failed due to %v, which is unexpected.", err)
-		glog.Warningf("Failed to admit pod %v - %s", format.Pod(admitPod), message)
-		return PodAdmitResult{
-			Admit:   false,
-			Reason:  "UnexpectedAdmissionError",
-			Message: message,
+	if !utilfeature.DefaultFeatureGate.Enabled(features.DisableRejectPod) {
+		// ensure the node has enough plugin resources for that required in pods
+		if err = w.pluginResourceUpdateFunc(nodeInfo, attrs); err != nil {
+			message := fmt.Sprintf("Update plugin resources failed due to %v, which is unexpected.", err)
+			glog.Warningf("Failed to admit pod %v - %s", format.Pod(admitPod), message)
+			return PodAdmitResult{
+				Admit:   false,
+				Reason:  "UnexpectedAdmissionError",
+				Message: message,
+			}
 		}
 	}
 

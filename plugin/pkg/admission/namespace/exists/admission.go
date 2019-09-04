@@ -74,7 +74,7 @@ func (e *Exists) Validate(a admission.Attributes) error {
 	}
 
 	// we need to wait for our caches to warm
-	if !e.WaitForReady() {
+	if !e.WaitForReady(a.GetContext()) {
 		return admission.NewForbidden(a, fmt.Errorf("not yet ready to handle request"))
 	}
 	_, err := e.namespaceLister.Get(a.GetNamespace())

@@ -1,17 +1,20 @@
 package kuberuntime
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"gitlab.alipay-inc.com/sigma/eavesdropping/pkg/opentracing"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/kubernetes/pkg/kubelet/images"
+	"k8s.io/kubernetes/pkg/kubelet/tracing"
 
 	"github.com/golang/glog"
 	"google.golang.org/grpc/status"
-	"k8s.io/api/core/v1"
 	"k8s.io/client-go/util/flowcontrol"
 	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/kubelet/events"
@@ -78,14 +81,20 @@ type containerOperationInfo struct {
 //  5. start container without doing postStartHook which need to pause.
 //  6. clean container state status which not exist
 //  7. update pod annotation.
-func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeapi.PodSandboxConfig, pod *v1.Pod,
+func (m *kubeGenericRuntimeManager) SyncPodExtension(ctx context.Context, podSandboxConfig *runtimeapi.PodSandboxConfig, pod *v1.Pod,
 	podStatus *kubecontainer.PodStatus, pullSecrets []v1.Secret, podIP string, result *kubecontainer.PodSyncResult,
 	changes podActions, backOff *flowcontrol.Backoff) {
+
+	ctx, t, _ := tracing.FlatTracker.Track(ctx, nil, "kubeGenericRuntimeManager.SyncPodExtension")
+	defer t.Finish(ctx)
 
 	podSandboxID := changes.SandboxID
 
 	// step 1:  stop container which need to stop.
 	for containerID, containerInfo := range changes.ContainersToKillBecauseDesireState {
+		ctx, _ = t.Stage(ctx, "containerToKill")
+		opentracing.LogKV(ctx, "containerName", containerInfo.name, "containerID", containerID)
+
 		glog.V(3).Infof("Killing unwanted container %q(id=%q) for pod %q",
 			containerInfo.name, containerID, format.Pod(pod))
 		killContainerResult := kubecontainer.NewSyncResult(kubecontainer.KillContainer, containerInfo.name)
@@ -100,6 +109,9 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 				containerInfo.name, containerID, format.Pod(pod), err)
 			glog.Errorf(msg)
 			m.updateContainerStateStatus(containerStatus, containerInfo.name, containerID.ID, result.StateStatus, false, msg)
+			opentracing.LogKV(ctx, "message", msg)
+			opentracing.LogError(ctx, err)
+
 		} else {
 			m.updateContainerStateStatus(containerStatus, containerInfo.name, containerID.ID, result.StateStatus, true, KillContainerSuccess)
 		}
@@ -108,7 +120,12 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 	// step 2: start container which need to start.
 	// step 2: start container which need to start.
 	for _, idx := range changes.ContainersToStartBecauseDesireState {
+		ctx, _ = t.Stage(ctx, "containerToStart")
+
 		container := &pod.Spec.Containers[idx]
+
+		opentracing.LogKV(ctx, "containerName", container.Name, "containerIndex", idx)
+
 		status := podStatus.FindContainerStatusByName(container.Name)
 		if status == nil {
 			glog.V(4).Infof("Failed to get status of %s in pod %s, start container in next loop",
@@ -133,6 +150,9 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 			startContainerResult.Fail(err, msg)
 			m.updateContainerStateStatus(containerStatus, container.Name, containerID.ID, result.StateStatus, false, msg)
 
+			opentracing.LogKV(ctx, "message", msg)
+			opentracing.LogError(ctx, err)
+
 			// known errors that are logged in other places are logged at higher levels here to avoid
 			// repetitive log spam
 			utilruntime.HandleError(fmt.Errorf("container start failed: %v: %s", err, msg))
@@ -147,6 +167,9 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 
 	// step 3: upgrade container which need to be upgraded.
 	for containerID, containerInfo := range changes.ContainersToUpgrade {
+		ctx, _ = t.Stage(ctx, "containerToUpgrade")
+		opentracing.LogKV(ctx, "containerName", containerInfo.name, "containerID", containerID)
+
 		container := containerInfo.container
 		upgradeContainerResult := kubecontainer.NewSyncResult(kubecontainer.SyncAction("UpgradeContainer"), container.Name)
 		result.AddSyncResult(upgradeContainerResult)
@@ -155,6 +178,10 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 		previousResult := sigmautil.GetStatusFromAnnotation(pod, container.Name)
 		if previousResult != nil && !previousResult.Success {
 			isInBackOff, msg, err := m.doBackOffExtension(pod, container, podStatus, backOff)
+			if err != nil {
+				opentracing.LogKV(ctx, "message", msg)
+				opentracing.LogError(ctx, err)
+			}
 			if isInBackOff {
 				upgradeContainerResult.Fail(err, msg)
 				glog.V(4).Infof("Backing Off upgrading container %+v in pod %v", container, format.Pod(pod))
@@ -173,6 +200,9 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 			success = false
 			statusMsg = msg
 
+			opentracing.LogKV(ctx, "message", msg)
+			opentracing.LogError(ctx, err)
+
 			// known errors that are logged in other places are logged at higher levels here to avoid
 			// repetitive log spam
 			utilruntime.HandleError(fmt.Errorf("container start failed: %v: %s", err, msg))
@@ -180,6 +210,7 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 			success = true
 			statusMsg = UpgradeContainerSuccess
 		}
+
 		var currentContainerID string
 		if containerUpgradeResult != nil {
 			currentContainerID = containerUpgradeResult.ID
@@ -192,6 +223,8 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 	// step 4: update container which need to be updated.
 	// Ignore update request if inplace update state is not accepted.
 	if len(changes.ContainersToUpdate) > 0 && sigmautil.IsInplaceUpdateAccepted(pod) {
+		ctx, _ = t.Stage(ctx, "updatePodCgroup")
+
 		updatePodResult := kubecontainer.NewSyncResult(kubecontainer.UpdateContainer, format.Pod(pod))
 		currentPodCPUQuota := int64(0)
 		newPodCPUQuota := int64(0)
@@ -231,6 +264,9 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 		}
 
 		for containerID, containerInfo := range changes.ContainersToUpdate {
+			ctx, _ = t.Stage(ctx, "containerToUpdate")
+			opentracing.LogKV(ctx, "containerName", containerInfo.name, "containerID", containerID)
+
 			container := containerInfo.container
 			updateContainerResult := kubecontainer.NewSyncResult(kubecontainer.UpdateContainer, containerInfo.name)
 			result.AddSyncResult(updateContainerResult)
@@ -239,6 +275,10 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 			previousResult := sigmautil.GetStatusFromAnnotation(pod, container.Name)
 			if previousResult != nil && !previousResult.Success {
 				isInBackOff, msg, err := m.doBackOffExtension(pod, container, podStatus, backOff)
+				if err != nil {
+					opentracing.LogKV(ctx, "message", msg)
+					opentracing.LogError(ctx, err)
+				}
 				if isInBackOff {
 					updateContainerResult.Fail(err, msg)
 					glog.V(4).Infof("backing off updating container %+v in pod %v", container, format.Pod(pod))
@@ -250,6 +290,9 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 			if msg, err := m.updateContainer(containerID, containerInfo.container, pod); err != nil {
 				m.updateContainerStateStatus(containerStatus, containerInfo.name, containerID.ID, result.StateStatus, false, msg)
 				updateContainerResult.Fail(err, msg)
+
+				opentracing.LogKV(ctx, "message", msg)
+				opentracing.LogError(ctx, err)
 			} else {
 				// After updateContainer, needs to updates PodStatusCache for the pod resized here.
 				// The current PLEG that is responsible for updating PodCache can't detect container resizing by docker update.
@@ -257,6 +300,7 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 				// cf. See g.relist in pkg/kubelet/pleg/generic.go
 				if err := m.runtimeHelper.UpdatePodStatusCache(pod); err != nil {
 					glog.Errorf("UpdatePodStatusCache failed for pod %s/%s %v", pod.Namespace, pod.Name, err)
+					opentracing.LogError(ctx, err)
 				}
 				m.updateContainerStateStatus(containerStatus, containerInfo.name, containerID.ID, result.StateStatus, true, UpdateContainerSuccess)
 			}
@@ -265,6 +309,9 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 
 	// step 5: pause container if needed.
 	for containerID, containerInfo := range changes.ContainersToStartBecausePause {
+		ctx, _ = t.Stage(ctx, "containerToResume")
+		opentracing.LogKV(ctx, "containerName", containerInfo.name, "containerID", containerID)
+
 		container := containerInfo.container
 		pauseContainerResult := kubecontainer.NewSyncResult(kubecontainer.SyncAction("PauseContainer"), container.Name)
 		result.AddSyncResult(pauseContainerResult)
@@ -274,6 +321,7 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 		if containerStatusFromCache.State != kubecontainer.ContainerStateRunning {
 			ref, err := kubecontainer.GenerateContainerRef(pod, container)
 			if err != nil {
+				opentracing.LogError(ctx, err)
 				glog.Errorf("Couldn't make a ref to pod %q: '%v'", format.Pod(pod), err)
 			}
 			err = m.runtimeService.StartContainer(containerID.ID)
@@ -282,6 +330,7 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 				glog.V(0).Infof("Failed to start the paused container %s in %s: %s",
 					container.Name, format.Pod(pod), err.Error())
 				m.updateContainerStateStatus(containerStatus, containerInfo.name, containerID.ID, result.StateStatus, false, err.Error())
+				opentracing.LogError(ctx, err)
 			} else {
 				m.recorder.Eventf(ref, v1.EventTypeNormal, events.StartedContainer, "Success to start container(paused)")
 
@@ -292,6 +341,9 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 	}
 
 	for containerID, containerInfo := range changes.ContainersToSuspend {
+		ctx, _ = t.Stage(ctx, "containerToSuspend")
+		opentracing.LogKV(ctx, "containerName", containerInfo.name, "containerID", containerID)
+
 		container := containerInfo.container
 		suspendContainerResult := kubecontainer.NewSyncResult(kubecontainer.SyncAction("SuspendContainer"), container.Name)
 		result.AddSyncResult(suspendContainerResult)
@@ -302,6 +354,7 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 
 		ref, err := kubecontainer.GenerateContainerRef(pod, container)
 		if err != nil {
+			opentracing.LogError(ctx, err)
 			glog.Errorf("Couldn't make a ref to pod %q: '%v'", format.Pod(pod), err)
 		}
 
@@ -310,6 +363,7 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 			glog.V(0).Infof("Failed to suspend container %s in %s: %s",
 				container.Name, format.Pod(pod), err.Error())
 			m.updateContainerStateStatus(containerStatus, containerInfo.name, containerID.ID, result.StateStatus, false, err.Error())
+			opentracing.LogError(ctx, err)
 		} else {
 			m.recorder.Eventf(ref, v1.EventTypeNormal, events.SuspendedContainer, "Success to suspend container")
 			containerStatus.CurrentState = sigmak8sapi.ContainerStateSuspended
@@ -318,6 +372,9 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 	}
 
 	for containerID, containerInfo := range changes.ContainersToUnsuspend {
+		ctx, _ = t.Stage(ctx, "containerToUnsuspend")
+		opentracing.LogKV(ctx, "containerName", containerInfo.name, "containerID", containerID)
+
 		container := containerInfo.container
 		unSuspendContainerResult := kubecontainer.NewSyncResult(kubecontainer.SyncAction("UnsuspendContainer"), container.Name)
 		result.AddSyncResult(unSuspendContainerResult)
@@ -328,6 +385,7 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 
 		ref, err := kubecontainer.GenerateContainerRef(pod, container)
 		if err != nil {
+			opentracing.LogError(ctx, err)
 			glog.Errorf("Couldn't make a ref to pod %q: '%v'", format.Pod(pod), err)
 		}
 
@@ -336,6 +394,7 @@ func (m *kubeGenericRuntimeManager) SyncPodExtension(podSandboxConfig *runtimeap
 			glog.V(0).Infof("Failed to unsuspend container %s in %s: %s",
 				container.Name, format.Pod(pod), err.Error())
 			m.updateContainerStateStatus(containerStatus, containerInfo.name, containerID.ID, result.StateStatus, false, err.Error())
+			opentracing.LogError(ctx, err)
 		} else {
 			m.recorder.Eventf(ref, v1.EventTypeNormal, events.UnsuspendedContainer, "Success to unsuspend container")
 			containerStatus.CurrentState = sigmak8sapi.ContainerStateRunning

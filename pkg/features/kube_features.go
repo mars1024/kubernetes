@@ -17,10 +17,10 @@ limitations under the License.
 package features
 
 import (
+	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
 	apiextensionsfeatures "k8s.io/apiextensions-apiserver/pkg/features"
 	genericfeatures "k8s.io/apiserver/pkg/features"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
-	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
 )
 
 const (
@@ -471,6 +471,35 @@ const (
 	// add Pod.Spec.DNSConfig.Searches to Pod's /etc/resolv.conf at first
 	// github issue see: https://github.com/kubernetes/kubernetes/issues/78206
 	PodSearchesFirst utilfeature.Feature = "PodSearchesFirst"
+
+	// owner: @fankang.fk (fankang.fk@alipay.com)
+	// alpha: v1.12
+	//
+	// Don't set UTSMode=host when pod is host network mode.
+	DisableHostUTSMode utilfeature.Feature = "DisableHostUTSMode"
+
+	// owner: @fankang.fk (fankang.fk@alipay.com)
+	// alpha: v1.12
+	//
+	// Disable dangling pod features.
+	DisableDanglingPod utilfeature.Feature = "DisableDanglingPod"
+
+	// owner: @fankang.fk (fankang.fk@alipay.com)
+	// alpha: v1.12
+	//
+	// Ignore some unwanted events if IgnoreUnwantedEvent is true.
+	IgnoreUnwantedEvent utilfeature.Feature = "IgnoreUnwantedEvent"
+
+	// owner: @kira.gw (kira.gw@alipay.com)
+	// alpha: v1.12
+	//
+	// Patch tracing data to object annotations if PatchTracingToObject is true.
+	PatchTracingToObject utilfeature.Feature = "PatchTracingToObject"
+
+	// owner: @yuzhi.wx (yuzhi.wx@antfin.com)
+	// alpha: v1.12
+	// Disable user info backup/restore logic during image upgrading
+	DisableUserInfoRetainDuringUpgrade utilfeature.Feature = "DisableUserInfoRetainDuringUpgrade"
 )
 
 func init() {
@@ -483,6 +512,7 @@ func init() {
 var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureSpec{
 	AppArmor:             {Default: true, PreRelease: utilfeature.Beta},
 	DynamicKubeletConfig: {Default: true, PreRelease: utilfeature.Beta},
+
 	ExperimentalHostUserNamespaceDefaultingGate: {Default: false, PreRelease: utilfeature.Beta},
 	ExperimentalCriticalPodAnnotation:           {Default: false, PreRelease: utilfeature.Alpha},
 	DevicePlugins:                               {Default: true, PreRelease: utilfeature.Beta},
@@ -547,10 +577,16 @@ var defaultKubernetesFeatureGates = map[utilfeature.Feature]utilfeature.FeatureS
 	DisableChangePodStatusByNodeReadyCondition:  {Default: true, PreRelease: utilfeature.Beta},
 	DefaultHashVersionTo110:                     {Default: false, PreRelease: utilfeature.Alpha},
 	DisableRejectPod:                            {Default: false, PreRelease: utilfeature.Alpha},
+	DisableUpdatePodQOSValidation:               {Default: false, PreRelease: utilfeature.Alpha},
 	PodLevelResourceQuota:                       {Default: false, PreRelease: utilfeature.Alpha},
 	IgnoreSidecarContainerReady:                 {Default: false, PreRelease: utilfeature.Alpha},
 	EnsurePodSuccess:                            {Default: false, PreRelease: utilfeature.Alpha},
 	PodSearchesFirst:                            {Default: false, PreRelease: utilfeature.Alpha},
+	DisableHostUTSMode:                          {Default: false, PreRelease: utilfeature.Alpha},
+	DisableDanglingPod:                          {Default: false, PreRelease: utilfeature.Alpha},
+	IgnoreUnwantedEvent:                         {Default: false, PreRelease: utilfeature.Alpha},
+	PatchTracingToObject:                        {Default: false, PreRelease: utilfeature.Alpha},
+	DisableUserInfoRetainDuringUpgrade:          {Default: false, PreRelease: utilfeature.Alpha},
 	multitenancy.FeatureName:                    {Default: false, PreRelease: utilfeature.Alpha},
 
 	// inherited features from generic apiserver, relisted here to get a conflict if it is changed

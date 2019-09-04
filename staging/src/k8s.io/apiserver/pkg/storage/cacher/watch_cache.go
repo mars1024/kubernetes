@@ -17,11 +17,13 @@ limitations under the License.
 package cacher
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"sync"
 	"time"
 
+	"github.com/golang/glog"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
@@ -165,7 +167,7 @@ type watchCache struct {
 
 	// This handler is run at the end of every Add/Update/Delete method
 	// and additionally gets the previous value of the object.
-	onEvent func(*watchCacheEvent)
+	eventHandler func(*watchCacheEvent)
 
 	// for testing timeouts.
 	clock clock.Clock
@@ -178,6 +180,7 @@ func newWatchCache(
 	capacity int,
 	keyFunc func(runtime.Object) (string, error),
 	indexers *cache.Indexers,
+	eventHandler func(*watchCacheEvent),
 	getAttrsFunc func(runtime.Object) (labels.Set, fields.Set, bool, error),
 	versioner storage.Versioner) *watchCache {
 	wc := &watchCache{
@@ -187,9 +190,10 @@ func newWatchCache(
 		cache:               make([]watchCacheElement, capacity),
 		startIndex:          0,
 		endIndex:            0,
-		store:               cache.NewIndexer(storeElementKey, 	storeElementIndexers(indexers)),
+		store:               cache.NewIndexer(storeElementKey, storeElementIndexers(indexers)),
 		resourceVersion:     0,
 		listResourceVersion: 0,
+		eventHandler:        eventHandler,
 		clock:               clock.RealClock{},
 		versioner:           versioner,
 	}
@@ -245,6 +249,8 @@ func (w *watchCache) objectToVersionedRuntimeObject(obj interface{}) (runtime.Ob
 	return object, resourceVersion, nil
 }
 
+// processEvent is safe as long as there is at most one call to it in flight
+// at any point in time.
 func (w *watchCache) processEvent(event watch.Event, resourceVersion uint64, updateFunc func(*storeElement) error) error {
 	key, err := w.keyFunc(event.Object)
 	if err != nil {
@@ -266,31 +272,42 @@ func (w *watchCache) processEvent(event watch.Event, resourceVersion uint64, upd
 		ResourceVersion:  resourceVersion,
 	}
 
-	// TODO: We should consider moving this lock below after the watchCacheEvent
-	// is created. In such situation, the only problematic scenario is Replace(
-	// happening after getting object from store and before acquiring a lock.
-	// Maybe introduce another lock for this purpose.
-	w.Lock()
-	defer w.Unlock()
-	previous, exists, err := w.store.Get(elem)
-	if err != nil {
+	if err := func() error {
+		// TODO: We should consider moving this lock below after the watchCacheEvent
+		// is created. In such situation, the only problematic scenario is Replace(
+		// happening after getting object from store and before acquiring a lock.
+		// Maybe introduce another lock for this purpose.
+		w.Lock()
+		defer w.Unlock()
+
+		previous, exists, err := w.store.Get(elem)
+		if err != nil {
+			return err
+		}
+		if exists {
+			previousElem := previous.(*storeElement)
+			watchCacheEvent.PrevObject = previousElem.Object
+			watchCacheEvent.PrevObjLabels = previousElem.Labels
+			watchCacheEvent.PrevObjFields = previousElem.Fields
+		}
+
+		w.updateCache(resourceVersion, watchCacheEvent)
+		w.resourceVersion = resourceVersion
+		defer w.cond.Broadcast()
+
+		return updateFunc(elem)
+	}(); err != nil {
 		return err
 	}
-	if exists {
-		previousElem := previous.(*storeElement)
-		watchCacheEvent.PrevObject = previousElem.Object
-		watchCacheEvent.PrevObjLabels = previousElem.Labels
-		watchCacheEvent.PrevObjFields = previousElem.Fields
-		watchCacheEvent.PrevObjUninitialized = previousElem.Uninitialized
+
+	// Avoid calling event handler under lock.
+	// This is safe as long as there is at most one call to processEvent in flight
+	// at any point in time.
+	if w.eventHandler != nil {
+		w.eventHandler(watchCacheEvent)
 	}
 
-	if w.onEvent != nil {
-		w.onEvent(watchCacheEvent)
-	}
-	w.updateCache(resourceVersion, watchCacheEvent)
-	w.resourceVersion = resourceVersion
-	w.cond.Broadcast()
-	return updateFunc(elem)
+	return nil
 }
 
 // Assumes that lock is already held for write.
@@ -311,7 +328,7 @@ func (w *watchCache) List() []interface{} {
 // waitUntilFreshAndBlock waits until cache is at least as fresh as given <resourceVersion>.
 // NOTE: This function acquired lock and doesn't release it.
 // You HAVE TO explicitly call w.RUnlock() after this function.
-func (w *watchCache) waitUntilFreshAndBlock(resourceVersion uint64, trace *utiltrace.Trace) error {
+func (w *watchCache) waitUntilFreshAndBlock(ctx context.Context, resourceVersion uint64, trace *utiltrace.Trace) error {
 	startTime := w.clock.Now()
 	go func() {
 		// Wake us up when the time limit has expired.  The docs
@@ -321,7 +338,10 @@ func (w *watchCache) waitUntilFreshAndBlock(resourceVersion uint64, trace *utilt
 		// it will wake up the loop below sometime after the broadcast,
 		// we don't need to worry about waking it up before the time
 		// has expired accidentally.
-		<-w.clock.After(blockTimeout)
+		select {
+		case <-w.clock.After(blockTimeout):
+		case <-ctx.Done():
+		}
 		w.cond.Broadcast()
 	}()
 
@@ -334,6 +354,11 @@ func (w *watchCache) waitUntilFreshAndBlock(resourceVersion uint64, trace *utilt
 			// Timeout with retry after 1 second.
 			return errors.NewTimeoutError(fmt.Sprintf("Too large resource version: %v, current: %v", resourceVersion, w.resourceVersion), 1)
 		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
 		w.cond.Wait()
 	}
 	if trace != nil {
@@ -343,8 +368,8 @@ func (w *watchCache) waitUntilFreshAndBlock(resourceVersion uint64, trace *utilt
 }
 
 // WaitUntilFreshAndList returns list of pointers to <storeElement> objects.
-func (w *watchCache) WaitUntilFreshAndList(resourceVersion uint64, trace *utiltrace.Trace) ([]interface{}, uint64, error) {
-	err := w.waitUntilFreshAndBlock(resourceVersion, trace)
+func (w *watchCache) WaitUntilFreshAndList(ctx context.Context, resourceVersion uint64, trace *utiltrace.Trace) ([]interface{}, uint64, error) {
+	err := w.waitUntilFreshAndBlock(ctx, resourceVersion, trace)
 	defer w.RUnlock()
 	if err != nil {
 		return nil, 0, err
@@ -353,8 +378,8 @@ func (w *watchCache) WaitUntilFreshAndList(resourceVersion uint64, trace *utiltr
 }
 
 // Don't change the WaitUntilFreshAndList for upstream compatibility.
-func (w *watchCache) WaitUntilFreshAndListWithIndex(resourceVersion uint64, matchValues []storage.MatchValue, trace *utiltrace.Trace) ([]interface{}, uint64, error) {
-	err := w.waitUntilFreshAndBlock(resourceVersion, trace)
+func (w *watchCache) WaitUntilFreshAndListWithIndex(ctx context.Context, resourceVersion uint64, matchValues []storage.MatchValue, trace *utiltrace.Trace) ([]interface{}, uint64, error) {
+	err := w.waitUntilFreshAndBlock(ctx, resourceVersion, trace)
 	defer w.RUnlock()
 	if err != nil {
 		return nil, 0, err
@@ -371,8 +396,8 @@ func (w *watchCache) WaitUntilFreshAndListWithIndex(resourceVersion uint64, matc
 }
 
 // WaitUntilFreshAndGet returns a pointers to <storeElement> object.
-func (w *watchCache) WaitUntilFreshAndGet(resourceVersion uint64, key string, trace *utiltrace.Trace) (interface{}, bool, uint64, error) {
-	err := w.waitUntilFreshAndBlock(resourceVersion, trace)
+func (w *watchCache) WaitUntilFreshAndGet(ctx context.Context, resourceVersion uint64, key string, trace *utiltrace.Trace) (interface{}, bool, uint64, error) {
+	err := w.waitUntilFreshAndBlock(ctx, resourceVersion, trace)
 	defer w.RUnlock()
 	if err != nil {
 		return nil, false, 0, err
@@ -449,6 +474,7 @@ func (w *watchCache) Replace(objs []interface{}, resourceVersion string) error {
 		w.onReplace()
 	}
 	w.cond.Broadcast()
+	glog.V(3).Infof("Replace watchCache (rev: %v) ", resourceVersion)
 	return nil
 }
 
@@ -456,12 +482,6 @@ func (w *watchCache) SetOnReplace(onReplace func()) {
 	w.Lock()
 	defer w.Unlock()
 	w.onReplace = onReplace
-}
-
-func (w *watchCache) SetOnEvent(onEvent func(*watchCacheEvent)) {
-	w.Lock()
-	defer w.Unlock()
-	w.onEvent = onEvent
 }
 
 func (w *watchCache) GetAllEventsSinceThreadUnsafe(resourceVersion uint64) ([]*watchCacheEvent, error) {

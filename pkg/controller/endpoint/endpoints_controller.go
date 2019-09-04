@@ -187,10 +187,23 @@ func (e *EndpointController) getPodServiceMemberships(pod *v1.Pod) (sets.String,
 	return set, nil
 }
 
+func logPodEventCost(podName string, threshold time.Duration, eventType string) func() {
+	start := time.Now()
+
+	return func() {
+		cost := time.Now().Sub(start)
+		if cost > threshold {
+			glog.V(4).Infof("endpoints process pod event cost too much, podName: %s, eventType: %s, cost: %v", podName, eventType, cost)
+		}
+	}
+}
+
 // When a pod is added, figure out what services it will be a member of and
 // enqueue them. obj must have *v1.Pod type.
 func (e *EndpointController) addPod(obj interface{}) {
 	pod := obj.(*v1.Pod)
+
+	defer logPodEventCost(fmt.Sprintf("%s/%s", pod.Namespace, pod.Name), time.Millisecond*100, "ADD")()
 
 	if utilfeature.DefaultFeatureGate.Enabled(multitenancy.FeatureName) {
 		tenantInfo, _ := multitenancyutil.TransformTenantInfoFromAnnotations(pod.Annotations)
@@ -267,6 +280,9 @@ func determineNeededServiceUpdates(oldServices, services sets.String, podChanged
 func (e *EndpointController) updatePod(old, cur interface{}) {
 	newPod := cur.(*v1.Pod)
 	oldPod := old.(*v1.Pod)
+
+	defer logPodEventCost(fmt.Sprintf("%s/%s", newPod.Namespace, newPod.Name), time.Millisecond*100, "UPDATE")()
+
 	if newPod.ResourceVersion == oldPod.ResourceVersion {
 		// Periodic resync will send update events for all known pods.
 		// Two different versions of the same pod will always have different RVs.
@@ -321,7 +337,8 @@ func hostNameAndDomainAreEqual(pod1, pod2 *v1.Pod) bool {
 // When a pod is deleted, enqueue the services the pod used to be a member of.
 // obj could be an *v1.Pod, or a DeletionFinalStateUnknown marker item.
 func (e *EndpointController) deletePod(obj interface{}) {
-	if _, ok := obj.(*v1.Pod); ok {
+	if pod, ok := obj.(*v1.Pod); ok {
+		defer logPodEventCost(fmt.Sprintf("%s/%s", pod.Namespace, pod.Name), time.Millisecond*100, "DELETE")()
 		// Enqueue all the services that the pod used to be a member
 		// of. This happens to be exactly the same thing we do when a
 		// pod is added.
@@ -339,6 +356,9 @@ func (e *EndpointController) deletePod(obj interface{}) {
 		utilruntime.HandleError(fmt.Errorf("Tombstone contained object that is not a Pod: %#v", obj))
 		return
 	}
+
+	defer logPodEventCost(fmt.Sprintf("%s/%s", pod.Namespace, pod.Name), time.Millisecond*100, "DELETE")()
+
 	glog.V(4).Infof("Enqueuing services of deleted pod %s/%s having final state unrecorded", pod.Namespace, pod.Name)
 	e.addPod(pod)
 }

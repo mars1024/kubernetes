@@ -433,6 +433,33 @@ func TestStatefulPodControlDeleteFailure(t *testing.T) {
 	}
 }
 
+func TestStatefulPodControlCreatePodPvcTerminating(t *testing.T) {
+	recorder := record.NewFakeRecorder(10)
+	set := newStatefulSet(3)
+	pod := newStatefulSetPod(set, 0)
+	fakeClient := &fake.Clientset{}
+	pvcs := getPersistentVolumeClaims(set, pod)
+	pvcIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
+	now := metav1.Now()
+	for k := range pvcs {
+		pvc := pvcs[k]
+		pvc.DeletionTimestamp = &now
+		pvcIndexer.Add(&pvc)
+	}
+	pvcLister := corelisters.NewPersistentVolumeClaimLister(pvcIndexer)
+	control := NewRealStatefulPodControl(fakeClient, nil, nil, pvcLister, recorder)
+	if err := control.CreateStatefulPod(set, pod); err != nil && !strings.Contains(err.Error(), "is being deleted") {
+		t.Errorf("Failed to create Pod error: %s", err)
+	}
+	events := collectEvents(recorder.Events)
+	if eventCount := len(events); eventCount != 1 {
+		t.Errorf("Pod and PVC exist: got %d events, but want 1", eventCount)
+		for i := range events {
+			t.Log(events[i])
+		}
+	}
+}
+
 func collectEvents(source <-chan string) []string {
 	done := false
 	events := make([]string, 0)

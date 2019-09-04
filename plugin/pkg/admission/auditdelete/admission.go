@@ -35,7 +35,7 @@ func Register(plugins *admission.Plugins) {
 // auditDeletePlugin is an implementation of admission.Interface.
 type auditDeletePlugin struct {
 	*admission.Handler
-	podLister    settingslisters.PodLister
+	podLister settingslisters.PodLister
 	// podCounterHandler is used for testing purpose: they are set to fake
 	// functions when testing
 	podCounterHandler func(string, metav1.Object) (int, error)
@@ -97,7 +97,7 @@ func (p *auditDeletePlugin) Validate(a admission.Attributes) error {
 		if !ok {
 			return errors.NewBadRequest("Resource was marked with kind StatefulSet but was unable to be converted by AuditDelete")
 		}
-		if set.Labels[statefulsetcontroller.ModeForStatefulSet] == "sigma" {
+		if statefulsetcontroller.StatefulSetMode(set) == "sigma" {
 			return p.validateWorkloadDeletion(objectMeta)
 		}
 	}

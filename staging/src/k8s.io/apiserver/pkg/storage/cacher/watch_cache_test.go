@@ -17,12 +17,14 @@ limitations under the License.
 package cacher
 
 import (
+	"context"
 	"fmt"
-	"k8s.io/kubernetes/pkg/registry/core/pod"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"k8s.io/kubernetes/pkg/registry/core/pod"
 
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -49,7 +51,7 @@ func makeTestPodDetails(name string, resourceVersion uint64, node string, labels
 			Namespace:       "ns",
 			Name:            name,
 			ResourceVersion: strconv.FormatUint(resourceVersion, 10),
-			Labels: labels,
+			Labels:          labels,
 		},
 		Spec: api.PodSpec{
 			NodeName: node,
@@ -80,7 +82,8 @@ func newTestWatchCache(capacity int, indexers *cache.Indexers) *watchCache {
 		return labels.Set(pod.Labels), fields.Set{"spec.nodeName": pod.Spec.NodeName}, false, nil
 	}
 	versioner := etcd.APIObjectVersioner{}
-	wc := newWatchCache(capacity, keyFunc, indexers, getAttrsFunc, versioner)
+	mockHandler := func(*watchCacheEvent) {}
+	wc := newWatchCache(capacity, keyFunc, indexers, mockHandler, getAttrsFunc, versioner)
 	wc.clock = clock.NewFakeClock(time.Now())
 	return wc
 }
@@ -326,7 +329,7 @@ func TestWaitUntilFreshAndList(t *testing.T) {
 		store.Add(makeTestPod("bar", 5))
 	}()
 
-	list, resourceVersion, err := store.WaitUntilFreshAndList(5, nil)
+	list, resourceVersion, err := store.WaitUntilFreshAndList(context.TODO(), 5, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -347,7 +350,7 @@ func TestWaitUntilFreshAndGet(t *testing.T) {
 		store.Add(makeTestPod("bar", 5))
 	}()
 
-	obj, exists, resourceVersion, err := store.WaitUntilFreshAndGet(5, "prefix/ns/bar", nil)
+	obj, exists, resourceVersion, err := store.WaitUntilFreshAndGet(context.TODO(), 5, "prefix/ns/bar", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -381,7 +384,7 @@ func TestWaitUntilFreshAndListTimeout(t *testing.T) {
 		store.Add(makeTestPod("bar", 5))
 	}()
 
-	_, _, err := store.WaitUntilFreshAndList(5, nil)
+	_, _, err := store.WaitUntilFreshAndList(context.TODO(), 5, nil)
 	if err == nil {
 		t.Fatalf("unexpected lack of timeout error")
 	}
@@ -403,7 +406,7 @@ func TestReflectorForWatchCache(t *testing.T) {
 	store := newTestWatchCache(5, &cache.Indexers{})
 
 	{
-		_, version, err := store.WaitUntilFreshAndList(0, nil)
+		_, version, err := store.WaitUntilFreshAndList(context.TODO(), 0, nil)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -426,7 +429,7 @@ func TestReflectorForWatchCache(t *testing.T) {
 	r.ListAndWatch(wait.NeverStop)
 
 	{
-		_, version, err := store.WaitUntilFreshAndList(10, nil)
+		_, version, err := store.WaitUntilFreshAndList(context.TODO(), 10, nil)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -438,7 +441,7 @@ func TestReflectorForWatchCache(t *testing.T) {
 
 func TestWaitUntilFreshAndListWithIndex(t *testing.T) {
 	store := newTestWatchCache(3, &cache.Indexers{
-		"label": pod.PodLabelIndexFunc("label"),
+		"label":         pod.PodLabelIndexFunc("label"),
 		"spec.nodeName": pod.NodeNameIndexFunc,
 	})
 
@@ -453,7 +456,7 @@ func TestWaitUntilFreshAndListWithIndex(t *testing.T) {
 		{IndexName: "label", Value: "value1"},
 		{IndexName: "spec.nodeName", Value: "node2"},
 	}
-	list, resourceVersion, err := store.WaitUntilFreshAndListWithIndex(5, matchValues, nil)
+	list, resourceVersion, err := store.WaitUntilFreshAndListWithIndex(context.TODO(), 5, matchValues, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -468,7 +471,7 @@ func TestWaitUntilFreshAndListWithIndex(t *testing.T) {
 		{IndexName: "not-exist-label", Value: "whatever"},
 		{IndexName: "spec.nodeName", Value: "node2"},
 	}
-	list, resourceVersion, err = store.WaitUntilFreshAndListWithIndex(5, matchValues, nil)
+	list, resourceVersion, err = store.WaitUntilFreshAndListWithIndex(context.TODO(), 5, matchValues, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -483,7 +486,7 @@ func TestWaitUntilFreshAndListWithIndex(t *testing.T) {
 	matchValues = []storage.MatchValue{
 		{IndexName: "not-exist-label", Value: "whatever"},
 	}
-	list, resourceVersion, err = store.WaitUntilFreshAndListWithIndex(5, matchValues, nil)
+	list, resourceVersion, err = store.WaitUntilFreshAndListWithIndex(context.TODO(), 5, matchValues, nil)
 	if resourceVersion != 5 {
 		t.Errorf("unexpected resourceVersion: %v, expected: 5", resourceVersion)
 	}

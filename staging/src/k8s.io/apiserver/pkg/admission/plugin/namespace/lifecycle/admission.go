@@ -125,7 +125,7 @@ func (l *Lifecycle) Admit(a admission.Attributes) error {
 	}
 
 	// we need to wait for our caches to warm
-	if !l.WaitForReady() {
+	if !l.WaitForReady(a.GetContext()) {
 		return admission.NewForbidden(a, fmt.Errorf("not yet ready to handle request"))
 	}
 

@@ -26,7 +26,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes/fake"
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	containertest "k8s.io/kubernetes/pkg/kubelet/container/testing"
@@ -188,15 +187,22 @@ func TestContainerGC(t *testing.T) {
 	assert.NoError(t, err)
 	imageService.PullImage(&runtimeapi.ImageSpec{Image: "test-image"}, nil)
 
-	m.containerGC.kubeClient = fake.NewSimpleClientset()
-	m.containerGC.nodeName = "host"
-	node := &v1.Node{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "host",
-		},
+	m.containerGC.getNode = func() (node *v1.Node, e error) {
+		return &v1.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "host",
+			},
+		}, nil
 	}
-	_, err = m.containerGC.kubeClient.CoreV1().Nodes().Create(node)
-	assert.Equal(t, err, nil)
+	//m.containerGC.kubeClient = fake.NewSimpleClientset()
+	//m.containerGC.nodeName = "host"
+	//node := &v1.Node{
+	//	ObjectMeta: metav1.ObjectMeta{
+	//		Name: "host",
+	//	},
+	//}
+	//_, err = m.containerGC.kubeClient.CoreV1().Nodes().Create(node)
+	//assert.Equal(t, err, nil)
 
 	podStateProvider := m.containerGC.podStateProvider.(*fakePodStateProvider)
 	makeGCContainer := func(podName, containerName string, attempt int, createdAt int64, state runtimeapi.ContainerState) containerTemplate {

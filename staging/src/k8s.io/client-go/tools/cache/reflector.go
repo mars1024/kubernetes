@@ -17,6 +17,7 @@ limitations under the License.
 package cache
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -69,6 +70,7 @@ type Reflector struct {
 	lastSyncResourceVersion string
 	// lastSyncResourceVersionMutex guards read/write access to lastSyncResourceVersion
 	lastSyncResourceVersionMutex sync.RWMutex
+	lastSyncResourceVersionCond  *sync.Cond
 }
 
 var (
@@ -113,6 +115,7 @@ func NewNamedReflector(name string, lw ListerWatcher, expectedType interface{}, 
 		resyncPeriod:  resyncPeriod,
 		clock:         &clock.RealClock{},
 	}
+	r.lastSyncResourceVersionCond = sync.NewCond(r.lastSyncResourceVersionMutex.RLocker())
 	return r
 }
 
@@ -146,6 +149,8 @@ var (
 	// Used to indicate that watching stopped because of a signal from the stop
 	// channel passed in from a client of the reflector.
 	errorStopRequested = errors.New("Stop requested")
+
+	errorContextCanceled = errors.New("Context canceled")
 )
 
 // resyncChan returns a channel which will receive something when a resync is
@@ -237,6 +242,10 @@ func (r *Reflector) ListAndWatch(stopCh <-chan struct{}) error {
 			// We want to avoid situations of hanging watchers. Stop any wachers that do not
 			// receive any events within the timeout window.
 			TimeoutSeconds: &timeoutSeconds,
+			// To reduce load on kube-apiserver on watch restarts, you may enable watch bookmarks.
+			// Reflector doesn't assume bookmarks are returned at all (if the server do not support
+			// watch bookmarks, it will ignore this field).
+			AllowWatchBookmarks: true,
 		}
 
 		r.metrics.numberOfWatches.Inc()
@@ -340,6 +349,9 @@ loop:
 				if err != nil {
 					utilruntime.HandleError(fmt.Errorf("%s: unable to delete watch event object (%#v) from store: %v", r.name, event.Object, err))
 				}
+			case watch.Bookmark:
+				// A `Bookmark` means watch has synced here, just update the resourceVersion
+				glog.V(5).Info("received Bookmark event")
 			default:
 				utilruntime.HandleError(fmt.Errorf("%s: unable to understand watch event %#v", r.name, event))
 			}
@@ -374,5 +386,31 @@ func (r *Reflector) setLastSyncResourceVersion(v string) {
 	rv, err := strconv.Atoi(v)
 	if err == nil {
 		r.metrics.lastResourceVersion.Set(float64(rv))
+	}
+
+	r.lastSyncResourceVersionCond.Broadcast()
+}
+
+// WaitLastSyncResourceVersionUntil waits until condFunc returns true or error.
+func (r *Reflector) WaitLastSyncResourceVersionUntil(ctx context.Context, condFunc func(rv string) (bool, error)) error {
+	go func() {
+		select {
+		case <-ctx.Done():
+		}
+		r.lastSyncResourceVersionCond.Broadcast()
+	}()
+	r.lastSyncResourceVersionMutex.RLock()
+	defer r.lastSyncResourceVersionMutex.RUnlock()
+	for {
+		ok, err := condFunc(r.lastSyncResourceVersion)
+		if ok || err != nil {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return errorContextCanceled
+		default:
+		}
+		r.lastSyncResourceVersionCond.Wait()
 	}
 }

@@ -24,7 +24,7 @@ import (
 	"strconv"
 
 	apps "k8s.io/api/apps/v1"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
@@ -214,6 +214,11 @@ func isFailed(pod *v1.Pod) bool {
 	return pod.Status.Phase == v1.PodFailed
 }
 
+// isPending returns true if pod has a Phase of PodPending
+func isPending(pod *v1.Pod) bool {
+	return pod.Status.Phase == v1.PodPending
+}
+
 // isTerminating returns true if pod's DeletionTimestamp has been set
 func isTerminating(pod *v1.Pod) bool {
 	return pod.DeletionTimestamp != nil
@@ -396,4 +401,24 @@ func (ao ascendingOrdinal) Swap(i, j int) {
 
 func (ao ascendingOrdinal) Less(i, j int) bool {
 	return getOrdinal(ao[i]) < getOrdinal(ao[j])
+}
+
+const (
+	// ModeForStatefulSet is the mode of a StatefulSet.
+	ModeForStatefulSet = "statefulset.sigma.ali/mode"
+	// StatefulSetModeDefault is the default mode. If the mode of a StatefulSet
+	// is not StatefulSetModeDefault, controller in this package won't handle it.
+	StatefulSetModeDefault = ""
+)
+
+// StatefulSetMode returns the mode of a StatefulSet.
+func StatefulSetMode(ss metav1.Object) string {
+	if ss != nil {
+		if labels := ss.GetLabels(); labels != nil {
+			if mode, ok := labels[ModeForStatefulSet]; ok {
+				return mode
+			}
+		}
+	}
+	return StatefulSetModeDefault
 }

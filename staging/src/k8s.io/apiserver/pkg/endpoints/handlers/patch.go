@@ -129,7 +129,7 @@ func PatchResource(r rest.Patcher, scope RequestScope, admit admission.Interface
 		)
 
 		userInfo, _ := request.UserFrom(ctx)
-		staticAdmissionAttributes := admission.NewAttributesRecord(
+		staticAdmissionAttributes := admission.NewAttributesRecordWithContext(
 			nil,
 			nil,
 			scope.Kind,
@@ -140,11 +140,12 @@ func PatchResource(r rest.Patcher, scope RequestScope, admit admission.Interface
 			admission.Update,
 			dryrun.IsDryRun(options.DryRun),
 			userInfo,
+			req.Context(),
 		)
 		admissionCheck := func(updatedObject runtime.Object, currentObject runtime.Object) error {
 			// if we allow create-on-patch, we have this TODO: call the mutating admission chain with the CREATE verb instead of UPDATE
 			if mutatingAdmission, ok := admit.(admission.MutationInterface); ok && admit.Handles(admission.Update) {
-				return mutatingAdmission.Admit(admission.NewAttributesRecord(
+				return mutatingAdmission.Admit(admission.NewAttributesRecordWithContext(
 					updatedObject,
 					currentObject,
 					scope.Kind,
@@ -155,6 +156,7 @@ func PatchResource(r rest.Patcher, scope RequestScope, admit admission.Interface
 					admission.Update,
 					dryrun.IsDryRun(options.DryRun),
 					userInfo,
+					req.Context(),
 				))
 			}
 			return nil

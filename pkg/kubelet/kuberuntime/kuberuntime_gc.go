@@ -24,9 +24,9 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
-	clientset "k8s.io/client-go/kubernetes"
 	internalapi "k8s.io/kubernetes/pkg/kubelet/apis/cri"
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
@@ -35,18 +35,16 @@ import (
 
 // containerGC is the manager of garbage collection.
 type containerGC struct {
-	kubeClient       clientset.Interface
-	nodeName         string
+	getNode          func() (*v1.Node, error)
 	client           internalapi.RuntimeService
 	manager          *kubeGenericRuntimeManager
 	podStateProvider podStateProvider
 }
 
 // NewContainerGC creates a new containerGC.
-func NewContainerGC(kubeClient clientset.Interface, nodeName string, client internalapi.RuntimeService, podStateProvider podStateProvider, manager *kubeGenericRuntimeManager) *containerGC {
+func NewContainerGC(getNode func() (*v1.Node, error), client internalapi.RuntimeService, podStateProvider podStateProvider, manager *kubeGenericRuntimeManager) *containerGC {
 	return &containerGC{
-		kubeClient:       kubeClient,
-		nodeName:         nodeName,
+		getNode:          getNode,
 		client:           client,
 		manager:          manager,
 		podStateProvider: podStateProvider,
@@ -172,7 +170,7 @@ func (cgc *containerGC) evictableContainers(minAge time.Duration) (containersByE
 		return containersByEvictUnit{}, err
 	}
 
-	danglingPods, err := sigmautil.GetDanglingPods(cgc.kubeClient, cgc.nodeName)
+	danglingPods, err := sigmautil.GetDanglingPods(cgc.getNode)
 	if err != nil {
 		return containersByEvictUnit{}, err
 	}

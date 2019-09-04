@@ -21,8 +21,9 @@ import (
 	"strings"
 
 	apps "k8s.io/api/apps/v1"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	errorutils "k8s.io/apimachinery/pkg/util/errors"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientset "k8s.io/client-go/kubernetes"
@@ -48,6 +49,8 @@ type StatefulPodControlInterface interface {
 	// DeleteStatefulPod deletes a Pod in a StatefulSet. The pods PVCs are not deleted. If the delete is successful,
 	// the returned error is nil.
 	DeleteStatefulPod(set *apps.StatefulSet, pod *v1.Pod) error
+	// CreatePersistentVolumeClaims creates all of the required PersistentVolumeClaims for pod
+	CreatePersistentVolumeClaims(set *apps.StatefulSet, pod *v1.Pod) error
 }
 
 func NewRealStatefulPodControl(
@@ -72,7 +75,7 @@ type realStatefulPodControl struct {
 
 func (spc *realStatefulPodControl) CreateStatefulPod(set *apps.StatefulSet, pod *v1.Pod) error {
 	// Create the Pod's PVCs prior to creating the Pod
-	if err := spc.createPersistentVolumeClaims(set, pod); err != nil {
+	if err := spc.CreatePersistentVolumeClaims(set, pod); err != nil {
 		spc.recordPodEvent("create", set, pod, err)
 		return err
 	}
@@ -101,7 +104,7 @@ func (spc *realStatefulPodControl) UpdateStatefulPod(set *apps.StatefulSet, pod 
 		if !storageMatches(set, pod) {
 			updateStorage(set, pod)
 			consistent = false
-			if err := spc.createPersistentVolumeClaims(set, pod); err != nil {
+			if err := spc.CreatePersistentVolumeClaims(set, pod); err != nil {
 				spc.recordPodEvent("update", set, pod, err)
 				return err
 			}
@@ -172,14 +175,14 @@ func (spc *realStatefulPodControl) recordClaimEvent(verb string, set *apps.State
 	}
 }
 
-// createPersistentVolumeClaims creates all of the required PersistentVolumeClaims for pod, which must be a member of
+// CreatePersistentVolumeClaims creates all of the required PersistentVolumeClaims for pod, which must be a member of
 // set. If all of the claims for Pod are successfully created, the returned error is nil. If creation fails, this method
 // may be called again until no error is returned, indicating the PersistentVolumeClaims for pod are consistent with
 // set's Spec.
-func (spc *realStatefulPodControl) createPersistentVolumeClaims(set *apps.StatefulSet, pod *v1.Pod) error {
+func (spc *realStatefulPodControl) CreatePersistentVolumeClaims(set *apps.StatefulSet, pod *v1.Pod) error {
 	var errs []error
 	for _, claim := range getPersistentVolumeClaims(set, pod) {
-		_, err := spc.pvcLister.PersistentVolumeClaims(claim.Namespace).Get(claim.Name)
+		pvc, err := spc.pvcLister.PersistentVolumeClaims(claim.Namespace).Get(claim.Name)
 		switch {
 		case apierrors.IsNotFound(err):
 			_, err := spc.client.CoreV1().PersistentVolumeClaims(claim.Namespace).Create(&claim)
@@ -192,6 +195,23 @@ func (spc *realStatefulPodControl) createPersistentVolumeClaims(set *apps.Statef
 		case err != nil:
 			errs = append(errs, fmt.Errorf("Failed to retrieve PVC %s: %s", claim.Name, err))
 			spc.recordClaimEvent("create", set, pod, &claim, err)
+		case err == nil:
+			if pvc.DeletionTimestamp != nil {
+				// double check if the pvc is actually in terminating state.
+				// if failed to get pvc, collect error and return;
+				// if pvc not found or in terminating,  also collect error;
+				// if found pvc and not in terminating state, do not collect error.
+				actualPVC, getErr := spc.client.CoreV1().PersistentVolumeClaims(claim.Namespace).Get(claim.Name,
+					metav1.GetOptions{})
+				if getErr != nil && apierrors.IsNotFound(getErr) ||
+					actualPVC != nil && actualPVC.DeletionTimestamp != nil {
+					err = fmt.Errorf("PVC %s is being deleted or actually deleted", claim.Name)
+					errs = append(errs, err)
+					spc.recordClaimEvent("create", set, pod, &claim, err)
+				} else if getErr != nil {
+					errs = append(errs, fmt.Errorf("Failed to get actual PVC %s from api-server: %s", claim.Name, getErr))
+				}
+			}
 		}
 		// TODO: Check resource requirements and accessmodes, update if necessary
 	}

@@ -73,9 +73,14 @@ func TestGetAndUpdateDanglingPods(t *testing.T) {
 			t.Errorf("%v", err)
 		}
 
-		UpdateDanglingPods(test.kubeClient, test.node.Name, test.danglingPods)
+		err = UpdateDanglingPods(test.kubeClient, test.node.Name, test.danglingPods)
+		assert.NoError(t, err, "update danging pod error")
 
-		nodeDanglingPods, err := GetDanglingPods(test.kubeClient, test.node.Name)
+		getNode := func() (*v1.Node, error) {
+			return test.kubeClient.CoreV1().Nodes().Get(string(test.node.Name), metav1.GetOptions{})
+		}
+
+		nodeDanglingPods, err := GetDanglingPods(getNode)
 		assert.Equal(t, err, nil)
 		if !reflect.DeepEqual(test.danglingPods, nodeDanglingPods) {
 			t.Errorf("Get wrong dangling pod in case %q: expect: %v, but get: %v", test.message, test.danglingPods, nodeDanglingPods)

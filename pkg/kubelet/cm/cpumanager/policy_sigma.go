@@ -22,13 +22,13 @@ import (
 	"github.com/golang/glog"
 	sigmak8sapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	"k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpumanager/state"
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpumanager/topology"
 	"k8s.io/kubernetes/pkg/kubelet/cm/cpuset"
 	"k8s.io/kubernetes/pkg/kubelet/util/format"
+	"k8s.io/kubernetes/pkg/scheduler/algorithm/predicates"
 )
 
 // PolicySigma is the name of the sigma policy
@@ -43,6 +43,8 @@ type sigmaPolicy struct {
 	kubeClient clientset.Interface
 	// name of the node
 	nodeName types.NodeName
+	// nodeInfo can get node from cache
+	nodeInfo predicates.NodeInfo
 	// cpu socket topology
 	topology *topology.CPUTopology
 }
@@ -51,10 +53,11 @@ type sigmaPolicy struct {
 // assignments for exclusively pinned guaranteed containers after the main
 // container process starts.
 // SigmaPolicy reads the CPU assignments from pod's annotation.
-func NewSigmaPolicy(kubeClient clientset.Interface, nodeName types.NodeName, topology *topology.CPUTopology) Policy {
+func NewSigmaPolicy(kubeClient clientset.Interface, nodeName types.NodeName, nodeInfo predicates.NodeInfo, topology *topology.CPUTopology) Policy {
 	return &sigmaPolicy{
 		kubeClient: kubeClient,
 		nodeName:   nodeName,
+		nodeInfo:   nodeInfo,
 		topology:   topology,
 	}
 }
@@ -64,18 +67,37 @@ func (p *sigmaPolicy) Name() string {
 	return string(PolicySigma)
 }
 
+func (p *sigmaPolicy) initialized() bool {
+	if p.nodeInfo == nil {
+		glog.Warningf("[cpumanager] nodeInfo in sigma policy is not initialized")
+		return false
+	}
+
+	if nodeInfo, ok := p.nodeInfo.(*predicates.CachedNodeInfo); ok {
+		if nodeInfo.NodeLister == nil {
+			glog.Warningf("[cpumanager] nodeInfo in sigma policy is not initialized")
+			return false
+		}
+	}
+
+	return true
+}
+
 // Start checks sigma policy and does some initialized works.
 func (p *sigmaPolicy) Start(s state.State) {
-	node, err := p.kubeClient.Core().Nodes().Get(string(p.nodeName), metav1.GetOptions{})
+	if !p.initialized() {
+		return
+	}
+	node, err := p.nodeInfo.GetNodeInfo(string(p.nodeName))
 	if err != nil {
-		glog.Warningf("[cpumanager] sigma policy can't get node: %s, set defaultCPUSet to all cpus", node.Name)
+		glog.Warningf("[cpumanager] sigma policy can't get node: %s, set defaultCPUSet to all cpus", string(p.nodeName))
 		s.SetDefaultCPUSet(p.topology.CPUDetails.CPUs())
 		return
 	}
 
 	expectDefaultCPUSet, exists := p.getDefaultCPUSetFromNodeAnnotation(node)
 	if !exists {
-		glog.Warningf("[cpumanager] sigma policy can't get defultCPUSet from node: %s, set defaultCPUSet to all cpus", node.Name)
+		glog.Warningf("[cpumanager] sigma policy can't get defultCPUSet from node: %s, set defaultCPUSet to all cpus", string(p.nodeName))
 		s.SetDefaultCPUSet(p.topology.CPUDetails.CPUs())
 		return
 	}
@@ -84,9 +106,12 @@ func (p *sigmaPolicy) Start(s state.State) {
 
 // CheckAndCorrectDefaultCPUSet can check DefaultCPUSet. If DefaultCPUSet is not correct, then correct it.
 func (p *sigmaPolicy) CheckAndCorrectDefaultCPUSet(s state.State) {
-	node, err := p.kubeClient.Core().Nodes().Get(string(p.nodeName), metav1.GetOptions{})
+	if !p.initialized() {
+		return
+	}
+	node, err := p.nodeInfo.GetNodeInfo(string(p.nodeName))
 	if err != nil {
-		glog.Errorf("[cpumanager] sigma policy can't get node: %s", node.Name)
+		glog.Errorf("[cpumanager] sigma policy can't get node: %s", string(p.nodeName))
 		return
 	}
 

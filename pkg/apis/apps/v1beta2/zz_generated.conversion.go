@@ -657,6 +657,7 @@ func autoConvert_v1beta2_DaemonSetSpec_To_extensions_DaemonSetSpec(in *v1beta2.D
 	}
 	out.MinReadySeconds = in.MinReadySeconds
 	out.RevisionHistoryLimit = (*int32)(unsafe.Pointer(in.RevisionHistoryLimit))
+	out.Paused = in.Paused
 	return nil
 }
 
@@ -671,6 +672,7 @@ func autoConvert_extensions_DaemonSetSpec_To_v1beta2_DaemonSetSpec(in *extension
 	out.MinReadySeconds = in.MinReadySeconds
 	// WARNING: in.TemplateGeneration requires manual conversion: does not exist in peer-type
 	out.RevisionHistoryLimit = (*int32)(unsafe.Pointer(in.RevisionHistoryLimit))
+	out.Paused = in.Paused
 	return nil
 }
 
@@ -737,6 +739,7 @@ func autoConvert_extensions_DaemonSetUpdateStrategy_To_v1beta2_DaemonSetUpdateSt
 	} else {
 		out.RollingUpdate = nil
 	}
+	// WARNING: in.SurgingRollingUpdate requires manual conversion: does not exist in peer-type
 	return nil
 }
 
@@ -1091,11 +1094,19 @@ func Convert_extensions_ReplicaSetStatus_To_v1beta2_ReplicaSetStatus(in *extensi
 
 func autoConvert_v1beta2_RollingUpdateDaemonSet_To_extensions_RollingUpdateDaemonSet(in *v1beta2.RollingUpdateDaemonSet, out *extensions.RollingUpdateDaemonSet, s conversion.Scope) error {
 	// WARNING: in.MaxUnavailable requires manual conversion: inconvertible types (*k8s.io/apimachinery/pkg/util/intstr.IntOrString vs k8s.io/apimachinery/pkg/util/intstr.IntOrString)
+	out.Selector = (*metav1.LabelSelector)(unsafe.Pointer(in.Selector))
+	if err := metav1.Convert_Pointer_int32_To_int32(&in.Partition, &out.Partition, s); err != nil {
+		return err
+	}
 	return nil
 }
 
 func autoConvert_extensions_RollingUpdateDaemonSet_To_v1beta2_RollingUpdateDaemonSet(in *extensions.RollingUpdateDaemonSet, out *v1beta2.RollingUpdateDaemonSet, s conversion.Scope) error {
 	// WARNING: in.MaxUnavailable requires manual conversion: inconvertible types (k8s.io/apimachinery/pkg/util/intstr.IntOrString vs *k8s.io/apimachinery/pkg/util/intstr.IntOrString)
+	out.Selector = (*metav1.LabelSelector)(unsafe.Pointer(in.Selector))
+	if err := metav1.Convert_int32_To_Pointer_int32(&in.Partition, &out.Partition, s); err != nil {
+		return err
+	}
 	return nil
 }
 

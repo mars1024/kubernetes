@@ -3,13 +3,16 @@ package filter
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"reflect"
 	"strings"
 
 	"gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy"
 	multitenancyutil "gitlab.alipay-inc.com/antcloud-aks/aks-k8s-api/pkg/multitenancy/util"
 
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apiserver/pkg/authentication/serviceaccount"
 	authnuser "k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/endpoints/request"
 )
@@ -42,6 +45,8 @@ var (
 		{"batch", "jobs"},
 		{"batch", "cronjobs"},
 
+		{"autoscaling", "horizontalpodautoscalers"},
+
 		{"rbac.authorization.k8s.io", "roles"},
 		{"rbac.authorization.k8s.io", "rolebindings"},
 
@@ -72,14 +77,15 @@ var (
 		{"admissionregistration.k8s.io", "mutatingwebhookconfigurations"},
 		{"admissionregistration.k8s.io", "validatingwebhookconfigurations"},
 
-		{Group: "apps.cafe.cloud.alipay.com", Resource:"cafedeployments"},
-		{Group: "apps.cafe.cloud.alipay.com", Resource:"cafeinplacedeployments"},
-		{Group: "apps.cafe.cloud.alipay.com", Resource:"inplacesets"},
+		{Group: "apps.cafe.cloud.alipay.com", Resource: "cafedeployments"},
+		{Group: "apps.cafe.cloud.alipay.com", Resource: "cafeinplacedeployments"},
+		{Group: "apps.cafe.cloud.alipay.com", Resource: "inplacesets"},
 	}
 	AKSSupportedGroupSuffixes = []string{
 		".istio.io",
 		".knative.dev",
-		".sigma.alipay.com",
+		".alipay.com",
+		".sofastack.io",
 	}
 )
 
@@ -88,6 +94,22 @@ func WithResourceWhiteList(delegate http.Handler) http.Handler {
 		reqInfo, _ := request.RequestInfoFrom(req.Context())
 		user, _ := request.UserFrom(req.Context())
 		tenant, _ := multitenancyutil.TransformTenantInfoFromUser(user)
+
+		if len(os.Getenv("AKS_WHITELIST_DISABLE")) > 0 {
+			delegate.ServeHTTP(w, req)
+			return
+		}
+
+		// exception for NPD integration
+		if user.GetName() == serviceaccount.ServiceAccountUsernamePrefix+
+			v1.NamespaceSystem+
+			serviceaccount.ServiceAccountUsernameSeparator+
+			"node-problem-detector" {
+			if reqInfo.APIGroup == "" && reqInfo.Resource == "events" {
+				delegate.ServeHTTP(w, req)
+				return
+			}
+		}
 
 		for _, group := range user.GetGroups() {
 			if group == authnuser.NodesGroup {

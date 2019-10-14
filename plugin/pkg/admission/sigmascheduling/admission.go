@@ -25,7 +25,6 @@ import (
 	"strings"
 
 	"github.com/golang/glog"
-	sigmaapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 	core "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -36,10 +35,23 @@ import (
 	api "k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/apis/core/validation"
 	kubeletapis "k8s.io/kubernetes/pkg/kubelet/apis"
+
+	sigmaapi "gitlab.alibaba-inc.com/sigma/sigma-k8s-api/pkg/api"
 )
 
 // PluginName indicates name of admission plugin.
 const PluginName = "SigmaScheduling"
+
+func isSidecar(container api.Container) bool {
+	const sidecarEnvKey = "IS_SIDECAR"
+
+	for _, env := range container.Env {
+		if env.Name == sidecarEnvKey {
+			return env.Value == "true"
+		}
+	}
+	return false
+}
 
 // Register registers a plugin
 func Register(plugins *admission.Plugins) {
@@ -271,6 +283,11 @@ func validatePod(attributes admission.Attributes) error {
 				allErrs = append(allErrs, field.Invalid(fld, string(container.Resource.CPU.CPUSet.SpreadStrategy), expectValues))
 			}
 
+			// Currently, skip cpu request validation for sidecar container
+			if isSidecar(pod.Spec.Containers[idx]) {
+				continue
+			}
+
 			// validate cpuIDs count
 			milliValue := pod.Spec.Containers[idx].Resources.Requests.Cpu().MilliValue()
 			if milliValue == 0 {
@@ -356,41 +373,71 @@ func validatePod(attributes admission.Attributes) error {
 			fmt.Errorf("can not %s annotation %s due to json unmarshal error `%s`", op, sigmaapi.AnnotationPodAllocSpec, err))
 	}
 
-	// 如果容器删除了，那么需要在下面的比较中index就不一致了，所以需要将oldAllocSpec更新下再比较
-	var err error
-	oldAllocSpec.Containers, err = GetNewAllocContainer(pod, oldAllocSpec.Containers, op)
-	if err != nil {
-		return admission.NewForbidden(attributes,
-			fmt.Errorf("can not %s annotation %s due to error `%s`", op, sigmaapi.AnnotationPodAllocSpec, err))
-	}
-	var containers []sigmaapi.Container
-	if len(oldAllocSpec.Containers) > len(allocSpec.Containers) {
-		containers = allocSpec.Containers
-	} else {
-		containers = oldAllocSpec.Containers
-	}
+	return checkOtherChangeForAllocSpec(&oldAllocSpec, &allocSpec, pod, attributes)
+}
 
-	for i, container := range containers {
-		if container.Resource.CPU.CPUSet != nil && allocSpec.Containers[i].Resource.CPU.CPUSet != nil {
-			oldAllocSpec.Containers[i].Resource.CPU.CPUSet.CPUIDs = allocSpec.Containers[i].Resource.CPU.CPUSet.CPUIDs
-		} else if !(container.Resource.CPU.CPUSet == nil && allocSpec.Containers[i].Resource.CPU.CPUSet == nil) {
+func checkOtherChangeForAllocSpec(oldAllocSpec, newAllocSpec *sigmaapi.AllocSpec, pod *api.Pod, attributes admission.Attributes) error {
+	newContainerMap := allocSpecContainersToMap(newAllocSpec)
+	oldContainerMap := allocSpecContainersToMap(oldAllocSpec)
+
+	newContainers, oldContainers := intersectionContainers(newContainerMap, oldContainerMap)
+
+	for i, container := range oldContainers {
+		if oldContainers[i].Resource.CPU.CPUSet != nil && newContainers[i].Resource.CPU.CPUSet != nil {
+			oldContainers[i].Resource.CPU.CPUSet.CPUIDs = newContainers[i].Resource.CPU.CPUSet.CPUIDs
+		} else if !(oldContainers[i].Resource.CPU.CPUSet == nil && newContainers[i].Resource.CPU.CPUSet == nil) {
 			// cpuset field has been removed or added, which means it has switch cpuset mode(cpuset or cpushare)
 			if isInInplaceUpdateProcess(pod) {
-				oldAllocSpec.Containers[i].Resource.CPU.CPUSet = allocSpec.Containers[i].Resource.CPU.CPUSet
+				oldContainers[i].Resource.CPU.CPUSet = newContainers[i].Resource.CPU.CPUSet
 			}
 		}
 
-		if container.HostConfig.MemorySwap != allocSpec.Containers[i].HostConfig.MemorySwap {
-			oldAllocSpec.Containers[i].HostConfig.MemorySwap = allocSpec.Containers[i].HostConfig.MemorySwap
+		if container.HostConfig.MemorySwap != newContainers[i].HostConfig.MemorySwap {
+			oldContainers[i].HostConfig.MemorySwap = newContainers[i].HostConfig.MemorySwap
 		}
 	}
 
-	if !apiequality.Semantic.DeepEqual(allocSpec, oldAllocSpec) {
+	oldAllocSpec.Containers = oldContainers
+	newAllocSpec.Containers = newContainers
+
+	if !apiequality.Semantic.DeepEqual(newAllocSpec, oldAllocSpec) {
 		return admission.NewForbidden(attributes,
-			fmt.Errorf("can not %s annotation %s due to only cpuIDs, cpuset and memorySwap field can be updated.", op, sigmaapi.AnnotationPodAllocSpec))
+			fmt.Errorf("can not %s annotation %s due to only cpuIDs, cpuset and memorySwap field can be updated",
+				attributes.GetOperation(), sigmaapi.AnnotationPodAllocSpec),
+		)
 	}
 
 	return nil
+}
+
+func allocSpecContainersToMap(alloc *sigmaapi.AllocSpec) map[string]*sigmaapi.Container {
+	containersMap := make(map[string]*sigmaapi.Container, len(alloc.Containers))
+	for index := range alloc.Containers {
+		containersMap[alloc.Containers[index].Name] = &(alloc.Containers[index])
+	}
+	return containersMap
+}
+
+func intersectionContainers(first, second map[string]*sigmaapi.Container) ([]sigmaapi.Container, []sigmaapi.Container) {
+	var keys []string
+	for key := range first {
+		if second != nil && second[key] != nil {
+			keys = append(keys, key)
+		}
+	}
+	if len(keys) == 0 {
+		return nil, nil
+	}
+	firstArray := make([]sigmaapi.Container, 0, len(keys))
+	secondArray := make([]sigmaapi.Container, 0, len(keys))
+
+	for _, k := range keys {
+		firstArray = append(firstArray, *first[k])
+	}
+	for _, k := range keys {
+		secondArray = append(secondArray, *second[k])
+	}
+	return firstArray, secondArray
 }
 
 // GetNewAllocContainer() delete containers from allocSpec if not in pod Spec.

@@ -79,20 +79,32 @@ func hasVolumeMount(mounts []core.VolumeMount, volumeName string) bool {
 	return false
 }
 
+func hasVolume(volumes []core.Volume, volumeName string) bool {
+	for _, v := range volumes {
+		if v.Name == volumeName {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (a *AlipayCPUShareAdmission) injectCPUShare(pod *core.Pod) error {
 	// add volumes to pod.
 	// All pods should mount hostPath `/lib/libsysconf-alipay.so` to containers
 
-	hostPathFile := core.HostPathFile
-	pod.Spec.Volumes = append(pod.Spec.Volumes, core.Volume{
-		Name: cpushareVolumeName,
-		VolumeSource: core.VolumeSource{
-			HostPath: &core.HostPathVolumeSource{
-				Path: cpusharePatchFile,
-				Type: &hostPathFile,
+	if !hasVolume(pod.Spec.Volumes, cpushareVolumeName) {
+		hostPathFile := core.HostPathFile
+		pod.Spec.Volumes = append(pod.Spec.Volumes, core.Volume{
+			Name: cpushareVolumeName,
+			VolumeSource: core.VolumeSource{
+				HostPath: &core.HostPathVolumeSource{
+					Path: cpusharePatchFile,
+					Type: &hostPathFile,
+				},
 			},
-		},
-	})
+		})
+	}
 
 	for i := range pod.Spec.Containers {
 		// FIXME: this clearly adds env and volume mounts to all containers in the pod,

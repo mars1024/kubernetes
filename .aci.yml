@@ -9,7 +9,6 @@ stages:
 
 PubCloudBuild:
   stage: 公有云构建
-  plugin: ANT-BUILD        # 内置的构建插件
   allowFailure: true
   agent:
     docker:

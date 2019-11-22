@@ -1,0 +1,22 @@
+only:
+  triggerType: #触发类型为manual 只有手动触发
+    - manual
+  targetBranch: #只有向下面的分支提交pullRequest时才触发pipeline执行
+    - aks.1.12_dev
+
+stages:
+  - 公有云构建
+
+PubCloudBuild:
+  stage: 公有云构建
+  plugin: ANT-BUILD        # 内置的构建插件
+  allowFailure: true
+  agent:
+    docker:
+      image: acs-reg.alipay.com/antcloudqa/ubuntu:v1.0.1 # 此Docker image是任务运行的环境，由用户自定义
+  script: # 执行脚本
+    - echo ${ACI_COMMIT_REF_NAME} # 第一条命令
+    - echo ${ACI_COMMIT_SHA}
+    - echo ${ACI_COMMIT_MESSAGE}
+    - echo ${ACI_USER_NAME}
+    - pwd # 第二条命令

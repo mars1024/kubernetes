@@ -17,8 +17,10 @@ limitations under the License.
 package cni
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"sort"
 	"strings"
 	"sync"
@@ -89,6 +91,8 @@ type cniBandwidthEntry struct {
 type cniIpRange struct {
 	Subnet string `json:"subnet"`
 }
+
+type cniIPs []net.IP
 
 func SplitDirs(dirs string) []string {
 	// Use comma rather than colon to work better with Windows too
@@ -395,5 +399,27 @@ func (plugin *cniNetworkPlugin) buildCNIRuntimeConf(podName string, podNs string
 	// Set the PodCIDR
 	rt.CapabilityArgs["ipRanges"] = [][]cniIpRange{{{Subnet: plugin.podCidr}}}
 
+	ips, err := extractReqeustIPsFromAnnotations(annotations)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse pod ips annotations: %v", err)
+	}
+	rt.CapabilityArgs["ips"] = ips
+
 	return rt, nil
+}
+
+func extractReqeustIPsFromAnnotations(annotations map[string]string) (cniIPs, error) {
+	if annotations == nil {
+		return nil, nil
+	}
+
+	if data, exist := annotations["kubernetes.io/ips"]; exist {
+		var ips cniIPs
+		if err := json.Unmarshal([]byte(data), &ips); err != nil {
+			return nil, err
+		}
+		return ips, nil
+	}
+
+	return nil, nil
 }
